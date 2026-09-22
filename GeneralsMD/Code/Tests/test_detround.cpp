@@ -73,8 +73,13 @@ static void non_ties_round_to_the_nearer_side()
 }
 
 // hrawanim.cpp computes Float_To_Long(frame - 0.499999f) to floor a frame number, which only works
-// if the conversion rounds to nearest.  Two separate claims here, because writing this test as
-// "the idiom floors" was wrong and finding out why was worth more than the test.
+// if the conversion rounds to nearest.  Two separate claims here rather than one, and the reason is
+// worth writing down.
+//
+// The first version of this function asserted the single obvious thing - that the idiom floors - and
+// it went red at 33, 35, 37 and every odd integer up to 63.  The instinct was that arm64 had got the
+// rounding wrong.  It had not: the test was wrong, and the code it was testing was faithfully
+// reproducing what x64 does.  A test going red is not yet evidence about the code.
 //
 // The idiom is exact only below 33.  0.499999f sits 1e-6 below a half, and float spacing is 1.9e-6
 // in [16,32) but 3.8e-6 in [32,64) - so from 32 upwards the subtraction lands exactly on x.5 and

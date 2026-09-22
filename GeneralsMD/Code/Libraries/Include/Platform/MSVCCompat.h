@@ -34,6 +34,11 @@
 // Reached from always.h (all of WWVegas) and from Lib/BaseType.h (GameEngine and compression).
 // PreRTS.h belongs to B5 and is deliberately not touched here.
 
+// NOTE TO ANYONE RUNNING A BULK RENAME OVER THE TREE: exclude this file.  The MSVC wrappers below
+// are the one place the Microsoft spellings have to survive, because they are what the standard
+// names are implemented in terms of.  A sweep that rewrote _stricmp to strcasecmp in here turned
+// strcasecmp into a call to itself - which compiles, and recurses forever, and only on Windows.
+
 #pragma once
 
 #ifndef MSVCCOMPAT_H
@@ -126,20 +131,42 @@ inline int mkdir(const char* path, int /* mode */) { return _mkdir(path); }
 // ---------------------------------------------------------------------------
 // Limits.
 //
-// _MAX_PATH is Microsoft's name for it and is 260.  POSIX has PATH_MAX, which is 1024 on Darwin,
-// so a buffer sized by this grows rather than shrinks and no existing bound is loosened on
-// Windows.  41 files name _MAX_PATH; they are being moved to PATH_MAX.
+// _MAX_PATH stays, and stays 260, and that is a deliberate refusal to tidy it.
+//
+// The obvious move is to rename its 117 uses to POSIX's PATH_MAX.  PATH_MAX is 1024 on Darwin, so
+// that would silently change the size of every `char name[_MAX_PATH]` in the tree - and some of
+// those are members of structures that go into save games and into the multiplayer INI checksum.
+// A port whose entire premise is that both builds compute the same bytes cannot afford to move a
+// struct boundary for tidiness.  260 on both, spelled the same on both, and no call site changes.
+//
+// _isnan and _finite are the same kind of thing one level down: Microsoft's spellings of what C99
+// calls isnan and isfinite.  Nine files use them, and the shim is one line each against fifty-four
+// renames that would each have to be read for whether the int-versus-bool return matters.
 // ---------------------------------------------------------------------------
 #if defined(_MSC_VER)
-#include <stdlib.h>
-#ifndef PATH_MAX
-#define PATH_MAX _MAX_PATH
-#endif
+
+#include <stdlib.h>   // _MAX_PATH
+
 #else
-#include <limits.h>
-#ifndef PATH_MAX
-#define PATH_MAX 1024
+
+#include <math.h>
+
+#ifndef _MAX_PATH
+#define _MAX_PATH 260   // Windows' value, on purpose - see above.  Not PATH_MAX.
 #endif
+#ifndef MAX_PATH
+#define MAX_PATH _MAX_PATH
+#endif
+
+// Microsoft returns int from both; C99's are macros over a bool-ish result.  The casts keep the
+// `if (_isnan(x))` and `if (!_finite(x))` call sites reading exactly as they do on Windows.
+#ifndef _isnan
+#define _isnan(x)  ((int)::isnan(x))
+#endif
+#ifndef _finite
+#define _finite(x) ((int)::isfinite(x))
+#endif
+
 #endif
 
 #endif // MSVCCOMPAT_H
