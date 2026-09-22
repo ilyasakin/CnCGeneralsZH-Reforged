@@ -276,8 +276,14 @@ of the three corrupt data rather than fail to build, and both reach the bytes th
 network packets are made of.
 
 So: before assuming a vendored library ports cleanly, grep it for `__APPLE__`, `MACOS`,
-`TARGET_OS_*`, `_WIN32`, `__BIG_ENDIAN__`, `unsigned long` and `#ifdef` around type definitions.
-Treat every one as a claim about 2003 hardware until checked.
+`TARGET_OS_*`, `_WIN32`, `__BIG_ENDIAN__`, **`__i386__`/`_M_IX86`**, `unsigned long` and `#ifdef`
+around type definitions. Treat every one as a claim about 2003 hardware until checked.
+
+**`__i386__` was added to that list on 2026-09-22**, by a fifth instance that the list as it stood
+could not have found: `gimex.h:99` selected the `ARGB` channel order with
+`#if defined(_MSC_VER) || defined(__i386__)`, meaning "little-endian desktop", and Apple Silicon
+fell through it to the GameCube/Mac big-endian order. A 2003 "which machine am I?" test is written
+as a positive CPU test at least as often as a negative platform one.
 
 **Running the rule immediately found a fourth**, in the same library and the same file family as
 the first: `zlib-1.1.4/zutil.h:113` repeats `#if defined(MACOS) || defined(TARGET_OS_MAC)` and,
@@ -294,7 +300,28 @@ hits total** across zlib, LZH-Light, EAC and all 564 GameSpy files — quiet eno
 build. `unsigned long` is not: GameSpy alone would bury it. Automate the first half; the second
 stays a human read.
 
-Still unswept: GameSpy, EAC, and the committed FFmpeg dist.
+EAC and the FFmpeg dist were swept on 2026-09-22 —
+[`VENDORED-PREDICATE-SWEEP.md`](VENDORED-PREDICATE-SWEEP.md). FFmpeg is clean on both halves and
+was always going to be (it is 2020s code written against `stdint.h`); EAC is clean on the
+predicate half and produced the `__i386__` instance above on the human half, now fixed. GameSpy has
+had the predicate half only: seven hits, six of them modern `__APPLE__ && __MACH__` Darwin support
+and the seventh inside a commented-out block. **`zutil.h:113` is still live** — it is in a fetched,
+`.gitignore`d directory, so it needs a vendor-step patch rather than an edit.
+
+**Two ways this rule can report clean without having looked.** Both measured, both reproducible,
+and they matter to every sweep in this plan rather than only to this one:
+
+1. **`grep -r` from the repository root skips 466 tracked files on this machine.** `grep` here is
+   ugrep, which honours `.gitignore` by default — and git does *not* ignore these files, so this is
+   the tool's opinion rather than git's. 356 of the 466 are in `GeneralsMD`, including all 147
+   committed FFmpeg files and 54 sources in `Libraries/Source/debug` and `Libraries/Source/profile`,
+   **both of which are built**. Naming a directory explicitly avoids it; recursing from the root
+   does not. Any sweep meant to be exhaustive wants `--no-ignore-files`, or a file list from
+   `git ls-files`.
+2. **zlib, GameSpy and most of LZHCompress are not in the repository at all** — their directories
+   hold a `.gitignore` that ignores everything and `build.bat` fetches the sources. In a fresh
+   worktree they are empty, and a sweep pointed at them finds nothing and says so. Any check must
+   run after the vendor step and fail, rather than pass, on an empty directory.
 
 **A corollary about fixing them**, learned the same afternoon: the fix can be as
 platform-dependent as the bug. B3's `UINT32=unsigned int` compile definition is correct on Darwin
