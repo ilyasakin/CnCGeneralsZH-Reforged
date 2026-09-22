@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** nothing (but C1 and D4 both rely on the guarantee)
-- **Status:** not started
+- **Status:** in review — see [B7-w3d-layout.md](../B7-w3d-layout.md)
 - **Size:** `w3d_file.h`; the structs are read by bulk binary reads across the asset loaders
 
 ## Why
@@ -17,15 +17,38 @@ the model, mesh, material and hierarchy structs, and they are read with bulk bin
 `distlod.cpp:304` does `cload.Read(&lodStruct, sizeof(W3dLODStruct))` and it is not alone. Layout
 is load-bearing and **nothing asserts it**.
 
-B4 recon's analysis says it is safe by EA's design rather than by luck: every data member is a
-width-pinned bittype typedef (115 `uint32`, 63 `float32`, 43 `uint8`, 33 `char`, 21 `uint16`), a
-char array, or a nested struct of the same. No `double`, no pointer, no `long`, no `bool`, no
-`wchar_t`, no enum member — so every field is naturally aligned at its own width and there is no
-padding for two compilers to disagree about.
+B4 recon's analysis said it was safe by EA's design rather than by luck: every data member a
+width-pinned bittype typedef, no `double`, no pointer, no `long`, no `bool`, no `wchar_t`, no enum
+member — so every field naturally aligned and no padding for two compilers to disagree about.
 
-That analysis is convincing and it is still only an analysis. These structs have a far stronger
-claim on a `static_assert` than `DelayedTransportMessage` does, because a `.w3d` misread produces
-wrong geometry rather than a failed build.
+> ## Recon findings, 2026-09-22 — that analysis was WRONG. See [B7-w3d-layout.md](../B7-w3d-layout.md).
+>
+> Half of it holds: there is no `bool`, `enum`, pointer, `double`, `wchar_t` or bitfield member
+> anywhere in the header (re-derived from clang's AST, not grep).
+>
+> The "width-pinned" half is false. `WWLib/bittype.h:46` has, with no platform guard:
+> `typedef unsigned long uint32;` (and `sint32` from `signed long` at `:51`). `long` is 4 bytes
+> under Windows' LLP64 and 8 under Apple's LP64, so **`uint32` is a name that looks width-pinned
+> and is not**. 124 of the ~280 members in the header are `long`-based.
+>
+> **Measured: 50 of the 77 structs in `w3d_file.h` lay out differently under AppleClang arm64.**
+> `ChunkHeader` (`chunkio.h`, the framing struct every `.w3d` chunk is read through, and the one
+> `chunkio.cpp:465` does its seek arithmetic with) goes 8 → 16. `W3dMeshHeader3Struct` goes
+> 116 → 160. A Mac build would not misread the occasional model; it would lose the file position
+> at the first chunk and never recover.
+>
+> Two consequences for this task:
+>
+> - **`W3dChunkHeader` is dead** — zero references outside its own declaration. Item 3 below names
+>   it one of the load-bearing four on B4's recommendation; the real one is `chunkio.h`'s
+>   `ChunkHeader`. The test pins that instead and records why.
+> - **Fixing `bittype.h` is NOT part of B7** and has not been done. `uint32`/`sint32` are used 701
+>   times across 98 files in six libraries, and `DWORD`/`ULONG`/`BOOL` come from the same header.
+>   That is its own task, or it folds into B3. B7's asserts are what make it provable: they are red
+>   now and go green when it lands.
+
+These structs have a far stronger claim on a `static_assert` than `DelayedTransportMessage` does,
+because a `.w3d` misread produces wrong geometry rather than a failed build.
 
 ## Scope
 
