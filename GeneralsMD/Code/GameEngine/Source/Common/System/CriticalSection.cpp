@@ -26,8 +26,8 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "Common/CriticalSection.h"
 
-// Definitions.
-FastCriticalSectionClass TheAsciiStringCriticalSection;
+// Definitions.  TheAsciiStringCriticalSection went with B11 - see the note in CriticalSection.h:
+// its three uses in AsciiString.h were all commented out and nothing else ever named it.
 CriticalSection *TheUnicodeStringCriticalSection = NULL;
 CriticalSection *TheDmaCriticalSection = NULL;
 CriticalSection *TheMemoryPoolCriticalSection = NULL;
