@@ -121,6 +121,7 @@
 //--------------------------------------------------------------------
 // Fundamental type definitions
 //--------------------------------------------------------------------
+#include <stdint.h>   // int64_t and uint64_t, for Int64/UnsignedInt64 below
 typedef float							Real;							// 4 bytes 
 typedef int								Int;							// 4 bytes 
 typedef unsigned int			UnsignedInt;	  	// 4 bytes
@@ -133,9 +134,11 @@ typedef unsigned char			UnsignedByte;			// 1 byte		USED TO BE "Byte"
 typedef char							Byte;							// 1 byte		USED TO BE "SignedByte"
 typedef char							Char;							// 1 byte of text
 typedef bool							Bool;							// 
-// note, the types below should use "long long", but MSVC doesn't support it yet
-typedef __int64						Int64;							// 8 bytes 
-typedef unsigned __int64	UnsignedInt64;	  	// 8 bytes 
+// The note that used to be here said MSVC did not support "long long" yet.  It has since 2003, and
+// <cstdint> is the spelling that is the same width on every compiler this builds on - which matters
+// because these two are in save games and in the replay checksum.
+typedef int64_t						Int64;							// 8 bytes 
+typedef uint64_t					UnsignedInt64;	  	// 8 bytes 
 
 #include "Lib/Trig.h"
 
@@ -183,7 +186,9 @@ inline Real deg2rad(Real rad) { return rad * (PI/180); }
 #endif				// #errors with "No Target Architecture" without it
 #include <windef.h>
 #include <string.h>
-#include <emmintrin.h>
+// Was <emmintrin.h>, for fast_float2long_round below.  See Lib/DetRound.h for which
+// instruction each architecture uses and why the rounding is not negotiable.
+#include "Lib/DetRound.h"
 #undef BitTest
 #define BitTest( x, i ) ( ( (x) & (i) ) != 0 )
 #define BitSet( x, i ) ( (x) |= (i) )
@@ -200,7 +205,7 @@ inline Real deg2rad(Real rad) { return rad * (PI/180); }
 // to nearest.
 __forceinline long fast_float2long_round(float f)
 {
-	return _mm_cvtss_si32(_mm_set_ss(f));
+	return DetRound::To_Long(f);
 }
 
 // super fast float trunc routine, works always (independent of any FPU modes)

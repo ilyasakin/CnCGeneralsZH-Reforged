@@ -46,7 +46,9 @@
 #include "dettrig.h"
 #include <math.h>
 #include <float.h>
-#include <emmintrin.h>
+// Was <emmintrin.h>, for the two cvtss2si conversions below.  Lib/DetRound.h is where the choice
+// of rounding now lives, for both architectures and with a test behind it.
+#include "Lib/DetRound.h"
 #include <assert.h>
 #include <float.h>
 
@@ -309,14 +311,15 @@ WWINLINE bool WWMath::Is_Valid_Double(double x)
 
 WWINLINE long WWMath::Float_To_Long(float f)
 {
-	// cvtss2si, not a cast: EA's fistp rounds to nearest even and a C cast truncates, and callers
-	// in GameLogic depend on the rounding.
-	return (long)_mm_cvtss_si32(_mm_set_ss(f));
+	// Not a cast: EA's fistp rounds to nearest even and a C cast truncates, and callers in
+	// GameLogic depend on the rounding.  Lib/DetRound.h picks the instruction per architecture -
+	// cvtss2si on x64, FCVTNS on arm64 - and Tests/test_detround.cpp holds them to the same table.
+	return DetRound::To_Long(f);
 }
 
 WWINLINE long WWMath::Float_To_Long(double f)
 {
-	return (long)_mm_cvtsd_si32(_mm_set_sd(f));
+	return DetRound::To_Long(f);
 }
 
 // ----------------------------------------------------------------------------
