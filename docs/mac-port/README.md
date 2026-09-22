@@ -172,18 +172,15 @@ you start. That commit is the lock.
 | B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) — **see [findings](B7-w3d-layout.md)** | M1 | A1 | **done, held for B10** | -14 |
 | B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in review | -83 |
 | B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | in progress | -21 |
-| B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | **done, merges with B7** | -14 |
+| B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | in progress | -14 |
 | B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | in review | -83 |
 | B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | in review | -83 |
 | B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | not started | |
 | B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress | -3a |
 | B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | in progress | -14 |
 | B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) | M1 | A1 | not started | |
-| B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | absorbed by B3 | — |
-| E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | in progress | -21 |
-| B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | in progress | -14 |
-| B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | in review | -83 |
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | in progress | -21 |
+| E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | in progress | -21 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | not started | |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
@@ -276,11 +273,6 @@ recon passes were worth the time:
 
 | Task | Found by | What the plan had assumed |
 |:--|:--|:--|
-| B7 | B4 recon | that B4's `#pragma pack` work covered the `.w3d` file format. All 8 of its regions are wire formats. |
-| B8 | B5 recon | that no task needed to own threading. `JobSystem.cpp` is a Win32 thread pool the allocator reaches. |
-| B9 | A1 | nothing — 147 backslash include directives, a hard error under clang, unowned. |
-| B10 | B7 | that `.w3d` structs were width-pinned. `uint32` is `unsigned long`: 8 bytes here, and `ChunkHeader` 16 where the format says 8. |
-| B11 | B8 | as B8 — `CriticalSection` is a raw `CRITICAL_SECTION` under the allocator and both string classes. |
 
 B10 is the one that would have hurt. Nothing about it fails loudly: the build succeeds, the game
 starts, and every `.w3d` read walks off its own chunk boundary.
