@@ -41,6 +41,14 @@ other 8 are the D3DX shim (3) and the D3D11 backend's own headers (5), which D2 
 hides. Two headers dominate: `dx8wrapper.h` (29 includes from outside WW3D2) and `texture.h` (21)
 are 50 of the 82 include sites between them, and expose every D3D9 type the engine can name.
 
+**Numbers revised again by D1 PR1, which found the wrapper richer than the survey credited.** Of
+the 75 sites said to need new API, 7 do not: `SetFVF` (6 sites) is `Set_Vertex_Format`, which
+already mirrors, and `EvictManagedResources` is `Flush_DX8_Resource_Manager`. A render-target
+save/restore pair was written and then deleted, because `Set_Render_Target(surface, depth)` already
+keeps what it displaced and `Set_Render_Target(NULL, NULL)` puts it back — a second stack of one
+would have fought it. Final split: **59 sites covered by PR1's new API, 7 reclassified as swaps, 9
+out of scope** (7 cursor calls to C3, 2 possibly-dead `ProcessVertices`).
+
 **A surface this file did not account for:** `Peek_D3D_Texture()` and friends hand raw
 `IDirect3D*9` resources straight out of the texture classes — **134 uses, 64 of them outside
 WW3D2**. Not D1's problem (they are not device calls), but they are D2's, and they are most of why

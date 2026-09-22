@@ -174,6 +174,7 @@ you start. That commit is the lock.
 | B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | in progress | -21 |
 | B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | in progress | -14 |
 | B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | in progress | -83 |
+| B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | in progress | -21 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | not started | |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
