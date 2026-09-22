@@ -346,7 +346,7 @@ static TransferFileType getTransferFileType(const char *extension)
 {
 	for (Int i = 0; i < TransferFileType_Count; ++i)
 	{
-		if (stricmp(extension, transferFileRules[i].ext) == 0)
+		if (strcasecmp(extension, transferFileRules[i].ext) == 0)
 			return (TransferFileType)i;
 	}
 	return TransferFileType_Invalid;

@@ -210,7 +210,7 @@ const char * Get_D3D_Error_String(HRESULT result)
 			return ERROR_NAMES[index].Name;
 		}
 	}
-	_snprintf(UnknownErrorText, ERROR_TEXT_SIZE, "0x%08lx", (unsigned long)result);
+	snprintf(UnknownErrorText, ERROR_TEXT_SIZE, "0x%08lx", (unsigned long)result);
 	UnknownErrorText[ERROR_TEXT_SIZE - 1] = '\0';
 	return UnknownErrorText;
 }

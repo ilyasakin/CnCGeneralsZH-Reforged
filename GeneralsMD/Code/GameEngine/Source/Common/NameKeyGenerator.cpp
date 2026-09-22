@@ -180,7 +180,7 @@ NameKeyType NameKeyGenerator::nameToLowercaseKey(const char* nameString)
 	// hmm, do we have it already?
 	for (b = m_sockets[hash]; b; b = b->m_nextInSocket)
 	{
-		if (_stricmp(nameString, b->m_nameString.str()) == 0)
+		if (strcasecmp(nameString, b->m_nameString.str()) == 0)
 			return b->m_key; 
 	}
 

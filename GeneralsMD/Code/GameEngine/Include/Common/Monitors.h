@@ -130,7 +130,7 @@ inline MonitorEntry findMonitor( const char *device )
 	int primary = -1;
 	for (int index = 0; index < count; ++index)
 	{
-		if (::_stricmp( monitors[index].device, device ) == 0)
+		if (::strcasecmp( monitors[index].device, device ) == 0)
 			return monitors[index];
 		if (monitors[index].primary)
 			primary = index;

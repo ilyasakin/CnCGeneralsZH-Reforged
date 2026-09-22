@@ -1101,12 +1101,12 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		while (argc < MAXIMUM_ARGUMENTS && token != NULL) {
 			argv[argc++] = strtrim(token);
 			//added a preparse step for this flag because it affects window creation style
-			if (stricmp(token,"-win")==0)
+			if (strcasecmp(token,"-win")==0)
 			{
 				ApplicationIsWindowed=true;
 				ApplicationIsBorderless=false;	// an explicit -win beats a borderless Options.ini
 			}
-			if (stricmp(token,"-fullscreen")==0)
+			if (strcasecmp(token,"-fullscreen")==0)
 			{
 				ApplicationIsWindowed=false;
 				ApplicationIsBorderless=false;
@@ -1115,7 +1115,7 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			// or frame, covering the display at the desktop resolution - so it implies -win.  Parsed
 			// here rather than from Options.ini because the window exists long before the engine's
 			// preferences do.
-			if (stricmp(token,"-borderless")==0)
+			if (strcasecmp(token,"-borderless")==0)
 			{
 				ApplicationIsWindowed=true;
 				ApplicationIsBorderless=true;
@@ -1126,7 +1126,7 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			// nothing is ever drawn into it, it is never shown either: a batch of matches used to
 			// throw a hundred little windows on the desktop and steal the focus off whatever the
 			// machine was really doing.
-			if (stricmp(token,"-headless")==0)
+			if (strcasecmp(token,"-headless")==0)
 			{
 				ApplicationIsWindowed=true;
 				ApplicationIsHeadless=true;

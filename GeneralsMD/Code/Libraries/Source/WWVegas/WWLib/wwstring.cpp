@@ -245,9 +245,11 @@ StringClass::Format_Args (const TCHAR *format, const va_list & arg_list )
 	//
 	// Make a guess at the maximum length of the resulting string
 	//
-	//	_vsnprintf writes no terminator when the result fills the buffer
-	//	exactly, so the array is one TCHAR longer than the count handed to it
-	//	and the extra slot is left as the zero from the initialiser.
+	//	The array is one TCHAR longer than the formatted length this allows.  It used to be that way
+	//	because vsnprintf writes no terminator when the result fills the buffer exactly and the extra
+	//	slot held the zero from the initialiser; with vsnprintf the bound includes the terminator, so
+	//	the count handed over is the whole array and the extra slot is where the terminator goes.
+	//	Either way 512 formatted characters fit, which is what callers were written against.
 	TCHAR temp_buffer[512 + 1] = { 0 };
 	int retval = 0;
 
@@ -257,7 +259,7 @@ StringClass::Format_Args (const TCHAR *format, const va_list & arg_list )
 	#ifdef _UNICODE
 		retval = _vsnwprintf (temp_buffer, 512, format, arg_list);
 	#else
-		retval = _vsnprintf (temp_buffer, 512, format, arg_list);
+		retval = vsnprintf (temp_buffer, sizeof(temp_buffer)/sizeof(TCHAR), format, arg_list);
 	#endif
 	
 	//
@@ -283,9 +285,11 @@ StringClass::Format (const TCHAR *format, ...)
 	//
 	// Make a guess at the maximum length of the resulting string
 	//
-	//	_vsnprintf writes no terminator when the result fills the buffer
-	//	exactly, so the array is one TCHAR longer than the count handed to it
-	//	and the extra slot is left as the zero from the initialiser.
+	//	The array is one TCHAR longer than the formatted length this allows.  It used to be that way
+	//	because vsnprintf writes no terminator when the result fills the buffer exactly and the extra
+	//	slot held the zero from the initialiser; with vsnprintf the bound includes the terminator, so
+	//	the count handed over is the whole array and the extra slot is where the terminator goes.
+	//	Either way 512 formatted characters fit, which is what callers were written against.
 	TCHAR temp_buffer[512 + 1] = { 0 };
 	int retval = 0;
 
@@ -295,7 +299,7 @@ StringClass::Format (const TCHAR *format, ...)
 	#ifdef _UNICODE
 		retval = _vsnwprintf (temp_buffer, 512, format, arg_list);
 	#else
-		retval = _vsnprintf (temp_buffer, 512, format, arg_list);
+		retval = vsnprintf (temp_buffer, sizeof(temp_buffer)/sizeof(TCHAR), format, arg_list);
 	#endif
 	
 	//

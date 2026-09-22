@@ -163,7 +163,7 @@ void W3DSnowManager::updateIniSettings(void)
 	//Call base class
 	SnowManager::updateIniSettings();
 
-	if (m_snowTexture && stricmp(m_snowTexture->Get_Texture_Name(),TheWeatherSetting->m_snowTexture.str()) != 0)
+	if (m_snowTexture && strcasecmp(m_snowTexture->Get_Texture_Name(),TheWeatherSetting->m_snowTexture.str()) != 0)
 	{	
 		REF_PTR_RELEASE(m_snowTexture);
 		m_snowTexture = WW3DAssetManager::Get_Instance()->Get_Texture(TheWeatherSetting->m_snowTexture.str());

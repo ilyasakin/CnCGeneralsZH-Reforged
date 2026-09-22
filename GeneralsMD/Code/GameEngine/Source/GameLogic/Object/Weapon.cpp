@@ -411,12 +411,12 @@ void WeaponTemplate::reset( void )
 
 	const char* token = ini->getNextTokenOrNull(ini->getSepsColon());
 
-	if( stricmp(token, MIN_LABEL) == 0 )
+	if( strcasecmp(token, MIN_LABEL) == 0 )
 	{
 		// Two entry min/max
 		self->m_minDelayBetweenShots = INI::scanInt(ini->getNextToken(ini->getSepsColon()));
 		token = ini->getNextTokenOrNull(ini->getSepsColon());
-		if( stricmp(token, MAX_LABEL) != 0 )
+		if( strcasecmp(token, MAX_LABEL) != 0 )
 		{
 			// Messed up double entry
 			self->m_maxDelayBetweenShots = self->m_minDelayBetweenShots;
@@ -1647,7 +1647,7 @@ void WeaponStore::createAndFireTempWeapon(const WeaponTemplate* wt, const Object
 //-------------------------------------------------------------------------------------------------
 const WeaponTemplate *WeaponStore::findWeaponTemplate( AsciiString name ) const 
 { 
-	if (stricmp(name.str(), "None") == 0)
+	if (strcasecmp(name.str(), "None") == 0)
 		return NULL;
 	const WeaponTemplate * wt = findWeaponTemplatePrivate( TheNameKeyGenerator->nameToKey( name ) );
 	DEBUG_ASSERTCRASH(wt != NULL, ("Weapon %s not found!\n",name.str()));

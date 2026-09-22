@@ -242,8 +242,10 @@ Bool	File::print ( const Char *format, ...)
 	va_list args;
 	va_start( args, format );     /* Initialize variable arguments. */
 	// bounded: this was a vsprintf, so the length test below only ran AFTER the overflow had
-	// already happened. _vsnprintf returns negative when it truncates.
-	len = _vsnprintf( buffer, sizeof(buffer), format, args );
+	// already happened.  vsnprintf stops at the wall instead, and returns the length it wanted - so
+	// the "len >= sizeof(buffer)" half of the test below is the half that catches truncation.  It was
+	// already written that way, which is why this is a rename and nothing more.
+	len = vsnprintf( buffer, sizeof(buffer), format, args );
 	va_end( args );
 	buffer[sizeof(buffer) - 1] = 0;
 

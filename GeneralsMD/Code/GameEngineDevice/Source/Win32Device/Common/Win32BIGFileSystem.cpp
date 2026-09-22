@@ -105,7 +105,7 @@ static Bool isReforgedArchive(const AsciiString &path)
 {
 	const char *name = strrchr(path.str(), '\\');
 	name = (name != NULL) ? name + 1 : path.str();
-	return _strnicmp(name, REFORGED_ARCHIVE_PREFIX, sizeof(REFORGED_ARCHIVE_PREFIX) - 1) == 0;
+	return strncasecmp(name, REFORGED_ARCHIVE_PREFIX, sizeof(REFORGED_ARCHIVE_PREFIX) - 1) == 0;
 }
 
 void Win32BIGFileSystem::init() {
@@ -307,13 +307,13 @@ void Win32BIGFileSystem::closeArchiveFile(const Char *filename) {
 		return;
 	}
 
-	if (stricmp(filename, MUSIC_BIG) == 0) {
+	if (strcasecmp(filename, MUSIC_BIG) == 0) {
 		// Stop the current audio
 		TheAudio->stopAudio(AudioAffect_Music);
 
 		// No need to turn off other audio, as the lookups will just fail.
 	}
-	DEBUG_ASSERTCRASH(stricmp(filename, MUSIC_BIG) == 0, ("Attempting to close Archive file '%s', need to add code to handle its shutdown correctly.", filename));
+	DEBUG_ASSERTCRASH(strcasecmp(filename, MUSIC_BIG) == 0, ("Attempting to close Archive file '%s', need to add code to handle its shutdown correctly.", filename));
 
 	// may need to do some other processing here first.
 	

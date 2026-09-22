@@ -891,7 +891,7 @@ void MetaMap::loadWasdBindings( const AsciiString& overlayFile )
 GameMessage::Type MetaMap::findGameMessageMetaType(const char* name)
 {
 	for (const LookupListRec* metaNames = GameMessageMetaTypeNames; metaNames->name; metaNames++)
-		if (stricmp(metaNames->name, name) == 0)
+		if (strcasecmp(metaNames->name, name) == 0)
 			return (GameMessage::Type)metaNames->value;
 
 	DEBUG_CRASH(("MetaTypeName %s not found -- did you remember to add it to GameMessageMetaTypeNames[] ?", name));

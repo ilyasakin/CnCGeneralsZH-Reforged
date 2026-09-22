@@ -904,7 +904,7 @@ void CommandButton::parseCommand( INI* ini, void *instance, void *store, const v
 	for( i = 0; TheGuiCommandNames[ i ]; i++ )
 	{
 
-		if( stricmp( TheGuiCommandNames[ i ], token ) == 0 )
+		if( strcasecmp( TheGuiCommandNames[ i ], token ) == 0 )
 		{
 
 			GUICommandType *command = (GUICommandType *)store;
