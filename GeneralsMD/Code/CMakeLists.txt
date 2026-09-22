@@ -909,6 +909,9 @@ add_lib_test(test_compression compression)
 # something.  See docs/mac-port/B7-w3d-layout.md.
 add_lib_test(test_w3dlayout)
 target_include_directories(test_w3dlayout PRIVATE
+  # Libraries/Include is here because always.h reaches Platform/MSVCCompat.h, which B3 added after
+  # B7 wrote this target.  Neither branch could see the other; it only fails once both are merged.
+  ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
   ${WW}/WW3D2 ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/WWSaveLoad ${WW}/Wwutil)
 
 # Every test from here to test_pixelcentre links the renderer or a Direct3D backend, so they exist
