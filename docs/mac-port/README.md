@@ -214,6 +214,51 @@ So: any change that defines, redefines or shims a name the Windows SDK also owns
 before merge, and the reviewer's job is specifically to ask *what does this do to the SDK header
 that includes it*. Until E2 exists, that review is the only Windows check this project has.
 
+### Rule: when you write a check, say what it cannot see
+
+Added 2026-09-22 after **four** instances in one day, each found only because something else caught
+it. The shape: *a check that shares the property it is checking, so it agrees with the code under
+test while both differ from the truth.*
+
+| Check | Shared the property | Found by |
+|:--|:--|:--|
+| `DetRound`'s 400,000-value sweep | referenced the C library, which has the same 64-bit `long` and the same saturation as the arm64 code under test | E3, running the real x86 instruction |
+| E3's own probe | varies architecture while holding OS and **endianness** fixed, so a byte-order probe would agree with itself | its author, refusing to add one |
+| `crcengine_byte_at_a_time_matches_block` | both sides move together, so it passes at either accumulator width | rewriting `crc.h` |
+| `persist_object_round_trips_through_its_factory` | checks the object's data, not the identity token the round trip exists to preserve — passed through the entire x64 port while the token was lost | measuring the chunk payload |
+| A root-level `grep -r` | (tooling) `ugrep` honours `.gitignore` by default and skips **466 tracked files**, including 54 `.cpp`/`.h` in two **built** libraries | an explicit-directory sweep disagreeing with it |
+
+So: every test and every sweep gets a sentence saying what it does **not** establish. E3's header
+does this and is the model. An absolute expected value beats a self-consistency check wherever one
+can be derived — `crc.h`'s new test asserts `0x93b0f838` for "Westwood Studios" rather than that
+two code paths agree.
+
+**Tooling corollary**, measured on this machine: `grep -rln 'DEBUG' .` finds **0** files under
+`Libraries/Source/debug/`; `grep -rln --no-ignore-files 'DEBUG' .` finds **13**; and
+`git check-ignore` says git does not ignore them. Naming the directory explicitly is also safe.
+Recurse from the root and you silently miss two built libraries. Use `--no-ignore-files`, or drive
+the file list from `git ls-files`.
+
+### Rule: never define `_UNIX`
+
+It will look free, and it is the most expensive thing in this tree.
+
+`_UNIX` appears at roughly sixty sites across WWVegas — twenty in `rawfile.cpp` alone, plus
+`cpudetect.cpp`, `data.cpp`, `ini.cpp`, `hash.cpp`, `matrix3d.h`, `vector3.h`, `udp.h`,
+`widestring.h`, `wwstring.h`. It is Westwood's own never-finished UNIX port, and defining it would
+make a large part of `wwlib` compile at once.
+
+Two of those arms have now been read, and the tree records what they were:
+
+- `mutex.cpp` — the `#ifdef _UNIX` arms "were not a port; they were a hole": locks that took
+  nothing and answered success, constructors that built nothing.
+- `thread.cpp:201` — its `_UNIX` branch "used to return 0 from here for every thread", which makes
+  every main-thread assertion in `TextureLoader` and `DX8_THREAD_ASSERT` pass from anywhere.
+
+Those two have been replaced. **The other fifty-eight have not been read.** Defining `_UNIX` trades
+compile errors for silent misbehaviour, which is exactly what B5's task file forbids for a
+`WinTypes.h`. Port the file in front of you; do not switch on someone's abandoned 1990s branch.
+
 ### Rule: grep the vendored sources for platform predicates
 
 Added 2026-09-22 after three instances in one afternoon, all the same shape — **a platform
