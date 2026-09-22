@@ -44,6 +44,7 @@
 //-----------------------------------------------------------------------------
 
 #include "W3DDevice/GameClient/heightmap.h"
+#include "Lib/Clock.h"
 #include "W3DDevice/GameClient/W3DWaterTracks.h"
 #include "W3DDevice/GameClient/W3DShaderManager.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
@@ -866,19 +867,19 @@ void WaterTracksRenderSystem::update()
 	// third of its motion to the cast every frame. The counter is the performance counter and not
 	// timeGetTime for the same reason: a 1 ms tick quantises a 3 ms frame by a third.
 	//
-	static LARGE_INTEGER perfFreq = { 0 };
-	static LARGE_INTEGER lastCount = { 0 };
+	static long long perfFreq = 0;
+	static long long lastCount = 0;
 	static Real carryMs = 0.0f;
-	LARGE_INTEGER nowCount;
 
-	if (perfFreq.QuadPart == 0)
-		QueryPerformanceFrequency(&perfFreq);
-	QueryPerformanceCounter(&nowCount);
-	if (lastCount.QuadPart == 0)
-		lastCount.QuadPart = nowCount.QuadPart;
+	if (perfFreq == 0)
+		perfFreq = Clock_Ticks_Per_Second();
+	const long long nowCount = Clock_Ticks();
+	if (lastCount == 0)
+		lastCount = nowCount;
 
-	Real elapsedMs = (Real)((double)(nowCount.QuadPart - lastCount.QuadPart) * 1000.0 / (double)perfFreq.QuadPart);
-	lastCount.QuadPart = nowCount.QuadPart;
+	Real elapsedMs = (perfFreq != 0)
+		? (Real)((double)(nowCount - lastCount) * 1000.0 / (double)perfFreq) : 0.0f;
+	lastCount = nowCount;
 	if (elapsedMs > 100.0f)
 		elapsedMs = 100.0f;		// a level load must not run the surf forward
 

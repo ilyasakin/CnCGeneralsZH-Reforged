@@ -129,7 +129,7 @@ void StatsCollector::reset( void )
 	// zero out
 	zeroOutStats();
 
-	m_lastUpdate = TheGameLogic->getFrame(); // timeGetTime();
+	m_lastUpdate = TheGameLogic->getFrame(); // Clock_Milliseconds();
 }	
 
 // Msgs pass through here so we can track whichever ones we want
@@ -196,7 +196,7 @@ void StatsCollector::update( void )
 
 	zeroOutStats();
 
-	m_lastUpdate = TheGameLogic->getFrame(); //timeGetTime();
+	m_lastUpdate = TheGameLogic->getFrame(); //Clock_Milliseconds();
 	
 }
 

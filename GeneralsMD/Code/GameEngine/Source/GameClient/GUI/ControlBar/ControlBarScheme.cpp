@@ -52,6 +52,7 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/Player.h"
 #include "Common/PlayerTemplate.h"
@@ -1131,7 +1132,7 @@ void ControlBarSchemeManager::update( void )
 	static UnsignedInt lastStepMs = 0;
 	static Real stepAccumMs = 0.0f;
 
-	if (!GameClient_isUiAnimStepDue(lastStepMs, stepAccumMs, timeGetTime(), UI_ANIM_STEPS_PER_SEC))
+	if (!GameClient_isUiAnimStepDue(lastStepMs, stepAccumMs, Clock_Milliseconds(), UI_ANIM_STEPS_PER_SEC))
 		return;
 
 	if(m_currentScheme)

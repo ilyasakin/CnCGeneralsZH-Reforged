@@ -44,6 +44,7 @@
 
 // SYSTEM INCLUDES 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 
 // USER INCLUDES 
@@ -201,7 +202,7 @@ static const char *getCurrentTimeString(void)
 static const char *getCurrentTickString(void)
 {
 	static char TheTickString[32];
-	snprintf(TheTickString, ARRAY_SIZE(TheTickString), "(T=%08lx)",::GetTickCount());
+	snprintf(TheTickString, ARRAY_SIZE(TheTickString), "(T=%08lx)",Clock_Milliseconds_Coarse());
 	return TheTickString;
 }
 
@@ -243,7 +244,7 @@ static DWORD theLastLogFlushMS = 0;
 
 static void flushLogFileAtMostOnceASecond(void)
 {
-	const DWORD nowMS = ::GetTickCount();
+	const DWORD nowMS = Clock_Milliseconds_Coarse();
 	if (nowMS - theLastLogFlushMS < LOG_FLUSH_INTERVAL_MS)
 		return;
 	theLastLogFlushMS = nowMS;
@@ -613,7 +614,7 @@ void DebugSetFlags(int flags)
 // ----------------------------------------------------------------------------
 SimpleProfiler::SimpleProfiler()
 {
-	QueryPerformanceFrequency((LARGE_INTEGER*)&m_freq);
+	m_freq = Clock_Ticks_Per_Second();
 	m_startThisSession = 0;
 	m_totalThisSession = 0;
 	m_totalAllSessions = 0;
@@ -624,7 +625,7 @@ SimpleProfiler::SimpleProfiler()
 void SimpleProfiler::start()
 {
 	DEBUG_ASSERTCRASH(m_startThisSession == 0, ("already started"));
-	QueryPerformanceCounter((LARGE_INTEGER*)&m_startThisSession);
+	m_startThisSession = Clock_Ticks();
 }
 
 // ----------------------------------------------------------------------------
@@ -633,7 +634,7 @@ void SimpleProfiler::stop()
 	if (m_startThisSession != 0) 
 	{
 		__int64 stop;
-		QueryPerformanceCounter((LARGE_INTEGER*)&stop);
+		stop = Clock_Ticks();
 		m_totalThisSession = stop - m_startThisSession;
 		m_totalAllSessions += stop - m_startThisSession;
 		m_startThisSession = 0;

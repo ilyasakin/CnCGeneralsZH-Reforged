@@ -28,6 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #define DEFINE_SHADOW_NAMES
 
@@ -3018,7 +3019,7 @@ void InGameUI::update( void )
 			// so far and apply only the ones not applied yet, so nothing drifts however long it
 			// runs.  See FINDINGS.md 7.2.
 			//
-			const UnsignedInt nowMs = timeGetTime();
+			const UnsignedInt nowMs = Clock_Milliseconds();
 			if( m_subtitleFreezeStartMs == 0 )
 			{
 				m_subtitleFreezeStartMs = nowMs;
@@ -3223,7 +3224,7 @@ void InGameUI::update( void )
 	// frames the wall clock says went by.  Capped at four, so coming back from a hitch or an
 	// alt-tab does not fling the camera across the map on the first frame.  See FINDINGS.md 7.4.
 	//
-	const UnsignedInt cameraNowMs = timeGetTime();
+	const UnsignedInt cameraNowMs = Clock_Milliseconds();
 	Real cameraSteps = 1.0f;
 	if( m_cameraKeyLastMs != 0 )
 		cameraSteps = (Real)(cameraNowMs - m_cameraKeyLastMs) * (LOGICFRAMES_PER_SECOND / 1000.0f);
@@ -3699,7 +3700,7 @@ void InGameUI::noteAllyCursor( Int playerIndex, Real x, Real y )
 	cursor.position.x = x;
 	cursor.position.y = y;
 	cursor.position.z = TheTerrainLogic->getGroundHeight( x, y );
-	cursor.heardMs = timeGetTime();
+	cursor.heardMs = Clock_Milliseconds();
 
 	// the first report of a match arrives wherever that ally is looking, which is nowhere near the
 	// origin the marker starts at - easing in from there would draw a line across the whole map
@@ -3742,7 +3743,7 @@ Real InGameUI::getAllyCursorFade( Int playerIndex ) const
 	if( cursor.known == FALSE )
 		return 0.0f;
 
-	const UnsignedInt ageMs = timeGetTime() - cursor.heardMs;
+	const UnsignedInt ageMs = Clock_Milliseconds() - cursor.heardMs;
 	if( ageMs >= ALLY_CURSOR_GONE_MS )
 		return 0.0f;
 	if( ageMs <= ALLY_CURSOR_HOLD_MS )
@@ -3758,7 +3759,7 @@ Real InGameUI::getAllyCursorFade( Int playerIndex ) const
 //-------------------------------------------------------------------------------------------------
 void InGameUI::updateAllyCursors( void )
 {
-	const UnsignedInt nowMs = timeGetTime();
+	const UnsignedInt nowMs = Clock_Milliseconds();
 	const UnsignedInt elapsedMs = ( m_allyCursorEasedMs == 0 ) ? 0 : ( nowMs - m_allyCursorEasedMs );
 	m_allyCursorEasedMs = nowMs;
 
@@ -3821,7 +3822,7 @@ void InGameUI::sendLocalAllyCursor( void )
 	if( TheNetwork == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
 		return;
 
-	const UnsignedInt nowMs = timeGetTime();
+	const UnsignedInt nowMs = Clock_Milliseconds();
 	if( m_allyCursorSentMs != 0 && ( nowMs - m_allyCursorSentMs ) < ALLY_CURSOR_SEND_INTERVAL_MS )
 		return;
 
@@ -4390,7 +4391,7 @@ void InGameUI::addOrderHint( OrderHint& hint, const std::vector<OrderHint>& prev
 			ordinal++;
 	}
 
-	hint.bornMs = timeGetTime();
+	hint.bornMs = Clock_Milliseconds();
 
 	Int seen = 0;
 	for( std::vector<OrderHint>::const_iterator it = previous.begin();
@@ -8381,7 +8382,7 @@ void InGameUI::drawHudOverlay( void )
 	++m_hudDrawCount;
 	const UnsignedInt clientFrame = m_hudDrawCount;
 	const UnsignedInt logicFrame = TheGameLogic->getFrame();
-	UnsignedInt nowMs = timeGetTime();
+	UnsignedInt nowMs = Clock_Milliseconds();
 	if( m_hudLastSampleFrame == 0 )
 	{
 		m_hudLastSampleMs = nowMs;
@@ -10017,7 +10018,7 @@ extern Real TheStripDrawMS;
 static Real stripElapsedMS( const Int64 &from, const Int64 &to )
 {
 	Int64 freq;
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+	freq = Clock_Ticks_Per_Second();
 	if( freq == 0 )
 		return 0.0f;
 	return (Real)((double)( to - from ) * 1000.0 / (double)freq );
@@ -10029,7 +10030,7 @@ void InGameUI::drawProductionStrip( void )
 {
 #ifdef DEBUG_LOGGING
 	Int64 tGatherStart, tGatherEnd, tDrawEnd;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tGatherStart );
+	tGatherStart = Clock_Ticks();
 	tGatherEnd = tGatherStart;
 	tDrawEnd = tGatherStart;
 	TheStripGatherMS = 0.0f;
@@ -10135,7 +10136,7 @@ void InGameUI::drawProductionStrip( void )
 	}
 
 #ifdef DEBUG_LOGGING
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tGatherEnd );
+	tGatherEnd = Clock_Ticks();
 	TheStripGatherMS = stripElapsedMS( tGatherStart, tGatherEnd );
 #endif
 
@@ -10217,7 +10218,7 @@ void InGameUI::drawProductionStrip( void )
 	TheDisplay->endBatch2D();
 
 #ifdef DEBUG_LOGGING
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tDrawEnd );
+	tDrawEnd = Clock_Ticks();
 	TheStripDrawMS = stripElapsedMS( tGatherEnd, tDrawEnd );
 #endif
 }

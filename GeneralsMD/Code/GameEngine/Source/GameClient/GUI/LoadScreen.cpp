@@ -48,6 +48,7 @@
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 //-----------------------------------------------------------------------------
 // USER INCLUDES //////////////////////////////////////////////////////////////
@@ -592,7 +593,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 		// if we're min spec'ed don't play a movie
 		
 		Int delay = mission->m_voiceLength * 1000;
-		Int begin = timeGetTime();
+		Int begin = Clock_Milliseconds();
 		Int currTime = begin;
 		Int fudgeFactor = 0;
 		while(begin + delay > currTime )
@@ -603,7 +604,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 			TheWindowManager->update();
 			TheDisplay->draw();
 			Sleep(100);
-			currTime = timeGetTime();
+			currTime = Clock_Milliseconds();
 		}
 		
 
@@ -1110,7 +1111,7 @@ void ChallengeLoadScreen::init( GameInfo *game )
 		activatePiecesMinSpec(generalPlayer, generalOpponent);
 
 		Int delay = mission->m_voiceLength * 1000;
-		Int begin = timeGetTime();
+		Int begin = Clock_Milliseconds();
 		Int currTime = begin;
 		Int fudgeFactor = 0;
 		while(begin + delay > currTime )
@@ -1121,7 +1122,7 @@ void ChallengeLoadScreen::init( GameInfo *game )
 			TheWindowManager->update();
 			TheDisplay->draw();
 			Sleep(100);
-			currTime = timeGetTime();
+			currTime = Clock_Milliseconds();
 		}
 		
 		m_wndVideoManager->update();
@@ -1257,8 +1258,8 @@ void ShellGameLoadScreen::init( GameInfo *game )
 			win->winHide(FALSE);
 		firstLoad = FALSE;
 
-		UnsignedInt showTime = timeGetTime();
-		while(showTime + 3000 > timeGetTime())
+		UnsignedInt showTime = Clock_Milliseconds();
+		while(showTime + 3000 > Clock_Milliseconds())
 		{	
 			LoadScreen::update(0);
 			Sleep(100);

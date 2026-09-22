@@ -55,6 +55,17 @@ endif()
 set(WW ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/WWVegas)
 set(COMP ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/Compression)
 
+# Libraries/Include holds the handful of headers that belong to no library and are wanted by all
+# of them: Lib/BaseType.h, Lib/trig.h and, since B2, Lib/Clock.h.  Thirteen targets read the clock
+# - the five WWVegas libraries, the four dx11 ones and three of their tests - and naming each of
+# them here is a list that goes stale the first time somebody adds a target and forgets.
+#
+# This is a directory-wide include path and nothing else.  The warning further down about not
+# defining things globally is about compile *definitions*, where a mismatch between libraries is a
+# link error or a differently-shaped struct; an extra /I carries no such risk, and the three
+# headers behind it are included by name and by nobody who does not want them.
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+
 # The third-party sources EA stripped out, which this repository does not carry either.  build.bat
 # fetches them before it configures; say so here rather than let the generator report a missing
 # source file per library.
@@ -867,6 +878,10 @@ target_include_directories(test_wwsaveload PRIVATE ${WW}/WWSaveLoad ${WW}/WWLib 
 
 add_lib_test(test_wwutil PENDING_MACOS wwutil wwmath wwlib wwdebug)
 target_include_directories(test_wwutil PRIVATE ${WW}/Wwutil ${WW}/WWLib ${WW}/WWMath)
+
+# Lib/Clock.h is header-only and links nothing, so this runs on both platforms from day one -
+# which matters, because the macOS half of that header is the half nobody has ever executed.
+add_lib_test(test_clock)
 
 add_lib_test(test_compression compression)
 

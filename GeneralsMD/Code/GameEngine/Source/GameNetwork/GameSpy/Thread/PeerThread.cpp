@@ -30,6 +30,7 @@
 // Author: Matthew D. Campbell, June 2002
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/Registry.h"
 #include "Common/StackDump.h"
@@ -1540,7 +1541,7 @@ void PeerThreadClass::Thread_Function()
 
 #ifdef DEBUG_LOGGING
 					static UnsignedInt prev = 0;
-					UnsignedInt now = timeGetTime();
+					UnsignedInt now = Clock_Milliseconds();
 					UnsignedInt diff = now - prev;
 					prev = now;
 #endif
@@ -1643,7 +1644,7 @@ void PeerThreadClass::Thread_Function()
 							peerLeaveRoom( peer, GroupRoom, NULL );
 						}
 						isThreadHosting = 1; // debugging
-						s_lastStateChangedHeartbeat = timeGetTime(); // wait the full interval before updating state
+						s_lastStateChangedHeartbeat = Clock_Milliseconds(); // wait the full interval before updating state
 						s_wantStateChangedHeartbeat = FALSE;
 						m_isHosting = TRUE;
 						m_allowObservers = incomingRequest.stagingRoomCreation.allowObservers;
@@ -1734,7 +1735,7 @@ void PeerThreadClass::Thread_Function()
 
 		if (isThreadHosting && s_wantStateChangedHeartbeat)
 		{
-			UnsignedInt now = timeGetTime();
+			UnsignedInt now = Clock_Milliseconds();
 			if (now > s_lastStateChangedHeartbeat + s_heartbeatInterval)
 			{
 				s_lastStateChangedHeartbeat = now;
@@ -1743,7 +1744,7 @@ void PeerThreadClass::Thread_Function()
 
 #ifdef DEBUG_LOGGING
 				static UnsignedInt prev = 0;
-				UnsignedInt now = timeGetTime();
+				UnsignedInt now = Clock_Milliseconds();
 				UnsignedInt diff = now - prev;
 				prev = now;
 #endif

@@ -35,6 +35,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "systimer.h"
+#include "Lib/Clock.h"
 
 SysTimeClass SystemTime;
 
@@ -56,7 +57,7 @@ SysTimeClass SystemTime;
 SysTimeClass::SysTimeClass(void)
 {
 	//tell windows we need single ms precision.
-	timeBeginPeriod(1);
+	Clock_Begin_Fine_Resolution();
 }
 
 /***********************************************************************************************
@@ -76,7 +77,7 @@ SysTimeClass::SysTimeClass(void)
 SysTimeClass::~SysTimeClass(void)
 {
 	//tell windows we need single ms precision.
-	timeEndPeriod(1);
+	Clock_End_Fine_Resolution();
 }
 
 /***********************************************************************************************
@@ -95,7 +96,7 @@ SysTimeClass::~SysTimeClass(void)
  *=============================================================================================*/
 void SysTimeClass::Reset(void)
 {
-	StartTime = timeGetTime();
+	StartTime = Clock_Milliseconds();
 	WrapAdd = 0 - StartTime;
 }
 

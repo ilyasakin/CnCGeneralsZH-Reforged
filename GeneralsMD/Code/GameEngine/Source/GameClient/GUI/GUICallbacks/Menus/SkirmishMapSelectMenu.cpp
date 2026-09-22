@@ -29,6 +29,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/GameEngine.h"
 #include "Common/MessageStream.h"
@@ -124,7 +125,7 @@ static void addRandomMapRows( GameWindow *listbox )
 static Bool generateRandomMapForSkirmish( RandomMapSize size, AsciiString& mapPathOut )
 {
 	RandomMapSettings settings;
-	settings.m_seed = (Int)GetTickCount();
+	settings.m_seed = (Int)Clock_Milliseconds_Coarse();
 	settings.m_numPlayers = RandomMapGenerator::MAX_PLAYERS;
 	settings.m_playableCells = RandomMapGenerator::cellsFor( size, settings.m_numPlayers );
 

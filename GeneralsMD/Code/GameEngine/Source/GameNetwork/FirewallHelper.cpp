@@ -47,6 +47,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/crc.h"
 #include "Common/UserPreferences.h"
@@ -118,7 +119,7 @@ FirewallHelperClass::FirewallHelperClass(void)
 	
 	m_currentState = DETECTIONSTATE_IDLE;
 
-	m_sourcePortPool = 4096 + ((timeGetTime() / 1000) % 1000); // do this to make sure we don't use the same source
+	m_sourcePortPool = 4096 + ((Clock_Milliseconds() / 1000) % 1000); // do this to make sure we don't use the same source
 																										// port before a previous connection has had a chance
 																										// to time out.
 }
@@ -659,7 +660,7 @@ Bool FirewallHelperClass::detectionBeginUpdate() {
 
 
 
-	m_timeoutStart = timeGetTime();
+	m_timeoutStart = Clock_Milliseconds();
 	m_timeoutLength = 5000;
 	DEBUG_LOG(("About to call gethostbyname for the mangler address\n"));
 	int namenum = 0;
@@ -717,7 +718,7 @@ Bool FirewallHelperClass::detectionBeginUpdate() {
 			DEBUG_LOG(("Found mangler address at %d.%d.%d.%d\n", mangler_addresses[m][0], mangler_addresses[m][1], mangler_addresses[m][2], mangler_addresses[m][3]));
 		}
 
-	} while ((m_numManglers < MAX_NUM_MANGLERS) && ((timeGetTime() - m_timeoutStart) < m_timeoutLength));
+	} while ((m_numManglers < MAX_NUM_MANGLERS) && ((Clock_Milliseconds() - m_timeoutStart) < m_timeoutLength));
 
 
 	DEBUG_ASSERTCRASH(m_numManglers > 2, ("not enough mangler addresses found."));
@@ -772,7 +773,7 @@ Bool FirewallHelperClass::detectionBeginUpdate() {
 	/*
 	** Send to the mangler from this port until we get a response.
 	*/
-	m_timeoutStart = timeGetTime();
+	m_timeoutStart = Clock_Milliseconds();
 	m_timeoutLength = 6000;
 
 	sendToManglerFromPort(m_manglers[0], m_sparePorts[0], m_packetID);
@@ -793,12 +794,12 @@ Bool FirewallHelperClass::detectionTest1Update() {
 			m_sourcePortAllocationDelta = 0;
 			DEBUG_LOG(("FirewallHelperClass::detectionTest1Update - Non-mangled response from mangler, quitting test.\n"));
 		}
-		if ((m_mangledPorts[0] == 0) && ((timeGetTime() - m_timeoutStart) < m_timeoutLength)) {
+		if ((m_mangledPorts[0] == 0) && ((Clock_Milliseconds() - m_timeoutStart) < m_timeoutLength)) {
 			// we are still waiting for a response and haven't timed out yet.
 			DEBUG_LOG(("FirewallHelperClass::detectionTest1Update - waiting for response from mangler.\n"));
 			return FALSE;
 		}
-		if ((m_mangledPorts[0] == 0) && ((timeGetTime() - m_timeoutStart) >= m_timeoutLength)) {
+		if ((m_mangledPorts[0] == 0) && ((Clock_Milliseconds() - m_timeoutStart) >= m_timeoutLength)) {
 			// we are still waiting for a response and we timed out.
 			DEBUG_LOG(("FirewallHelperClass::detectionTest1Update - timed out waiting for response from mangler.\n"));
 		}
@@ -822,7 +823,7 @@ Bool FirewallHelperClass::detectionTest1Update() {
 	/*
 	** Send to the mangler from this port until we get a response.
 	*/
-	m_timeoutStart = timeGetTime();
+	m_timeoutStart = Clock_Milliseconds();
 	m_timeoutLength = 6000;
 	m_mangledPorts[1] = 0;
 	sendToManglerFromPort(m_manglers[1], m_sparePorts[0], m_packetID+1);
@@ -836,7 +837,7 @@ Bool FirewallHelperClass::detectionTest2Update() {
 	m_mangledPorts[1] = getManglerResponse(m_packetID+1);
 
 	if (m_mangledPorts[1] == 0) {
-		if ((timeGetTime() - m_timeoutStart) <= m_timeoutLength) {
+		if ((Clock_Milliseconds() - m_timeoutStart) <= m_timeoutLength) {
 			return FALSE;
 		}
 		DEBUG_LOG(("FirewallHelperClass::detectionTest2Update - timed out waiting for mangler response\n"));
@@ -938,7 +939,7 @@ Bool FirewallHelperClass::detectionTest3Update() {
 		** Keep sending from each port until we get a response to all the sends. There's a implied
 		** delay between initial sends due to the timeout in Get_Mangler_Response.
 		*/
-		m_timeoutStart = timeGetTime();
+		m_timeoutStart = Clock_Milliseconds();
 		m_timeoutLength = 12000;
 
 		DEBUG_LOG(("FirewallHelperClass::detectionTest3Update - Sending to %d manglers\n", NUM_TEST_PORTS));
@@ -973,7 +974,7 @@ Bool FirewallHelperClass::detectionTest3WaitForResponsesUpdate() {
 	}
 
 	if (m_numResponses < NUM_TEST_PORTS) {
-		if ((timeGetTime() - m_timeoutStart) > m_timeoutLength) {
+		if ((Clock_Milliseconds() - m_timeoutStart) > m_timeoutLength) {
 			/*
 			** Close down those sockets - we are finished with them.
 			*/
@@ -1084,7 +1085,7 @@ Bool FirewallHelperClass::detectionTest3WaitForResponsesUpdate() {
 			/*
 			** Get a reference port.
 			*/
-			m_timeoutStart = timeGetTime();
+			m_timeoutStart = Clock_Milliseconds();
 			m_timeoutLength = 4000;
 			m_mangledPorts[0] = 0;
 			m_packetID += 10;
@@ -1123,7 +1124,7 @@ Bool FirewallHelperClass::detectionTest4Stage1Update() {
 	m_mangledPorts[0] = getManglerResponse(m_packetID);
 
 	if (m_mangledPorts[0] == 0) {
-		if ((timeGetTime() - m_timeoutStart) > m_timeoutLength) {
+		if ((Clock_Milliseconds() - m_timeoutStart) > m_timeoutLength) {
 			closeSpareSocket(m_sparePorts[0]);
 			closeSpareSocket(m_sparePorts[1]);
 			m_currentState = DETECTIONSTATE_DONE;
@@ -1149,7 +1150,7 @@ Bool FirewallHelperClass::detectionTest4Stage1Update() {
 	** what we would normally expect.
 	*/
 	m_packetID++;
-	m_timeoutStart = timeGetTime();
+	m_timeoutStart = Clock_Milliseconds();
 	m_timeoutLength = 4000;
 
 	sendToManglerFromPort(m_manglers[0], m_sparePorts[1], m_packetID);
@@ -1162,7 +1163,7 @@ Bool FirewallHelperClass::detectionTest4Stage2Update() {
 	m_mangledPorts[1] = getManglerResponse(m_packetID);
 
 	if (m_mangledPorts[1] == 0) {
-		if ((timeGetTime() - m_timeoutStart) > m_timeoutLength) {
+		if ((Clock_Milliseconds() - m_timeoutStart) > m_timeoutLength) {
 			closeSpareSocket(m_sparePorts[0]);
 			closeSpareSocket(m_sparePorts[1]);
 			m_currentState = DETECTIONSTATE_DONE;

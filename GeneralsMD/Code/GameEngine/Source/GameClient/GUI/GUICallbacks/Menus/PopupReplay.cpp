@@ -46,6 +46,7 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/LocalFileSystem.h"
 #include "Common/MessageStream.h"
@@ -177,7 +178,7 @@ void PopupReplayUpdate( WindowLayout *layout, void *userData )
 	{
 		// the replay save confirmation popup is up
 		// check to see if its time to take it down.
-		if ((timeGetTime() - s_fileSavePopupStartTime) >= s_fileSavePopupDuration) 
+		if ((Clock_Milliseconds() - s_fileSavePopupStartTime) >= s_fileSavePopupDuration) 
 		{
 			ShowReplaySavedPopup(FALSE);
 
@@ -334,7 +335,7 @@ void reallySaveReplay(void)
 	PopulateReplayFileListbox(listboxGames);
 
 	ShowReplaySavedPopup(TRUE);
-	s_fileSavePopupStartTime = timeGetTime();
+	s_fileSavePopupStartTime = Clock_Milliseconds();
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -42,6 +42,7 @@
 #endif
 
 #include "Common/GameCommon.h"	// ensure we get DUMP_PERF_STATS, or not
+#include "Lib/Clock.h"
 
 #ifdef PERF_TIMERS
 #include "GameLogic/GameLogic.h"
@@ -56,8 +57,20 @@ class DebugDisplayInterface;
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 
-#define NO_USE_QPF	// non-QPF is much faster.
+/* This used to read the time stamp counter through an __asm RDTSC block, with the performance
+	 counter behind a USE_QPF that was never defined.  Two things were wrong with that, and B2 found
+	 both while sweeping the clocks:
 
+	 The block was not dead.  GameCommon.h defines DUMP_PERF_STATS in every _DEBUG or _INTERNAL
+	 build, so this function - and its __asm - was compiled in all of them, and the PERF_TIMERS
+	 CMake option turns it on in a Release build too.  It was only ever invisible because nobody
+	 builds those configurations.  This project is x64 only (CMakeLists.txt refuses anything else)
+	 and MSVC does not accept __asm on x64 at all, so a Debug build of this tree does not compile
+	 today.  docs/mac-port/tasks/B2-time-shim.md carries the finding.
+
+	 And the reading did not match the rate.  InitPrecisionTimer calibrated the time stamp counter
+	 against the performance counter and stored a TSC rate, which is only correct while this reads
+	 the TSC.  Both halves now come from the same clock, so they cannot drift apart. */
 #if defined(PERF_TIMERS) || defined(DUMP_PERF_STATS)
 //-------------------------------------------------------------------------------------------------
 void InitPrecisionTimer();
@@ -68,20 +81,7 @@ void GetPrecisionTimerTicksPerSec(Int64* t);
 //-------------------------------------------------------------------------------------------------
 __forceinline void GetPrecisionTimer(Int64* t)
 {
-#ifdef USE_QPF
-	QueryPerformanceCounter((LARGE_INTEGER*)t);
-#else
-	// CPUID is needed to force serialization of any previous instructions. 
-	__asm 
-	{
-		// for now, I am commenting this out. It throws the timings off a bit more (up to .001%) jkmcd
-		//		CPUID
-		RDTSC
-		MOV ECX,[t]
-		MOV [ECX], EAX
-		MOV [ECX+4], EDX
-	}
-#endif
+	*t = (Int64)Clock_Ticks();
 }
 #endif
 

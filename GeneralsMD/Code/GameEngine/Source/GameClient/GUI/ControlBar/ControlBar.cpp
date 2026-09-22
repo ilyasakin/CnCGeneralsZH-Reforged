@@ -30,6 +30,7 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include <map>
 #define DEFINE_GUI_COMMMAND_NAMES
@@ -287,7 +288,7 @@ void ControlBar::pressCommandButton( Int index )
 	if( slot == SLOT_ARMS_CHORD )
 	{
 		m_chordGroup = ( index == CHORD_SLOT_Q ) ? 0 : 1;
-		m_chordStartMs = timeGetTime();
+		m_chordStartMs = Clock_Milliseconds();
 		m_chordDrawableID = m_currentSelectedDrawable ? m_currentSelectedDrawable->getID()
 																								 : INVALID_DRAWABLE_ID;
 		markUIDirty();		// the group that is armed greys the other one out
@@ -2186,7 +2187,7 @@ void ControlBar::applyPanelSlide( void )
 //-------------------------------------------------------------------------------------------------
 void ControlBar::updatePanelSlide( void )
 {
-	const UnsignedInt now = timeGetTime();
+	const UnsignedInt now = Clock_Milliseconds();
 	const UnsignedInt sinceMs = ( m_panelSlideMs == 0 || now < m_panelSlideMs ) ? 0 : now - m_panelSlideMs;
 	m_panelSlideMs = now;
 
@@ -2245,7 +2246,7 @@ void ControlBar::showPanel( Int panel, Bool show, Bool immediate )
 		m_panelHidden[ panel ] = !show && ( m_panelDropCap[ panel ] <= 0 );
 	}
 
-	m_panelSlideMs = timeGetTime();
+	m_panelSlideMs = Clock_Milliseconds();
 	applyPanelSlide();
 
 }  // end showPanel
@@ -3021,7 +3022,7 @@ void ControlBar::update( void )
 	// a chord the player armed and then walked away from expires on its own, so it cannot be
 	// waiting to eat a keystroke a minute later
 	//
-	if( m_chordGroup >= 0 && timeGetTime() - m_chordStartMs > CHORD_TIMEOUT_MS )
+	if( m_chordGroup >= 0 && Clock_Milliseconds() - m_chordStartMs > CHORD_TIMEOUT_MS )
 	{
 		dropChord();
 	}
@@ -3048,7 +3049,7 @@ void ControlBar::update( void )
 	{
 		const Int visibleRows = ( countVisibleSpecialPowerShortcuts() + SPECIAL_POWER_SHORTCUT_COLS - 1 )
 														/ SPECIAL_POWER_SHORTCUT_COLS;
-		if( timeGetTime() - m_specialPowerShortcutRowMs > CHORD_TIMEOUT_MS
+		if( Clock_Milliseconds() - m_specialPowerShortcutRowMs > CHORD_TIMEOUT_MS
 				|| m_specialPowerShortcutParent == NULL
 				|| m_specialPowerShortcutParent->winIsHidden()
 				|| m_specialPowerShortcutRow >= visibleRows )
@@ -4446,7 +4447,7 @@ void ControlBar::pressSpecialPowerShortcut( Int index )
 	if( slot == SLOT_ARMS_CHORD )
 	{
 		m_specialPowerShortcutRow = index;
-		m_specialPowerShortcutRowMs = timeGetTime();
+		m_specialPowerShortcutRowMs = Clock_Milliseconds();
 		return;
 	}
 
@@ -5650,7 +5651,7 @@ void ControlBar::updatePurchaseScienceHotKeys( void )
 
 	// a column marked and then thought better of expires on its own, like an armed builder chord
 	if( m_purchaseScienceColumn >= 0
-			&& timeGetTime() - m_purchaseScienceColumnMs > CHORD_TIMEOUT_MS )
+			&& Clock_Milliseconds() - m_purchaseScienceColumnMs > CHORD_TIMEOUT_MS )
 		clearPurchaseScienceColumn();
 
 	// the promotion screen ships its own big yellow font; the key reads like a command bar label
@@ -5712,7 +5713,7 @@ void ControlBar::pressPurchaseScienceColumn( Int column )
 	if( m_purchaseScienceColumn != column )
 	{
 		m_purchaseScienceColumn = column;
-		m_purchaseScienceColumnMs = timeGetTime();
+		m_purchaseScienceColumnMs = Clock_Milliseconds();
 		updatePurchaseScienceHotKeys();
 
 		// a column with nothing left to sell says so rather than sitting there armed

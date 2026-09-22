@@ -33,6 +33,7 @@
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include <stdlib.h>
+#include "Lib/Clock.h"
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "Lib/BaseType.h"
@@ -866,7 +867,7 @@ extern UnsignedInt TheSortingPolygonsRefused;
 static Real sceneElapsedMS( const Int64 &from, const Int64 &to )
 {
 	Int64 freq;
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+	freq = Clock_Ticks_Per_Second();
 	if( freq < 1 )
 		return 0.0f;
 	return (Real)((double)(to - from) * 1000.0 / (double)freq);
@@ -912,7 +913,7 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 		Int64 tTranslucentStart, tTranslucentEnd;
 		const unsigned drawsBefore = DX8Wrapper::Get_Draw_Calls();
 		const unsigned refusedBefore = SortingRendererClass::Get_Refused_Polygon_Count();
-		QueryPerformanceCounter( (LARGE_INTEGER *)&tTranslucentStart );
+		tTranslucentStart = Clock_Ticks();
 #endif
 
 		//don't draw transparent in this mode because they interfere with destination alpha
@@ -921,7 +922,7 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 
 		SortingRendererClass::Flush();	//draw sorted translucent polys like particles.
 #ifdef DEBUG_LOGGING
-		QueryPerformanceCounter( (LARGE_INTEGER *)&tTranslucentEnd );
+		tTranslucentEnd = Clock_Ticks();
 		TheTranslucentMS += sceneElapsedMS( tTranslucentStart, tTranslucentEnd );
 		TheTranslucentDraws += DX8Wrapper::Get_Draw_Calls() - drawsBefore;
 		TheSortingPolygonsRefused += SortingRendererClass::Get_Refused_Polygon_Count() - refusedBefore;

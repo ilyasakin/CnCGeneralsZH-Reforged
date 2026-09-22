@@ -28,6 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include <stdlib.h>
+#include "Lib/Clock.h"
 
 #include "Common/GlobalData.h"
 #include "Common/Player.h"
@@ -464,20 +465,20 @@ void W3DInGameUI::draw( void )
 	extern Real TheUIPostDrawMS;
 	extern Real TheWindowRepaintMS;
 	Int64 tPostStart, tPostEnd, tWinEnd, freq;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tPostStart );
+	tPostStart = Clock_Ticks();
 #endif
 
 	postDraw();
 
 #ifdef DEBUG_LOGGING
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tPostEnd );
+	tPostEnd = Clock_Ticks();
 #endif
 
 	TheWindowManager->winRepaint();
 
 #ifdef DEBUG_LOGGING
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tWinEnd );
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+	tWinEnd = Clock_Ticks();
+	freq = Clock_Ticks_Per_Second();
 	if( freq > 0 )
 	{
 		TheUIPostDrawMS = (Real)((double)(tPostEnd - tPostStart) * 1000.0 / (double)freq);
@@ -1113,7 +1114,7 @@ void W3DInGameUI::drawOrderHints( void )
 	const UnsignedInt MARKER_SLIDE_MS = 130;
 	const Real MARKER_SLIDE_PIXELS = 13.0f;
 
-	const UnsignedInt nowMs = timeGetTime();
+	const UnsignedInt nowMs = Clock_Milliseconds();
 
 	for( std::vector<OrderHint>::const_iterator it = hints.begin(); it != hints.end(); ++it )
 	{

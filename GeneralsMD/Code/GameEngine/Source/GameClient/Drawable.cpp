@@ -28,6 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
   
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/AudioEventInfo.h"
 #include "Common/DynamicAudioEventInfo.h"
@@ -2772,7 +2773,7 @@ void Drawable::draw( View *view )
 	{
 		fadeFrame = TheGameClient->getFrame();
 
-		const UnsignedInt nowMs = timeGetTime();
+		const UnsignedInt nowMs = Clock_Milliseconds();
 		if ( fadeLastMs == 0 )
 			fadeLastMs = nowMs;
 

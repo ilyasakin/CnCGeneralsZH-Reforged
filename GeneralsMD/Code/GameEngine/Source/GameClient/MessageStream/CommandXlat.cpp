@@ -27,6 +27,7 @@
 // Author: Michael S. Booth, February 2001
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "stdlib.h"				// VC++ wants this here, or gives compile error...
 
@@ -2586,7 +2587,7 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			enum { SELECT_MATCHING_AGAIN_MS = 500 };		///< real time: the client frame rate is uncapped
 			static UnsignedInt s_lastMatchingMs = 0;
 
-			const UnsignedInt now = timeGetTime();
+			const UnsignedInt now = Clock_Milliseconds();
 			const Bool again = ( s_lastMatchingMs != 0
 														&& now - s_lastMatchingMs <= SELECT_MATCHING_AGAIN_MS );
 			s_lastMatchingMs = now;
@@ -5564,43 +5565,43 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 		{
 			static __int64 startTime64;
 			static __int64 endTime64,freq64;
-			QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
-			QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
+			startTime64 = Clock_Ticks();
+			freq64 = Clock_Ticks_Per_Second();
 			Int numberLookups = 10000;
 			for( Int testindex = 1; testindex < numberLookups; testindex++ )
 			{
 				Object *objPtr = TheGameLogic->findObjectByID((ObjectID)testindex);
 				objPtr++;
 			}
-			QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+			endTime64 = Clock_Ticks();
 			double timeToUpdate = ((double)(endTime64-startTime64) / (double)(freq64));
 
 			TheInGameUI->message( UnicodeString(L"Time to run %d ObjectID lookups is %f.  Next index is %d."), numberLookups, timeToUpdate, (Int)TheGameLogic->getObjectIDCounter() );
 
 
-			QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
-			QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
+			startTime64 = Clock_Ticks();
+			freq64 = Clock_Ticks_Per_Second();
 			numberLookups = 100000;
 			for( testindex = 1; testindex < numberLookups; testindex++ )
 			{
 				Object *objPtr = TheGameLogic->findObjectByID((ObjectID)testindex);
 				objPtr++;
 			}
-			QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+			endTime64 = Clock_Ticks();
 			timeToUpdate = ((double)(endTime64-startTime64) / (double)(freq64));
 
 			TheInGameUI->message( UnicodeString(L"Time to run %d ObjectID lookups is %f.  Next index is %d."), numberLookups, timeToUpdate, (Int)TheGameLogic->getObjectIDCounter() );
 
 
-			QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
-			QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
+			startTime64 = Clock_Ticks();
+			freq64 = Clock_Ticks_Per_Second();
 			numberLookups = 1000000;
 			for( testindex = 1; testindex < numberLookups; testindex++ )
 			{
 				Object *objPtr = TheGameLogic->findObjectByID((ObjectID)testindex);
 				objPtr++;
 			}
-			QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+			endTime64 = Clock_Ticks();
 			timeToUpdate = ((double)(endTime64-startTime64) / (double)(freq64));
 
 			TheInGameUI->message( UnicodeString(L"Time to run %d ObjectID lookups is %f.  Next index is %d."), numberLookups, timeToUpdate, (Int)TheGameLogic->getObjectIDCounter() );
@@ -5614,43 +5615,43 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 		{
 			static __int64 startTime64;
 			static __int64 endTime64,freq64;
-			QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
-			QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
+			startTime64 = Clock_Ticks();
+			freq64 = Clock_Ticks_Per_Second();
 			Int numberLookups = 10000;
 			for( Int testindex = 1; testindex < numberLookups; testindex++ )
 			{
 				Drawable *drawPtr = TheGameClient->findDrawableByID((DrawableID)testindex);
 				drawPtr++;
 			}
-			QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+			endTime64 = Clock_Ticks();
 			double timeToUpdate = ((double)(endTime64-startTime64) / (double)(freq64));
 
 			TheInGameUI->message( UnicodeString(L"Time to run %d DrawableID lookups is %f.  Next index is %d."), numberLookups, timeToUpdate, (Int)TheGameClient->getDrawableIDCounter() );
 
 
-			QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
-			QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
+			startTime64 = Clock_Ticks();
+			freq64 = Clock_Ticks_Per_Second();
 			numberLookups = 100000;
 			for( testindex = 1; testindex < numberLookups; testindex++ )
 			{
 				Drawable *drawPtr = TheGameClient->findDrawableByID((DrawableID)testindex);
 				drawPtr++;
 			}
-			QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+			endTime64 = Clock_Ticks();
 			timeToUpdate = ((double)(endTime64-startTime64) / (double)(freq64));
 
 			TheInGameUI->message( UnicodeString(L"Time to run %d DrawableID lookups is %f.  Next index is %d."), numberLookups, timeToUpdate, (Int)TheGameClient->getDrawableIDCounter() );
 
 
-			QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
-			QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
+			startTime64 = Clock_Ticks();
+			freq64 = Clock_Ticks_Per_Second();
 			numberLookups = 1000000;
 			for( testindex = 1; testindex < numberLookups; testindex++ )
 			{
 				Drawable *drawPtr = TheGameClient->findDrawableByID((DrawableID)testindex);
 				drawPtr++;
 			}
-			QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+			endTime64 = Clock_Ticks();
 			timeToUpdate = ((double)(endTime64-startTime64) / (double)(freq64));
 
 			TheInGameUI->message( UnicodeString(L"Time to run %d DrawableID lookups is %f.  Next index is %d."), numberLookups, timeToUpdate, (Int)TheGameClient->getDrawableIDCounter() );
