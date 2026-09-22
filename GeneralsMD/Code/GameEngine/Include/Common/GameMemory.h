@@ -65,7 +65,11 @@
 #include <new>   // was <new.h>, which only MSVC has
 #include <stdio.h>
 #ifdef MEMORYPOOL_OVERRIDE_MALLOC
-	#include <malloc.h>
+	#if defined(_MSC_VER)
+#include <malloc.h>   // Microsoft puts malloc, _msize and _alloca here
+#else
+#include "Platform/MSVCCompat.h"   // <stdlib.h> and <alloca.h>, and _alloca's spelling
+#endif
 #endif
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
