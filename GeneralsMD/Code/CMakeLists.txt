@@ -251,7 +251,20 @@ target_compile_definitions(compression PRIVATE Z_PREFIX)
 # width without patching a vendored file that A2 re-fetches.  `unsigned int` is 32 bits on both, so
 # Windows is unchanged and macOS now agrees with it - which is the point, because these widths reach
 # the compressed bytes that save games and network packets are made of.
-target_compile_definitions(compression PRIVATE UINT32=unsigned\ int UINT16=unsigned\ short)
+# LZH-Light's _lzhl.h says `#define UINT32 unsigned long`, which is 64 bits on LP64, and LZHASH and
+# LZPOS are both UINT32 - so the hash index runs off its table and compress() walks into unmapped
+# memory.  SIGBUS on the first buffer.
+#
+# Guarded to non-Windows deliberately.  UINT32 and UINT16 are Windows SDK TYPEDEFS
+# (basetsd.h: `typedef unsigned int UINT32, *PUINT32;`) and this defines them as command-line
+# MACROS, so a TU that reaches the SDK preprocesses that to `typedef unsigned int unsigned int,
+# *PUINT32;`.  NoxCompress.cpp does reach it, through Lib/BaseType.h's <windef.h>.  And the define
+# buys nothing there anyway: _lzhl.h's guard is `#ifndef UINT32`, which tests for a macro, so the
+# SDK's typedef does not satisfy it and the header's own `unsigned long` applies - already 32 bits
+# under LLP64.  All risk, no benefit, in the first library a Windows build reaches.
+if(NOT ZH_PLATFORM_WINDOWS)
+  target_compile_definitions(compression PRIVATE UINT32=unsigned\ int UINT16=unsigned\ short)
+endif()
 
 # Round-trip check over every codec CompressionManager exposes.
 add_executable(compression_selfcheck ${COMP}/test_compression.cpp)
