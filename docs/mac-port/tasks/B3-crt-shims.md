@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** not started
+- **Status:** in progress — mac-port-B3
 - **Size:** `stricmp` 71 files, `_snprintf` 12, `_vsnprintf` 8, `_stricmp` 5, `_access` 4,
   `_mkdir` 1, `__int64` 22
 
