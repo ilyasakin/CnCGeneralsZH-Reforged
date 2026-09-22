@@ -41,34 +41,28 @@
 CriticalSectionClass::CriticalSectionClass():
 inside(false)
 {
-#ifndef _UNIX
-	InitializeCriticalSection(&Bar);
-#endif
 }
 
 CriticalSectionClass::~CriticalSectionClass()
 {
-#ifndef _UNIX
-	DeleteCriticalSection(&Bar);
-#endif
+	WWASSERT(inside==false);	// Can't delete a locked critical section
 }
 
 void CriticalSectionClass::Enter()
 {
-	WWASSERT(inside==false);
-#ifndef _UNIX	
-	EnterCriticalSection(&Bar);
+	Bar.lock();
+	WWASSERT(inside==false);	// see the note in critsection.h: after the acquire, not before
 	inside=true;
-#endif
+	Owner=std::this_thread::get_id();
 }
 
 void CriticalSectionClass::Exit()
 {
 	WWASSERT(inside==true);
-#ifndef _UNIX	
+	WWASSERT(Owner==std::this_thread::get_id());
 	inside=false;
-	LeaveCriticalSection(&Bar);	
-#endif
+	Owner=std::thread::id();
+	Bar.unlock();
 }
 
 CriticalSectionClass::LockClass::LockClass(CriticalSectionClass &c):

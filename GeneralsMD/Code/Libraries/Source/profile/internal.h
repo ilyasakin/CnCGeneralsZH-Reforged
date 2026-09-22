@@ -33,6 +33,10 @@
 #define INTERNAL_H
 
 #include "../debug/debug.h"
+
+#include <atomic>
+#include <thread>
+
 #include "internal_funclevel.h"
 #include "internal_highlevel.h"
 #include "internal_cmd.h"
@@ -43,30 +47,33 @@ class ProfileFastCS
   ProfileFastCS(const ProfileFastCS&);
   ProfileFastCS& operator=(const ProfileFastCS&);
 
-	volatile unsigned m_Flag;
-  static HANDLE testEvent;
+	std::atomic_flag m_Flag;
 
+	/* The third copy of WWLib's "lock bts" spin (B14 did all three in one commit; the other two
+	   are WWLib/mutex.h and WWDebug/wwmemlog.cpp).  std::atomic_flag now, for the same reasons
+	   set out at length in mutex.h: same instruction on x86, a real one on arm64, and an unlock
+	   that is a release store rather than a plain write to a volatile unsigned.
+
+	   Two things about this copy that the other two do not have.  It is unreachable: nothing in
+	   the tree includes internal.h, and nothing names ProfileFastCS.  And its wait was already a
+	   no-op - `static HANDLE testEvent` is declared here and defined nowhere, so the `if
+	   (testEvent)` was always false and taking the lock under contention was a bare busy spin
+	   that would have failed to link the moment anybody used it.  yield() is what the branch was
+	   reaching for. */
 	void ThreadSafeSetFlag()
 	{
-		volatile unsigned& nFlag=m_Flag;
-
-		// EA's "lock bts" spin, written with the intrinsic that compiles to the same instruction.
-		while (_interlockedbittestandset((volatile long *)&nFlag, 0))
-		{
-			if (testEvent)
-				::WaitForSingleObject(testEvent,1);
-		}
-		return;
+		while (m_Flag.test_and_set(std::memory_order_acquire))
+			std::this_thread::yield();
 	}
 
 	void ThreadSafeClearFlag()
 	{
-		m_Flag=0;
+		m_Flag.clear(std::memory_order_release);
 	}
 
 public:
 	ProfileFastCS(void):
-    m_Flag(0) 
+    m_Flag ATOMIC_FLAG_INIT
   {
   }
 
