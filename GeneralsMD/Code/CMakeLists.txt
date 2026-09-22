@@ -870,12 +870,22 @@ target_include_directories(test_wwutil PRIVATE ${WW}/Wwutil ${WW}/WWLib ${WW}/WW
 
 add_lib_test(test_compression compression)
 
+# .w3d on-disk layout pins.  Deliberately OUTSIDE the ZH_PLATFORM_WINDOWS guard
+# below: it is header-only, asserts sizeof/offsetof and links nothing but the
+# harness, so it builds on a platform where ww3d2 itself does not compile yet -
+# which is the whole of M1 and the only time these asserts can still catch
+# something.  See docs/mac-port/B7-w3d-layout.md.
+add_lib_test(test_w3dlayout)
+target_include_directories(test_w3dlayout PRIVATE
+  ${WW}/WW3D2 ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/WWSaveLoad ${WW}/Wwutil)
+
 # Every test from here to test_pixelcentre links the renderer or a Direct3D backend, so they exist
 # only where those targets do.  D2 through D5 bring the Metal side back with tests of its own.
 if(ZH_PLATFORM_WINDOWS)
 add_lib_test(test_ww3d2 ww3d2 wwsaveload wwlib wwmath wwdebug)
 target_include_directories(test_ww3d2 PRIVATE
   ${WW}/WW3D2 ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/WWSaveLoad ${WW}/Wwutil)
+
 
 add_lib_test(test_ffshader ffshader)
 add_lib_test(test_dx11device dx11device)

@@ -169,7 +169,7 @@ you start. That commit is the lock.
 | B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
 | B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | recon done, held for -83 |  |
 | B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | not started |  |
-| B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) | M1 | A1 | **done, held for B10** | -14 |
+| B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) — **see [findings](B7-w3d-layout.md)** | M1 | A1 | **done, held for B10** | -14 |
 | B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in review | -83 |
 | B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | in progress | -21 |
 | B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | in progress | -14 |
