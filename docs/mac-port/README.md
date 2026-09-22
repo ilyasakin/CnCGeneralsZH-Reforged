@@ -286,24 +286,40 @@ two threads dropping the last two references both observe zero and both call `fr
 ASan the re-read itself is a heap-use-after-free — it touches the block the other thread has already
 freed. Fixed in B13 by using what the decrement returns, so exactly one caller sees 1.
 
-**3. Save-game pointer identity is truncated on x64, and has been since the x64 migration.**
-`WWSaveLoad/persistfactory.h:133`:
+**3. Pointer remapping in `WWSaveLoad` does not happen at all on x64 — and never has.**
+*This entry was rewritten 2026-09-22 after it was measured. The first version, taken from a reading
+of the code, described a probabilistic collision. It is not probabilistic and it is not a
+collision.*
 
-```cpp
-uint32 objptr = (uint32)obj;
-csave.Write(&objptr, sizeof(uint32));
-```
+`persistfactory.h:133` saves an object identity token with `csave.Write(&objptr, sizeof(uint32))`
+— 4 bytes. `persistfactory.h:118` has **always** read it back with `cload.Read(&old_obj,
+sizeof(T *))` — 8 bytes on any 64-bit build. And `ChunkLoadClass::Read` (`chunkio.cpp:697`)
+refuses a read that would overrun the chunk: it returns 0 and **does not touch the buffer**.
 
-Before B10, `uint32` was `unsigned long` — **4 bytes on Win64 under LLP64** — so this has been
-truncating 64-bit pointers on the shipping x64 build all along. It was lossless on macOS only by
-accident, because `unsigned long` is 8 bytes under LP64; B10 removing that accident is what made
-clang reject it and surface the bug.
+So `old_obj` keeps the `NULL` it was initialised with one line earlier, and every object is
+registered with `SaveLoadSystemClass::Register_Pointer` under the key `NULL`. Measured against the
+real `ChunkSaveClass`/`ChunkLoadClass` and the real template: 4 bytes written, `Read` returns 0,
+key is `0x0`. Pointer remapping through this template is not degraded on x64 — it is **absent**.
 
-The value is an object identity token written into the save chunk and fed to
-`SaveLoadSystemClass::Register_Pointer` for pointer remapping on load, so two objects whose
-addresses collide in their low 32 bits remap to the same object. With ASLR and a heap spread beyond
-4GB that is **possible rather than certain** — and how much of `WWSaveLoad` the game actually
-exercises has not been traced, so treat the severity as unverified rather than established.
+**And the game never executes it**, which is the other half and cuts the other way. Zero references
+to `SaveLoadSystemClass::` anywhere in `GameEngine` or `GameEngineDevice`; zero files naming
+`PersistFactoryClass`; the only caller of `SaveLoadSystemClass::Save`/`Load` in the tree is
+`Tests/test_wwsaveload.cpp`. The game's own save system is separate — `Common/System/SaveGame/`,
+built on `Xfer`. The 22 `SimplePersistFactoryClass<>` instantiations are Westwood engine classes,
+registered but never driven.
+
+Certain and total, in code that does not run. **Neither half is the story on its own**, which is
+why the first version of this entry was wrong in both directions at once.
+
+The fix was not the trade-off it looked like either. Keeping 32 bits on the save side was
+impossible — the load side already reads 8 — and widening does not "break the save format", because
+no build that writes this format can read it back. The rest of the engine already writes these
+tokens at pointer width (`AudibleSoundClass`'s `WRITE_MICRO_CHUNK` is `sizeof(var)`, read back as
+`sizeof(old_ptr)`); this template was the only place that narrowed it. One line, bringing an
+outlier into line with the codebase's own convention.
+
+The existing test passed throughout the entire x64 port while the token was being lost, because it
+only checks the object's data. That gap is the finding behind the finding.
 
 **4. An animation picks the wrong frame from 33 upward.**
 `hrawanim.cpp`'s `Float_To_Long(frame - 0.499999f)` floor idiom is exact only below 33. Float
