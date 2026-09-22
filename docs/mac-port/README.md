@@ -95,6 +95,13 @@ the smoke test on `feature/game-control-mcp` is the part to want.
 
 Each milestone is a thing that works, not a percentage.
 
+**Resequenced 2026-09-22.** A1 delivered a clean configure on arm64, but its own acceptance —
+building `wwdebug`, `wwutil`, `wwmath`, `compression` — turned out to be unreachable from A1,
+because all four need a `windows.h` story that belongs to B3 and B5. `always.h` alone uses `size_t`
+with no `<stddef.h>` and spells `__cdecl` 13 times; `compression` hits `__int64`, `<windef.h>` and
+`<emmintrin.h>` (SSE2 on arm64). So the real order is **A1 → B3 + B5 + B9 → the four libraries and
+the two self-checks**, and that last step is a follow-up rather than part of A1.
+
 **M1 — headless Mac build.** No renderer, no window, no sound. `gameengine` and the portable
 libraries compile under clang on arm64, and the test suites that do not need a device run green.
 This is where the toolchain, `WideChar`, the shims and the link-surface trimming all get proved, and
@@ -153,7 +160,7 @@ you start. That commit is the lock.
 
 | ID | Task | Milestone | Depends on | Status | Owner |
 |:--|:--|:--|:--|:--|:--|
-| A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | not started | |
+| A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | **configure done** | -95 |
 | A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | not started | |
 | A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | not started | |
 | B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | recon done | |
@@ -163,7 +170,8 @@ you start. That commit is the lock.
 | B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | recon done | |
 | B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | not started | |
 | B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) | M1 | A1 | not started | |
-| B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | not started | |
+| B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in progress | -83 |
+| B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | not started | |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | not started | |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
