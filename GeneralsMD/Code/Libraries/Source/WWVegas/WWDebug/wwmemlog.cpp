@@ -44,7 +44,15 @@
 #include "vector.h"
 #include "fastallocator.h"
 #include <windows.h>
+// MSVC's compiler-intrinsics header, for the _interlockedbittestandset spin below.  clang ships an
+// <intrin.h> that #include_nexts Microsoft's and fails where there is none, so this is guarded and
+// the Windows translation unit is unchanged.  That leaves the intrinsic itself undeclared on arm64,
+// which is deliberate: it turns a missing-header error into an error naming the one thing that
+// actually has to be replaced.  The replacement is B8's - it is an atomic test-and-set, and arm64
+// wants __atomic_test_and_set or std::atomic_flag rather than a per-compiler intrinsic.
+#if defined(_MSC_VER)
 #include <intrin.h>
+#endif
 
 #define USE_FAST_ALLOCATOR
 
