@@ -125,6 +125,45 @@ inline int mkdir(const char* path, int /* mode */) { return _mkdir(path); }
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <alloca.h>    // alloca, which Microsoft spells _alloca and declares in <malloc.h>
+
+// _alloca: two call sites, chunkio.h's read macro and ini.cpp's line buffer.
+#ifndef _alloca
+#define _alloca alloca
+#endif
+
+// ---------------------------------------------------------------------------
+// TCHAR.
+//
+// Microsoft's answer to "narrow or wide, decided at compile time", from <tchar.h>.  _UNICODE is not
+// defined anywhere in this build and never has been - CMakeLists.txt does not set it and no source
+// defines it - so every one of these is the narrow spelling, and that is all this needs to be.
+//
+// This is deliberately NOT the wide-character story.  B1 is moving WideChar to char16_t and B15 is
+// removing the wide %ls; TCHAR is a separate and much smaller thing, being a Microsoft name for a
+// decision this build already made.  If _UNICODE is ever defined, this block must not quietly follow
+// it - it should fail to compile and be dealt with properly.
+// ---------------------------------------------------------------------------
+#if defined(_UNICODE) || defined(UNICODE)
+#error "TCHAR here is narrow-only by assumption; _UNICODE needs B1's char16_t work, not this shim."
+#endif
+
+typedef char TCHAR;
+
+#ifndef _T
+#define _T(x) x
+#endif
+#define _tcscmp   strcmp
+#define _tcsicmp  strcasecmp
+#define _tcsncmp  strncmp
+#define _tcsnicmp strncasecmp
+#define _tcslen   strlen
+#define _tcsclen  strlen
+#define _tcscpy   strcpy
+#define _tcsncpy  strncpy
+#define _tcscat   strcat
+#define _tcschr   strchr
+#define _tcsstr   strstr
 
 #endif
 

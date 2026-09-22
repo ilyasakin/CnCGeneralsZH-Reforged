@@ -95,7 +95,11 @@
 #include	"xpipe.h"
 #include	"xstraw.h"
 #include	<stdio.h>
-#include <malloc.h>
+#if defined(_MSC_VER)
+#include <malloc.h>   // Microsoft puts malloc, _msize and _alloca here
+#else
+#include "Platform/MSVCCompat.h"   // <stdlib.h> and <alloca.h>, and _alloca's spelling
+#endif
 #ifdef _UNIX
 #include <ctype.h>
 #endif
