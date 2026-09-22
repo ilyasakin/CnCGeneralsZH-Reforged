@@ -93,8 +93,8 @@ void AsciiString::freeBytes(void)
 void AsciiString::validate() const
 {
 	if (!m_data) return;
-	DEBUG_ASSERTCRASH(m_data->m_refCount > 0, ("m_refCount is zero"));
-	DEBUG_ASSERTCRASH(m_data->m_refCount < 32000, ("m_refCount is suspiciously large"));
+	DEBUG_ASSERTCRASH(m_data->m_refCount.load(std::memory_order_relaxed) > 0, ("m_refCount is zero"));
+	DEBUG_ASSERTCRASH(m_data->m_refCount.load(std::memory_order_relaxed) < 32000, ("m_refCount is suspiciously large"));
 	DEBUG_ASSERTCRASH(m_data->m_numCharsAllocated > 0, ("m_numCharsAllocated is zero"));
 //	DEBUG_ASSERTCRASH(m_data->m_numCharsAllocated < 1024, ("m_numCharsAllocated suspiciously large"));
 	DEBUG_ASSERTCRASH(strlen(m_data->peek())+1 <= m_data->m_numCharsAllocated,("str is too long (%d) for storage",strlen(m_data->peek())+1));
@@ -122,7 +122,7 @@ void AsciiString::ensureUniqueBufferOfSize(int numCharsNeeded, Bool preserveData
 	validate();
 
 	if (m_data &&
-			m_data->m_refCount == 1 &&
+			m_data->m_refCount.load(std::memory_order_relaxed) == 1 &&
 			m_data->m_numCharsAllocated >= numCharsNeeded)
 	{
 		// no buffer manhandling is needed (it's already large enough, and unique to us)
@@ -139,7 +139,12 @@ void AsciiString::ensureUniqueBufferOfSize(int numCharsNeeded, Bool preserveData
 
 	int actualBytes = TheDynamicMemoryAllocator->getActualAllocationSize(minBytes);
 	AsciiStringData* newData = (AsciiStringData*)TheDynamicMemoryAllocator->allocateBytesDoNotZero(actualBytes, "STR_AsciiString::ensureUniqueBufferOfSize");
-	newData->m_refCount = 1;
+	/* Placement-new rather than assignment.  allocateBytesDoNotZero hands back raw bytes that are
+		 then cast to AsciiStringData - no constructor has ever run for this struct, which is what the
+		 "Plain Old Data Structure... don't add a ctor/dtor" note on it means - so m_refCount's
+		 lifetime has to be started explicitly now that it is a std::atomic.  It compiles to the same
+		 16-bit store either way; this is about the object model, not the instructions. */
+	new (&newData->m_refCount) std::atomic<unsigned short>(1);
 	newData->m_numCharsAllocated = (actualBytes - sizeof(AsciiStringData))/sizeof(char);
 #if defined(_DEBUG) || defined(_INTERNAL)
 	newData->m_debugptr = newData->peek();	// just makes it easier to read in the debugger
