@@ -17,7 +17,6 @@
 */
 
 // The D3DX vector and matrix types for the native Direct3D 9 renderer.
-// RENDERER-ROADMAP.md phase 1.
 //
 // d3dx8math.h cannot come along, because it includes d3dx8.h, which includes d3d8.h,
 // and the whole point of the phase is that d3d8.h is gone.  The types themselves owe

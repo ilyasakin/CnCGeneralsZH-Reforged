@@ -1107,8 +1107,8 @@ void W3DDisplay::init( void )
 
 	// Which runtime the device really landed on.  The renderer creates an IDirect3DDevice9 itself
 	// now, so there is one answer here and no translating dll to name; -d3d12 was d3d8to9's opt-in
-	// and does nothing until RENDERER-ROADMAP.md's phase 5 puts a real Direct3D 12 backend behind
-	// the same seam.
+	// and does nothing until something puts a real Direct3D 12 backend behind the same seam.
+	// Nothing plans to: the seam's second backend is Direct3D 11, and the third is Metal.
 	DEBUG_LOG(("W3DDisplay::init - renderer runtime: %s\n",
 						 GetModuleHandleA("d3d9.dll") ? "Direct3D 9 (native)"
 						                              : "no Direct3D 9 runtime loaded"));

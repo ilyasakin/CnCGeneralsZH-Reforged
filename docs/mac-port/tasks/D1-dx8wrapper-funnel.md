@@ -3,17 +3,19 @@
 - **Milestone:** M3
 - **Depends on:** nothing — **this is Windows-side work and can start on day one**
 - **Blocks:** D2
-- **Status:** not started
-- **Size:** 2,630 `DX8Wrapper::` call sites across 93 files; 60 `_Get_D3D_Device()->` reaches past
-  the wrapper; 92 `DX8CALL` macro expansions in 7 files; 22 WW3D2 headers expose D3D9 types
+- **Status:** in progress — PR1 (the wrapper methods) on `feature/mac-port-D1-pr1`; PRs 2-8 need Windows
+- **Size:** 170 call sites across 22 files — 148 device calls through 89 escapes from the wrapper,
+  plus 22 `DX8CALL` sites outside `dx8wrapper.{cpp,h}`; 22 WW3D2 headers expose D3D9 types.
+  Measured 2026-09-22; see the recon findings below. (The earlier "60 reaches" and "92 DX8CALL
+  expansions" counted the accessor and the macro rather than the calls.)
 
 ## Why
 
-`dx11runtime.h` says it plainly:
+`dx11runtime.h` says it plainly — as corrected by PR1, which replaced the stale number below it:
 
-> RENDERER-ROADMAP.md's phase 2 is not finished while this is here: the engine still reaches the
-> Direct3D 9 device directly from 236 places, and until those go through DX8Wrapper a -dx11 run has
-> a backend that only the wrapper's own state calls reach.
+> The funnel is not finished while this is here: the engine still reaches the Direct3D 9 device
+> past DX8Wrapper, and until those calls go through the wrapper a -dx11 run has a backend that only
+> the wrapper's own state calls reach.
 
 Every backend that is not Direct3D depends on this being finished. It is the single longest task in
 the plan and it has no dependency on any Mac work, so if there are two people, one of them starts
@@ -57,6 +59,39 @@ problem of streams and draws.
 
 **This file was wrong that `DX8CALL` is always wrapper-internal.** True of the 69 inside
 `dx8wrapper.{cpp,h}`; false of the 22 outside, which are in D1's scope.
+
+**And step 4's `Enable_Reports` does not exist.** It is named once in the tree, in the same stale
+comment block as the 236. The progress meter is the refusal taxonomy `W3DDisplay.cpp:490-545`
+already logs at the end of a `-dx11` run: `no buffer`, `no texture stage`, `no input layout`,
+`no program`, `no device object`, `engine shader bound`, `unmirrored texture`, plus the
+per-pipeline and foreign-shader lists. Quote those seven counters before and after every PR.
+
+## PR1 is done, 2026-09-22 — `feature/mac-port-D1-pr1`, not merged
+
+The wrapper methods, calling nothing. Safe without a Windows machine by construction: additive API
+that no call site uses cannot change a pixel. **It has never been compiled** — A1 gates `ww3d2` out
+of the macOS configure — so build `ww3d2` on Windows before PR2, which is the first PR that calls
+into it. `WINDOWS-DEBT.md` carries that as a high-severity row.
+
+What it added, and what writing it changed about the plan:
+
+- `OwnedGeometryClass` — vertices and indices a caller builds and draws itself, with the Direct3D 11
+  twins beside them and locks that fill both. This is the 39 stream-and-draw sites plus the 11
+  buffer creations: **40 sites, one facility.** `Set_Owned_Geometry` invalidates the wrapper's own
+  buffer cache, which is what stops it becoming a second `shader.cpp`.
+- `EngineVertexShaderClass` — a shipped `.vso` and the layout it came with, bound together, because
+  a program bound against the previous layout reads zeros rather than failing.
+- `AssembledPixelShaderClass` — assembles, creates and **registers with the backend in one call**,
+  so the registration cannot be forgotten the way it can be today.
+- `Device_Is_Ready`, `Get_Render_Target_Description`, `Read_Back_Render_Target`, `Read_Back_Frame`.
+
+**Three corrections to the survey's own arithmetic, found by writing the code:** `SetFVF` (6 sites)
+already has `Set_Vertex_Format`, which mirrors; `EvictManagedResources` (1) already has
+`Flush_DX8_Resource_Manager`; and the render-target save/restore (5) already exists as
+`Set_Render_Target(surface, depth)` / `Set_Render_Target(NULL, NULL)`, which keeps and restores the
+displaced surfaces itself — a second stack of one would have fought it. So **7 of the 75 need no
+new API after all**, PR1 covers 59, and 9 are out of scope by decision (7 cursor calls to C3, 2
+`ProcessVertices` that may be dead).
 
 ### A live bug, not just a funnel gap
 
