@@ -12,6 +12,41 @@
 clang warns on every unknown pragma and ignores it. Three of these four kinds are noise. One of
 them is not.
 
+## Recon findings, 2026-09-22 — read before scoping
+
+The audit has been done (`docs/mac-port/B4-pragma-audit.md`). Four corrections to this file:
+
+- **The E1 optimisation risk is CLOSED.** 332 of the 335 `#pragma optimize` are commented out. The
+  three live ones are `Debug.cpp:74` (behind `_INTERNAL`, which `CMakeLists.txt` defines nowhere)
+  and a balanced pair at `aabtree.cpp:732/795` (behind `_DEBUG`, so Release never sees them).
+  `WWMath` has none at all, and all 129 in `GameLogic` are the identical commented line. E1 does
+  not need to model optimisation-level divergence; `-ffp-contract` remains the real concern.
+- **16 is a count of lines; it is 8 push/pop regions**, all already push/pop. The "convert bare
+  `pack(n)` to push/pop" work item has nothing to convert.
+- **All 8 are wire formats. None is a file format.** The `.w3d` exposure this task was written to
+  cover lives in `w3d_file.h`, which has no pack pragma at all — that is now **B7**.
+- **Two of the 8 wrap dead structs** (`CommandPacket`, `ConnectionMessage`), so 6 need asserts. Do
+  not assert `CommandPacket`: its size depends on `sizeof(GameMessage)`, a class with a vtable,
+  which is legitimately allowed to differ between MSVC x64 and clang arm64.
+
+Item 2 is nearly empty: there is no CMake work. The one real item is `debug_debug.h:38`'s
+`#pragma comment(linker,"/include:...")`, which forces a symbol past dead-stripping and needs
+`-Wl,-u,<symbol>` on clang. That belongs to B6.
+
+Item 4: it is 67 lines, not 70. There is no `#pragma warn`; the 3 are Watcom-form lines already
+inside the 67, which MSVC has silently ignored for twenty years. 34 files hold all 67 and 32 are
+under WWVegas, so `WWLib/always.h` is the home. Suppress rather than translate — the 62 MSVC-form
+lines are written 38 different ways.
+
+Two findings the implementer must act on:
+
+1. `LANAPI.h:436`'s assert is `<=`. That is wrong for a wire format: it would accept a build 40
+   bytes smaller that cannot talk to anyone. Tighten to `==` and add `offsetof` asserts on the
+   union arms, since handlers read fields at fixed offsets.
+2. `NetworkDefs.h:79` derives `MAX_PACKET_SIZE` — a wire-protocol constant — from
+   `sizeof(TransportMessageHeader)`, a packed struct. A layout disagreement there produces no
+   diagnostic at all: both builds run and simply cannot talk to each other.
+
 ## Scope
 
 All of `GameEngine`, `GameEngineDevice`, `Main`, `Libraries/Source/WWVegas`.

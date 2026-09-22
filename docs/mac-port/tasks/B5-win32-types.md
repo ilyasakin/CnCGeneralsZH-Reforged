@@ -32,6 +32,51 @@ is the POSIX original — `SOCKET` is an `int`, `closesocket` is `close`, `ioctl
 `fcntl(O_NONBLOCK)`, and `WSAStartup` goes away. Port it rather than stubbing it; see the note on
 `-control` in the plan's README for why it is worth having on macOS.
 
+## Recon findings, 2026-09-22 — this changes the ORDER of the work
+
+The survey is done (`docs/mac-port/B5-win32-type-survey.md`). Its most important conclusion is
+about sequencing, and this task file had it wrong.
+
+**Do the `PreRTS.h` guard early, not last.** Until `windows.h` is out of the precompiled header,
+the PCH silently satisfies every one of the other fixes, so none of them is visible. The guard is
+what turns the remaining work into a compile-error worklist. Three steps:
+
+1. Give every file that genuinely needs Windows its **own** `#include`s while the PCH still
+   provides them. Today the bucket-(c) files declare nothing themselves — `ChromaKeyboard.cpp`
+   includes `wininet.h` but leans on the PCH for `HANDLE` and `CreateThread`; `StackDump.cpp`
+   names `IMAGEHLP_LINE64` with no include of its own. **This step is a no-op on Windows by
+   construction** — identical declarations, identical command line, identical object file — which
+   makes it the one change in B5 that can be made with real confidence without a Windows machine.
+   Its own commit.
+2. Wrap `PreRTS.h:43–96` in `#if defined(_WIN32)`. Windows is unchanged by construction; macOS
+   starts producing honest errors.
+3. Then the bucket-(a) substitutions, which are now visible.
+
+Counts to revise: **18 of the 21 files are compiled** (`simpleplayer.cpp`, `urllaunch.cpp` and
+`GameSpyGameInfo.cpp` are already in `REMOVE_ITEM`). The headers under `Common` are **9, not 4**,
+of which 6 are real. And the distribution is not what "scalar types" suggests: bucket (a) 7 files,
+bucket (b) 3, **bucket (c) eleven** — over half the compiled sites are whole files of Windows
+subsystem code, not type substitutions.
+
+Bucket (b) is smaller than it looks: all three sites are the same handle, `ApplicationHWnd`, and
+nothing inspects it. The engine wants a "show the user this fatal message" hook, not a window
+handle.
+
+**WOLBrowser is confirmed as bucket (c), and it is worse and easier than this file assumed.** It
+is the reason `gameengine` has a *configure-time* dependency on `midl.exe`, and the only reason
+`atlbase.h` is in the PCH. `TheWebBrowser` has never been non-NULL — the sole assignment site
+(`GameEngine.cpp:923`) is commented out and every consumer already tests for NULL. Moving
+`GameNetwork/WOLBrowser/` into `Win32Device/` is behaviour-preserving in the strongest sense and
+removes `atlbase.h`, the MIDL custom command and `eabrowserdispatch` from the engine's graph at a
+stroke. The `createWebBrowser` factory stays on `GameEngine`.
+
+**`JobSystem.cpp` came out of this survey and is now its own task, B8.** It is a Win32 thread pool,
+not a type leak, and it is the one bucket-(c) file the engine actually needs working on macOS.
+
+Two quick wins worth taking first: `LookAtXlat.cpp:31` is `#include "windows.h"` and nothing else
+in the file uses a Windows type; `AsciiString.h:60` is a bare `windows.h` include with no Windows
+type named anywhere in the header — and that one is in most of the engine's include graph.
+
 ## Do
 
 1. For each site, decide which of three it is:

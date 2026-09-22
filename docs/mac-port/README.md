@@ -121,20 +121,27 @@ the shader generators emit an IR rather than HLSL text.
 ## Dependency graph
 
 ```
-A1 ─┬─> B1 ─┐
-    ├─> B2  ├─> B6 ──> E1 ──> [M1]
-    ├─> B3  │           │
-    ├─> B4  │           v
-    └─> B5 ─┘        C1 ─┬─> C2 ──> [M2]
-A2 ──> A3              C5 ┘
-                          │
-D1 ──> D2 ──> D3 ──> [M3] │
-                 │        │
-                 v        v
+A1 ─┬─> B1 ──> B4 ─┐                  B4 now waits on B1: see the note below
+    ├─> B2 ────────┤
+    ├─> B3 ────────┼─> B6 ──> E1 ──> [M1]
+    ├─> B5 ────────┤            │
+    ├─> B7 ────────┤            v
+    └─> B8 ────────┘         C1 ─┬─> C2 ──> [M2]
+A2 ──> A3                      C5 ┘
+                                  │
+D1 ──> D2 ──> D3 ──> [M3]         │
+                 │                │
+                 v                v
                D4 ─┬─> D5 ─┬─> [M4]
                    └─> C3 ─┘
                             C4 ──> E2 ──> [M5]
 ```
+
+**B4 depends on B1, which the first version of this graph missed.** `LANAPI.h:50` sizes the LAN
+broadcast's option buffer with `*2` literals that are `sizeof(WideChar)` written by hand. Measured:
+with 4-byte `wchar_t`, `sizeof(LANMessage)` is 536 against a 476-byte limit; with `char16_t` it is
+471. So the existing `static_assert` at `LANAPI.h:436` fails and a naive Mac build dies there
+before reaching anything B4 adds. B1 first, always.
 
 D1, D2 and D3 are Windows-side work and depend on nothing in tracks A, B or C. If two agents are
 free, one should be on D1 from day one — it is the long pole and it does not wait for M1.
@@ -149,18 +156,20 @@ you start. That commit is the lock.
 | A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | not started | |
 | A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | not started | |
 | A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | not started | |
-| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | not started | |
+| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | recon done | |
 | B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | not started | |
 | B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | not started | |
-| B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 | not started | |
-| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | not started | |
-| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 | not started | |
+| B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done | |
+| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | recon done | |
+| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | not started | |
+| B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) | M1 | A1 | not started | |
+| B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | not started | |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | not started | |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
 | C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | not started | |
 | C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | not started | |
-| D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | not started | |
+| D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | recon in progress | |
 | D2 | [Abstract the backend interface](tasks/D2-backend-interface.md) | M3 | D1 | not started | |
 | D3 | [Shader generators emit an IR](tasks/D3-shader-generators-ir.md) | M3 | D2 | not started | |
 | D4 | [Metal backend](tasks/D4-metal-backend.md) | M4 | D3 | not started | |
