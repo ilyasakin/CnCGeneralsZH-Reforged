@@ -248,20 +248,17 @@ target_compile_definitions(compression PRIVATE Z_PREFIX)
 # and 64 under Darwin's LP64.  LZHASH and LZPOS are both UINT32, so at 64 bits the hash index runs
 # off the end of its table and LZHLCompressor::compress walks into unmapped memory - a SIGBUS on the
 # first buffer it is handed.  The header asks first (#ifndef UINT32), so saying it here fixes the
-# width without patching a vendored file that A2 re-fetches.  `unsigned int` is 32 bits on both, so
-# Windows is unchanged and macOS now agrees with it - which is the point, because these widths reach
-# the compressed bytes that save games and network packets are made of.
-# LZH-Light's _lzhl.h says `#define UINT32 unsigned long`, which is 64 bits on LP64, and LZHASH and
-# LZPOS are both UINT32 - so the hash index runs off its table and compress() walks into unmapped
-# memory.  SIGBUS on the first buffer.
+# width without patching a vendored file that A2 re-fetches.  These widths reach the compressed
+# bytes that save games and network packets are made of, so this is a parity fix, not a tidy-up.
 #
-# Guarded to non-Windows deliberately.  UINT32 and UINT16 are Windows SDK TYPEDEFS
-# (basetsd.h: `typedef unsigned int UINT32, *PUINT32;`) and this defines them as command-line
-# MACROS, so a TU that reaches the SDK preprocesses that to `typedef unsigned int unsigned int,
-# *PUINT32;`.  NoxCompress.cpp does reach it, through Lib/BaseType.h's <windef.h>.  And the define
-# buys nothing there anyway: _lzhl.h's guard is `#ifndef UINT32`, which tests for a macro, so the
-# SDK's typedef does not satisfy it and the header's own `unsigned long` applies - already 32 bits
-# under LLP64.  All risk, no benefit, in the first library a Windows build reaches.
+# Not on Windows, and the reason is not caution.  UINT32 and UINT16 are Windows SDK *typedefs* -
+# basetsd.h has `typedef unsigned int UINT32, *PUINT32;` - and _lzhl.h's guard tests for a *macro*,
+# so on Windows the guard is true either way and the header already defines `unsigned long`, which
+# is already 32 bits there.  The define would buy nothing and cost something: NoxCompress.cpp
+# includes Lib/BaseType.h, which includes <windef.h>, so a command-line UINT32 macro is live when
+# the SDK's typedef is preprocessed and turns it into `typedef unsigned int unsigned int, *PUINT32;`.
+# clang only warns at that and limps on; MSVC is stricter about duplicate declaration specifiers and
+# neither machine here can tell us how much stricter.  Found by a contributor before it was merged.
 if(NOT ZH_PLATFORM_WINDOWS)
   target_compile_definitions(compression PRIVATE UINT32=unsigned\ int UINT16=unsigned\ short)
 endif()
