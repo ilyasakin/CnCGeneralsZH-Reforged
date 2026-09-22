@@ -483,6 +483,86 @@ Int WideCharScan( const WideChar *in, const WideChar *format, ... )
 	return result;
 }
 
+//-----------------------------------------------------------------------------------------------
+// WideChar text in a narrow printf
+//-----------------------------------------------------------------------------------------------
+
+size_t WideCharToUtf8( const WideChar *s, char *out, size_t outBytes )
+{
+	if (out == NULL || outBytes == 0)
+		return 0;
+
+	size_t written = 0;
+	if (s == NULL)
+	{
+		out[0] = 0;
+		return 0;
+	}
+
+	while (*s != 0)
+	{
+		/* Read one code point.  At a 2-byte WideChar a character outside the BMP arrives as a
+			 surrogate pair and has to be put back together, or the output is CESU-8 rather than UTF-8
+			 and a text editor shows two replacement characters.  At a 4-byte WideChar there are no
+			 surrogates and the first branch never fires.  Both widths have to work: this file is
+			 written to be correct before and after the typedef moves. */
+		unsigned long cp = (unsigned long)*s++;
+
+		if (cp >= 0xD800ul && cp <= 0xDBFFul)				// high surrogate
+		{
+			const unsigned long low = (unsigned long)*s;
+			if (low >= 0xDC00ul && low <= 0xDFFFul)
+			{
+				cp = 0x10000ul + ((cp - 0xD800ul) << 10) + (low - 0xDC00ul);
+				++s;
+			}
+			else
+			{
+				cp = 0xFFFDul;										// a high surrogate with nothing after it
+			}
+		}
+		else if (cp >= 0xDC00ul && cp <= 0xDFFFul)	// a low surrogate on its own
+		{
+			cp = 0xFFFDul;
+		}
+
+		// how many bytes this character needs, and stop on a whole character rather than half of one
+		size_t need;
+		if (cp < 0x80ul)					need = 1;
+		else if (cp < 0x800ul)		need = 2;
+		else if (cp < 0x10000ul)	need = 3;
+		else											need = 4;
+
+		if (written + need + 1 > outBytes)
+			break;
+
+		switch (need)
+		{
+			case 1:
+				out[written++] = (char)cp;
+				break;
+			case 2:
+				out[written++] = (char)(0xC0ul | (cp >> 6));
+				out[written++] = (char)(0x80ul | (cp & 0x3Ful));
+				break;
+			case 3:
+				out[written++] = (char)(0xE0ul | (cp >> 12));
+				out[written++] = (char)(0x80ul | ((cp >> 6) & 0x3Ful));
+				out[written++] = (char)(0x80ul | (cp & 0x3Ful));
+				break;
+			default:
+				out[written++] = (char)(0xF0ul | (cp >> 18));
+				out[written++] = (char)(0x80ul | ((cp >> 12) & 0x3Ful));
+				out[written++] = (char)(0x80ul | ((cp >> 6) & 0x3Ful));
+				out[written++] = (char)(0x80ul | (cp & 0x3Ful));
+				break;
+		}
+	}
+
+	out[written] = 0;
+	return written;
+}
+
 Int WideCharFileWrite( FILE *f, const WideChar *s )
 {
 	if (f == NULL || s == NULL)

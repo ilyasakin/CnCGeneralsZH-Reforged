@@ -28,6 +28,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/GameSpy/LadderDefs.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
@@ -163,8 +165,8 @@ static LadderInfo *parseLadder(AsciiString raw)
 		}
 		else if ( lad && line.compare("</Ladder>") == 0 )
 		{
-			DEBUG_LOG(("Saw a ladder: name=%ls, addr=%s:%d, players=%dv%d, pass=%s, replay=%d, homepage=%s\n",
-				lad->name.str(), lad->address.str(), lad->port, lad->playersPerTeam, lad->playersPerTeam, lad->cryptedPassword.str(),
+			DEBUG_LOG(("Saw a ladder: name=%s, addr=%s:%d, players=%dv%d, pass=%s, replay=%d, homepage=%s\n",
+				WideCharAsUtf8( lad->name.str() ).str(), lad->address.str(), lad->port, lad->playersPerTeam, lad->playersPerTeam, lad->cryptedPassword.str(),
 				lad->submitReplay, lad->homepageURL.str()));
 			// end of a ladder
 			if (lad->playersPerTeam >= 1 && lad->playersPerTeam <= MAX_SLOTS/2)
@@ -192,7 +194,7 @@ static LadderInfo *parseLadder(AsciiString raw)
 						AsciiString faction = *it;
 						AsciiString marker;
 						marker.format("INI:Faction%s", faction.str());
-						DEBUG_LOG(("Faction %s has marker %s corresponding to str %ls\n", faction.str(), marker.str(), TheGameText->fetch(marker).str()));
+						DEBUG_LOG(("Faction %s has marker %s corresponding to str %s\n", faction.str(), marker.str(), WideCharAsUtf8( TheGameText->fetch(marker).str() ).str()));
 					}
 				}
 
@@ -530,6 +532,6 @@ void LadderList::checkLadder( AsciiString fname, Int index )
 	//	fname.removeLastChar(); // remove .lad
 	//li->name = UnicodeString(MultiByteToWideCharSingleLine(fname.reverseFind('\\')+1).c_str());
 
-	DEBUG_LOG(("Adding local ladder %ls\n", li->name.str()));
+	DEBUG_LOG(("Adding local ladder %s\n", WideCharAsUtf8( li->name.str() ).str()));
 	m_localLadders.push_back(li);
 }

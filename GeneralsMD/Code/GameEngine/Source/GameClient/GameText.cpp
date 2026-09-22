@@ -45,6 +45,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "GameClient/GameText.h"
 #include "Common/Language.h"
 #include "Common/Registry.h"
@@ -493,7 +495,7 @@ void GameTextManager::deinit( void )
 	DEBUG_LOG(("\n*** Missing strings ***\n"));
 	while ( noString )
 	{
-		DEBUG_LOG(("*** %ls ***\n", noString->text.str()));
+		DEBUG_LOG(("*** %s ***\n", WideCharAsUtf8( noString->text.str() ).str()));
 		NoString *next = noString->next;
 		delete noString;
 		noString = next;

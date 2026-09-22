@@ -30,6 +30,8 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "Common/CRCDebug.h"
 #include "Common/DrawnPath.h"
 #include "Common/GameAudio.h"
@@ -522,8 +524,8 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, void *userData )
 #if 0
 	if (commandName.isNotEmpty() /*&& msg->getType() != GameMessage::MSG_FRAME_TICK*/)
 	{
-		DEBUG_LOG(("Frame %d: GameLogic::logicMessageDispatcher() saw a %s from player %d (%ls)\n", getFrame(), commandName.str(),
-			msg->getPlayerIndex(), thisPlayer->getPlayerDisplayName().str()));
+		DEBUG_LOG(("Frame %d: GameLogic::logicMessageDispatcher() saw a %s from player %d (%s)\n", getFrame(), commandName.str(),
+			msg->getPlayerIndex(), WideCharAsUtf8( thisPlayer->getPlayerDisplayName().str() ).str()));
 	}
 #endif
 #endif // DEBUG_LOGGING
