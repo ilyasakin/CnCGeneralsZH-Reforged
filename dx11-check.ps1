@@ -1,7 +1,7 @@
 # Photograph the same frame of the same match twice, once through Direct3D 9 and once through the
 # Direct3D 11 backend, and count the pixels between them.
 #
-# This is RENDERER-ROADMAP.md phase 2's exit measurement.  Everything else about the backend is a
+# This is the Direct3D 11 backend's exit measurement.  Everything else about the backend is a
 # count - buffers mirrored, pipelines built, draws made and refused - and a run can have all of
 # those right and still draw the wrong picture: the white terrain had a correct atlas, a correct
 # program and a correct draw count for two sessions.  Only two pictures of one frame settle it.
@@ -32,8 +32,8 @@
 # UI-MAP.md that between them frame terrain, trees, water, roads, shadows and the command bar.
 
 # -Map narrows the run to the views whose map name contains it, for the middle of a hunt where one
-# view answers the question and eight of them is twenty-four launches.  The table in
-# RENDERER-ROADMAP.md is only ever written from a full run.
+# view answers the question and eight of them is twenty-four launches.  The table that goes into a
+# pull request is only ever written from a full run.
 #
 # -BackendNoise takes the repeated pair through the Direct3D 11 backend instead, which answers a
 # different question: the printed floor is Direct3D 9 against itself, and a backend with a

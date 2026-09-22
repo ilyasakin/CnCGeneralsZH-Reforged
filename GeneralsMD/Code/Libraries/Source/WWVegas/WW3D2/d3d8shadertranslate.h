@@ -16,7 +16,7 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Loading the shipped D3D8 shaders on a Direct3D 9 device.  RENDERER-ROADMAP.md phase 1.
+// Loading the shipped D3D8 shaders on a Direct3D 9 device, for the move onto a native one.
 //
 // The game reads six compiled shaders out of its big archives: Trees.vso and wave.vso
 // are vs_1_1, terrain.pso, terrainnoise.pso, terrainnoise2.pso and monochrome.pso are

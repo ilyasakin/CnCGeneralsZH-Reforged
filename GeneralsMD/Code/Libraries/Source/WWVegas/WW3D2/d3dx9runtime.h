@@ -16,7 +16,7 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// D3DX9 for the native Direct3D 9 renderer.  RENDERER-ROADMAP.md phase 1.
+// D3DX9 for the native Direct3D 9 renderer.
 //
 // The Windows SDK ships d3d9.h and d3d9.lib but no D3DX9: that library only ever
 // came with the DirectX SDK, which was retired in 2012.  Seventeen of its entry points
