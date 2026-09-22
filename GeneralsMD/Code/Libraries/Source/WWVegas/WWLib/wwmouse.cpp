@@ -122,7 +122,7 @@ void CALLBACK Callback_Process_Mouse( UINT, UINT, DWORD, DWORD, DWORD  )
  *   03/10/1997 JLB : Created.                                                                 *
  *=============================================================================================*/
 WWMouseClass::WWMouseClass(Surface * surfaceptr, HWND window) :
-	Blocked(false),
+	Blocked(0),
 	MouseState(-1),
 	IsCaptured(false),
 	MouseX(0),
@@ -701,7 +701,7 @@ void WWMouseClass::Show_Mouse(void)
 		ShowCursor(TRUE);
 	} else {
 		Block_Mouse();
-		InterlockedIncrement(&MouseState);
+		MouseState.fetch_add(1, std::memory_order_acq_rel);
 		if (MouseState == 0) {
 			Low_Show_Mouse();
 		}
@@ -733,7 +733,7 @@ void WWMouseClass::Hide_Mouse(void)
 		ShowCursor(FALSE);
 	} else {
 		Block_Mouse();
-		InterlockedDecrement(&MouseState);
+		MouseState.fetch_sub(1, std::memory_order_acq_rel);
 		if (MouseState == -1) {
 			Low_Hide_Mouse();
 		}

@@ -14,6 +14,8 @@
  */
 #include "test_harness.h"
 
+#include <atomic>	/* the B14 thread tests below share flags between threads */
+
 #include "global.h"       /* UINT4 / PROTO_LIST, which md5.h assumes */
 #include "realcrc.h"
 #include "crc.h"
@@ -1397,6 +1399,194 @@ TEST(threadclass_stop_returns_promptly_when_called_unlocked)
 	unsigned elapsed = GetTickCount() - start;
 
 	CHECK(elapsed < 250);
+}
+
+//-------------------------------------------------------------------------------------------------
+// The guarantees B14's rewrite has to keep ---------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+//
+// mutex.h's three lock classes and ThreadClass stopped being Win32 primitives and became standard
+// library ones.  Each of these pins a property that the Win32 version provided and that a
+// plausible "simplification" of the replacement would quietly take away - a non-recursive mutex
+// where a recursive one was needed, a poll that blocks, a thread id that is the same for every
+// thread.  None of them would fail as a wrong answer; they fail as a hang or as an assert that
+// passes from the wrong thread.
+
+TEST(criticalsectionclass_is_recursive)
+{
+	/* A Win32 CRITICAL_SECTION can be re-acquired by the thread that holds it, and this class
+	   was one.  Built against a std::mutex instead, this deadlocks on the second line - not
+	   eventually and not on some machines, but here, every time.  That is why the replacement is
+	   a std::recursive_mutex, and this test is what says so to whoever wonders why. */
+	CriticalSectionClass cs;
+	CriticalSectionClass::LockClass outer(cs);
+	CriticalSectionClass::LockClass inner(cs);
+	CHECK(true);	// reaching this line is the assertion
+}
+
+TEST(mutexclass_is_recursive)
+{
+	/* Likewise: a Win32 mutex is owned by a thread and re-acquiring it from that thread succeeds
+	   rather than blocking. */
+	MutexClass m;
+	MutexClass::LockClass a(m);
+	CHECK(!a.Failed());
+	MutexClass::LockClass b(m);
+	CHECK(!b.Failed());
+}
+
+class LockHolderWorker : public ThreadClass
+{
+public:
+	LockHolderWorker(MutexClass &m) : ThreadClass("LockHolderWorker"), Held(false), m_mutex(m) {}
+	std::atomic<bool> Held;
+protected:
+	virtual void Thread_Function()
+	{
+		MutexClass::LockClass held(m_mutex);
+		Held = true;
+		while (running) { ThreadClass::Sleep_Ms(1); }
+	}
+private:
+	MutexClass &m_mutex;
+};
+
+TEST(mutexclass_poll_fails_rather_than_blocking)
+{
+	/* Lock(0) is WaitForSingleObject with a zero timeout: a poll.  Five GameSpy call sites take
+	   their mutex that way and carry on when it fails, so a replacement that blocked instead
+	   would turn a skipped update into a stalled network thread. */
+	MutexClass m;
+	LockHolderWorker worker(m);
+	worker.Execute();
+	while (!worker.Held) { ThreadClass::Sleep_Ms(1); }
+
+	MutexClass::LockClass poll(m, 0);
+	CHECK(poll.Failed());
+
+	worker.Stop(1000);
+}
+
+TEST(mutexclass_timed_acquire_gives_up_and_says_so)
+{
+	MutexClass m;
+	LockHolderWorker worker(m);
+	worker.Execute();
+	while (!worker.Held) { ThreadClass::Sleep_Ms(1); }
+
+	unsigned start = GetTickCount();
+	{
+		MutexClass::LockClass timed(m, 60);
+		CHECK(timed.Failed());
+	}
+	CHECK((GetTickCount() - start) >= 50);
+
+	worker.Stop(1000);
+}
+
+class IdWorker : public ThreadClass
+{
+public:
+	IdWorker() : ThreadClass("IdWorker"), Id(0), Stable(false) {}
+	std::atomic<unsigned> Id;
+	std::atomic<bool> Stable;
+protected:
+	virtual void Thread_Function()
+	{
+		Id = ThreadClass::_Get_Current_Thread_ID();
+		Stable = (Id == ThreadClass::_Get_Current_Thread_ID());
+		while (running) { ThreadClass::Sleep_Ms(1); }
+	}
+};
+
+TEST(thread_ids_are_distinct_stable_and_never_zero)
+{
+	/* Every use of _Get_Current_Thread_ID in the tree is an equality test against one stored
+	   earlier: DX8_THREAD_ASSERT, TextureLoader's three main-thread asserts, wwmemlog's
+	   per-thread category stack.  An id that repeats makes those pass from the wrong thread, and
+	   zero - which the old _UNIX branch returned for every thread - makes all of them pass from
+	   every thread. */
+	const unsigned mine = ThreadClass::_Get_Current_Thread_ID();
+	CHECK(mine != 0);
+	CHECK(mine == ThreadClass::_Get_Current_Thread_ID());
+
+	IdWorker a, b;
+	a.Execute();
+	b.Execute();
+	while (a.Id == 0 || b.Id == 0) { ThreadClass::Sleep_Ms(1); }
+
+	CHECK(a.Stable);
+	CHECK(b.Stable);
+	CHECK(a.Id != 0);
+	CHECK(b.Id != 0);
+	CHECK(a.Id != b.Id);
+	CHECK(a.Id != mine);
+	CHECK(b.Id != mine);
+
+	a.Stop(1000);
+	b.Stop(1000);
+}
+
+class CountingWorker : public ThreadClass
+{
+public:
+	CountingWorker() : ThreadClass("CountingWorker"), Ticks(0) {}
+	std::atomic<long> Ticks;
+protected:
+	virtual void Thread_Function() { while (running) { ++Ticks; ThreadClass::Sleep_Ms(0); } }
+};
+
+TEST(threadclass_running_flag_reaches_the_worker)
+{
+	/* `running` was a volatile bool written by Stop() on one thread and read by Thread_Function
+	   on another.  MSVC's /volatile:ms gave that acquire/release semantics; clang gives it none,
+	   and ThreadSanitizer called it a data race on the first armed run.  It is a std::atomic<bool>
+	   now.  What this test pins is the consequence rather than the mechanism: a worker that never
+	   observes the write runs until Stop's timeout instead of stopping, so a prompt Stop is the
+	   evidence that the write got there. */
+	CountingWorker w;
+	CHECK(!w.Is_Running());
+	w.Execute();
+	CHECK(w.Is_Running());
+	ThreadClass::Sleep_Ms(30);
+
+	unsigned start = GetTickCount();
+	w.Stop(3000);
+	CHECK((GetTickCount() - start) < 1000);
+	CHECK(!w.Is_Running());
+	CHECK(w.Ticks > 0);
+}
+
+TEST(fastcriticalsection_serialises_a_plain_counter)
+{
+	/* The one lock in this header that is not recursive and never was - its own comment says so,
+	   and the old spin enforced it by spinning forever on a flag only the holder could clear.
+	   What it does guarantee is exclusion, over a counter that is deliberately not atomic so
+	   that a lock which stopped locking would show up as a wrong total rather than as nothing. */
+	FastCriticalSectionClass lock;
+	static long counter;	// static so the lambda-free worker below can reach it
+	counter = 0;
+
+	struct Bumper : public ThreadClass
+	{
+		Bumper(FastCriticalSectionClass &l, long *c) : ThreadClass("Bumper"), m_lock(l), m_counter(c) {}
+		virtual void Thread_Function()
+		{
+			for (int i = 0; i < 20000; ++i) {
+				FastCriticalSectionClass::LockClass held(m_lock);
+				++(*m_counter);
+			}
+			running = false;
+		}
+		FastCriticalSectionClass &m_lock;
+		long *m_counter;
+	};
+
+	Bumper a(lock, &counter), b(lock, &counter), c(lock, &counter), d(lock, &counter);
+	a.Execute(); b.Execute(); c.Execute(); d.Execute();
+	a.Stop(30000); b.Stop(30000); c.Stop(30000); d.Stop(30000);
+
+	CHECK_EQ(counter, 4L * 20000L);
 }
 
 /* ---------------------------------------------------------------------------------------------
