@@ -44,6 +44,7 @@
 #ifdef INCLUDE_GRANNY_IN_BUILD
 
 #include "W3DDevice/GameClient/W3DGranny.h"
+#include "Lib/Clock.h"
 #include "common/GlobalData.h"
 #include "texture.h"
 #include "colmath.h"
@@ -1056,7 +1057,7 @@ void GrannyRenderObjClassSystem::shutdown( void )
 void GrannyRenderObjClassSystem::update()
 {
 
-	Int		iTime=timeGetTime();
+	Int		iTime=Clock_Milliseconds();
 }
 
 

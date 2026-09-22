@@ -36,16 +36,16 @@
 #define DX11RESOURCE_H
 
 #include <d3d9.h>
+#include "Lib/Clock.h"
 #include <d3d11.h>
 
 // Wall time in milliseconds, for the per-frame costs the backend and the texture copies report.
 inline double DX11Resource_Milliseconds_Now()
 {
-	LARGE_INTEGER counter;
-	LARGE_INTEGER frequency;
-	QueryPerformanceCounter(&counter);
-	QueryPerformanceFrequency(&frequency);
-	return 1000.0 * static_cast<double>(counter.QuadPart) / static_cast<double>(frequency.QuadPart);
+	const long long counter = Clock_Ticks();
+	const long long frequency = Clock_Ticks_Per_Second();
+	if (frequency == 0) return 0.0;
+	return 1000.0 * static_cast<double>(counter) / static_cast<double>(frequency);
 }
 
 // DXGI_FORMAT_UNKNOWN comes back for a format with no D3D11 counterpart, which the caller has to

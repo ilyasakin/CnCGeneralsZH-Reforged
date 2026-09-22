@@ -24,6 +24,7 @@
 
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Compression.h"
 #include "strtok_r.h"
@@ -405,7 +406,7 @@ void ConnectionManager::doRelay() {
 					 will do - the point is only that the player still exists.  See StallJudgement.h. */
 				UnsignedInt fromSlot = cmd->getCommand()->getPlayerID();
 				if (fromSlot < MAX_SLOTS) {
-					m_lastHeardFrom[fromSlot] = timeGetTime();
+					m_lastHeardFrom[fromSlot] = Clock_Milliseconds();
 				}
 
 				if (CommandRequiresAck(cmd->getCommand())) {
@@ -1290,7 +1291,7 @@ void ConnectionManager::update(Bool isInGame) {
 
 void ConnectionManager::updateRunAhead(Int oldRunAhead, Int frameRate, Bool didSelfSlug, Int nextExecutionFrame) {
 	static time_t lasttimesent = 0;
-	time_t curTime = timeGetTime();
+	time_t curTime = Clock_Milliseconds();
 
 	if ((lasttimesent == 0) || ((curTime - lasttimesent) > TheGlobalData->m_networkRunAheadMetricsTime)) {
 		if (m_localSlot == m_packetRouterSlot) {
@@ -1682,7 +1683,7 @@ Bool ConnectionManager::allCommandsReady(UnsignedInt frame, Bool justTesting /* 
 		 announcement is the thing that was lost.  Ask for it.  See FrameResendPolicy.h for why the
 		 wait is the connection's own retry timeout rather than a constant. */
 	if ((notReadyPlayer >= 0) && (justTesting == FALSE)) {
-		time_t now = timeGetTime();
+		time_t now = Clock_Milliseconds();
 
 		if (frame != m_resendWatchFrame) {
 			m_resendWatchFrame = frame;
@@ -1784,7 +1785,7 @@ void ConnectionManager::determineRouterFallbackPlan() {
 */
 
 void ConnectionManager::doKeepAlive() {
-	time_t curTime = timeGetTime();
+	time_t curTime = Clock_Milliseconds();
 
 	if (m_keepAliveRoundStart == 0) {
 		m_keepAliveRoundStart = curTime;
@@ -2496,7 +2497,7 @@ UnsignedInt ConnectionManager::getTimeSinceLastPacketFrom( Int slot ) const
 	if (m_lastHeardFrom[slot] == 0)
 		return 0;
 
-	time_t now = timeGetTime();
+	time_t now = Clock_Milliseconds();
 	if (now <= m_lastHeardFrom[slot])
 		return 0;
 

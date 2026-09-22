@@ -28,6 +28,7 @@
 // Description: LAN API Callbacks
 ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "strtok_r.h"
 #include "Common/GameEngine.h"
@@ -213,7 +214,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 
 	LANGameInfo *game = NEW LANGameInfo;
 	game->enterGame();
-	/* enterGame() resets, and reset() seeds itself from GetTickCount() - so the seed we were
+	/* enterGame() resets, and reset() seeds itself from Clock_Milliseconds_Coarse() - so the seed we were
 		 handed has to be set after it, or the replay header records a clock reading and plays back
 		 a different game than the one that ran. */
 	game->setSeed( seed );
@@ -249,7 +250,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 		slot.setState( SLOT_PLAYER, playerName );
 		slot.setIP( slotIPs[i] );
 		slot.setPort( NETWORK_BASE_PORT_NUMBER );	// one address per player, so one port does for all
-		slot.setLastHeard( timeGetTime() );
+		slot.setLastHeard( Clock_Milliseconds() );
 		slot.setLogin( m_userName );
 		slot.setHost( m_hostName );
 		slot.setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
@@ -266,7 +267,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 	game->setNext( NULL );
 	game->setMap( mapName );
 	game->setIsDirectConnect( FALSE );
-	game->setLastHeard( timeGetTime() );
+	game->setLastHeard( Clock_Milliseconds() );
 	game->setLocalIP( m_localIP );
 
 	/* The map is not transferred, so both machines have to already have it - but say what we have,
@@ -421,7 +422,7 @@ void LANAPI::OnGameOptions( UnsignedInt playerIP, Int playerSlot, AsciiString op
 
 	if (playerSlot == 0 && !m_currentGame->amIHost())
 	{
-		m_currentGame->setLastHeard(timeGetTime());
+		m_currentGame->setLastHeard(Clock_Milliseconds());
 		AsciiString oldOptions = GameInfoToAsciiString(m_currentGame); // save these off for if we get booted
 		if(ParseGameOptionsString(m_currentGame,options))
 		{
@@ -475,11 +476,11 @@ void LANAPI::OnGameOptions( UnsignedInt playerIP, Int playerSlot, AsciiString op
 		{
 			if (options.compare("HELLO") == 0)
 			{
-				m_currentGame->setPlayerLastHeard(playerSlot, timeGetTime());
+				m_currentGame->setPlayerLastHeard(playerSlot, Clock_Milliseconds());
 			}
 			else
 			{
-				m_currentGame->setPlayerLastHeard(playerSlot, timeGetTime());
+				m_currentGame->setPlayerLastHeard(playerSlot, Clock_Milliseconds());
 				Bool change = false;
 				Bool shouldUnaccept = false;
 				AsciiString key;

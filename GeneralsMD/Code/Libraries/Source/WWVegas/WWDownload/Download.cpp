@@ -18,6 +18,7 @@
 
 // Download.cpp : Implementation of CDownload
 #include "DownloadDebug.h"
+#include "Lib/Clock.h"
 #include "download.h"
 #include <mmsystem.h>
 #include <assert.h>
@@ -337,7 +338,7 @@ HRESULT CDownload::PumpMessages()
 		if( m_TimeStarted == 0 )
 		{
 			// This is the first time through here - record the starting time.
-			m_TimeStarted = timeGetTime();
+			m_TimeStarted = Clock_Milliseconds();
 		}
 
 		if( iResult == FTP_SUCCEEDED )
@@ -357,7 +358,7 @@ HRESULT CDownload::PumpMessages()
 		// Calculate time taken so far, and predict how long there is left.
 		// The prediction returned is the average of the last 8 predictions.
 
-		timetaken = ( timeGetTime() - m_TimeStarted ) / 1000;
+		timetaken = ( Clock_Milliseconds() - m_TimeStarted ) / 1000;
 
 		//////////if( m_BytesRead > 0 ) // NAK - RP said this is wrong
       if( ( m_BytesRead - m_StartPosition ) > 0 )

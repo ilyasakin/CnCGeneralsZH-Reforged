@@ -54,6 +54,7 @@
 //-----------------------------------------------------------------------------
 
 #include "dx8wrapper.h"
+#include "Lib/Clock.h"
 #include "assetmgr.h"
 #include "Lib/BaseType.h"
 #include "Common/File.h"
@@ -117,7 +118,7 @@ static Bool fadeStepDue( void )
 {
 	static UnsignedInt lastMs = 0;
 	static Real accumMs = 0.0f;
-	return GameClient_isUiAnimStepDue( lastMs, accumMs, timeGetTime(), UI_ANIM_STEPS_PER_SEC );
+	return GameClient_isUiAnimStepDue( lastMs, accumMs, Clock_Milliseconds(), UI_ANIM_STEPS_PER_SEC );
 }
 
 /** Interface definition for custom shaders we define in our app.  These shaders can perform more complex
@@ -1780,7 +1781,7 @@ Int TerrainShader2Stage::init( void )
 	m_xSlidePerSecond = -0.02f;	 
 	m_ySlidePerSecond =  1.50f * m_xSlidePerSecond;
 	m_curTick = 0;
-	m_curTick = WW3D::Get_Sync_Time();//::GetTickCount();
+	m_curTick = WW3D::Get_Sync_Time();//Clock_Milliseconds_Coarse();
 	m_xOffset = 0;
 	m_yOffset = 0;
 
@@ -1825,7 +1826,7 @@ void TerrainShader2Stage::updateNoise1(D3DXMATRIX *destMatrix,D3DXMATRIX *curVie
 	D3DXMATRIX offset;
 
 	Int delta = m_curTick;
-	m_curTick = WW3D::Get_Sync_Time();//::GetTickCount();
+	m_curTick = WW3D::Get_Sync_Time();//Clock_Milliseconds_Coarse();
 	delta = m_curTick-delta;
 	m_xOffset += m_xSlidePerSecond*delta/1000;
 	m_yOffset += m_ySlidePerSecond*delta/1000;
@@ -3021,7 +3022,7 @@ Bool W3DShaderManager::filterSetup(FilterTypes filter, enum FilterModes mode)
 static void rttComplain( const char *why )
 {
 	static UnsignedInt lastComplaintMs = 0;
-	const UnsignedInt now = timeGetTime();
+	const UnsignedInt now = Clock_Milliseconds();
 	if( lastComplaintMs != 0 && now - lastComplaintMs < 1000 )
 		return;
 	lastComplaintMs = now;
@@ -3452,8 +3453,8 @@ Real W3DShaderManager::GetCPUBenchTime(void)
     long int low, ixran, itot, j, iprod;
 
   	__int64 endTime64,freq64,startTime64;
-	QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
-	QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
+	freq64 = Clock_Ticks_Per_Second();
+	startTime64 = Clock_Ticks();
 
     ztot = 0.0;
     low = 1;
@@ -3480,7 +3481,7 @@ Real W3DShaderManager::GetCPUBenchTime(void)
 	}
 	pi = 4.0 * (float)low/(float)itot;
 
-	QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+	endTime64 = Clock_Ticks();
 	return ((double)(endTime64-startTime64)/(double)(freq64));
 }
 

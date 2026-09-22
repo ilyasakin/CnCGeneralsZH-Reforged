@@ -27,6 +27,7 @@
 // Author: Michael S. Booth, April 2001
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/ActionManager.h"
 #include "Common/AudioAffect.h"
@@ -200,7 +201,7 @@ Int GameEngine::getFramesPerSecondLimit( void )
 GameEngine::GameEngine( void )
 {
 	// Set the time slice size to 1 ms.
-	timeBeginPeriod(1);
+	Clock_Begin_Fine_Resolution();
 
 	// initialize to non garbage values
 	m_maxFPS = 0;
@@ -279,7 +280,7 @@ GameEngine::~GameEngine()
 #endif
 
 	// Restore the previous time slice for Windows.
-	timeEndPeriod(1);
+	Clock_End_Fine_Resolution();
 }
 
 void GameEngine::setFramesPerSecondLimit( Int fps )
@@ -479,7 +480,7 @@ static void startAutoSkirmish( Int numPlayersWanted )
 	/* -seed makes the whole run repeatable: the seed drives the factions, the colours, the start
 		 positions and every logic random draw after them, so the same command line replays the same
 		 match. */
-	const Int seed = (TheGlobalData->m_fixedSeed >= 0) ? TheGlobalData->m_fixedSeed : GetTickCount();
+	const Int seed = (TheGlobalData->m_fixedSeed >= 0) ? TheGlobalData->m_fixedSeed : Clock_Milliseconds_Coarse();
 	TheSkirmishGameInfo->setSeed( seed );
 	TheSkirmishGameInfo->startGame( 0 );
 
@@ -1290,7 +1291,7 @@ static ParticleCostTotals theParticleCost;
 static Real engineElapsedMS( const Int64 &from, const Int64 &to )
 {
 	Int64 freq;
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+	freq = Clock_Ticks_Per_Second();
 	if( freq < 1 )
 		return 0.0f;
 	return (Real)((double)(to - from) * 1000.0 / (double)freq);
@@ -1683,14 +1684,14 @@ static void updateResDrill( void )
 
 	if( applied )
 	{
-		if( dismissed || timeGetTime() - appliedTimeMs < RES_DRILL_DISMISS_DELAY_MS )
+		if( dismissed || Clock_Milliseconds() - appliedTimeMs < RES_DRILL_DISMISS_DELAY_MS )
 			return;
 		dismissed = TRUE;
 		ResolutionDrillDismiss( TheGlobalData->m_resDrillKeep );
 		return;
 	}
 	applied = TRUE;
-	appliedTimeMs = timeGetTime();
+	appliedTimeMs = Clock_Milliseconds();
 
 	if( TheGlobalData->m_headless )
 	{
@@ -1925,7 +1926,7 @@ static void updateHeadlessRun( void )
 	static Int peakUnits[ MAX_PLAYER_COUNT ];
 	if (runStartTime == 0)
 	{
-		runStartTime = timeGetTime();
+		runStartTime = Clock_Milliseconds();
 		runStartFrame = TheGameLogic->getFrame();
 		for( Int i = 0; i < MAX_PLAYER_COUNT; ++i )
 			peakUnits[ i ] = 0;
@@ -1999,7 +2000,7 @@ static void updateHeadlessRun( void )
 	if (why == NULL)
 		return;
 
-	const DWORD wallMs = timeGetTime() - runStartTime;
+	const DWORD wallMs = Clock_Milliseconds() - runStartTime;
 	const Real logicFps = wallMs ? (Real)(frame - runStartFrame) * 1000.0f / (Real)wallMs : 0.0f;
 
 	DEBUG_LOG(("HEADLESS RESULT: %s on frame %d (%d frames in %.1fs wall, %.0f logic fps, %.1fx real time)\n",
@@ -2105,7 +2106,7 @@ void GameEngine::update( void )
 		static Real fpsClientTotal = 0.0f, fpsClientMax = 0.0f;
 		static Real fpsLogicTotal = 0.0f, fpsLogicMax = 0.0f;
 		static Int fpsLogicTicks = 0, fpsCatchupPasses = 0;
-		static DWORD fpsWindowStart = timeGetTime();
+		static DWORD fpsWindowStart = Clock_Milliseconds();
 		static Real fpsRadarTotal = 0.0f, fpsAudioTotal = 0.0f, fpsDrawTotal = 0.0f, fpsDrawMax = 0.0f;
 		static Real fpsSceneTotal = 0.0f, fpsUITotal = 0.0f, fpsPostTotal = 0.0f, fpsWinTotal = 0.0f;
 		static Real fpsStripGatherTotal = 0.0f, fpsStripDrawTotal = 0.0f;
@@ -2116,7 +2117,7 @@ void GameEngine::update( void )
 		TheStripGatherMS = TheStripDrawMS = 0.0f;
 		TheParticleUpdateMS = TheParticleFillMS = TheTranslucentMS = 0.0f;
 		TheTranslucentDraws = TheSortingPolygonsRefused = TheParticlesPastGroupLimit = 0;
-		QueryPerformanceCounter( (LARGE_INTEGER *)&tClientStart );
+		tClientStart = Clock_Ticks();
 #endif
 
 		{
@@ -2126,14 +2127,14 @@ void GameEngine::update( void )
 
 			TheRadar->UPDATE();
 #ifdef DEBUG_LOGGING
-			QueryPerformanceCounter( (LARGE_INTEGER *)&tRadarEnd );
+			tRadarEnd = Clock_Ticks();
 #endif
 
 			/// @todo Move audio init, update, etc, into GameClient update
 
 			TheAudio->UPDATE();
 #ifdef DEBUG_LOGGING
-			QueryPerformanceCounter( (LARGE_INTEGER *)&tAudioEnd );
+			tAudioEnd = Clock_Ticks();
 #endif
 			TheGameClient->UPDATE();
 			TheMessageStream->propagateMessages();
@@ -2150,7 +2151,7 @@ void GameEngine::update( void )
 			updateChromaKeyboard();
 		}
 #ifdef DEBUG_LOGGING
-		QueryPerformanceCounter( (LARGE_INTEGER *)&tClientEnd );
+		tClientEnd = Clock_Ticks();
 		clientMS = engineElapsedMS( tClientStart, tClientEnd );
 		radarMS = engineElapsedMS( tClientStart, tRadarEnd );
 		audioMS = engineElapsedMS( tRadarEnd, tAudioEnd );
@@ -2193,9 +2194,9 @@ void GameEngine::update( void )
 														 && videoLogicFrame + 1 >= TheGlobalData->m_videoStartFrame
 														 && videoLogicFrame <= TheGlobalData->m_videoEndFrame );
 
-		static DWORD prevLogicTime = timeGetTime();
+		static DWORD prevLogicTime = Clock_Milliseconds();
 		static Real logicAccumMs = 0.0f;
-		DWORD now = timeGetTime();
+		DWORD now = Clock_Milliseconds();
 		Real elapsedMs = (Real)(now - prevLogicTime);
 		prevLogicTime = now;
 
@@ -2237,7 +2238,7 @@ void GameEngine::update( void )
 		else if (logicFrameDue)
 		{
 #ifdef DEBUG_LOGGING
-			QueryPerformanceCounter( (LARGE_INTEGER *)&tLogicStart );
+			tLogicStart = Clock_Ticks();
 #endif
 			// Pay off the wall clock's debt.  Every pass after the first is a logic frame this call
 			// already owes, and it runs without a client pass in front of it: a render frame is what
@@ -2250,7 +2251,7 @@ void GameEngine::update( void )
 				 25ms ticks back to back with no picture in between is the 113ms freeze; one of them
 				 plus the render is a dropped frame nobody files a bug about. */
 			Int64 tCatchupStart, tCatchupNow;
-			QueryPerformanceCounter( (LARGE_INTEGER *)&tCatchupStart );
+			tCatchupStart = Clock_Ticks();
 			for( ;; )
 			{
 				TheGameLogic->UPDATE();
@@ -2258,7 +2259,7 @@ void GameEngine::update( void )
 
 				if (!mayCatchUp)
 					break;
-				QueryPerformanceCounter( (LARGE_INTEGER *)&tCatchupNow );
+				tCatchupNow = Clock_Ticks();
 				if (!GameEngine_mayStartAnotherCatchupTick( logicTicksThisPass, maxTicksThisPass,
 																									 engineElapsedMS( tCatchupStart, tCatchupNow ) ))
 					break;
@@ -2267,7 +2268,7 @@ void GameEngine::update( void )
 					break;
 			}
 #ifdef DEBUG_LOGGING
-			QueryPerformanceCounter( (LARGE_INTEGER *)&tLogicEnd );
+			tLogicEnd = Clock_Ticks();
 			logicMS = engineElapsedMS( tLogicStart, tLogicEnd );
 			logicTicks = logicTicksThisPass;
 			// One pass can pay off several ticks of debt; charge the histogram per tick, or a
@@ -2322,7 +2323,7 @@ void GameEngine::update( void )
 		if( clientMS > fpsClientMax ) fpsClientMax = clientMS;
 		if( logicMS > fpsLogicMax ) fpsLogicMax = logicMS;
 		{
-			const DWORD nowMS = timeGetTime();
+			const DWORD nowMS = Clock_Milliseconds();
 			const DWORD windowMS = nowMS - fpsWindowStart;
 			if( windowMS >= 1000 )
 			{
@@ -2373,9 +2374,9 @@ extern HWND ApplicationHWnd;
  */
 void GameEngine::execute( void )
 {
-	DWORD prevLoopTime = timeGetTime();
+	DWORD prevLoopTime = Clock_Milliseconds();
 #if defined(_DEBUG) || defined(_INTERNAL)
-	DWORD startTime = timeGetTime() / 1000;
+	DWORD startTime = Clock_Milliseconds() / 1000;
 #endif
 
 	// pretty basic for now
@@ -2397,7 +2398,7 @@ void GameEngine::execute( void )
 				// enter only if in benchmark mode
 				if (TheGlobalData->m_benchmarkTimer > 0)
 				{
-					DWORD currentTime = timeGetTime() / 1000;
+					DWORD currentTime = Clock_Milliseconds() / 1000;
 					if (TheGlobalData->m_benchmarkTimer < currentTime - startTime)
 					{
 						if (TheGameLogic->isInGame())
@@ -2419,7 +2420,7 @@ void GameEngine::execute( void )
 					 the next, not just the parts somebody remembered to instrument.  Two
 					 QueryPerformanceCounter reads a frame, which is why this is not behind a switch. */
 				Int64 tFrameStart, tFrameEnd;
-				QueryPerformanceCounter( (LARGE_INTEGER *)&tFrameStart );
+				tFrameStart = Clock_Ticks();
 				try
 				{
 					// compute a frame
@@ -2446,7 +2447,7 @@ void GameEngine::execute( void )
 					}
 					RELEASE_CRASH(("Uncaught Exception in GameEngine::update"));
 				}	// catch
-				QueryPerformanceCounter( (LARGE_INTEGER *)&tFrameEnd );
+				tFrameEnd = Clock_Ticks();
 				thisFrameMS = engineElapsedMS( tFrameStart, tFrameEnd );
 				GameEngine_noteFrameTime( thisFrameMS,
 																	TheGameLogic ? TheGameLogic->getFrame() : 0 );
@@ -2458,7 +2459,7 @@ void GameEngine::execute( void )
 				// menus no longer need a capped loop either: AnimateWindowManager::update paces
 				// its own stepping off the wall clock, so the window animations keep the cadence
 				// they were tuned for however fast the loop runs.
-				prevLoopTime = timeGetTime();
+				prevLoopTime = Clock_Milliseconds();
 
 		#if defined(_DEBUG) || defined(_INTERNAL)
 				// I'm disabling this in internal because many people need alt-tab capability.  If you happen to be

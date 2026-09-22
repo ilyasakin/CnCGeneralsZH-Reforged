@@ -82,6 +82,7 @@
 
 
 #include "ww3d.h"
+#include "Lib/Clock.h"
 #include "rinfo.h"
 #include "assetmgr.h"
 #include "boxrobj.h"
@@ -287,8 +288,8 @@ WW3DErrorType WW3D::Init(void *hwnd, char *defaultpal, bool lite)
 	WWDEBUG_SAY(("Allocate Debug Resources\n"));
 	Allocate_Debug_Resources();
 
- 	MMRESULT r=timeBeginPeriod(1);
-	WWASSERT(r==TIMERR_NOERROR);
+ 	const bool fine_resolution=Clock_Begin_Fine_Resolution();
+	WWASSERT(fine_resolution);
 
 	/*
 	** Initialize the dazzle system
@@ -345,8 +346,8 @@ WW3DErrorType WW3D::Shutdown(void)
 #endif //WW3D_DX8
 
 	//restore the previous timer resolution
-	MMRESULT r=timeEndPeriod(1);
-	WWASSERT(r==TIMERR_NOERROR);
+	const bool resolution_given_back=Clock_End_Fine_Resolution();
+	WWASSERT(resolution_given_back);
 	/*
 	** Free memory in predictive LOD optimizer
 	*/

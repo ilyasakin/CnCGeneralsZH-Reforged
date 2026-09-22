@@ -21,6 +21,7 @@
 // Author: Matthew D. Campbell, June 2002
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 #include <set>
 
 #include "Common/GameState.h"
@@ -539,7 +540,7 @@ void GameSpyInfo::markAsStagingRoomHost( void )
 
   m_localStagingRoom.reset();
 	m_localStagingRoom.enterGame();
-	m_localStagingRoom.setSeed(GetTickCount());
+	m_localStagingRoom.setSeed(Clock_Milliseconds_Coarse());
   
   m_localStagingRoom.setUseStats( useStats );
   m_localStagingRoom.setOldFactionsOnly( oldFactionsOnly );

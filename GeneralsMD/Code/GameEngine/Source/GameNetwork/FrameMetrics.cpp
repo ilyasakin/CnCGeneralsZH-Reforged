@@ -25,6 +25,7 @@
 /** FrameMetrics.cpp */
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "GameNetwork/FrameMetrics.h"
 #include "GameNetwork/NetworkUtil.h"
@@ -95,7 +96,7 @@ void FrameMetrics::init() {
 	// The fps window has to open on a real time and a real frame.  Left at zero, the first sample
 	// is taken against a zero start time, reads as ~0 fps, and drags the whole room's run-ahead
 	// down for the first NetworkFPSHistoryLength seconds of the game.
-	m_lastFpsTimeThing = timeGetTime();
+	m_lastFpsTimeThing = Clock_Milliseconds();
 	m_fpsStartingFrame = 0;
 	for (i = 0; i < TheGlobalData->m_networkLatencyHistoryLength; ++i) {
 		m_latencyList[i] = (Real)0.2;
@@ -123,7 +124,7 @@ void FrameMetrics::doPerFrameMetrics(UnsignedInt frame) {
 	// so the honest measurement is in the argument: count the logic frames the window covered.
 	// This is EA's own commented-out alternative, with the logic frame instead of the client one
 	// and divided by the real window length rather than assuming it was exactly 1000ms.
-	time_t curTime = timeGetTime();
+	time_t curTime = Clock_Milliseconds();
 	time_t windowMS = curTime - m_lastFpsTimeThing;
 	if (windowMS >= 1000) {
 		Real logicFps = FrameMetrics_logicFpsSample(frame, m_fpsStartingFrame, windowMS);
@@ -143,7 +144,7 @@ void FrameMetrics::doPerFrameMetrics(UnsignedInt frame) {
 }
 
 void FrameMetrics::processLatencyResponse(UnsignedInt frame) {
-	time_t curTime = timeGetTime();
+	time_t curTime = Clock_Milliseconds();
 	Int pendingIndex = frame % MAX_FRAMES_AHEAD;
 	time_t timeDiff = curTime - m_pendingLatencies[pendingIndex];
 

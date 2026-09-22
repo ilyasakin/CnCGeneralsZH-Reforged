@@ -30,6 +30,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/GameEngine.h"
 #include "Common/QuickmatchPreferences.h"
@@ -1100,8 +1101,8 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 		}
 
 #ifdef PERF_TEST
-		UnsignedInt start = timeGetTime();
-		UnsignedInt end = timeGetTime();
+		UnsignedInt start = Clock_Milliseconds();
+		UnsignedInt end = Clock_Milliseconds();
 		std::list<Int> responses;
 		Int numMessages = 0;
 #endif // PERF_TEST
@@ -1447,7 +1448,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 		}
 #ifdef PERF_TEST
 		// check performance
-		end = timeGetTime();
+		end = Clock_Milliseconds();
 		UnsignedInt frameTime = end-start;
 		if (frameTime > 100 || responses.size() > 20)
 		{
