@@ -45,7 +45,17 @@
 #include "always.h"
 #include "wwdebug.h"
 #include "mutex.h"
+/*
+**	<malloc.h> is a Microsoft and glibc header; macOS has no such file.  Nothing in here uses one of
+**	its MSVC-only entry points - StackAllocator is new/delete and a stack buffer - but the Windows
+**	branch keeps the include unchanged anyway, because a consumer could be leaning on this header to
+**	supply _msize or _alloca transitively and there is no way to check that from here.  B5.
+*/
+#if defined(_WIN32)
 #include <malloc.h>
+#else
+#include <stdlib.h>
+#endif
 #include <stddef.h> //size_t & ptrdiff_t definition
 #include <string.h>
 
