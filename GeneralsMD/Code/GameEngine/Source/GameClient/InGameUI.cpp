@@ -31,6 +31,7 @@
 
 #define DEFINE_SHADOW_NAMES
 
+#include "Lib/WideCharFns.h"
 #include "Common/ActionManager.h"
 #include "Common/DrawnPath.h"
 #include "Common/GameAudio.h"
@@ -3450,7 +3451,9 @@ void InGameUI::message( AsciiString stringManagerLabel, ... )
 	WideChar buf[ UnicodeString::MAX_FORMAT_BUF_LEN ];
   // truncate rather than throw: an uncaught engine exception aborts with 0xC0000409 and no log
   // at all, so an over-long chat or script message used to be a silent hard crash.
-  if( _vsnwprintf(buf, sizeof( buf )/sizeof( WideChar ) - 1, stringManagerString.str(), args ) < 0 )
+  // WideCharFormatV, not _vsnwprintf: buf is WideChar and there is no char16_t printf anywhere.
+  // It keeps _vsnwprintf's contract, so the negative test below still means "it did not fit".
+  if( WideCharFormatV(buf, sizeof( buf )/sizeof( WideChar ) - 1, stringManagerString.str(), args ) < 0 )
 			DEBUG_LOG(("InGameUI::message - text truncated to %d characters\n", (Int)(sizeof( buf )/sizeof( WideChar ) - 1)));
 	buf[ sizeof( buf )/sizeof( WideChar ) - 1 ] = 0;
 	formattedMessage.set( buf );
@@ -3475,7 +3478,7 @@ void InGameUI::message( UnicodeString format, ... )
 	WideChar buf[ UnicodeString::MAX_FORMAT_BUF_LEN ];
   // truncate rather than throw: an uncaught engine exception aborts with 0xC0000409 and no log
   // at all, so an over-long chat or script message used to be a silent hard crash.
-  if( _vsnwprintf(buf, sizeof( buf )/sizeof( WideChar ) - 1, format.str(), args ) < 0 )
+  if( WideCharFormatV(buf, sizeof( buf )/sizeof( WideChar ) - 1, format.str(), args ) < 0 )
 			DEBUG_LOG(("InGameUI::message - text truncated to %d characters\n", (Int)(sizeof( buf )/sizeof( WideChar ) - 1)));
 	buf[ sizeof( buf )/sizeof( WideChar ) - 1 ] = 0;
 	formattedMessage.set( buf );
@@ -3500,7 +3503,7 @@ void InGameUI::messageColor( const RGBColor *rgbColor, UnicodeString format, ...
 	WideChar buf[ UnicodeString::MAX_FORMAT_BUF_LEN ];
   // truncate rather than throw: an uncaught engine exception aborts with 0xC0000409 and no log
   // at all, so an over-long chat or script message used to be a silent hard crash.
-  if( _vsnwprintf(buf, sizeof( buf )/sizeof( WideChar ) - 1, format.str(), args ) < 0 )
+  if( WideCharFormatV(buf, sizeof( buf )/sizeof( WideChar ) - 1, format.str(), args ) < 0 )
 			DEBUG_LOG(("InGameUI::message - text truncated to %d characters\n", (Int)(sizeof( buf )/sizeof( WideChar ) - 1)));
 	buf[ sizeof( buf )/sizeof( WideChar ) - 1 ] = 0;
 	formattedMessage.set( buf );
@@ -7128,7 +7131,7 @@ void InGameUI::militarySubtitle( const AsciiString& label, Int duration )
 	// make sure we actually will be displaying something
 	if( title.isEmpty() || duration <= 0)
 	{
-		DEBUG_CRASH(("Trying to create a military subtitle but either title is empty (%ls) or duration is <= 0 (%d)",title.str(), duration));
+		DEBUG_CRASH(("Trying to create a military subtitle but either title is empty (%s) or duration is <= 0 (%d)",WideCharAsUtf8( title.str() ).str(), duration));
 		return;
 	}
 
@@ -10709,7 +10712,7 @@ void InGameUI::selectNextIdleWorker( void )
 	Int index = ThePlayerList->getLocalPlayer()->getPlayerIndex();
 	if(m_idleWorkers[index].empty())
 	{
-		DEBUG_ASSERTCRASH(FALSE, ("InGameUI::selectNextIdleWorker We're trying to select a worker when our list is empty for player %ls", ThePlayerList->getLocalPlayer()->getPlayerDisplayName().str()));
+		DEBUG_ASSERTCRASH(FALSE, ("InGameUI::selectNextIdleWorker We're trying to select a worker when our list is empty for player %s", WideCharAsUtf8( ThePlayerList->getLocalPlayer()->getPlayerDisplayName().str() ).str()));
 		return;
 	}
 	Object *selectThisObject = NULL;

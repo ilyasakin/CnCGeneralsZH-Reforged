@@ -25,6 +25,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "GameClient/LanguageFilter.h"
 #include "Common/FileSystem.h"
 #include "Common/File.h"
@@ -106,7 +108,7 @@ void LanguageFilter::filterLine(UnicodeString &line)
 		unHaxor(token);
 		LangMapIter iter = m_wordList.find(token);
 		if (iter != m_wordList.end()) {
-			DEBUG_LOG(("Found word %ls in bad word list. Token was %ls\n", (*iter).first.str(), token.str()));
+			DEBUG_LOG(("Found word %s in bad word list. Token was %s\n", WideCharAsUtf8( (*iter).first.str() ).str(), WideCharAsUtf8( token.str() ).str()));
 			for (Int i = 0; i < len; ++i) {
 				*pos = L'*';
 				++pos;

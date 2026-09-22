@@ -31,6 +31,7 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
 #include "GameSpy/peer/peer.h"
 
 #include "Common/QuotedPrintable.h"
@@ -119,7 +120,9 @@ void UpdateRemoteIPList()
 	UnicodeString newEntry = unisel;
 	UnicodeString newIP;
 	newEntry.nextToken(&newIP, UnicodeString(L":"));
-	Int numFields = swscanf(newIP.str(), L"%d.%d.%d.%d", &(n1[0]), &(n1[1]), &(n1[2]), &(n1[3]));
+	// WideCharScan, not swscanf: newIP.str() is a WideChar* and swscanf reads a wchar_t*, which is
+	// a different width off Windows.  See Lib/WideCharFns.h.
+	Int numFields = WideCharScan(newIP.str(), L"%d.%d.%d.%d", &(n1[0]), &(n1[1]), &(n1[2]), &(n1[3]));
 
 	if (numFields != 4) {
 		// this is not a properly formatted IP, don't change a thing.
@@ -147,7 +150,7 @@ void UpdateRemoteIPList()
 				UnicodeString oldIP;
 				oldEntry.nextToken(&oldIP, UnicodeString(L":"));
 
-				swscanf(oldIP.str(), L"%d.%d.%d.%d", &(n2[0]), &(n2[1]), &(n2[2]), &(n2[3]));
+				WideCharScan(oldIP.str(), L"%d.%d.%d.%d", &(n2[0]), &(n2[1]), &(n2[2]), &(n2[3]));
 
 				Bool isEqual = TRUE;
 				for (Int i = 0; (i < 4) && (isEqual == TRUE); ++i) {

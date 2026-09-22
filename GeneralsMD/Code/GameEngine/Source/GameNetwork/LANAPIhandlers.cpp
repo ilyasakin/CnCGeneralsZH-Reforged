@@ -30,6 +30,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "Common/CRC.h"
 #include "Common/GameState.h"
 #include "Common/Registry.h"
@@ -359,7 +361,7 @@ void LANAPI::handleRequestJoin( LANMessage *msg, UnsignedInt senderIP )
 					newSlot.setLastHeard(timeGetTime());
 					newSlot.setSerial(msg->GameToJoin.serial);
 					m_currentGame->setSlot(player,newSlot);
-					DEBUG_LOG(("LANAPI::handleRequestJoin - added player %ls at ip 0x%08x to the game\n", msg->name, senderIP));
+					DEBUG_LOG(("LANAPI::handleRequestJoin - added player %s at ip 0x%08x to the game\n", WideCharAsUtf8( msg->name ).str(), senderIP));
 
 					OnPlayerJoin(player, UnicodeString(msg->name));
 					responseIP = 0;
@@ -599,10 +601,10 @@ void LANAPI::handleChat( LANMessage *msg, UnsignedInt senderIP )
 	{
 		if (LookupGame(UnicodeString(msg->Chat.gameName)) != m_currentGame)
 		{
-			DEBUG_LOG(("Game '%ls' is not my game\n", msg->Chat.gameName));
+			DEBUG_LOG(("Game '%s' is not my game\n", WideCharAsUtf8( msg->Chat.gameName ).str()));
 			if (m_currentGame)
 			{
-				DEBUG_LOG(("Current game is '%ls'\n", m_currentGame->getName().str()));
+				DEBUG_LOG(("Current game is '%s'\n", WideCharAsUtf8( m_currentGame->getName().str() ).str()));
 			}
 			return;
 		}

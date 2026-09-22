@@ -31,6 +31,8 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "Common/AudioEventRTS.h"
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
@@ -421,7 +423,7 @@ void updateBuddyInfo( void )
 
 		// insert status into box
 		AsciiString marker;
-		marker.format("Buddy:%ls", info.m_statusString.str());
+		marker.format("Buddy:%s", WideCharAsUtf8( info.m_statusString.str() ).str());
 		if (!info.m_statusString.compareNoCase(L"Offline") ||
 			!info.m_statusString.compareNoCase(L"Online") ||
 			!info.m_statusString.compareNoCase(L"Matching"))
@@ -619,7 +621,7 @@ void HandleBuddyResponses( void )
 					{
 						// insert status into box
 						AsciiString marker;
-						marker.format("Buddy:%lsNotification", info.m_statusString.str());
+						marker.format("Buddy:%sNotification", WideCharAsUtf8( info.m_statusString.str() ).str());
 
 						lastNotificationWasStatus = TRUE;
 						if (newStatus != GP_OFFLINE)

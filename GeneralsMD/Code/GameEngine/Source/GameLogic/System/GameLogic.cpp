@@ -29,6 +29,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "Common/AudioAffect.h"
 #include "Common/AudioHandleSpecialValues.h"
 #include "Common/BuildAssistant.h"
@@ -498,15 +500,15 @@ static Object * placeObjectAtPosition(Int slotNum, AsciiString objectTemplateNam
 	DEBUG_ASSERTCRASH(btt, ("TheThingFactory didn't find a template in placeObjectAtPosition()") );
 
 	Object *obj = TheThingFactory->newObject( btt, pPlayer->getDefaultTeam() );
-	DEBUG_ASSERTCRASH(obj, ("TheThingFactory didn't give me a valid Object for player %d's (%ls) starting building\n",
-		slotNum, pTemplate->getDisplayName().str()));
+	DEBUG_ASSERTCRASH(obj, ("TheThingFactory didn't give me a valid Object for player %d's (%s) starting building\n",
+		slotNum, WideCharAsUtf8( pTemplate->getDisplayName().str() ).str()));
 	if (obj)
 	{
 		obj->setOrientation(obj->getTemplate()->getPlacementViewAngle());	
 		obj->setPosition( &pos );
 
 		//DEBUG_LOG(("Placed a starting building for %s at waypoint %s\n", playerName.str(), waypointName.str()));
-		CRCDEBUG_LOG(("Placed an object for %ls at pos (%g,%g,%g)\n", pPlayer->getPlayerDisplayName().str(),
+		CRCDEBUG_LOG(("Placed an object for %s at pos (%g,%g,%g)\n", WideCharAsUtf8( pPlayer->getPlayerDisplayName().str() ).str(),
 			pos.x, pos.y, pos.z));
 		DUMPCOORD3D(&pos);
 
@@ -559,8 +561,8 @@ static void placeNetworkBuildingsForPlayer(Int slotNum, const GameSlot *pSlot, P
 
 	AsciiString buildingTemplateName = pTemplate->getStartingBuilding();
 
-	DEBUG_ASSERTCRASH(!buildingTemplateName.isEmpty(), ("no starting building type for player %d (playertemplate %ls)\n",
-		slotNum, pTemplate->getDisplayName().str()));
+	DEBUG_ASSERTCRASH(!buildingTemplateName.isEmpty(), ("no starting building type for player %d (playertemplate %s)\n",
+		slotNum, WideCharAsUtf8( pTemplate->getDisplayName().str() ).str()));
 	if (buildingTemplateName.isEmpty())
 		return;
 
@@ -1801,7 +1803,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 
 	// reveal the map for the permanent observer
 	ThePartitionManager->revealMapForPlayerPermanently( ThePlayerList->findPlayerWithNameKey(TheNameKeyGenerator->nameToKey("ReplayObserver"))->getPlayerIndex() );
-	DEBUG_LOG(("Reveal shroud for %ls whose index is %d\n", ThePlayerList->findPlayerWithNameKey(TheNameKeyGenerator->nameToKey("ReplayObserver"))->getPlayerDisplayName().str(),ThePlayerList->findPlayerWithNameKey(TheNameKeyGenerator->nameToKey("ReplayObserver"))->getPlayerIndex()));
+	DEBUG_LOG(("Reveal shroud for %s whose index is %d\n", WideCharAsUtf8( ThePlayerList->findPlayerWithNameKey(TheNameKeyGenerator->nameToKey("ReplayObserver"))->getPlayerDisplayName().str() ).str(),ThePlayerList->findPlayerWithNameKey(TheNameKeyGenerator->nameToKey("ReplayObserver"))->getPlayerIndex()));
 	
 	if (game)
 	{
@@ -2263,8 +2265,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			if (pPlayer)
 			{
 				pPlayer->addSkillPoints(m_rankPointsToAddAtGameStart);
-				DEBUG_LOG(("GameLogic::startNewGame() - adding m_rankPointsToAddAtGameStart==%d to player %d(%ls)\n",
-					m_rankPointsToAddAtGameStart, i, pPlayer->getPlayerDisplayName().str()));
+				DEBUG_LOG(("GameLogic::startNewGame() - adding m_rankPointsToAddAtGameStart==%d to player %d(%s)\n",
+					m_rankPointsToAddAtGameStart, i, WideCharAsUtf8( pPlayer->getPlayerDisplayName().str() ).str()));
 			}
 		}
 	}
@@ -2358,7 +2360,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			TheRadar->forceOn(TRUE);
 			ThePartitionManager->refreshShroudForLocalPlayer();
 			TheControlBar->setControlBarSchemeByPlayer( ThePlayerList->getLocalPlayer());
-			DEBUG_LOG(("Start of a replay game %ls, %d\n",ThePlayerList->getLocalPlayer()->getPlayerDisplayName().str(), ThePlayerList->getLocalPlayer()->getPlayerIndex()));
+			DEBUG_LOG(("Start of a replay game %s, %d\n",WideCharAsUtf8( ThePlayerList->getLocalPlayer()->getPlayerDisplayName().str() ).str(), ThePlayerList->getLocalPlayer()->getPlayerIndex()));
 		}
 		else
 			TheControlBar->setControlBarSchemeByPlayer(ThePlayerList->getLocalPlayer());
@@ -2717,8 +2719,8 @@ void GameLogic::processCommandList( CommandList *list )
 			for (std::map<Int, UnsignedInt>::const_iterator crcIt = m_cachedCRCs.begin(); crcIt != m_cachedCRCs.end(); ++crcIt)
 			{
 				Player *player = ThePlayerList->getNthPlayer(crcIt->first);
-				DEBUG_LOG(("CRC from player %d (%ls) = %X\n", crcIt->first,
-					player?player->getPlayerDisplayName().str():L"<NONE>", crcIt->second));
+				DEBUG_LOG(("CRC from player %d (%s) = %X\n", crcIt->first,
+					WideCharAsUtf8( player?player->getPlayerDisplayName().str():L"<NONE>" ).str(), crcIt->second));
 			}
 #endif DEBUG_LOGGING
 			TheNetwork->setSawCRCMismatch();

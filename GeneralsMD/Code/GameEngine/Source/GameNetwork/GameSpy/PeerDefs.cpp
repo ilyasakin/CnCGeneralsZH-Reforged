@@ -21,6 +21,8 @@
 // Author: Matthew D. Campbell, June 2002
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+
+#include "Lib/WideCharFns.h"
 #include <set>
 
 #include "Common/GameState.h"
@@ -584,7 +586,7 @@ void GameSpyInfo::markAsStagingRoomJoiner( Int game )
 		m_localStagingRoom.setAllowObservers(info->getAllowObservers());
 		m_localStagingRoom.setHasPassword(info->getHasPassword());
 		m_localStagingRoom.setGameName(info->getGameName());
-		DEBUG_LOG(("Joining game: host is %ls\n", m_localStagingRoom.getConstSlot(0)->getName().str()));
+		DEBUG_LOG(("Joining game: host is %s\n", WideCharAsUtf8( m_localStagingRoom.getConstSlot(0)->getName().str() ).str()));
 	}
 }
 

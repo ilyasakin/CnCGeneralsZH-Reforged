@@ -24,6 +24,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
 #include "Common/Recorder.h"
 #include "Common/FileSystem.h"
 #include "Common/playerlist.h"
@@ -163,7 +164,7 @@ void RecorderClass::logPlayerDisconnect(UnicodeString player, Int slot)
 			time_t t;
 			time(&t);
 			struct tm *t2 = localtime(&t);
-			fprintf(logFP, "\tPlayer %ls dropped at %s", player.str(), asctime(t2));
+			fprintf(logFP, "\tPlayer %s dropped at %s", WideCharAsUtf8( player.str() ).str(), asctime(t2));
 			fclose(logFP);
 		}
 	}
@@ -585,9 +586,15 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	}
 
 	// Print out the name of the replay.
+	//
+	// WideCharFileWrite rather than fwprintf: the argument is a WideChar*, and "%ws" tells the C
+	// library it is a wchar_t* - two bytes under MSVC and four under clang.  The bytes on disk do
+	// not change; readUnicodeString below reads them back one fgetwc at a time and has to keep
+	// working.  See Lib/WideCharFns.h, which also records why this whole function needs a
+	// byte-oriented rewrite before it runs on a Mac at all.
 	UnicodeString replayName;
 	replayName = TheGameText->fetch("GUI:LastReplay");
-	fwprintf(m_file, L"%ws", replayName.str());
+	WideCharFileWrite(m_file, replayName.str());
 	fputwc(0, m_file);
 
 	// Date and Time
@@ -599,9 +606,9 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	UnicodeString versionString = TheVersion->getUnicodeVersion();
 	UnicodeString versionTimeString = TheVersion->getUnicodeBuildTime();
 	UnsignedInt versionNumber = TheVersion->getVersionNumber();
-	fwprintf(m_file, L"%ws", versionString.str());
+	WideCharFileWrite(m_file, versionString.str());
 	fputwc(0, m_file);
-	fwprintf(m_file, L"%ws", versionTimeString.str());
+	WideCharFileWrite(m_file, versionTimeString.str());
 	fputwc(0, m_file);
 	fwrite(&versionNumber, sizeof(UnsignedInt), 1, m_file);
 	fwrite(&(TheGlobalData->m_exeCRC), sizeof(UnsignedInt), 1, m_file);
@@ -1113,12 +1120,12 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 		debugString = "EXE is different:\n";
 		if (versionStringDiff)
 		{
-			tempStr.format("   Version [%ls] vs [%ls]\n", TheVersion->getUnicodeVersion().str(), header.versionString.str());
+			tempStr.format("   Version [%s] vs [%s]\n", WideCharAsUtf8( TheVersion->getUnicodeVersion().str() ).str(), WideCharAsUtf8( header.versionString.str() ).str());
 			debugString.concat(tempStr);
 		}
 		if (versionTimeStringDiff)
 		{
-			tempStr.format("   Build Time [%ls] vs [%ls]\n", TheVersion->getUnicodeBuildTime().str(), header.versionTimeString.str());
+			tempStr.format("   Build Time [%s] vs [%s]\n", WideCharAsUtf8( TheVersion->getUnicodeBuildTime().str() ).str(), WideCharAsUtf8( header.versionTimeString.str() ).str());
 			debugString.concat(tempStr);
 		}
 		if (versionNumberDiff)
@@ -1146,8 +1153,8 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 #ifdef DEBUG_LOGGING
 	if (header.localPlayerIndex >= 0)
 	{
-		DEBUG_LOG(("Local player is %ls (slot %d, IP %8.8X)\n",
-			m_gameInfo.getSlot(header.localPlayerIndex)->getName().str(), header.localPlayerIndex, m_gameInfo.getSlot(header.localPlayerIndex)->getIP()));
+		DEBUG_LOG(("Local player is %s (slot %d, IP %8.8X)\n",
+			WideCharAsUtf8( m_gameInfo.getSlot(header.localPlayerIndex)->getName().str() ).str(), header.localPlayerIndex, m_gameInfo.getSlot(header.localPlayerIndex)->getIP()));
 	}
 #endif
 
@@ -1572,7 +1579,7 @@ AsciiString RecorderClass::getLastReplayFileName()
 				if (slot && slot->isHuman())
 				{
 					AsciiString player;
-					player.format("%ls_", slot->getName().str());
+					player.format("%s_", WideCharAsUtf8( slot->getName().str() ).str());
 					players.concat(player);
 				}
 			}

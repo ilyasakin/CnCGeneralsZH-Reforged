@@ -13441,5 +13441,6 @@ TEST(chroma_money_bar_is_a_thousand_credits_a_lamp)
 #include "test_production_input.inc"
 #include "test_minimap_input.inc"
 #include "test_selection_priority.inc"
+#include "test_widechar_width.inc"
 #include "test_supply_center_save.inc"
 #include "test_cinema.inc"

@@ -28,6 +28,7 @@
 #ifndef __LANGUAGEFILTER_H
 #define __LANGUAGEFILTER_H
 
+#include "Lib/WideCharFns.h"
 #include "Common/STLTypedefs.h"
 #include "Common/AsciiString.h"
 #include "Common/UnicodeString.h"
@@ -55,7 +56,7 @@ struct UnicodeStringsEqual
 	Bool operator()(UnicodeString a, UnicodeString b) const
 	{
 		Bool retval = (a.compareNoCase(b) == 0);
-		DEBUG_LOG(("Comparing %ls with %ls, return value is ", a.str(), b.str()));
+		DEBUG_LOG(("Comparing %s with %s, return value is ", WideCharAsUtf8( a.str() ).str(), WideCharAsUtf8( b.str() ).str()));
 		if (retval) {
 			DEBUG_LOG(("true.\n"));
 		} else {
