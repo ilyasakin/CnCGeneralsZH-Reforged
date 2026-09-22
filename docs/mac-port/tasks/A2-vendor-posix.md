@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** nothing
 - **Blocks:** A3
-- **Status:** not started
+- **Status:** in review
 - **Size:** one new script, ~150 lines, mirroring `GeneralsMD/Code/Tools/vendor.ps1`
 
 ## Why
