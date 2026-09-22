@@ -58,6 +58,14 @@ is a test, checked into `Tests/`.
 
 Verified on a case-sensitive volume as well as the default one.
 
+**Seven case-sensitivity bugs already exist in the tree**, found by B9 and not caused by it:
+`GameLogic/Weaponset.h` (4 sites; the file is `WeaponSet.h`), `WWMath/Vector3.h` (the file is
+`vector3.h`), `../wwmath/rect.h` and `../wwlib/argv.h`. They resolve on MSVC and on a default APFS
+volume, and break on a case-sensitive one or a Linux CI runner. They are include paths rather than
+game data, so they are not strictly C1's — but they will be the first thing a case-sensitive volume
+reports, and knowing that in advance saves an afternoon. E2 should care too if CI ever runs on
+Linux.
+
 Windows: `Win32Device` untouched, full build and `ctest` green.
 
 ## Do not
