@@ -866,8 +866,17 @@ function(add_lib_test name)
   endif()
   add_executable(${name} ${exclude} ${TESTS}/${name}.cpp)
   target_link_libraries(${name} PRIVATE test_harness ${libs})
-  if(exclude STREQUAL "")
-    add_test(NAME ${name} COMMAND ${name})
+  add_test(NAME ${name} COMMAND ${name})
+  if(NOT exclude STREQUAL "")
+    # PENDING_MACOS used to skip add_test() altogether, so `ctest` on macOS
+    # listed 11 tests where Windows lists 16 and said nothing about the other
+    # five.  An absent test reads exactly like a passing one, and "ctest is
+    # green" was being taken as evidence of progress across the whole port.
+    # Registering it DISABLED keeps it out of the run - the binary is
+    # EXCLUDE_FROM_ALL and would not link - and puts it in the output, which is
+    # where a test somebody still owes belongs.
+    set_tests_properties(${name} PROPERTIES DISABLED TRUE)
+    set_property(GLOBAL APPEND PROPERTY ZH_DEFERRED_TESTS ${name})
   endif()
 endfunction()
 
@@ -1095,4 +1104,16 @@ if(PERF_TIMERS)
   else()
     message(STATUS "PERF_TIMERS ON - measurement build, timers cost real time")
   endif()
+endif()
+
+# Say out loud which tests this configuration does not run.  A test that is
+# absent from `ctest` looks identical to one that passed, and on a port where
+# half the tree does not compile yet that distinction is the whole point.
+get_property(_zh_deferred GLOBAL PROPERTY ZH_DEFERRED_TESTS)
+if(_zh_deferred)
+  list(LENGTH _zh_deferred _zh_deferred_count)
+  string(REPLACE ";" ", " _zh_deferred_text "${_zh_deferred}")
+  message(STATUS "ctest: ${_zh_deferred_count} test(s) registered DISABLED on this platform "
+                 "- ${_zh_deferred_text}")
+  message(STATUS "ctest: they are built EXCLUDE_FROM_ALL and will not link until their task lands")
 endif()
