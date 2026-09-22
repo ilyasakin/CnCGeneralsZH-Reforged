@@ -295,10 +295,29 @@ it is a landmine rather than a fire — which is the argument for fixing it whil
 open, not against.
 
 **Which half of this can be automated**, which matters if anyone turns it into a CI check: the
-predicate patterns (`__APPLE__`, `TARGET_OS_`, `MACOS`, `__BIG_ENDIAN`, `POWERPC`) return **five
-hits total** across zlib, LZH-Light, EAC and all 564 GameSpy files — quiet enough to run on every
-build. `unsigned long` is not: GameSpy alone would bury it. Automate the first half; the second
-stays a human read.
+predicate patterns (`__APPLE__`, `TARGET_OS_`, `MACOS`, `__BIG_ENDIAN`, `POWERPC`, and
+`__i386__`/`_M_IX86` added after a fifth instance was found written as a positive CPU test) are
+quiet enough to run on every build. `unsigned long` is not: GameSpy alone would bury it. Automate
+the first half; the second stays a human read.
+
+⚠ **The "five hits across zlib, LZH, EAC and all 564 GameSpy files" figure this section used to
+carry was wrong, and wrongly reassuring.** GameSpy contributed **zero** of those five because not
+one of its 564 files was ever opened. Real figures once they were: **7** on the automatable list,
+**44** on the wider one. The automation split survives; the number did not.
+
+**There are three distinct ways this check passes on nothing**, all now measured:
+
+1. `grep` here is `ugrep`, which honours `.gitignore` by default. From the repository root it skips
+   **466 tracked files**, including 54 `.cpp`/`.h` in two **built** libraries. Git does not ignore
+   them.
+2. **Every vendored directory carries a committed `.gitignore` containing `*`** — so `ugrep` reads
+   none of it even when fully populated. Measured: `grep -rn socket Libraries/Source/GameSpy`
+   returns **0**; `/usr/bin/grep -rn socket --include='*.c'` on the same directory returns **854**.
+3. Those directories are **empty in a fresh worktree** until the vendor step runs, so a sweep finds
+   nothing and says so cheerfully.
+
+Any CI form of this rule must use `--no-ignore-files` or drive the list from `git ls-files`, must
+run **after** vendoring, and must **fail rather than pass** on an empty directory.
 
 EAC and the FFmpeg dist were swept on 2026-09-22 —
 [`VENDORED-PREDICATE-SWEEP.md`](VENDORED-PREDICATE-SWEEP.md). FFmpeg is clean on both halves and
