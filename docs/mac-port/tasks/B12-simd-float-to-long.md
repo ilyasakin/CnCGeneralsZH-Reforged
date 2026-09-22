@@ -25,7 +25,15 @@ WWINLINE long WWMath::Float_To_Long(float f)
 }
 ```
 
-That comment was written by this project, deliberately, and it is the warning label on a trap.
+**Correction, 2026-09-22: that comment is wrong about GameLogic.** There are zero `Float_To_Long`
+callers in `GameLogic` — verified. All 18 sites are in WW3D2 (`hrawanim`, `bw_render`, `bwrender`,
+`visrasterizer`, `htree`) and WWMath (`lookuptable.h`). The rounding still must not change, because
+`hrawanim`'s `Float_To_Long(frame - 0.499999f)` is arithmetic built on round-to-nearest — but the
+desync framing this file inherited from the source comment overstates it, and it was quoted onward
+before anyone checked. One loose end: `GameLogic` does use `lookuptable`, so an indirect path may
+exist; somebody should confirm or rule it out rather than leaving it implied.
+
+The comment is still the warning label on a trap, and the trap is real.
 `_mm_cvtss_si32` rounds **to nearest, ties to even**. A C cast `(long)f` **truncates toward zero**.
 They differ for every value with a fractional part. 18 call sites.
 
@@ -54,6 +62,24 @@ deserves the same treatment.
    deliverable as much as the fix. Run it here; it will run on Windows the day there is a machine.
 4. Check `Float_To_Long(double)` (`_mm_cvtsd_si32`) the same way. It has no comment and the same
    exposure.
+
+## Status, 2026-09-22: absorbed by B3
+
+`wwmath` could not compile without the conversion, so B3 hit this wall from the other side and took
+it. `Float_To_Long` now lives in `Libraries/Include/Lib/DetRound.h` with `Tests/test_detround.cpp`
+behind it. `wwmath.h:49` is a comment; `<emmintrin.h>` survives in exactly one place tree-wide,
+inside `DetRound.h` behind an x86 guard. Nothing is left in B12 and it should not be reassigned.
+
+**Outstanding against `DetRound.h`, found by B12's differential oracle** (see E3): the header states
+two properties it does not have. NaN gives 0 on arm64 (`FCVTNS`) and `0x80000000` on x86, which the
+saturation comment does not cover and which is a different mechanism from the one it does cover.
+And `To_Long(double)` returns a 64-bit result whose comment says "narrowing afterwards is exact for
+every value a long can hold" — but on LP64 `long` is 64 bits and there is no narrowing at all, so
+the reasoning silently assumes Windows. Every call site assigns to `int`, so an out-of-range double
+gives the caller an implementation-defined truncation rather than either architecture's answer.
+Probably unreachable — the call sites are frame numbers, scanline coordinates and pixel counts —
+so this is a comment-correctness and clamping fix, not an urgent one. It belongs to whoever owns
+`DetRound.h`.
 
 ## Done when
 
