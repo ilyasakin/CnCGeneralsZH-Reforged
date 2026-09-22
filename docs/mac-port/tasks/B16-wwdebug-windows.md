@@ -31,9 +31,22 @@ highest-leverage single file in the M1 build.
 
 | Line | What |
 |--:|:--|
+| 69 | `FormatMessage` in `Convert_System_Error_To_String` — **already guarded by EA's own `#ifndef _UNIX`** |
+| 82 | `GetLastError` in `Get_Last_System_Error` — **not guarded at all** |
 | 308 | `MessageBoxA(...)` for assert failure |
 | 316 | `__debugbreak()` |
 | 464-498 | the DBWIN32 mechanism — `CreateFileMapping`, shared-memory debug output to a listener |
+
+**The first two rows were missing from this table and they are the ones you hit first.** Measured:
+copy the file, delete the include, compile — exactly two errors, `FORMAT_MESSAGE_FROM_SYSTEM` at
+`:70` and `GetLastError` at `:82`. **Neither is one of the three this task originally listed.**
+`MessageBoxA` and `__debugbreak` only surface once those clear, because clang stops at the first
+pass. Two errors now is not the total.
+
+EA anticipated a Unix port *in this exact file* — hence the `#ifndef _UNIX` at `:68`. Note that
+this does **not** license defining `_UNIX` (see the plan's rule): it would dispose of the
+`FormatMessage` branch for free and still leave `Get_Last_System_Error` unbuilt, so `_UNIX` alone
+does not compile the file. The POSIX answers are `strerror_r` and `errno`, two lines each.
 
 EA left the hint at line 47: `//#include "win.h" can use this if allowed to see wwlib`.
 
