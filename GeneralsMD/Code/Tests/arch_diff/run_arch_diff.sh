@@ -24,6 +24,19 @@
 #   - The x87 unit, the MXCSR state a Windows process actually runs in, or anything setFPMode()
 #     is there to pin.
 #
+# It is also blind to anything the two targets share, and they share more than the architecture
+# name suggests. BOTH define __APPLE__ and BOTH are little-endian. So a bug keyed on either -
+# `#if defined(__APPLE__)` taking a path meant for PowerPC, or code that assumes a byte order -
+# takes the SAME branch in both builds, they agree, and this harness reports green. B3 hit exactly
+# that: gimex.h's ggetm/gputm used a native load for big-endian fields under `#if defined(__APPLE__)`,
+# a 2003 shorthand for PowerPC, and it silently byte-swapped every RefPack header field on Apple
+# Silicon. Adding a probe for it here would not have caught it, for the reason above.
+#
+# That is the same shape as the mistake this harness exists because of: a reference that shares the
+# property under test proves nothing about it. A differential harness can only see the axis it
+# varies. Bugs keyed on the OS or on endianness need a test that asserts the intended value -
+# a round-trip in a selfcheck - not a comparison against a twin that shares the assumption.
+#
 # So: a green run here is NOT a green run against Windows.  E1's standing item in
 # WINDOWS-DEBT.md is reduced by this task, not discharged by it.  If you find yourself about to
 # write "determinism verified" because this passed, read this paragraph again.
