@@ -20,9 +20,13 @@
 ** The Direct3D 11 renderer, driven the way the engine drives a Direct3D 9 device.
 **
 ** The engine sets one thing at a time and then draws: a render state, a texture stage state, a
-** texture, a transform, a stream, and eventually a DrawIndexedPrimitive.  There are 236 places that
-** do it and 5600 calls between them, and rewriting those into something D3D11 shaped is not a
-** phase, it is a different program.  So this takes the calls as they are and resolves them at the
+** texture, a transform, a stream, and eventually a DrawIndexedPrimitive.  Several hundred places
+** do it and several thousand calls a frame come out of them, and rewriting those into something
+** D3D11 shaped is not a phase, it is a different program.  (This said "236 places and 5600 calls"
+** when it was written on 2026-09-09; the first number was a count of every mention of the device
+** accessor in the sources, taken before ef8303a9 cut it by 45%, and the second was never a static
+** count of anything.  docs/mac-port/D1-call-site-survey.md has the measurement that replaced it.)
+** So this takes the calls as they are and resolves them at the
 ** moment of the draw, which is the only moment where everything needed to build a D3D11 pipeline is
 ** known at once.
 **

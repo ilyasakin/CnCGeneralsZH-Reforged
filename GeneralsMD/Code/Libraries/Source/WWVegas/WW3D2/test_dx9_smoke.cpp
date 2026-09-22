@@ -1,4 +1,4 @@
-// Native Direct3D 9 checkpoint for RENDERER-ROADMAP.md phase 1.  test_dx8_smoke.cpp
+// Native Direct3D 9 checkpoint for the move off the translating DLL.  test_dx8_smoke.cpp
 // proves the D3D8 path through our d3d8to9 d3d8.dll; this one calls Direct3DCreate9
 // itself, with no translating DLL anywhere, and answers the questions that decide
 // whether the phase-1 rename is a rename or a rewrite:

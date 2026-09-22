@@ -19,7 +19,7 @@
 /*
 ** The Direct3D 11 device, its swap chain and the two views that hang off it.
 **
-** This is the bottom of RENDERER-ROADMAP.md's phase 2 and it knows nothing about the game: a
+** This is the bottom of the Direct3D 11 backend and it knows nothing about the game: a
 ** device, a back buffer, a depth buffer, a clear and a present.  Everything above it - the state
 ** translation, the combiner programs -ffshader generates, the two .vso rewrites - is built on this
 ** and can be written against a device that already exists rather than one being designed at the
