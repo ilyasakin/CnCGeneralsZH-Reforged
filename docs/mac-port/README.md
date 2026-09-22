@@ -251,19 +251,38 @@ two threads dropping the last two references both observe zero and both call `fr
 ASan the re-read itself is a heap-use-after-free — it touches the block the other thread has already
 freed. Fixed in B13 by using what the decrement returns, so exactly one caller sees 1.
 
-**3. An animation picks the wrong frame from 33 upward.**
+**3. Save-game pointer identity is truncated on x64, and has been since the x64 migration.**
+`WWSaveLoad/persistfactory.h:133`:
+
+```cpp
+uint32 objptr = (uint32)obj;
+csave.Write(&objptr, sizeof(uint32));
+```
+
+Before B10, `uint32` was `unsigned long` — **4 bytes on Win64 under LLP64** — so this has been
+truncating 64-bit pointers on the shipping x64 build all along. It was lossless on macOS only by
+accident, because `unsigned long` is 8 bytes under LP64; B10 removing that accident is what made
+clang reject it and surface the bug.
+
+The value is an object identity token written into the save chunk and fed to
+`SaveLoadSystemClass::Register_Pointer` for pointer remapping on load, so two objects whose
+addresses collide in their low 32 bits remap to the same object. With ASLR and a heap spread beyond
+4GB that is **possible rather than certain** — and how much of `WWSaveLoad` the game actually
+exercises has not been traced, so treat the severity as unverified rather than established.
+
+**4. An animation picks the wrong frame from 33 upward.**
 `hrawanim.cpp`'s `Float_To_Long(frame - 0.499999f)` floor idiom is exact only below 33. Float
 spacing doubles at 32, so from there up the subtraction lands on an exact tie, which rounds to the
 even neighbour below — an odd frame returns `frame-1`. Every architecture agrees, so it does not
 block the port. Found because a test written for the port went red against real code, and the test
 was right. D-track.
 
-**4. A Japanese player's auto-saved replay may fail to write.**
+**5. A Japanese player's auto-saved replay may fail to write.**
 `StatsCollector.cpp:345` and `Recorder.cpp:1582` build a **file name** from a player's name through
 `%ls`, which renders an unmappable character as `?` — illegal in a Windows filename. Reasoned from
 the code, not observed. UTF-8 introduces no path-illegal byte, so B1's sweep incidentally fixes it.
 
-**5. A format string one translator away from being attacker-controlled.**
+**6. A format string one translator away from being attacker-controlled.**
 About a dozen callers pass a `TheGameText->fetch(...)` result as a printf format
 (`InGameUI.cpp:280`, `:339`, `:7855` and others). Safe only because the shipped `.csf` strings
 contain no `%`. None is user- or network-controlled today. Flagged, not actioned.
