@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** not started
+- **Status:** in progress
 - **Size:** `GameEngine/Source/Common/System/JobSystem.cpp` (8.5 KB) and
   `GameEngine/Include/Common/JobSystem.h` (5.2 KB)
 
