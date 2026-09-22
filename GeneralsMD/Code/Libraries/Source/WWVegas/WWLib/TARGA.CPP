@@ -64,7 +64,11 @@
 #ifndef TGA_USES_WWLIB_FILE_CLASSES
 #include <stdio.h>
 #endif
-#include <malloc.h>
+#if defined(_MSC_VER)
+#include <malloc.h>   // Microsoft puts malloc, _msize and _alloca here
+#else
+#include "Platform/MSVCCompat.h"   // <stdlib.h> and <alloca.h>, and _alloca's spelling
+#endif
 #include <memory.h>
 #include <string.h>
 #ifdef TGA_USES_WWLIB_FILE_CLASSES
