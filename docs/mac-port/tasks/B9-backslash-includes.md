@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** nothing (A1 is done; this needs no build)
 - **Blocks:** B1, and everything else that compiles `GameLogic`
-- **Status:** not started
+- **Status:** in review
 - **Size:** **147 directives across 15 files**, measured 2026-09-22
 
 ## Why
