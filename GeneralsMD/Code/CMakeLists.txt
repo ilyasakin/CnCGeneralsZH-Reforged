@@ -233,6 +233,14 @@ target_include_directories(compression
 # CompressionManager calls z_compress2/z_uncompress and BaseType.h owns 'Byte',
 # so zlib must be built with its Z_PREFIX renames on.
 target_compile_definitions(compression PRIVATE Z_PREFIX)
+# LZH-Light's _lzhl.h says `#define UINT32 unsigned long`, which is 32 bits under Windows' LLP64
+# and 64 under Darwin's LP64.  LZHASH and LZPOS are both UINT32, so at 64 bits the hash index runs
+# off the end of its table and LZHLCompressor::compress walks into unmapped memory - a SIGBUS on the
+# first buffer it is handed.  The header asks first (#ifndef UINT32), so saying it here fixes the
+# width without patching a vendored file that A2 re-fetches.  `unsigned int` is 32 bits on both, so
+# Windows is unchanged and macOS now agrees with it - which is the point, because these widths reach
+# the compressed bytes that save games and network packets are made of.
+target_compile_definitions(compression PRIVATE UINT32=unsigned\ int UINT16=unsigned\ short)
 
 # Round-trip check over every codec CompressionManager exposes.
 add_executable(compression_selfcheck ${COMP}/test_compression.cpp)

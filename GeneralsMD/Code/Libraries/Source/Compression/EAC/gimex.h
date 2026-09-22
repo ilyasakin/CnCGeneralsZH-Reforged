@@ -376,7 +376,16 @@ static __inline unsigned int ggetm(const void *src, int bytes)
 {
     if (bytes==1)
         return (unsigned int) *(const unsigned char *) src;
-#if defined(__APPLE__) || (defined(__MWERKS__) && defined(__PPCGEKKO__))
+/* These two branches read and write a motorola (big-endian) field with a single native load or
+   store, which is only correct when the machine is itself big-endian.  In 2003 __APPLE__ meant
+   PowerPC and the shorthand held.  On Apple Silicon - and on an Intel Mac before it - __APPLE__ is
+   still defined and the machine is little-endian, so the shorthand silently byte-swaps every
+   two- and four-byte field in a RefPack header.  That is how compression_selfcheck's RefPack
+   round-trip came back claiming 1131375981 bytes instead of 65536: the decoder reads the size
+   byte-at-a-time big-endian, and the encoder had written it native little-endian.
+   Ask about byte order, which is what the code actually depends on. */
+#if defined(__BIG_ENDIAN__) || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__) \
+    || (defined(__MWERKS__) && defined(__PPCGEKKO__))
     else if (bytes==2)
         return (unsigned int) *(const unsigned short *) src;
     else if (bytes==4)
@@ -422,7 +431,16 @@ static __inline void gputm(void *dst, unsigned int data, int bytes)
     {
         ((unsigned char *) dst)[0] = (unsigned char) data;
     }
-#if defined(__APPLE__) || (defined(__MWERKS__) && defined(__PPCGEKKO__))
+/* These two branches read and write a motorola (big-endian) field with a single native load or
+   store, which is only correct when the machine is itself big-endian.  In 2003 __APPLE__ meant
+   PowerPC and the shorthand held.  On Apple Silicon - and on an Intel Mac before it - __APPLE__ is
+   still defined and the machine is little-endian, so the shorthand silently byte-swaps every
+   two- and four-byte field in a RefPack header.  That is how compression_selfcheck's RefPack
+   round-trip came back claiming 1131375981 bytes instead of 65536: the decoder reads the size
+   byte-at-a-time big-endian, and the encoder had written it native little-endian.
+   Ask about byte order, which is what the code actually depends on. */
+#if defined(__BIG_ENDIAN__) || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__) \
+    || (defined(__MWERKS__) && defined(__PPCGEKKO__))
     else if (bytes==2)
     {
         ((unsigned short *) dst)[0] = (unsigned short) data;
