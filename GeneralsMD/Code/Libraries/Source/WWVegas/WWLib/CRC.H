@@ -40,6 +40,8 @@
 #ifndef CRC_H
 #define CRC_H
 
+#include <stdint.h>   // int32_t and uint32_t: the CRC accumulator's width is not negotiable
+
 #include	<stdlib.h>
 #ifdef _UNIX
 	#include "osdep.h"
@@ -56,7 +58,7 @@ class CRCEngine {
 	public:
 
 		// Constructor for CRC engine (it can have an override initial CRC value).
-		CRCEngine(long initial=0) : CRC(initial), Index(0) {
+		CRCEngine(long initial=0) : CRC((int32_t)initial), Index(0) {
 			StagingBuffer.Composite = 0;
 		};
 
@@ -80,16 +82,28 @@ class CRCEngine {
 
 		long Value(void) const {
 			if (Buffer_Needs_Data()) {
-				return(_lrotl(CRC, 1) + StagingBuffer.Composite);
+				return((long)(Rotate_Left_32((uint32_t)CRC) + (uint32_t)StagingBuffer.Composite));
 			}
 			return(CRC);
 		};
 
 		/*
+		**	_lrotl is Microsoft's 32-bit rotate, and on Windows `long` is 32 bits, so the accumulator
+		**	rotated within 32 bits and the staging buffer below blocked on four bytes.  On Darwin's
+		**	LP64 `long` is 64 bits: a 64-bit rotate and an eight-byte staging block compute a
+		**	different CRC from the same input, and nothing says so - the existing self-consistency
+		**	test passes either way, because feeding byte-at-a-time and in bulk stay equal to each
+		**	other whichever width they use.  So the width is stated here rather than inherited.
+		*/
+		static uint32_t Rotate_Left_32(uint32_t value) {
+			return (uint32_t)((value << 1) | (value >> 31));
+		}
+
+		/*
 		**	Current accumulator of the CRC value. This value doesn't take into
 		**	consideration any pending data in the staging buffer.
 		*/
-		long CRC;
+		int32_t CRC;
 
 		/*
 		**	This is the sub index into the staging buffer used to keep track of
@@ -103,8 +117,8 @@ class CRCEngine {
 		**	in preparation for additional data.
 		*/
 		union {
-			long Composite;
-			char Buffer[sizeof(long)];
+			int32_t Composite;
+			char Buffer[sizeof(int32_t)];
 		} StagingBuffer;
 };
 
