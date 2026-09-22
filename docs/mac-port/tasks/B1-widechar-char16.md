@@ -140,6 +140,40 @@ at all. Recorded in C1.
 `va_list` and no funnel can reach them — same sweep as the 91 narrow ones, and they should be done
 together.
 
+## The `%ls` sweep is split, decided 2026-09-22
+
+The 138-odd `%ls`/`%ws`/`%S` specifiers are **two problems**, not one, and only the first is B1's.
+
+**The 91 in NARROW format strings are mechanical and are being done** (option b: wrap the argument,
+change `%ls` to `%s`). Two things about them that were not obvious:
+
+- **`AsciiString::translate` cannot be the helper**, though it is what anyone would reach for.
+  `AsciiString.cpp:181` carries its own admission — `/// @todo srj put in a real translation here;
+  this will only work for 7-bit ascii` — and line 185 is `concat((char)stringSrc.getCharAt(i))`. A
+  truncating cast: `Ç` becomes byte `0xC7`, `İ` becomes `0x30`, the digit zero. Using it would make
+  the logs **worse** than today's `%ls`. The sweep needs a real UTF-8 conversion with storage that
+  lives for the call, because three sites carry two `%ls` in one statement
+  (`LanguageFilter.h:58`, `Recorder.cpp:1116`, `:1121`) and a static scratch buffer would have the
+  second overwrite the first.
+- **It removes a locale dependency rather than adding one.** `printf("%ls", p)` on macOS in the C
+  locale fails with `EILSEQ` on any non-ASCII, the same root cause as the `vswprintf` finding
+  above. So the current spelling is broken on Mac twice over — wrong width *and* locale-dependent.
+  A UTF-8 helper is pure code-unit arithmetic with no CRT conversion, so it has no locale behaviour
+  to get wrong.
+- It is **not** a no-op on Windows: `%ls` converts through the current ANSI codepage today and the
+  log will carry UTF-8 after. For a Turkish or German player name that is different bytes in
+  `DebugLogFile.txt`, which is the file users send back. An improvement — today a name outside
+  CP1254 is `?` — but a change, and it gets a debt row saying so.
+
+**The 42 in WIDE format strings are deferred and need a design decision.** They are correct on MSVC
+today and stay correct on Windows after the flip, because `char16_t` and `wchar_t` are
+layout-compatible there. They break only on macOS, and they break *inside* the funnel:
+`WideCharFormatV` widens the format string, but the argument is a `char16_t*` in the `va_list`
+where nothing can reach it. Every cheap fix is wrong on one platform — `%hs` mangles non-ASCII on
+MSVC; widening at 42 call sites is exactly the scattering this task forbids; making the funnel
+parse the format and consume the `va_list` is correct and platform-neutral and is a hand-written
+mini-printf. That becomes its own task once the options are written up.
+
 ## Do
 
 1. `typedef char16_t WideChar`. `char16_t` is exactly 2 bytes on every conforming compiler, which
