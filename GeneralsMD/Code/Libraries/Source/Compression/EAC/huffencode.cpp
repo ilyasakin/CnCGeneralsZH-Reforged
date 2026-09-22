@@ -1050,8 +1050,13 @@ static void HUFF_pack(struct HuffEncodeContext *EC,
 		if (!i3)
 			HUFF_writecode(EC,dest,i);
 
-		if (((int) bptr1- (int) EC->buffer) >= (int)(EC->plen+curpc))
-			curpc = (int) bptr1 - (int) EC->buffer - EC->plen;
+		// Was ((int) bptr1 - (int) EC->buffer): two 64-bit pointers each truncated to int and then
+		// subtracted.  MSVC makes that warning C4311 and the Windows x64 build gets the right answer
+		// by accident, because truncating both before subtracting is correct modulo 2^32 and the two
+		// pointers are always within one buffer of each other.  clang makes it an error.  Subtracting
+		// first and narrowing the difference is the same value on both, and says what was meant.
+		if ((int)(bptr1 - EC->buffer) >= (int)(EC->plen+curpc))
+			curpc = (int)(bptr1 - EC->buffer) - EC->plen;
 	}
 
 	/* write EOF ([clue] 0gn [10]) */
