@@ -166,17 +166,22 @@ elseif(ZH_PLATFORM_MACOS)
 endif()
 
 # ---- wwdebug --------------------------------------------------------------
+# Libraries/Include is on the WWVegas targets from B3 onward: Platform/MSVCCompat.h lives
+# there, always.h includes it, and every WWVegas library reaches always.h.  Nothing in that
+# directory can shadow a WWVegas header - its only headers are under Lib/, rts/ and Platform/.
 add_library(wwdebug STATIC
   ${WW}/WWDebug/wwdebug.cpp
   ${WW}/WWDebug/wwmemlog.cpp
   ${WW}/WWDebug/wwprofile.cpp)
-target_include_directories(wwdebug PUBLIC ${WW}/WWDebug PRIVATE ${WW}/WWLib ${WW}/Wwutil)
+target_include_directories(wwdebug PUBLIC ${WW}/WWDebug
+  PRIVATE ${WW}/WWLib ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 
 # ---- wwutil ---------------------------------------------------------------
 add_library(wwutil STATIC
   ${WW}/Wwutil/mathutil.cpp
   ${WW}/Wwutil/miscutil.cpp)
-target_include_directories(wwutil PUBLIC ${WW}/Wwutil PRIVATE ${WW}/WWLib ${WW}/WWMath)
+target_include_directories(wwutil PUBLIC ${WW}/Wwutil
+  PRIVATE ${WW}/WWLib ${WW}/WWMath ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwutil PRIVATE wwdebug)
 
 # ---- wwmath ---------------------------------------------------------------
@@ -200,7 +205,8 @@ add_library(wwmath STATIC
   ${WW}/WWMath/tri.cpp            ${WW}/WWMath/v3_rnd.cpp
   ${WW}/WWMath/vehiclecurve.cpp   ${WW}/WWMath/vp.cpp
   ${WW}/WWMath/wwmath.cpp)
-target_include_directories(wwmath PUBLIC ${WW}/WWMath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
+target_include_directories(wwmath PUBLIC ${WW}/WWMath
+  PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwmath PRIVATE wwdebug)
 
 # ---- compression ----------------------------------------------------------
@@ -231,6 +237,13 @@ target_compile_definitions(compression PRIVATE Z_PREFIX)
 # Round-trip check over every codec CompressionManager exposes.
 add_executable(compression_selfcheck ${COMP}/test_compression.cpp)
 target_link_libraries(compression_selfcheck PRIVATE compression)
+
+# DetRound::To_Long has to round half to even on every architecture, because the simulation's
+# callers were written against an instruction that does.  Lib/DetRound.h is header-only and this
+# links nothing, so it runs before any library in the tree compiles - which is what makes it usable
+# as the first evidence that determinism survives a new architecture.  See Tests/test_detround.cpp.
+add_executable(detround_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_detround.cpp)
+target_include_directories(detround_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 
 # Guards the hand-rolled Matrix3D::Get_Inverse that replaced D3DXMatrixInverse.
 add_executable(wwmath_selfcheck ${WW}/WWMath/test_inverse.cpp)
@@ -275,7 +288,8 @@ add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE}
   ${WW}/WWLib/widestring.cpp ${WW}/WWLib/win.cpp        ${WW}/WWLib/WWCOMUtil.cpp
   ${WW}/WWLib/wwfile.cpp     ${WW}/WWLib/wwfont.cpp     ${WW}/WWLib/wwstring.cpp
   ${WW}/WWLib/xpipe.cpp      ${WW}/WWLib/xstraw.cpp     ${WW}/WWLib/xsurface.cpp)
-target_include_directories(wwlib PUBLIC ${WW}/WWLib PRIVATE ${WW}/WWMath ${WW}/Wwutil)
+target_include_directories(wwlib PUBLIC ${WW}/WWLib
+  PRIVATE ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwlib PRIVATE wwdebug)
 if(ZH_PLATFORM_WINDOWS)
   # winmm: timeGetTime/timeBeginPeriod.  version: verchk.cpp's GetFileVersionInfo,
@@ -292,7 +306,8 @@ add_library(wwsaveload STATIC ${ZH_NOT_YET_PORTABLE}
   ${WW}/WWSaveLoad/pointerremap.cpp        ${WW}/WWSaveLoad/saveload.cpp
   ${WW}/WWSaveLoad/saveloadstatus.cpp      ${WW}/WWSaveLoad/saveloadsubsystem.cpp
   ${WW}/WWSaveLoad/twiddler.cpp            ${WW}/WWSaveLoad/wwsaveload.cpp)
-target_include_directories(wwsaveload PUBLIC ${WW}/WWSaveLoad PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/Wwutil)
+target_include_directories(wwsaveload PUBLIC ${WW}/WWSaveLoad
+  PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwsaveload PRIVATE wwdebug wwlib wwmath)
 
 # ===========================================================================
@@ -929,6 +944,7 @@ target_compile_definitions(test_gameengine PRIVATE
 
 # The three hand-written self-checks predate the harness; run them from ctest
 # too so one command covers everything.
+add_test(NAME detround_selfcheck COMMAND detround_selfcheck)
 add_test(NAME wwmath_selfcheck COMMAND wwmath_selfcheck)
 add_test(NAME compression_selfcheck COMMAND compression_selfcheck)
 # The device and codec smoke tests below belong to targets only a Windows configuration defines.
