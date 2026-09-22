@@ -30,6 +30,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
 
@@ -211,7 +212,7 @@ NATStateType NAT::update() {
 		}
 		// check for timeout.  Timing out is not a fatal error - it just means we didn't get the other
 		// player's stats.  We'll see 0/0 as his record, but we can still play him just fine.
-		UnsignedInt now = timeGetTime();
+		UnsignedInt now = Clock_Milliseconds();
 		if (now > s_startStatWaitTime + MS_TO_WAIT_FOR_STATS)
 		{
 			DEBUG_LOG(("Timed out waiting for stats.  Let's just start the dang game.\n"));
@@ -231,7 +232,7 @@ NATStateType NAT::update() {
 			// we finished this round, move on to the next one.
 			++m_connectionRound;
 //			m_roundTimeout = timeGetTime() + TheGameSpyConfig->getRoundTimeout();
-			m_roundTimeout = timeGetTime() + m_timeForRoundTimeout;
+			m_roundTimeout = Clock_Milliseconds() + m_timeForRoundTimeout;
 			DEBUG_LOG(("NAT::update - done with connection round, moving on to round %d\n", m_connectionRound));
 
 			// we finished that round, now check to see if we're done, or if there are more rounds to go.
@@ -243,7 +244,7 @@ NATStateType NAT::update() {
 				// so therefore we don't need to refresh our NAT even if we previously thought we had to.
 				TheFirewallHelper->flagNeedToRefresh(FALSE);
 
-				s_startStatWaitTime = timeGetTime();
+				s_startStatWaitTime = Clock_Milliseconds();
 				DEBUG_LOG(("NAT::update - done with all connections, woohoo!!\n"));
 				/*
 				m_NATState = NATSTATE_DONE;
@@ -259,7 +260,7 @@ NATStateType NAT::update() {
 		}
 		NATConnectionState state = connectionUpdate();
 
-		if (timeGetTime() > m_roundTimeout) {
+		if (Clock_Milliseconds() > m_roundTimeout) {
 			DEBUG_LOG(("NAT::update - round timeout expired\n"));
 			setConnectionState(m_localNodeNumber, NATCONNECTIONSTATE_FAILED);
 			notifyUsersOfConnectionFailed(m_localNodeNumber);
@@ -309,16 +310,16 @@ NATConnectionState NAT::connectionUpdate() {
 	}
 
 	if (m_beenProbed == FALSE) {
-		if (timeGetTime() >= m_nextPortSendTime) {
+		if (Clock_Milliseconds() >= m_nextPortSendTime) {
 //			sendMangledPortNumberToTarget(m_previousSourcePort, targetSlot);
 			sendMangledPortNumberToTarget(m_sourcePorts[m_targetNodeNumber], targetSlot);
 //			m_nextPortSendTime = timeGetTime() + TheGameSpyConfig->getRetryInterval();
-			m_nextPortSendTime = timeGetTime() + m_timeBetweenRetries;
+			m_nextPortSendTime = Clock_Milliseconds() + m_timeBetweenRetries;
 		}
 	}
 
 	// check to see if its time to send out our keepalives.
-	if (timeGetTime() >= m_nextKeepaliveTime) {
+	if (Clock_Milliseconds() >= m_nextKeepaliveTime) {
 		for (Int node = 0; node < m_numNodes; ++node) {
 			if (m_myConnections[node] == TRUE) {
 				// we've made this connection, send a keepalive.
@@ -334,7 +335,7 @@ NATConnectionState NAT::connectionUpdate() {
 			}
 		}
 //		m_nextKeepaliveTime = timeGetTime() + TheGameSpyConfig->getKeepaliveInterval();
-		m_nextKeepaliveTime = timeGetTime() + m_keepaliveInterval;
+		m_nextKeepaliveTime = Clock_Milliseconds() + m_keepaliveInterval;
 	}
 
 	m_transport->update();
@@ -389,7 +390,7 @@ NATConnectionState NAT::connectionUpdate() {
 	// we are waiting for our target to tell us that they have received our probe.
 	if (m_connectionStates[m_localNodeNumber] == NATCONNECTIONSTATE_WAITINGFORRESPONSE) {
 		// check to see if it's time to probe our target.
-		if ((m_timeTillNextSend != -1) && (m_timeTillNextSend <= timeGetTime())) {
+		if ((m_timeTillNextSend != -1) && (m_timeTillNextSend <= Clock_Milliseconds())) {
 			if (m_numRetries > m_maxNumRetriesAllowed) {
 				DEBUG_LOG(("NAT::connectionUpdate - too many retries, connection failed.\n"));
 				setConnectionState(m_localNodeNumber, NATCONNECTIONSTATE_FAILED);
@@ -400,7 +401,7 @@ NATConnectionState NAT::connectionUpdate() {
 				// Send a probe.
 				sendAProbe(targetSlot->getIP(), targetSlot->getPort(), m_localNodeNumber);
 //				m_timeTillNextSend = timeGetTime() + TheGameSpyConfig->getRetryInterval();
-				m_timeTillNextSend = timeGetTime() + m_timeBetweenRetries;
+				m_timeTillNextSend = Clock_Milliseconds() + m_timeBetweenRetries;
 
 				// tell the target they've been probed. In other words, our port is open.
 				notifyTargetOfProbe(targetSlot);
@@ -424,7 +425,7 @@ NATConnectionState NAT::connectionUpdate() {
 			TheFirewallHelper->closeSpareSocket(m_spareSocketPort);
 			m_spareSocketPort = 0;
 		} else {
-			if (timeGetTime() >= m_manglerRetryTime) {
+			if (Clock_Milliseconds() >= m_manglerRetryTime) {
 				++m_manglerRetries;
 //				if (m_manglerRetries > TheGameSpyConfig->getMaxManglerRetries()) {
 				if (m_manglerRetries > m_maxAllowedManglerRetries) {
@@ -441,14 +442,14 @@ NATConnectionState NAT::connectionUpdate() {
 						TheFirewallHelper->sendToManglerFromPort(m_manglerAddress, m_spareSocketPort, m_packetID);
 					}
 //					m_manglerRetryTime = TheGameSpyConfig->getRetryInterval() + timeGetTime();
-					m_manglerRetryTime = m_manglerRetryTimeInterval + timeGetTime();
+					m_manglerRetryTime = m_manglerRetryTimeInterval + Clock_Milliseconds();
 				}
 			}
 		}
 	}
 
 	if (m_connectionStates[m_localNodeNumber] == NATCONNECTIONSTATE_WAITINGFORMANGLEDPORT) {
-		if (timeGetTime() > m_timeoutTime) {
+		if (Clock_Milliseconds() > m_timeoutTime) {
 			DEBUG_LOG(("NAT::connectionUpdate - waiting too long to get the other player's port number, failed.\n"));
 			setConnectionState(m_localNodeNumber, NATCONNECTIONSTATE_FAILED);
 
@@ -611,7 +612,7 @@ void NAT::establishConnectionPaths() {
 	}
 
 //	m_roundTimeout = timeGetTime() + TheGameSpyConfig->getRoundTimeout();
-	m_roundTimeout = timeGetTime() + m_timeForRoundTimeout;
+	m_roundTimeout = Clock_Milliseconds() + m_timeForRoundTimeout;
 
 	// make the connections for this round.
 	// this song is cool.
@@ -625,7 +626,7 @@ void NAT::attachSlotList(GameSlot *slotList[], Int localSlot, UnsignedInt localI
 	DEBUG_LOG(("NAT::attachSlotList - initting the transport socket with address %d.%d.%d.%d:%d\n",
 							m_localIP >> 24, (m_localIP >> 16) & 0xff, (m_localIP >> 8) & 0xff, m_localIP & 0xff, getSlotPort(localSlot)));
 
-	m_startingPortNumber = NETWORK_BASE_PORT_NUMBER + ((timeGetTime() / 1000) % 20000);
+	m_startingPortNumber = NETWORK_BASE_PORT_NUMBER + ((Clock_Milliseconds() / 1000) % 20000);
 	DEBUG_LOG(("NAT::attachSlotList - using %d as the starting port number\n", m_startingPortNumber));
 	generatePortNumbers(slotList, localSlot);
 	m_transport->init(m_localIP, getSlotPort(localSlot));
@@ -713,9 +714,9 @@ void NAT::doThisConnectionRound() {
 				DEBUG_LOG(("NAT::doThisConnectionRound - About to attempt to get the next mangled source port\n"));
 				sendMangledSourcePort();
 //				m_nextPortSendTime = timeGetTime() + TheGameSpyConfig->getRetryInterval();
-				m_nextPortSendTime = timeGetTime() + m_timeBetweenRetries;
+				m_nextPortSendTime = Clock_Milliseconds() + m_timeBetweenRetries;
 //				m_timeoutTime = timeGetTime() + TheGameSpyConfig->getPortTimeout();
-				m_timeoutTime = timeGetTime() + m_timeToWaitForPort;
+				m_timeoutTime = Clock_Milliseconds() + m_timeToWaitForPort;
 			} else {
 				// this is someone else that needs to connect to someone, so wait till they tell us
 				// that they're done.
@@ -837,7 +838,7 @@ void NAT::sendMangledSourcePort() {
 	DEBUG_LOG(("NAT::sendMangledSourcePort - NAT behavior = 0x%08x\n", fwType));
 
 //	m_manglerRetryTime = TheGameSpyConfig->getRetryInterval() + timeGetTime();
-	m_manglerRetryTime = m_manglerRetryTimeInterval + timeGetTime();
+	m_manglerRetryTime = m_manglerRetryTimeInterval + Clock_Milliseconds();
 	m_manglerRetries = 0;
 
 	if (TheFirewallHelper != NULL) {
@@ -845,7 +846,7 @@ void NAT::sendMangledSourcePort() {
 		TheFirewallHelper->openSpareSocket(m_spareSocketPort);
 		TheFirewallHelper->sendToManglerFromPort(m_manglerAddress, m_spareSocketPort, m_packetID);
 //		m_manglerRetryTime = TheGameSpyConfig->getRetryInterval() + timeGetTime();
-		m_manglerRetryTime = m_manglerRetryTimeInterval + timeGetTime();
+		m_manglerRetryTime = m_manglerRetryTimeInterval + Clock_Milliseconds();
 	}
 
 	setConnectionState(m_localNodeNumber, NATCONNECTIONSTATE_WAITINGFORMANGLERRESPONSE);

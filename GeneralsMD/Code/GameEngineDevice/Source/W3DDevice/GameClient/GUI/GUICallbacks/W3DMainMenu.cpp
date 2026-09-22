@@ -48,6 +48,7 @@
 //-----------------------------------------------------------------------------
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "Lib/Clock.h"
 #include <mmsystem.h>
 #include <time.h>
 //-----------------------------------------------------------------------------
@@ -111,8 +112,8 @@ static void advancePosition(GameWindow *window, const Image *image, UnsignedInt 
 	static Int x = -800;
 	static Int y = pos.y - (image->getImageHeight()/2);
 
-	static UnsignedInt m_startTime = timeGetTime();
-	Int time = timeGetTime() - m_startTime;
+	static UnsignedInt m_startTime = Clock_Milliseconds();
+	Int time = Clock_Milliseconds() - m_startTime;
 	Real percentDone = INT_TO_REAL(time) / 10000;
 	
 	if(goingForward)
@@ -120,7 +121,7 @@ static void advancePosition(GameWindow *window, const Image *image, UnsignedInt 
 		if(percentDone >= 1)
 		{
 			y = pos.y + size.y - (image->getImageHeight()/2);
-			m_startTime = timeGetTime();
+			m_startTime = Clock_Milliseconds();
 			goingForward = FALSE;
 		}
 		else
@@ -134,7 +135,7 @@ static void advancePosition(GameWindow *window, const Image *image, UnsignedInt 
 		if(percentDone >= 1)
 		{
 			y = pos.y - (image->getImageHeight()/2);
-			m_startTime = timeGetTime();
+			m_startTime = Clock_Milliseconds();
 			goingForward = TRUE;
 		}
 		else

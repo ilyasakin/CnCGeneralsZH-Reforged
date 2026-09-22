@@ -47,6 +47,7 @@
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -274,7 +275,7 @@ void TransitionGroup::update( void )
 	// Step off the wall clock at the rate the .ini frame counts were authored against instead.
 	//
 	// `MenuTransitionSpeed` in Options.ini scales this; 100 is the authored rate.
-	if (!GameClient_isUiAnimStepDue(m_lastStepMs, m_stepAccumMs, timeGetTime(),
+	if (!GameClient_isUiAnimStepDue(m_lastStepMs, m_stepAccumMs, Clock_Milliseconds(),
 																	GameClient_menuAnimStepsPerSec()))
 		return;
 

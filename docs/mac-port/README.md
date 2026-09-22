@@ -40,7 +40,7 @@ x64 work, and they are what makes this plan finite:
 | `GameEngine/Source/GameLogic` | 264 `.cpp`, **zero** Windows types |
 | All of `GameEngine/Source` | 21 of 604 files touch `HWND`/`HRESULT`/`DWORD`/`windows.h` — 8 in Common, 7 in GameClient, 6 in GameNetwork |
 | `windows.h` includes, engine + device + WWVegas | 58 files of 2,138 |
-| Inline assembly | every remaining `__asm` block is inside `#if 0`. Nothing is x86-shaped. |
+| Inline assembly | **two places, not none — B2 corrected this line.** `WWMath/vp.cpp`'s blocks are expanded only inside `#if defined(__ICL)` and are dead. `PerfTimer.h:75`'s was **live** in every `_DEBUG`/`_INTERNAL` build and under `-DPERF_TIMERS=ON`, which on an x64-only project MSVC cannot compile at all; B2 replaced it with `Lib/Clock.h`. Nothing else is x86-shaped, but `__rdtsc()` intrinsics remain in `PerfTimer.cpp` and `WWLib/mpu.cpp`. |
 | Video | FFmpeg already |
 | Validation | 38 test suites, `-headless`, replay checksum comparison |
 

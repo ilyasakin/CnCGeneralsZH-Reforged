@@ -19,6 +19,7 @@
 // FILE: ChromaKeyboard.cpp ///////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include <wininet.h>
 #include <math.h>
@@ -979,7 +980,7 @@ static DWORD WINAPI chromaWorkerMain( LPVOID )
 		memcpy( cells, s_pendingCells, sizeof( cells ) );
 		LeaveCriticalSection( &s_cellLock );
 
-		const DWORD nowMs = timeGetTime();
+		const DWORD nowMs = Clock_Milliseconds();
 		const Bool keepalive = lastSendMs == 0 || nowMs - lastSendMs >= CHROMA_KEEPALIVE_MS;
 		Bool sentAnything = FALSE;
 		for( Int device = 0; device < CHROMA_DEVICE_COUNT; ++device )

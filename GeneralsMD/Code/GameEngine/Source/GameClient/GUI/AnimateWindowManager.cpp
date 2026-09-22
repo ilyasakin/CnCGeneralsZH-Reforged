@@ -52,6 +52,7 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/GlobalData.h"
 #include "GameClient/AnimateWindowManager.h"
@@ -228,7 +229,7 @@ void AnimateWindowManager::update( void )
 	// the wall clock at that same rate instead - otherwise a menu animation covers its whole
 	// travel in a handful of milliseconds and appears to snap into place.
 	//
-	if (!GameClient_isUiAnimStepDue(m_lastStepMs, m_stepAccumMs, timeGetTime(),
+	if (!GameClient_isUiAnimStepDue(m_lastStepMs, m_stepAccumMs, Clock_Milliseconds(),
 																	GameClient_menuAnimStepsPerSec()))
 		return;
 

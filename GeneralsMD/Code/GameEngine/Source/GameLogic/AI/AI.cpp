@@ -26,6 +26,7 @@
 // The Artificial Intelligence system
 // Author: Michael S. Booth, November 2000
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/CRCDebug.h"
 #include "Common/GameState.h"
@@ -366,7 +367,7 @@ static Real aiElapsedMS( const Int64 &from, const Int64 &to )
 {
 	static Int64 freq = 0;
 	if( freq == 0 )
-		QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+		freq = Clock_Ticks_Per_Second();
 	if( freq == 0 )
 		return 0.0f;
 	return (Real)( (double)(to - from) * 1000.0 / (double)freq );
@@ -375,7 +376,7 @@ static Real aiElapsedMS( const Int64 &from, const Int64 &to )
 void AI::update( void )
 {
 	Int64 start, afterPathfind, end;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&start );
+	start = Clock_Ticks();
 
 	// Age the flow maps before anything reads them: the traffic left by last frame's jams decays,
 	// and a clearance field made stale by a building going up is rebuilt at most once a second.
@@ -385,7 +386,7 @@ void AI::update( void )
 	// Do pathfinding.
 	m_pathfinder->processPathfindQueue();
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&afterPathfind );
+	afterPathfind = Clock_Ticks();
 
 	// run player updates
 	{
@@ -393,7 +394,7 @@ void AI::update( void )
 		ThePlayerList->UPDATE();
 	}
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&end );
+	end = Clock_Ticks();
 	s_lastPathfindMS = aiElapsedMS( start, afterPathfind );
 	s_lastPlayerUpdateMS = aiElapsedMS( afterPathfind, end );
 }

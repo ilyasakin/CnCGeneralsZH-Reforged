@@ -28,6 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/Language.h"
 #include "Common/GameEngine.h"
@@ -150,7 +151,7 @@ void Keyboard::updateKeys( void )
 
 		m_keyStatus[ m_keys[ index ].key ].state = m_keys[ index ].state;
 		m_keyStatus[ m_keys[ index ].key ].status = m_keys[ index ].status;
-		m_keyStatus[ m_keys[ index ].key ].sequence = timeGetTime();
+		m_keyStatus[ m_keys[ index ].key ].sequence = Clock_Milliseconds();
 
 		// prevent ALT-TAB from causing a TAB event
 		if( m_keys[ index ].key == KEY_TAB )
@@ -222,7 +223,7 @@ Bool Keyboard::checkKeyRepeat( void )
 	while( m_keys[ index ].key != KEY_NONE )
 		index++;
 
-	const UnsignedInt nowMs = timeGetTime();
+	const UnsignedInt nowMs = Clock_Milliseconds();
 
 	// Scan Keyboard status array for first key down
 	// long enough to repeat

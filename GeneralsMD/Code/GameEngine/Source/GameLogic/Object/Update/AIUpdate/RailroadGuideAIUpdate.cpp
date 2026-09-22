@@ -28,6 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	
+#include "Lib/Clock.h"
 
 #include "Common/Player.h"
 #include "Common/ThingFactory.h"
@@ -132,9 +133,11 @@ RailroadBehavior::RailroadBehavior( Thing *thing, const ModuleData *moduleData )
 
 
 #ifdef RAILROAD_DESYNC_TEST
-	_LARGE_INTEGER pc;
-	QueryPerformanceCounter( &pc ); // absolutely, positively random every call!
-	Real random = 100000.0f / (Real)pc.LowPart;
+	// Deliberately machine-dependent: this block exists to MAKE a desync, to prove the network
+	// code reports one.  It has always been switched off (see the commented-out #define above) and
+	// nothing outside it reads a clock in the simulation - B2 checked all of GameLogic.
+	const unsigned int pc = (unsigned int)Clock_Ticks();
+	Real random = 100000.0f / (Real)pc;
 	conductorPullInfo.m_direction = random;
 	m_pullInfo.m_direction = random;
 #endif

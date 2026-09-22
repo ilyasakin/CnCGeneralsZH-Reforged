@@ -31,6 +31,7 @@
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/GameEngine.h"
 #include "Common/MessageStream.h"
@@ -345,7 +346,7 @@ void Network::init()
 
 	m_localStatus = NETLOCALSTATUS_PREGAME;
 
-	QueryPerformanceFrequency((LARGE_INTEGER *)&m_perfCountFreq);
+	m_perfCountFreq = Clock_Ticks_Per_Second();
 	m_nextFrameTime = 0;
 	m_sawCRCMismatch = FALSE;
 	m_checkCRCsThisFrame = FALSE;
@@ -764,7 +765,7 @@ void Network::endOfGameCheck() {
 
 Bool Network::timeForNewFrame() {
 	__int64 curTime;
-	QueryPerformanceCounter((LARGE_INTEGER *)&curTime);
+	curTime = Clock_Ticks();
 	__int64 frameDelay = m_perfCountFreq / m_frameRate;
 
 	/*

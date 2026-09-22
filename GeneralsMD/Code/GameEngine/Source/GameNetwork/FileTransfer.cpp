@@ -29,6 +29,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "GameClient/LoadScreen.h"
 #include "GameClient/Shell.h"
@@ -47,7 +48,7 @@ static Bool doFileTransfer( AsciiString filename, MapTransferLoadScreen *ls, Int
 	if (mask)
 	{
 		ls->setCurrentFilename(filename);
-		UnsignedInt startTime = timeGetTime();
+		UnsignedInt startTime = Clock_Milliseconds();
 		const Int timeoutPeriod = 2*60*1000;
 		ls->processTimeout(timeoutPeriod/1000);
 
@@ -109,7 +110,7 @@ static Bool doFileTransfer( AsciiString filename, MapTransferLoadScreen *ls, Int
 				ls->processProgress(0, fileTransferPercent, "MapTransfer:Done");
 			}
 
-			Int now = timeGetTime();
+			Int now = Clock_Milliseconds();
 			if (now > startTime + timeoutPeriod) // bail if we don't finish in a reasonable amount of time
 			{
 				DEBUG_LOG(("Timing out file transfer\n"));

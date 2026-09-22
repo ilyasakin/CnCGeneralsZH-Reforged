@@ -28,6 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "Lib/BaseType.h"
+#include "Lib/Clock.h"
 #include "camera.h"
 #include "simplevec.h"
 #include "dx8wrapper.h"
@@ -759,9 +760,9 @@ void W3DShroud::render(CameraClass *cam)
 //-----------------------------------------------------------------------------
 void W3DShroud::interpolateFogLevels(RECT *rect)
 {
-	static UnsignedInt prevTime = timeGetTime();
+	static UnsignedInt prevTime = Clock_Milliseconds();
 
-	UnsignedInt timeDiff=timeGetTime()-prevTime;
+	UnsignedInt timeDiff=Clock_Milliseconds()-prevTime;
 
 	if (!timeDiff)
 		return;	//no time has elapsed

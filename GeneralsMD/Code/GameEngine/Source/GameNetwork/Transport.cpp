@@ -24,6 +24,7 @@
 
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/CRC.h"
 #include "GameNetwork/LinkSimulation.h"
@@ -123,8 +124,8 @@ Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 		return false;
 	
 	int retval = -1;
-	time_t now = timeGetTime();
-	while ((retval != 0) && ((timeGetTime() - now) < 1000)) {
+	time_t now = Clock_Milliseconds();
+	while ((retval != 0) && ((Clock_Milliseconds() - now) < 1000)) {
 		retval = m_udpsock->Bind(ip, port);
 	}
 
@@ -155,7 +156,7 @@ Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 		m_unknownPackets[i] = 0;
 	}
 	m_statisticsSlot = 0;
-	m_lastSecond = timeGetTime();
+	m_lastSecond = Clock_Milliseconds();
 
 	m_port = port;
 
@@ -214,7 +215,7 @@ Bool Transport::doSend() {
 	Bool retval = TRUE;
 
 	// Statistics gathering
-	UnsignedInt now = timeGetTime();
+	UnsignedInt now = Clock_Milliseconds();
 	if (m_lastSecond + 1000 < now)
 	{
 		m_lastSecond = now;
@@ -292,7 +293,7 @@ Bool Transport::doRecv()
 
 	// Read in anything on our socket
 	sockaddr_in from;
-	UnsignedInt now = timeGetTime();
+	UnsignedInt now = Clock_Milliseconds();
 
 	TransportMessage incomingMessage;
 	unsigned char *buf = (unsigned char *)&incomingMessage;

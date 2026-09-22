@@ -39,6 +39,7 @@
 /*---------------------------------------------------------------------------*/
 
 #include <dsound.h>
+#include "Lib/Clock.h"
 #include "Lib/Basetype.h"
 #include "MilesAudioDevice/MilesAudioManager.h"
 
@@ -546,7 +547,7 @@ static void updateSoundCapture( void )
 		}
 
 		recording = TRUE;
-		QueryPerformanceCounter((LARGE_INTEGER *)&startTicks);
+		startTicks = Clock_Ticks();
 		DEBUG_LOG(("AUDIO: recording logic frames %d to %d into %s\n",
 			TheGlobalData->m_wavStartFrame, TheGlobalData->m_wavEndFrame, pathname));
 		return;
@@ -560,8 +561,8 @@ static void updateSoundCapture( void )
 
 	__int64 nowTicks = 0;
 	__int64 ticksPerSecond = 0;
-	QueryPerformanceCounter((LARGE_INTEGER *)&nowTicks);
-	QueryPerformanceFrequency((LARGE_INTEGER *)&ticksPerSecond);
+	nowTicks = Clock_Ticks();
+	ticksPerSecond = Clock_Ticks_Per_Second();
 	const Real recordedSeconds = (Real)(nowTicks - startTicks) / (Real)ticksPerSecond;
 	const Real pictureSeconds = (Real)(frame - TheGlobalData->m_wavStartFrame) / LOGICFRAMES_PER_SECONDS_REAL;
 	DEBUG_LOG(("AUDIO: recorded %.2f seconds of sound for %.2f seconds of picture, %.2f adrift\n",

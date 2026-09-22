@@ -30,6 +30,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
 
@@ -863,7 +864,7 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 		checkLogin();
 	}
 
-	if (TheGameSpyInfo && !buttonPushed && loginAttemptTime && (loginAttemptTime + loginTimeoutInMS < timeGetTime()))
+	if (TheGameSpyInfo && !buttonPushed && loginAttemptTime && (loginAttemptTime + loginTimeoutInMS < Clock_Milliseconds()))
 	{
 		// timed out a login attempt, so say so
 		loginAttemptTime = 0;
@@ -1245,7 +1246,7 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 
 						if ( !email.isEmpty() && !login.isEmpty() && !password.isEmpty() )
 						{
-							loginAttemptTime = timeGetTime();
+							loginAttemptTime = Clock_Milliseconds();
 							BuddyRequest req;
 							req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGINNEW;
 							strcpy(req.arg.login.nick, login.str());
@@ -1334,7 +1335,7 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 
 						if ( !email.isEmpty() && !login.isEmpty() && !password.isEmpty() )
 						{
-							loginAttemptTime = timeGetTime();
+							loginAttemptTime = Clock_Milliseconds();
 							BuddyRequest req;
 							req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
 							strcpy(req.arg.login.nick, login.str());
@@ -1398,7 +1399,7 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 
 						if ( !login.isEmpty() )
 						{
-							loginAttemptTime = timeGetTime();
+							loginAttemptTime = Clock_Milliseconds();
 							PeerRequest req;
 							req.peerRequestType = PeerRequest::PEERREQUEST_LOGIN;
 							req.nick = login.str();
