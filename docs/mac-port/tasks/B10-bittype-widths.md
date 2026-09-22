@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B7's asserts go green, C1, D4, and anything that reads a `.w3d`
-- **Status:** not started
+- **Status:** in review — merges with B7
 - **Size:** two typedefs; **701 uses across 98 files in six libraries**
 - **Risk:** the highest in M1, and it is the one that cannot be verified here
 
@@ -74,6 +74,37 @@ The B4 network structs are **not** affected — `NetworkDefs.h` uses none of the
    guarded `windows.h` out, **bittype.h's `DWORD` becomes the only `DWORD`** — at 8 bytes where
    Windows' is 4. Any `DWORD` B5 leaves behind silently doubles in width. Agree with B5 who owns
    which name.
+
+## Result, 2026-09-22
+
+Done. `uint32` -> `uint32_t`, `sint32` -> `int32_t`. `DWORD` and `ULONG` **removed** rather than
+retyped, because a non-verbatim duplicate of an SDK typedef is a hard
+`typedef redefinition with different types` on MSVC — so step 1's "and the same for `DWORD`,
+`ULONG`" could not be done as written. `WW3D2/agg_def.h` was the only file in the tree that used
+them without reaching `windows.h`; its two uses are now `uint32`, which is what
+`W3dAggregateMiscInfo::OriginalClassID` was declared as all along.
+
+The six remaining SDK names (`WORD`, `BYTE`, `BOOL`, `USHORT`, `UINT`, `LPCSTR`) are left alone:
+they are 2/1/4/2/4 bytes and `const char *`, correct on both toolchains, so removing them would be
+the duplication tidying step 4's "Do not" rules out.
+
+**Verified in a real build**, not by replica — A2 landed mid-task, so this is `cmake` + `ctest`:
+
+| | |
+|:--|:--|
+| `ctest -R test_w3dlayout` | **Passed**, 0.34s — B7's test, unedited |
+| same test with the two typedefs put back | 20 `static_assert` failures, first `sizeof(ChunkHeader) == 8` |
+| warnings across the 34 objects that compile | **byte-identical** before and after: 104 either way |
+| the three `ctest` failures that remain | `windows.h` not found — identical with and without B10 |
+
+Coordination (B5, B3) resolved: `bittype.h` reaches only WWVegas and `Tools/WW3D`, and nothing in
+`GameEngine`/`GameEngineDevice`/`Main`, so B5 and B10 never overlapped. B5 is under instruction
+not to create a `WinTypes.h`, so the SDK names could not be handed to it; deleting them was the
+alternative and it needs nothing from B5. B3's shim deals only in `size_t`/`int`/`const char *`.
+
+**What is NOT verified:** 701 uses across 98 files, of which 34 objects compile on macOS today.
+The rest are blocked on `windows.h` (B5) and `_interlockedbittestandset` (B8). Nothing here has
+been near MSVC.
 
 ## Done when
 
