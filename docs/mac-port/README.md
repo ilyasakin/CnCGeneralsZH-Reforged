@@ -234,6 +234,23 @@ So: before assuming a vendored library ports cleanly, grep it for `__APPLE__`, `
 `TARGET_OS_*`, `_WIN32`, `__BIG_ENDIAN__`, `unsigned long` and `#ifdef` around type definitions.
 Treat every one as a claim about 2003 hardware until checked.
 
+**Running the rule immediately found a fourth**, in the same library and the same file family as
+the first: `zlib-1.1.4/zutil.h:113` repeats `#if defined(MACOS) || defined(TARGET_OS_MAC)` and,
+inside it, `#define fdopen(fd,mode) NULL`. Live on macOS today. It was missed because **the
+compiler stopped at the first error in that file, so the second never got a chance to fail** —
+"fix the error the compiler reports" is not the same as "fix the file". Inert for now (nothing in
+the tree calls `gzopen`/`gzdopen`, and `CompressionManager` uses zlib format rather than gzip), so
+it is a landmine rather than a fire — which is the argument for fixing it while the mechanism is
+open, not against.
+
+**Which half of this can be automated**, which matters if anyone turns it into a CI check: the
+predicate patterns (`__APPLE__`, `TARGET_OS_`, `MACOS`, `__BIG_ENDIAN`, `POWERPC`) return **five
+hits total** across zlib, LZH-Light, EAC and all 564 GameSpy files — quiet enough to run on every
+build. `unsigned long` is not: GameSpy alone would bury it. Automate the first half; the second
+stays a human read.
+
+Still unswept: GameSpy, EAC, and the committed FFmpeg dist.
+
 **A corollary about fixing them**, learned the same afternoon: the fix can be as
 platform-dependent as the bug. B3's `UINT32=unsigned int` compile definition is correct on Darwin
 and would probably break the Windows build — `UINT32` is an SDK *typedef* and the definition makes
