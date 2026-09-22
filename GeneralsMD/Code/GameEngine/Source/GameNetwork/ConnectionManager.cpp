@@ -25,6 +25,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "Compression.h"
 #include "strtok_r.h"
 #include "Common/AudioEventRTS.h"
@@ -726,7 +728,7 @@ void ConnectionManager::processFile(NetFileCommandMsg *msg)
 #ifdef _INTERNAL
 	UnicodeString log;
 	log.format(L"Saw file transfer: '%hs' of %d bytes from %d", msg->getPortableFilename().str(), msg->getFileLength(), msg->getPlayerID());
-	DEBUG_LOG(("%ls\n", log.str()));
+	DEBUG_LOG(("%s\n", WideCharAsUtf8( log.str() ).str()));
 #endif
 
 	AsciiString realFileName = msg->getRealFilename();
@@ -2214,7 +2216,7 @@ void ConnectionManager::sendChat(UnicodeString text, Int playerMask, UnsignedInt
 	{
 		msg->setID(GenerateNextCommandID());
 	}
-	DEBUG_LOG(("Chat message has ID of %d, mask of %8.8X, text of %ls\n", msg->getID(), msg->getPlayerMask(), msg->getText().str()));
+	DEBUG_LOG(("Chat message has ID of %d, mask of %8.8X, text of %s\n", msg->getID(), msg->getPlayerMask(), WideCharAsUtf8( msg->getText().str() ).str()));
 
 	sendLocalCommand(msg, 0xff ^ (1 << m_localSlot));
 	processChat(msg);
@@ -2280,7 +2282,7 @@ UnsignedShort ConnectionManager::sendFileAnnounce(AsciiString path, UnsignedByte
 	{
 		UnicodeString log;
 		log.format(L"Not sending file '%hs' to %X\n", path.str(), playerMask);
-		DEBUG_LOG(("%ls\n", log.str()));
+		DEBUG_LOG(("%s\n", WideCharAsUtf8( log.str() ).str()));
 		if (TheLAN)
 			TheLAN->OnChat(UnicodeString(L"sendFile"), 0, log, LANAPI::LANCHAT_SYSTEM);
 		return 0;
@@ -2318,7 +2320,7 @@ void ConnectionManager::sendFile(AsciiString path, UnsignedByte playerMask, Unsi
 	{
 		UnicodeString log;
 		log.format(L"Not sending file '%hs' to %X\n", path.str(), playerMask);
-		DEBUG_LOG(("%ls\n", log.str()));
+		DEBUG_LOG(("%s\n", WideCharAsUtf8( log.str() ).str()));
 		if (TheLAN)
 			TheLAN->OnChat(UnicodeString(L"sendFile"), 0, log, LANAPI::LANCHAT_SYSTEM);
 		return;

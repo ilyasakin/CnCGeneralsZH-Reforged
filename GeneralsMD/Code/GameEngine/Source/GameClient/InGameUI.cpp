@@ -7131,7 +7131,7 @@ void InGameUI::militarySubtitle( const AsciiString& label, Int duration )
 	// make sure we actually will be displaying something
 	if( title.isEmpty() || duration <= 0)
 	{
-		DEBUG_CRASH(("Trying to create a military subtitle but either title is empty (%ls) or duration is <= 0 (%d)",title.str(), duration));
+		DEBUG_CRASH(("Trying to create a military subtitle but either title is empty (%s) or duration is <= 0 (%d)",WideCharAsUtf8( title.str() ).str(), duration));
 		return;
 	}
 
@@ -10712,7 +10712,7 @@ void InGameUI::selectNextIdleWorker( void )
 	Int index = ThePlayerList->getLocalPlayer()->getPlayerIndex();
 	if(m_idleWorkers[index].empty())
 	{
-		DEBUG_ASSERTCRASH(FALSE, ("InGameUI::selectNextIdleWorker We're trying to select a worker when our list is empty for player %ls", ThePlayerList->getLocalPlayer()->getPlayerDisplayName().str()));
+		DEBUG_ASSERTCRASH(FALSE, ("InGameUI::selectNextIdleWorker We're trying to select a worker when our list is empty for player %s", WideCharAsUtf8( ThePlayerList->getLocalPlayer()->getPlayerDisplayName().str() ).str()));
 		return;
 	}
 	Object *selectThisObject = NULL;

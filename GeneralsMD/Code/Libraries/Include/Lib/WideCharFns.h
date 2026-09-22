@@ -25,6 +25,7 @@
 #ifndef _WIDECHARFNS_H_
 #define _WIDECHARFNS_H_
 
+#include "Lib/WideCharFns.h"
 #include "Lib/BaseType.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -161,5 +162,62 @@ Int WideCharScan ( const WideChar *in, const WideChar *format, ... );
 	  needs a byte-oriented rewrite before it runs on a Mac.  That is C1/M2 work, not B1's, and
 	  this funnel is where it will be done when it is. */
 Int WideCharFileWrite ( FILE *f, const WideChar *s );
+
+//-----------------------------------------------------------------------------------------------
+// WideChar text in a narrow printf
+//-----------------------------------------------------------------------------------------------
+
+/* `DEBUG_LOG(("player %ls", name.str()))` tells the C library that the argument is a wchar_t*.
+	 It is a WideChar*.  Those are the same thing under MSVC today and will still be the same size
+	 there after the typedef moves, so this has always worked on Windows and always will - and it
+	 is wrong on a Mac twice over.  Once for the width, and once because macOS's narrow printf has
+	 to convert wide to multibyte through LC_CTYPE, which in the C locale a process starts in
+	 fails with EILSEQ on anything outside ASCII.
+
+	 So the argument is converted here instead, to UTF-8, by arithmetic on code units with no C
+	 library conversion anywhere in it and therefore no locale behaviour to get wrong.  The format
+	 then says %s, like any other string.
+
+	 Do NOT reach for AsciiString::translate for this.  It is `concat((char)getCharAt(i))` with a
+	 @todo above it admitting it only works for 7-bit ASCII: U+00C7 becomes byte 0xC7 and U+0130
+	 becomes 0x30, the digit zero.  It would make the logs worse than the spelling it replaced.
+
+	 One consequence worth knowing before reading a log: on Windows these bytes change.  %ls
+	 converted through the process ANSI codepage, which rendered a name outside it as '?'; this
+	 writes UTF-8.  DebugLogFile.txt is the file players send back, so that is a real change, not
+	 a no-op - an improvement, but a change. */
+
+/** `s` as UTF-8 in `out`, always terminated, truncated at a whole character if it does not fit.
+	  Returns the number of bytes written, not counting the terminator.
+
+	  A valid surrogate pair becomes the one character it encodes; an unpaired surrogate becomes
+	  U+FFFD.  That is the log's encoder making its output valid UTF-8, not the engine acquiring a
+	  text model - nothing round-trips through here. */
+size_t WideCharToUtf8 ( const WideChar *s, char *out, size_t outBytes );
+
+/** The same conversion with storage attached, for use as a printf argument:
+
+			DEBUG_LOG(( "player %s joined", WideCharAsUtf8( name.str() ).str() ));
+
+	  The temporary lives to the end of the full expression, so it outlives the call, and each one
+	  carries its own buffer - which matters, because several call sites print two wide strings in
+	  one statement and a shared scratch buffer would have the second overwrite the first.
+
+	  Deliberately a fixed buffer and not an allocation: this is reached from DEBUG_CRASH and from
+	  the crash handler, where taking the allocator is how a diagnostic becomes a second crash, and
+	  from CRCDEBUG_LOG inside the simulation loop.  Truncating a log line is the better failure. */
+class WideCharAsUtf8
+{
+public:
+	explicit WideCharAsUtf8( const WideChar *s ) { WideCharToUtf8( s, m_buffer, sizeof( m_buffer ) ); }
+	const char *str( void ) const { return m_buffer; }
+
+private:
+	enum { BUFFER_BYTES = 1024 };		///< 1023 bytes of ASCII, or 341 of anything; DebugLog's own line buffer is 8192
+	char m_buffer[ BUFFER_BYTES ];
+
+	WideCharAsUtf8( const WideCharAsUtf8 & );
+	WideCharAsUtf8 &operator=( const WideCharAsUtf8 & );
+};
 
 #endif // _WIDECHARFNS_H_

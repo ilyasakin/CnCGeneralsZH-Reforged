@@ -29,6 +29,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "Common/AudioAffect.h"
 #include "Common/AudioHandleSpecialValues.h"
 #include "Common/GameAudio.h"
@@ -3092,7 +3094,7 @@ void ScriptActions::doRevealMapEntire(const AsciiString& playerName)
 	Player* player = TheScriptEngine->getPlayerFromAsciiString(playerName);
 	if (player && playerName.isNotEmpty())
 	{
-		DEBUG_LOG(("ScriptActions::doRevealMapEntire() for player named '%ls' in position %d\n", player->getPlayerDisplayName().str(), player->getPlayerIndex()));
+		DEBUG_LOG(("ScriptActions::doRevealMapEntire() for player named '%s' in position %d\n", WideCharAsUtf8( player->getPlayerDisplayName().str() ).str(), player->getPlayerIndex()));
 		ThePartitionManager->revealMapForPlayer( player->getPlayerIndex() );
 	}
 	else

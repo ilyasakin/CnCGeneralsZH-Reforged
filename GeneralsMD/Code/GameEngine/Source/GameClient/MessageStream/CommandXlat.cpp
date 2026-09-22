@@ -28,6 +28,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "stdlib.h"				// VC++ wants this here, or gives compile error...
 
 #include "Common/AudioAffect.h"
@@ -4871,7 +4873,7 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 						UnicodeString umsg;
 						umsg.translate(msg);
 						TheInGameUI->message(umsg);
-						DEBUG_LOG(("%ls\n", msg.str()));
+						DEBUG_LOG(("%s\n", msg.str()));
 
 						pObject->setGeometryInfo( newGeometry );
 					}
@@ -5287,7 +5289,7 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 
 				Int numObjects = 0;
 				pPlayer->iterateObjects( countObjects, &numObjects );
-				line.format("Player %d (%ls) has %d non-dead objects", i, pPlayer->getPlayerDisplayName().str(), numObjects);
+				line.format("Player %d (%s) has %d non-dead objects", i, WideCharAsUtf8( pPlayer->getPlayerDisplayName().str() ).str(), numObjects);
 				TheScriptEngine->AppendDebugMessage(line, FALSE);
 
 				if (numObjects && (numObjects <= 5 || t == GameMessage::MSG_META_DEBUG_DUMP_ALL_PLAYER_OBJECTS))

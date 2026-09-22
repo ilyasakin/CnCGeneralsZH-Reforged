@@ -44,6 +44,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #define DEFINE_SCIENCE_AVAILABILITY_NAMES
 
 #include "Common/ActionManager.h"
@@ -183,9 +185,9 @@ AsciiString kindofMaskAsAsciiString(KindOfMaskType m)
 }
 void dumpBattlePlanBonuses(const BattlePlanBonuses *b, AsciiString name, const Player *p, const Object *o, AsciiString fname, Int line, Bool doDebugLog)
 {
-	CRCDEBUG_LOG(("dumpBattlePlanBonuses() %s:%d %s\n  Player %d(%ls) object %d(%s) armor:%g/%8.8X bombardment:%d, holdTheLine:%d, searchAndDestroy:%d sight:%g/%8.8X, valid:%s invalid:%s\n",
+	CRCDEBUG_LOG(("dumpBattlePlanBonuses() %s:%d %s\n  Player %d(%s) object %d(%s) armor:%g/%8.8X bombardment:%d, holdTheLine:%d, searchAndDestroy:%d sight:%g/%8.8X, valid:%s invalid:%s\n",
 		fname.str(), line, name.str(),
-		(p)?p->getPlayerIndex():-1, (p)?((Player *)p)->getPlayerDisplayName().str():L"<No Name>", (o)?o->getID():-1, (o)?o->getTemplate()->getName().str():"<No Name>",
+		(p)?p->getPlayerIndex():-1, WideCharAsUtf8( (p)?((Player *)p)->getPlayerDisplayName().str():L"<No Name>" ).str(), (o)?o->getID():-1, (o)?o->getTemplate()->getName().str():"<No Name>",
 		b->m_armorScalar, AS_INT(b->m_armorScalar),
 		b->m_bombardment, b->m_holdTheLine, b->m_searchAndDestroy,
 		b->m_sightRangeScalar, AS_INT(b->m_sightRangeScalar),
@@ -193,9 +195,9 @@ void dumpBattlePlanBonuses(const BattlePlanBonuses *b, AsciiString name, const P
 		kindofMaskAsAsciiString(b->m_invalidKindOf).str()));
 	if (!doDebugLog)
 		return;
-	DEBUG_LOG_DEV(("dumpBattlePlanBonuses() %s:%d %s\n  Player %d(%ls) object %d(%s) armor:%g/%8.8X bombardment:%d, holdTheLine:%d, searchAndDestroy:%d sight:%g/%8.8X, valid:%s invalid:%s\n",
+	DEBUG_LOG_DEV(("dumpBattlePlanBonuses() %s:%d %s\n  Player %d(%s) object %d(%s) armor:%g/%8.8X bombardment:%d, holdTheLine:%d, searchAndDestroy:%d sight:%g/%8.8X, valid:%s invalid:%s\n",
 		fname.str(), line, name.str(),
-		(p)?p->getPlayerIndex():-1, (p)?((Player *)p)->getPlayerDisplayName().str():L"<No Name>", (o)?o->getID():-1, (o)?o->getTemplate()->getName().str():"<No Name>",
+		(p)?p->getPlayerIndex():-1, WideCharAsUtf8( (p)?((Player *)p)->getPlayerDisplayName().str():L"<No Name>" ).str(), (o)?o->getID():-1, (o)?o->getTemplate()->getName().str():"<No Name>",
 		b->m_armorScalar, AS_INT(b->m_armorScalar),
 		b->m_bombardment, b->m_holdTheLine, b->m_searchAndDestroy,
 		b->m_sightRangeScalar, AS_INT(b->m_sightRangeScalar),
@@ -3971,9 +3973,9 @@ static void localApplyBattlePlanBonusesToObject( Object *obj, void *userData )
 				{
 					BodyModuleInterface *body = objectToModify->getBodyModule();
 					body->applyDamageScalar( bonus->m_armorScalar );
-					CRCDEBUG_LOG(("Applying armor scalar of %g (%8.8X) to object %d (%ls) owned by player %d\n",
+					CRCDEBUG_LOG(("Applying armor scalar of %g (%8.8X) to object %d (%s) owned by player %d\n",
 						bonus->m_armorScalar, AS_INT(bonus->m_armorScalar), objectToModify->getID(),
-						objectToModify->getTemplate()->getDisplayName().str(),
+						WideCharAsUtf8( objectToModify->getTemplate()->getDisplayName().str() ).str(),
 						objectToModify->getControllingPlayer()->getPlayerIndex()));
 					DEBUG_LOG_DEV(("After apply, armor scalar is %g\n", body->getDamageScalar()));
 				}
@@ -4405,7 +4407,7 @@ void Player::crc( Xfer *xfer )
 	// Player battle plan bonuses
 	Bool battlePlanBonus = m_battlePlanBonuses != NULL;
 	xfer->xferBool( &battlePlanBonus );
-	CRCDEBUG_LOG(("Player %d[%ls] %s battle plans\n", m_playerIndex, m_playerDisplayName.str(), (battlePlanBonus)?"has":"doesn't have"));
+	CRCDEBUG_LOG(("Player %d[%s] %s battle plans\n", m_playerIndex, WideCharAsUtf8( m_playerDisplayName.str() ).str(), (battlePlanBonus)?"has":"doesn't have"));
 	if( m_battlePlanBonuses )
 	{
 		CRCDUMPBATTLEPLANBONUSES(m_battlePlanBonuses, this, NULL);

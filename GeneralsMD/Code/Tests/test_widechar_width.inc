@@ -139,6 +139,63 @@ TEST(xfer_save_and_load_round_trip_a_turkish_string_at_two_bytes_a_character)
 	remove( path );
 }
 
+// The UTF-8 conversion the logs use, now that a WideChar* can no longer be handed to a narrow
+// printf's %ls.  It is arithmetic on code units with no C library conversion in it, so unlike the
+// spelling it replaces it has no locale behaviour to get wrong - which is the reason it exists as
+// much as the width is.
+TEST(widechar_to_utf8_encodes_turkish_and_stops_on_whole_characters)
+{
+	const UnicodeString text = turkishGameOptions();
+
+	// "OYUN SE" is 7 bytes, Ç is 2, "ENEKLER" is 7, İ is 2: 18 bytes and a terminator.
+	char buffer[ 64 ];
+	CHECK_EQ( (Int)WideCharToUtf8( text.str(), buffer, sizeof( buffer ) ), 18 );
+	CHECK_STR( buffer, "OYUN SE\xC3\x87" "ENEKLER" "\xC4\xB0" );
+
+	// a buffer that fits exactly, and three that do not - truncation always lands between
+	// characters, never inside a multi-byte sequence
+	char exact[ 19 ];
+	CHECK_EQ( (Int)WideCharToUtf8( text.str(), exact, sizeof( exact ) ), 18 );
+	char short18[ 18 ];
+	CHECK_EQ( (Int)WideCharToUtf8( text.str(), short18, sizeof( short18 ) ), 16 );	// İ dropped whole
+	char short10[ 10 ];
+	CHECK_EQ( (Int)WideCharToUtf8( text.str(), short10, sizeof( short10 ) ), 9 );	// Ç still fits
+	char short9[ 9 ];
+	CHECK_EQ( (Int)WideCharToUtf8( text.str(), short9, sizeof( short9 ) ), 7 );		// and here it does not
+
+	// degenerate inputs terminate rather than write nothing at all
+	char one[ 1 ];
+	CHECK_EQ( (Int)WideCharToUtf8( text.str(), one, sizeof( one ) ), 0 );
+	CHECK_EQ( (Int)one[0], 0 );
+	CHECK_EQ( (Int)WideCharToUtf8( NULL, buffer, sizeof( buffer ) ), 0 );
+	CHECK_EQ( (Int)buffer[0], 0 );
+
+	// the value wrapper carries its own storage, so two of them in one statement - which several
+	// of the converted log lines have - do not overwrite each other
+	CHECK_STR( WideCharAsUtf8( text.str() ).str(), "OYUN SE\xC3\x87" "ENEKLER" "\xC4\xB0" );
+}
+
+// Three-byte characters, and the surrogate pair that only exists once WideChar is 16 bits wide.
+TEST(widechar_to_utf8_puts_a_surrogate_pair_back_together)
+{
+	char buffer[ 64 ];
+
+	const WideChar cjk[ 3 ] = { (WideChar)0x4E2D, (WideChar)0x6587, 0 };
+	CHECK_EQ( (Int)WideCharToUtf8( cjk, buffer, sizeof( buffer ) ), 6 );
+	CHECK_STR( buffer, "\xE4\xB8\xAD\xE6\x96\x87" );
+
+	// U+1F600, which at two bytes a code unit arrives as D83D DE00 and has to come back out as one
+	// character - otherwise the log is CESU-8 and an editor shows two replacement marks.
+	const WideChar pair[ 3 ] = { (WideChar)0xD83D, (WideChar)0xDE00, 0 };
+	CHECK_EQ( (Int)WideCharToUtf8( pair, buffer, sizeof( buffer ) ), 4 );
+	CHECK_STR( buffer, "\xF0\x9F\x98\x80" );
+
+	// a high surrogate with nothing after it is U+FFFD, and does not eat the character that follows
+	const WideChar lone[ 3 ] = { (WideChar)0xD83D, (WideChar)'x', 0 };
+	CHECK_EQ( (Int)WideCharToUtf8( lone, buffer, sizeof( buffer ) ), 4 );
+	CHECK_STR( buffer, "\xEF\xBF\xBDx" );
+}
+
 // The one that would have caught a silent desync.  A Windows build and a Mac build have to agree
 // on this number or they disagree about every unit with a name in it.
 TEST(xfer_crc_of_a_turkish_string_matches_the_committed_constant)

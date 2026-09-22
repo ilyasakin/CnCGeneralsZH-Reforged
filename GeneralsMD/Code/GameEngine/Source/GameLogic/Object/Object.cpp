@@ -29,6 +29,8 @@
  
 // INCLUDES /////////////////////////////////////////////////////////////////////////////////////// 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+
+#include "Lib/WideCharFns.h"
 #define DEFINE_WEAPONCONDITIONMAP
 #include "Common/BitFlagsIO.h"
 #include "Common/BuildAssistant.h"
@@ -162,17 +164,17 @@ AsciiString DescribeObject(const Object *obj)
 
 	if (obj->getName().isNotEmpty())
 	{
-		ret.format("Object %d (%s) [%s, owned by player %d (%ls)]",
+		ret.format("Object %d (%s) [%s, owned by player %d (%s)]",
 			obj->getID(), obj->getName().str(), obj->getTemplate()->getName().str(),
 			obj->getControllingPlayer()->getPlayerIndex(),
-			obj->getControllingPlayer()->getPlayerDisplayName().str());
+			WideCharAsUtf8( obj->getControllingPlayer()->getPlayerDisplayName().str() ).str());
 	}
 	else
 	{
-		ret.format("Object %d [%s, owned by player %d (%ls)]",
+		ret.format("Object %d [%s, owned by player %d (%s)]",
 			obj->getID(), obj->getTemplate()->getName().str(),
 			obj->getControllingPlayer()->getPlayerIndex(),
-			obj->getControllingPlayer()->getPlayerDisplayName().str());
+			WideCharAsUtf8( obj->getControllingPlayer()->getPlayerDisplayName().str() ).str());
 	}
 
 	return ret;

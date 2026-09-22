@@ -30,6 +30,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
 #include "GameClient/GameText.h"
@@ -2097,8 +2099,8 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 									}
 									else
 									{
-										SLOTLIST_DEBUG_LOG(("Not from the host!  isHuman:%d, name:'%ls', sender:'%s'\n",
-											game->getSlot(0)->isHuman(), game->getSlot(0)->getName().str(),
+										SLOTLIST_DEBUG_LOG(("Not from the host!  isHuman:%d, name:'%s', sender:'%s'\n",
+											game->getSlot(0)->isHuman(), WideCharAsUtf8( game->getSlot(0)->getName().str() ).str(),
 											resp.nick.c_str()));
 									}
 								}
@@ -2170,7 +2172,7 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 										{
 											UnicodeString munkee;
 											munkee.format(L"\t%d: %ls", i, slot->getName().str());
-											SLOTLIST_DEBUG_LOG(("%ls\n", munkee.str()));
+											SLOTLIST_DEBUG_LOG(("%s\n", WideCharAsUtf8( munkee.str() ).str()));
 										}
 									}
 								}
@@ -2484,7 +2486,7 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 								{
 									if (uVal != slot->getIP())
 									{
-										DEBUG_LOG(("setting IP of player %ls from 0x%08x to be 0x%08x", slot->getName().str(), slot->getIP(), uVal));
+										DEBUG_LOG(("setting IP of player %s from 0x%08x to be 0x%08x", WideCharAsUtf8( slot->getName().str() ).str(), slot->getIP(), uVal));
 										slot->setIP(uVal);
 										change = true;
 										shouldUnaccept = true;

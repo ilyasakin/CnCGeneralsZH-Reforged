@@ -164,7 +164,7 @@ void RecorderClass::logPlayerDisconnect(UnicodeString player, Int slot)
 			time_t t;
 			time(&t);
 			struct tm *t2 = localtime(&t);
-			fprintf(logFP, "\tPlayer %ls dropped at %s", player.str(), asctime(t2));
+			fprintf(logFP, "\tPlayer %s dropped at %s", WideCharAsUtf8( player.str() ).str(), asctime(t2));
 			fclose(logFP);
 		}
 	}
@@ -1120,12 +1120,12 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 		debugString = "EXE is different:\n";
 		if (versionStringDiff)
 		{
-			tempStr.format("   Version [%ls] vs [%ls]\n", TheVersion->getUnicodeVersion().str(), header.versionString.str());
+			tempStr.format("   Version [%s] vs [%s]\n", WideCharAsUtf8( TheVersion->getUnicodeVersion().str() ).str(), WideCharAsUtf8( header.versionString.str() ).str());
 			debugString.concat(tempStr);
 		}
 		if (versionTimeStringDiff)
 		{
-			tempStr.format("   Build Time [%ls] vs [%ls]\n", TheVersion->getUnicodeBuildTime().str(), header.versionTimeString.str());
+			tempStr.format("   Build Time [%s] vs [%s]\n", WideCharAsUtf8( TheVersion->getUnicodeBuildTime().str() ).str(), WideCharAsUtf8( header.versionTimeString.str() ).str());
 			debugString.concat(tempStr);
 		}
 		if (versionNumberDiff)
@@ -1153,8 +1153,8 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 #ifdef DEBUG_LOGGING
 	if (header.localPlayerIndex >= 0)
 	{
-		DEBUG_LOG(("Local player is %ls (slot %d, IP %8.8X)\n",
-			m_gameInfo.getSlot(header.localPlayerIndex)->getName().str(), header.localPlayerIndex, m_gameInfo.getSlot(header.localPlayerIndex)->getIP()));
+		DEBUG_LOG(("Local player is %s (slot %d, IP %8.8X)\n",
+			WideCharAsUtf8( m_gameInfo.getSlot(header.localPlayerIndex)->getName().str() ).str(), header.localPlayerIndex, m_gameInfo.getSlot(header.localPlayerIndex)->getIP()));
 	}
 #endif
 
@@ -1579,7 +1579,7 @@ AsciiString RecorderClass::getLastReplayFileName()
 				if (slot && slot->isHuman())
 				{
 					AsciiString player;
-					player.format("%ls_", slot->getName().str());
+					player.format("%s_", WideCharAsUtf8( slot->getName().str() ).str());
 					players.concat(player);
 				}
 			}

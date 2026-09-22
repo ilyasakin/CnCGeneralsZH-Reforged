@@ -24,6 +24,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #define WIN32_LEAN_AND_MEAN  // only bare bones windows stuff wanted
 
 #include "Common/CRC.h"
@@ -913,7 +915,7 @@ void LANAPI::RequestGameCreate( UnicodeString gameName, Bool isDirectConnect )
 	while (s.getLength() > g_lanGameNameLength)
 		s.removeLastChar();
 
-	DEBUG_LOG(("Setting local game name to '%ls'\n", s.str()));
+	DEBUG_LOG(("Setting local game name to '%s'\n", WideCharAsUtf8( s.str() ).str()));
 
 	myGame->setName(s);
 
