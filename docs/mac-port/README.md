@@ -195,6 +195,55 @@ you start. That commit is the lock.
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
 
+### Defects found in the shipping Windows game
+
+Not port artefacts. These were found by porting, because porting means reading code with a compiler
+that has different opinions — and they are arguably worth more to this project than the port is.
+Each was verified independently before being recorded here.
+
+**1. Debug and `_INTERNAL` builds do not compile, and have not since the x64 migration.**
+`CMakeLists.txt:652` defines `_DEBUG` → `GameCommon.h:64` defines `DUMP_PERF_STATS` →
+`PerfTimer.h:61` compiles `GetPrecisionTimer` → `PerfTimer.h:59` is `#define NO_USE_QPF`, so
+`USE_QPF` is never defined → the `__asm { RDTSC }` block is the **live** branch. MSVC has no
+`__asm` on x64, and CMake refuses to configure anything else. `-DPERF_TIMERS=ON` reaches the same
+code in Release. Invisible only because nobody builds those configurations. *This plan asserted the
+opposite on day one — see the state-of-play table's correction.*
+
+**2. A double free in `AsciiString`, reproduced under AddressSanitizer.**
+`AsciiString.h:394` and `:459`:
+
+```cpp
+InterlockedDecrement((long *)&m_data->m_refCount);   // return value discarded
+if (!m_data->m_refCount)                             // separate, unsynchronised re-read
+    freeBytes();
+```
+
+`InterlockedDecrement` **returns** the new value. Both sites throw it away and re-read the field, so
+two threads dropping the last two references both observe zero and both call `freeBytes()`. Under
+ASan the re-read itself is a heap-use-after-free — it touches the block the other thread has already
+freed. Fixed in B13 by using what the decrement returns, so exactly one caller sees 1.
+
+**3. An animation picks the wrong frame from 33 upward.**
+`hrawanim.cpp`'s `Float_To_Long(frame - 0.499999f)` floor idiom is exact only below 33. Float
+spacing doubles at 32, so from there up the subtraction lands on an exact tie, which rounds to the
+even neighbour below — an odd frame returns `frame-1`. Every architecture agrees, so it does not
+block the port. Found because a test written for the port went red against real code, and the test
+was right. D-track.
+
+**4. A Japanese player's auto-saved replay may fail to write.**
+`StatsCollector.cpp:345` and `Recorder.cpp:1582` build a **file name** from a player's name through
+`%ls`, which renders an unmappable character as `?` — illegal in a Windows filename. Reasoned from
+the code, not observed. UTF-8 introduces no path-illegal byte, so B1's sweep incidentally fixes it.
+
+**5. A format string one translator away from being attacker-controlled.**
+About a dozen callers pass a `TheGameText->fetch(...)` result as a printf format
+(`InGameUI.cpp:280`, `:339`, `:7855` and others). Safe only because the shipped `.csf` strings
+contain no `%`. None is user- or network-controlled today. Flagged, not actioned.
+
+Related and **not** a defect, because someone got it right: `ConnectionManager.cpp:706`/`:718` pass
+a constant `L"%ls"` with network chat as the *argument*. It looks like a redundant format and it is
+the thing stopping a remote player's text being interpreted as one. B15 says so in capitals.
+
 ### "ctest is green" was not what it looked like
 
 Recorded 2026-09-22, because this plan's own status reports leaned on it. A1's `PENDING_MACOS`
