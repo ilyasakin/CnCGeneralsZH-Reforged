@@ -35,6 +35,41 @@ cannot link.
 sources under `GeneralsMD/Code/Stubs/` (which already holds `NullAudioManager.h`, so the pattern
 exists).
 
+## B6 prep findings, 2026-09-22 — item 1 was wrong and item 4 was pessimistic
+
+**Item 1 is wrong, and it is now task B17.** This file said `d3dx9math.h` is header-only so
+"the fix is one line". It is not: `d3dx9math.h:127` declares `D3DXVec4Transform` as a **function
+pointer** filled by `GetProcAddress` from `d3dx9_43.dll`, and it reaches `GameLogic` through
+`BezierSegment` → `DumbProjectileBehavior`, which puts it on the replay and network CRC path. The
+header's own comment says reimplementing it would be "a rounding difference nobody could see until
+a replay diverged". See B17; do not attempt it inside B6.
+
+The half of item 1 that WAS right: GameEngine includes **zero** WW3D2 headers except
+`d3dx9math.h`, verified by intersecting all 146 WW3D2 header names against every include in
+GameEngine.
+
+**Item 4 was pessimistic — GameSpy does not need stubbing, it builds.** Configured and built
+standalone on arm64: `libgamespy.a`, 102 objects, 1488 defined symbols with the real entry points
+(`qr2_initA`, `qr2_create_socket`, …), 0 errors, 9 warnings. It found pthreads on its own and
+needed no flags. Delete "stub gamespy". The open question is now the much smaller one of whether
+the **game's** GameSpy call sites compile, which is untested.
+
+**The rest of the 17, categorised** (source analysis plus building what builds; `gameengine` still
+does not link, so none of this is confirmed by a successful link):
+
+| Dependency | Verdict |
+|:--|:--|
+| `debuglib` | link-time accident — **zero** GameEngine files match `Debug_`/`debug.h` |
+| `dinput8` | link-time accident — 107 `DIK_` constants from `<dinput.h>` and **zero** calls to `DirectInput8Create`, `IDirectInput8` or `IDirectInputDevice`. It needs a key-code table, not a library. |
+| `WebBrowser` | stub — two pure virtuals plus the `SubsystemInterface` trio. Nothing under `GameLogic`. |
+| `DownloadManager` | stub — ~20 members, patch downloading the launcher now does. Nothing under `GameLogic`. |
+| `wininet`, `imagehlp`, `imm32` | genuinely Windows-only, move into the guard (`imagehlp` is C5's) |
+| `benchmark` | keep — builds on macOS and 7 files use it, `GameLOD.cpp` among them |
+| `profile` | keep — two call sites, in-repo and portable |
+
+Both stubs were checked against this file's "do not stub anything GameLogic calls" rule rather than
+assumed.
+
 ## Do
 
 1. **Work out what is a real dependency and what is a link-time accident.** The comment at line
