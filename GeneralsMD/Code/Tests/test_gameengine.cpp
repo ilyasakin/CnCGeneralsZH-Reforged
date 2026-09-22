@@ -133,6 +133,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <atomic>
+#include <chrono>
+#include <thread>
 
 //////////////////////////////////////////////////////////////////////////////
 // Boot scaffolding
@@ -9909,26 +9912,26 @@ enum { JOB_TEST_MAX = 4096 };
 static Int s_jobVisits[ JOB_TEST_MAX ];
 static UnsignedInt s_jobFPMode[ JOB_TEST_MAX ];
 static Int s_jobWorkerFlag[ JOB_TEST_MAX ];
-static volatile LONG s_jobWorkerSeen = 0;
-static volatile LONG s_jobWaitedOnce = 0;
+static std::atomic<Int> s_jobWorkerSeen( 0 );
+static std::atomic<Int> s_jobWaitedOnce( 0 );
 
 /* The forking thread works the queue too, and a job body that does nothing at all is finished long
-	 before a worker is out of WaitForSingleObject - so a test that wants to observe a worker has to
+	 before a worker is out of the pool's wait - so a test that wants to observe a worker has to
 	 hold the first item until one turns up.  One bounded wait per fork, and none at all once a
 	 worker has been seen, so this costs nothing when the pool is behaving. */
 static void jobTestWaitForAWorker( void )
 {
 	if( JobSystem::isWorkerThread() )
 	{
-		InterlockedExchange( (LONG *)&s_jobWorkerSeen, 1 );
+		s_jobWorkerSeen.store( 1 );
 		return;
 	}
-	if( s_jobWorkerSeen || InterlockedExchange( (LONG *)&s_jobWaitedOnce, 1 ) != 0 )
+	if( s_jobWorkerSeen.load() || s_jobWaitedOnce.exchange( 1 ) != 0 )
 		return;
 
-	const DWORD deadline = ::GetTickCount() + 500;
-	while( !s_jobWorkerSeen && ::GetTickCount() < deadline )
-		::Sleep( 0 );
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds( 500 );
+	while( !s_jobWorkerSeen.load() && std::chrono::steady_clock::now() < deadline )
+		std::this_thread::yield();
 }
 
 static void jobTestCount( Int index, void * )
@@ -9957,8 +9960,8 @@ static void jobTestAllocate( Int index, void * )
 
 static void resetJobVisits( void )
 {
-	s_jobWorkerSeen = 0;
-	s_jobWaitedOnce = 0;
+	s_jobWorkerSeen.store( 0 );
+	s_jobWaitedOnce.store( 0 );
 	for( Int i = 0; i < JOB_TEST_MAX; ++i )
 	{
 		s_jobVisits[ i ] = 0;
@@ -10101,7 +10104,7 @@ TEST(parallel_for_covers_forks_back_to_back_and_forks_after_a_pause)
 {
 	static const Int BACK_TO_BACK_FORKS = 2000;
 	static const Int PAUSED_FORKS = 20;
-	static const DWORD PAUSE_MS = 5;
+	static const Int PAUSE_MS = 5;
 	static const Int ITEMS = 64;
 
 	JobSystem::shutdown();
@@ -10110,7 +10113,7 @@ TEST(parallel_for_covers_forks_back_to_back_and_forks_after_a_pause)
 	for( Int fork = 0; fork < BACK_TO_BACK_FORKS + PAUSED_FORKS; ++fork )
 	{
 		if( fork >= BACK_TO_BACK_FORKS )
-			::Sleep( PAUSE_MS );
+			std::this_thread::sleep_for( std::chrono::milliseconds( PAUSE_MS ) );
 
 		resetJobVisits();
 		JobSystem::parallel_for( ITEMS, 1, jobTestCount, NULL );
