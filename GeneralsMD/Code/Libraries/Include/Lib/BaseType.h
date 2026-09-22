@@ -185,10 +185,17 @@ inline Real deg2rad(Real rad) { return rad * (PI/180); }
 // after this one silently rewrites every use below into an intrinsic that takes
 // a LONG* and the game's bit fields stop compiling.  Not <windows.h>: that also
 // drags in winsock.h, and the device code includes winsock2.h.
+//
+// None of that fight exists off Windows: there is no winnt.h to claim the name, so there is
+// nothing to pull in early and nothing to take back.  The #undef below is kept unguarded
+// because undefining a macro that was never defined is well-formed and it keeps the four
+// definitions that follow reading the same on both platforms.  B5.
+#if defined(_WIN32)
 #ifndef _AMD64_
 #define _AMD64_		// windows.h does this before it reaches windef.h, and winnt.h
 #endif				// #errors with "No Target Architecture" without it
 #include <windef.h>
+#endif
 #include <string.h>
 // Was <emmintrin.h>, for fast_float2long_round below.  See Lib/DetRound.h for which
 // instruction each architecture uses and why the rounding is not negotiable.
@@ -207,6 +214,13 @@ inline Real deg2rad(Real rad) { return rad * (PI/180); }
 //
 // EA's fld/fistp pair, written as cvtss2si: both round in the current mode, which setFPMode pins
 // to nearest.
+// <emmintrin.h> used to be included up in the BitTest block, which had nothing to do with it.
+// It is here, next to its only user, and guarded: the header #errors outright on a non-x86
+// target ("This header is only meant to be used on x86 and x64 architecture").  The function
+// body below is still SSE2 and still does not compile on arm64 - that is B12's, not B5's.
+#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
+#include <emmintrin.h>
+#endif
 __forceinline long fast_float2long_round(float f)
 {
 	return DetRound::To_Long(f);
