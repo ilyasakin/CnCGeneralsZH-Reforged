@@ -196,6 +196,24 @@ you start. That commit is the lock.
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
 
+### Rule: a project-wide definition in front of an uncompilable header needs a second reader
+
+Added 2026-09-22 after two Windows-only breaks in one afternoon, both with the same shape and
+**both invisible to every check available on this machine**:
+
+- `UINT32=unsigned int` as a compile definition, in front of `windef.h`, where `UINT32` is an SDK
+  *typedef* — so `basetsd.h` would have preprocessed to `typedef unsigned int unsigned int`.
+- A shim header that rewrote `_stricmp` into a call to itself.
+
+Neither was caught by a compiler or a test. The first was caught by another agent reading the diff;
+the second by its author re-reading their own script. Both were a **project-wide definition placed
+in front of a header nobody here can compile**.
+
+So: any change that defines, redefines or shims a name the Windows SDK also owns — `UINT32`,
+`DWORD`, `_stricmp`, `__int64`, anything in that family — gets a second pair of eyes on the diff
+before merge, and the reviewer's job is specifically to ask *what does this do to the SDK header
+that includes it*. Until E2 exists, that review is the only Windows check this project has.
+
 ### Rule: grep the vendored sources for platform predicates
 
 Added 2026-09-22 after three instances in one afternoon, all the same shape — **a platform
