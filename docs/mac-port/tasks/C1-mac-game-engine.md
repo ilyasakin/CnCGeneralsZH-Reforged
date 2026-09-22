@@ -68,6 +68,18 @@ Linux.
 
 Windows: `Win32Device` untouched, full build and `ctest` green.
 
+## Also here: the replay writer
+
+Found by B1 and not fixable there. `Recorder.cpp` opens the replay file `"wb"` and then mixes
+byte-oriented `fprintf`/`fwrite` with wide-oriented `fwprintf`/`fputwc`/`fgetwc` on the **same
+`FILE*`**. That is undefined behaviour. MSVC tolerates it; a POSIX C library sets the stream's
+orientation on first use and then fails every call of the other kind, silently as far as the caller
+is concerned.
+
+So the replay writer does not work on macOS at all, and replays are how this project proves a
+change leaves the simulation alone. Rewrite it byte-oriented — the file format does not change, the
+calls that produce it do. Do this early in C1: E1 and every later milestone lean on replays.
+
 ## Do not
 
 - Do not change `GameEngine`'s factory interface. If a factory does not fit macOS, that is worth

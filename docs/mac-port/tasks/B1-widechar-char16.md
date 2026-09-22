@@ -26,7 +26,7 @@ The proof is in the tree, not in theory:
 | `GameClient/GameText.cpp:1056` | `file->read(m_tbuffer, len*sizeof(WideChar))` — every `.csf` string file is UTF-16 on disk. At 4 bytes this reads twice as much as the file holds and every string is garbage. |
 | `Common/System/DataChunk.cpp:368,981` | map and scenario chunks, written and read by the same arithmetic |
 | `Common/System/XferSave.cpp:335`, `XferLoad.cpp:232` | save games |
-| **`Common/System/XferCRC.cpp:355`** | **the checksum.** `sizeof(WideChar) * len` feeds the CRC that replays and network games compare. A Mac build with 4-byte `WideChar` desyncs against Windows on the first unit with a name, and reports it as a desync rather than as a bug. |
+| **`Common/System/Xfer.cpp:209`** | **the checksum**, and this file cited the wrong line for it. `XferCRC` does **not** override `xferUnicodeString` — `XferCRC.cpp:355` is `XferDeepCRC`'s. So a plain `XferCRC` over a `UnicodeString` goes through the base `Xfer::xferUnicodeString` at `Xfer.cpp:209`, which is therefore not merely adjacent to the replay and network checksum path, it **is** that path. `sizeof(WideChar) * len`. A Mac build with 4-byte `WideChar` desyncs against Windows on the first unit with a name, and reports it as a desync rather than as a bug. |
 
 `UnicodeString.cpp:96,103` size their allocations by it, so the string class itself changes shape.
 
@@ -109,6 +109,36 @@ are no-ops on Windows by construction.
 Nothing in `GameLogic` touches a Win32 wide API. Nothing was compiled for this survey, so every
 "hard error" and "silent" claim is read off the language rules; the first clang build is what turns
 them into facts.
+
+## Steps 1-2 findings, 2026-09-22 — the compiler found what reading could not
+
+**macOS's `vswprintf`, `vswscanf` and `fwprintf` return -1 with `errno == EILSEQ` on ANY character
+outside ASCII while the process is in the default "C" locale.** Measured:
+
+```
+default (C locale)       swprintf -> -1 errno=92    fwprintf -> -1 errno=92
+uselocale(en_US.UTF-8)   swprintf ->  3 errno=0     fwprintf ->  2
+```
+
+MSVC's `_vsnwprintf` does no such conversion and passes anything through. The widen-to-`wchar_t`,
+call-`vswprintf`, narrow-back funnel this task's own recon recommended would therefore have made
+**every `UnicodeString::format` of a Turkish, German or French string return negative** — which
+`format_va` turns into a thrown `ERROR_OUT_OF_MEMORY`. Every localisation but English would have
+aborted on the first formatted message, on the Mac only, with nothing in the log naming why. It
+would have survived review, because reading the code tells you nothing about it.
+
+Fixed with `uselocale()` — POSIX-2008, sets `LC_CTYPE` for the calling thread only. It must stay
+thread-local: the engine formats from more than one thread.
+
+**`Recorder.cpp` has an M2 blocker that is not B1's.** It opens the replay `"wb"` and then mixes
+`fprintf`/`fwrite` with `fwprintf`/`fputwc`/`fgetwc` on the same `FILE*`. That is undefined. MSVC
+tolerates it; a POSIX C library sets the stream's orientation on first use and then **fails every
+call of the other kind**. The replay writer needs a byte-oriented rewrite before it runs on a Mac
+at all. Recorded in C1.
+
+**42 wide format strings carry a `%ls`/`%ws` and pass a `WideChar*`.** Those arguments are in the
+`va_list` and no funnel can reach them — same sweep as the 91 narrow ones, and they should be done
+together.
 
 ## Do
 
