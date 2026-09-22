@@ -261,15 +261,15 @@ Bool W3DBridge::load(enum BodyDamageType curDamageState)
 	for (i=0; i<pObj->Get_Num_Sub_Objects(); i++) {
 		RenderObjClass *pSub = pObj->Get_Sub_Object(i);
 		Matrix3D mtx = pSub->Get_Transform();
-		if (0==strnicmp(left, pSub->Get_Name(), strlen(left))) {
+		if (0==strncasecmp(left, pSub->Get_Name(), strlen(left))) {
 			m_leftMtx = mtx;
 			strcpy(left, pSub->Get_Name());
 		}
-		if (0==strnicmp(section, pSub->Get_Name(), strlen(section))) {
+		if (0==strncasecmp(section, pSub->Get_Name(), strlen(section))) {
 			m_sectionMtx = mtx;
 			strcpy(section, pSub->Get_Name());
 		}
-		if (0==strnicmp(right, pSub->Get_Name(), strlen(right))) {
+		if (0==strncasecmp(right, pSub->Get_Name(), strlen(right))) {
 			m_rightMtx = mtx;
 			strcpy(right, pSub->Get_Name());
 		}

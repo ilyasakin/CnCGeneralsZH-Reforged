@@ -160,7 +160,7 @@ void addCRCDebugLine(const char *fmt, ...)
 
 		va_list va;
 		va_start( va, fmt );
-		_vsnprintf(DebugStrings[nextDebugString]+len, 1024-len, fmt, va );
+		vsnprintf(DebugStrings[nextDebugString]+len, 1024-len, fmt, va );
 		DebugStrings[nextDebugString][1023] = 0;
 		va_end( va );
 
@@ -192,7 +192,7 @@ void addCRCGenLine(const char *fmt, ...)
 	static char buf[1024];
 	va_list va;
 	va_start( va, fmt );
-	_vsnprintf(buf, 1024, fmt, va );
+	vsnprintf(buf, 1024, fmt, va );
 	va_end( va );
 	buf[1023] = 0;
 	addCRCDebugLine("%s", buf);
@@ -205,7 +205,7 @@ void addCRCDumpLine(const char *fmt, ...)
 	/*
 	va_list va;
 	va_start( va, fmt );
-	_vsnprintf(DumpStrings[nextDumpString], 1024, fmt, va );
+	vsnprintf(DumpStrings[nextDumpString], 1024, fmt, va );
 	DumpStrings[nextDumpString][1023] = 0;
 	va_end( va );
 

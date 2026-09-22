@@ -147,7 +147,7 @@ void LogClass::log(const char *fmt, ...)
 
 	va_list va;
 	va_start( va, fmt );
-	_vsnprintf(buf, 1024, fmt, va );
+	vsnprintf(buf, 1024, fmt, va );
 	buf[1023] = 0;
 	va_end( va );
 
@@ -1290,7 +1290,7 @@ static void parseShowHideSubObject(INI* ini, void *instance, void *store, const 
 		Bool found = false;
 		for (std::vector<ModelConditionInfo::HideShowSubObjInfo>::iterator it = vec->begin(); it != vec->end(); ++it)
 		{
-			if (stricmp(it->subObjName.str(), subObjName.str()) == 0)
+			if (strcasecmp(it->subObjName.str(), subObjName.str()) == 0)
 			{
 				it->hide = (userData != NULL);
 				found = true;
@@ -1317,7 +1317,7 @@ void W3DModelDraw::showSubObject( const AsciiString& name, Bool show )
 		Bool found = false;
 		for( std::vector<ModelConditionInfo::HideShowSubObjInfo>::iterator it = m_subObjectVec.begin(); it != m_subObjectVec.end(); ++it )
 		{
-			if( stricmp( it->subObjName.str(), name.str() ) == 0 )
+			if( strcasecmp( it->subObjName.str(), name.str() ) == 0 )
 			{
 				it->hide = !show;
 				found = true;

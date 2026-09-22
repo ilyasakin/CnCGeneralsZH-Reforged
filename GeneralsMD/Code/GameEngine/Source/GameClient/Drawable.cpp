@@ -246,7 +246,7 @@ static DrawableIconType drawableIconNameToIndex( const char *iconName )
 	DEBUG_ASSERTCRASH( iconName != NULL, ("drawableIconNameToIndex - Illegal name\n") );
 
 	for( Int i = ICON_FIRST; i < MAX_ICONS; ++i )
-		if( stricmp( TheDrawableIconNames[ i ], iconName ) == 0 )
+		if( strcasecmp( TheDrawableIconNames[ i ], iconName ) == 0 )
 			return (DrawableIconType)i;
 
 	return ICON_INVALID;

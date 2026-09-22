@@ -115,7 +115,7 @@ void Win32LocalFileSystem::reset()
 Bool Win32LocalFileSystem::doesFileExist(const Char *filename) const
 {
 	//USE_PERF_TIMER(Win32LocalFileSystem_doesFileExist)
-	if (_access(filename, 0) == 0) {
+	if (access(filename, 0) == 0) {
 		return TRUE;
 	}
 	return FALSE;

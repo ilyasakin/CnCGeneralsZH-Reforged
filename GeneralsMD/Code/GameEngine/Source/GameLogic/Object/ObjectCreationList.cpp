@@ -1603,7 +1603,7 @@ ObjectCreationListStore::~ObjectCreationListStore()
 //-------------------------------------------------------------------------------------------------
 const ObjectCreationList *ObjectCreationListStore::findObjectCreationList(const char* name) const
 {
-	if (stricmp(name, "None") == 0)
+	if (strcasecmp(name, "None") == 0)
 		return NULL;
 
   ObjectCreationListMap::const_iterator it = m_ocls.find(NAMEKEY(name));

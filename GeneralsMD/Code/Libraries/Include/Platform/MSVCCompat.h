@@ -1,0 +1,172 @@
+/*
+**	Command & Conquer Generals Zero Hour(tm)
+**	Copyright 2025 Electronic Arts Inc.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+// The Microsoft spellings this tree was written against, and the standard ones it is being moved
+// to.  One header rather than an #ifdef at each of a few hundred call sites, per rule 2 of
+// docs/mac-port/README.md: a platform difference lives behind a named header with the reason in
+// its comment.
+//
+// Which way round, and why.  The call sites are being renamed to the POSIX and C99 names -
+// strcasecmp, snprintf, access - and this header teaches MSVC those names.  The other direction
+// would have been less work now and wrong later: it would have left the Microsoft spellings spread
+// across 70-odd files with a #define somewhere making them mean something else, which is the thing
+// B3's task file says not to do.  What is left here is small, and it shrinks as call sites move.
+//
+// Inline functions, not macros, wherever a function will do.  A macro named strcasecmp is a trap
+// for whatever declares strcasecmp next; an inline function is overload-resolved and scoped like
+// the code around it.
+//
+// Reached from always.h (all of WWVegas) and from Lib/BaseType.h (GameEngine and compression).
+// PreRTS.h belongs to B5 and is deliberately not touched here.
+
+// NOTE TO ANYONE RUNNING A BULK RENAME OVER THE TREE: exclude this file.  The MSVC wrappers below
+// are the one place the Microsoft spellings have to survive, because they are what the standard
+// names are implemented in terms of.  A sweep that rewrote _stricmp to strcasecmp in here turned
+// strcasecmp into a call to itself - which compiles, and recurses forever, and only on Windows.
+
+#pragma once
+
+#ifndef MSVCCOMPAT_H
+#define MSVCCOMPAT_H
+
+// ---------------------------------------------------------------------------
+// Compiler keywords.
+//
+// On x64 MSVC __cdecl and __stdcall are already the one calling convention the ABI has, so these
+// annotations do nothing there and are kept only so that the Windows compiler command line and
+// the declarations it reads do not change.  Everywhere else they have to become nothing, because
+// clang on arm64 does not have them at all.
+// ---------------------------------------------------------------------------
+#if !defined(_MSC_VER)
+
+#ifndef __cdecl
+#define __cdecl
+#endif
+#ifndef _cdecl
+#define _cdecl
+#endif
+#ifndef __stdcall
+#define __stdcall
+#endif
+#ifndef __fastcall
+#define __fastcall
+#endif
+
+// MSVC's __forceinline is a stronger request than inline and warns when it cannot be honoured.
+// always.h already funnels this through WWINLINE for its own use; this covers the direct uses.
+#ifndef __forceinline
+#define __forceinline inline __attribute__((always_inline))
+#endif
+
+// __declspec(dllexport|dllimport|align|noreturn|...) - only the storage-class spellings appear in
+// this tree, and nothing here is built as a DLL on a Mac, so it becomes nothing.  If a future use
+// needs align or noreturn, give it its own spelling rather than widening this.
+#ifndef __declspec
+#define __declspec(x)
+#endif
+
+#endif // !_MSC_VER
+
+// ---------------------------------------------------------------------------
+// The C runtime.
+//
+// Every name below is the standard one.  The MSVC branch is what makes the standard name work on
+// a compiler whose library spells it with an underscore.
+// ---------------------------------------------------------------------------
+#if defined(_MSC_VER)
+
+#include <string.h>
+#include <stdio.h>
+#include <io.h>
+#include <direct.h>
+#include <stdlib.h>
+
+inline int strcasecmp(const char* a, const char* b) { return _stricmp(a, b); }
+inline int strncasecmp(const char* a, const char* b, size_t n) { return _strnicmp(a, b, n); }
+
+// access() and its mode bits.  MSVC has _access and does not define the POSIX names; F_OK and
+// R_OK happen to have the same values in Microsoft's <io.h> documentation, but they are not named
+// there, so they are named here.
+#ifndef F_OK
+#define F_OK 0
+#endif
+#ifndef R_OK
+#define R_OK 4
+#endif
+#ifndef W_OK
+#define W_OK 2
+#endif
+inline int access(const char* path, int mode) { return _access(path, mode); }
+
+// mkdir: POSIX takes a mode, Windows has no use for one.  Callers pass a mode and it is dropped
+// here, which is what the Windows build has always effectively done.
+inline int mkdir(const char* path, int /* mode */) { return _mkdir(path); }
+
+#else // !_MSC_VER
+
+#include <strings.h>   // strcasecmp, strncasecmp
+#include <unistd.h>    // access, F_OK, R_OK, W_OK
+#include <sys/stat.h>  // mkdir
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#endif
+
+// ---------------------------------------------------------------------------
+// Limits.
+//
+// _MAX_PATH stays, and stays 260, and that is a deliberate refusal to tidy it.
+//
+// The obvious move is to rename its 117 uses to POSIX's PATH_MAX.  PATH_MAX is 1024 on Darwin, so
+// that would silently change the size of every `char name[_MAX_PATH]` in the tree - and some of
+// those are members of structures that go into save games and into the multiplayer INI checksum.
+// A port whose entire premise is that both builds compute the same bytes cannot afford to move a
+// struct boundary for tidiness.  260 on both, spelled the same on both, and no call site changes.
+//
+// _isnan and _finite are the same kind of thing one level down: Microsoft's spellings of what C99
+// calls isnan and isfinite.  Nine files use them, and the shim is one line each against fifty-four
+// renames that would each have to be read for whether the int-versus-bool return matters.
+// ---------------------------------------------------------------------------
+#if defined(_MSC_VER)
+
+#include <stdlib.h>   // _MAX_PATH
+
+#else
+
+#include <math.h>
+
+#ifndef _MAX_PATH
+#define _MAX_PATH 260   // Windows' value, on purpose - see above.  Not PATH_MAX.
+#endif
+#ifndef MAX_PATH
+#define MAX_PATH _MAX_PATH
+#endif
+
+// Microsoft returns int from both; C99's are macros over a bool-ish result.  The casts keep the
+// `if (_isnan(x))` and `if (!_finite(x))` call sites reading exactly as they do on Windows.
+#ifndef _isnan
+#define _isnan(x)  ((int)::isnan(x))
+#endif
+#ifndef _finite
+#define _finite(x) ((int)::isfinite(x))
+#endif
+
+#endif
+
+#endif // MSVCCOMPAT_H

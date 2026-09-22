@@ -66,7 +66,7 @@ HRESULT CDownload::DownloadFile(LPCSTR server, LPCSTR username, LPCSTR password,
 	}
 
 	// Make sure we have a download directory
-	_mkdir("download");
+	mkdir("download", 0777);   // POSIX takes a mode; the shim drops it again on Windows
 
 	// Copy parameters to member variables.
 	strncpy( m_Server, server, sizeof( m_Server ) );
@@ -279,7 +279,7 @@ HRESULT CDownload::PumpMessages()
 			struct _stat statdata;
 			if (	(_stat(m_LocalFile, &statdata) == 0) && 
 					(statdata.st_size == m_FileSize) && 
-					(_strnicmp(m_LocalFile, "patches\\", strlen("patches\\"))==0)) {
+					(strncasecmp(m_LocalFile, "patches\\", strlen("patches\\"))==0)) {
 				// OK, no need to download this again....
 
 				m_Status				= DOWNLOADSTATUS_FINDINGFILE;  // ready to find another file

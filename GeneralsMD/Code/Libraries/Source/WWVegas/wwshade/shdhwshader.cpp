@@ -122,7 +122,7 @@ void ShdHWShader::Preprocess_And_Assemble_Shader_From_File
    GetTempPath(_MAX_PATH, temp_path);
 	GetTempFileName(temp_path,"shd",1,temp_file);
 
-	_snprintf
+	snprintf
 	(
 		shell_command, 
 		sizeof(shell_command), 
