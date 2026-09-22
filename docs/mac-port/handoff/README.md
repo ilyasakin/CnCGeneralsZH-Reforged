@@ -31,7 +31,7 @@ Nothing has ever *linked* `wwlib`, and there may be a tail of link errors nobody
 | `-8d` | [`8d-d1-b2-b14.md`](8d-d1-b2-b14.md) | D1 recon + PR1, B2, B14, the vendored sweep |
 | `-21` | [`21-e3-and-sweeps.md`](21-e3-and-sweeps.md) | E3, zutil, persistfactory, GameSpy |
 | `-14` | [`14-b16-and-b6.md`](14-b16-and-b6.md) | B4 recon, B7, B10, test audit, B6 prep |
-| `-3a` | `3a-b1.md` | B1, B15, the `%ls` sweeps |
+| `-3a` | [`3a-b1.md`](3a-b1.md) | B1, B15, the `%ls` sweeps |
 
 ## Start here
 
@@ -43,7 +43,11 @@ Nothing has ever *linked* `wwlib`, and there may be a tail of link errors nobody
    before scheduling**; two agents got materially different counts on different trees and the
    handoff gives the command rather than the number.
 3. **B1's typedef flip.** Everything before it is done; it never got the go-ahead because the gate
-   is `gameengine` compiling, which is behind B16.
+   is `gameengine` compiling, which is behind B16. Its last open question was answered before its
+   author stopped, and the answer is **"don't"**: `Lib/BaseType.h` is not reachable from WW3D2
+   today, and pulling it in would bring `NULL` redefined against four WWLib headers that already
+   define it as `0L`/`(0L)` — ill-formed. The three WW3D2 headers need exactly one thing, the
+   `WideChar` typedef, not three hundred lines of engine preamble. Give it its own small header.
 
 ## What to distrust
 
