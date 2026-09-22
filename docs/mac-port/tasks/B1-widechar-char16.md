@@ -174,6 +174,41 @@ MSVC; widening at 42 call sites is exactly the scattering this task forbids; mak
 parse the format and consume the `va_list` is correct and platform-neutral and is a hand-written
 mini-printf. That becomes its own task once the options are written up.
 
+## Scope correction, 2026-09-22: B1 reaches WW3D2
+
+The survey said WWVegas' wide strings are "self-contained, and not reached by `WideChar`". That is
+true of `wwstring.h` and `widestring.h`, **which is all it opened.** It is false of WW3D2 — and
+WW3D2 is where the engine draws every character it displays.
+
+Three WW3D2 headers carry a `WCHAR` interface — `render2dsentence.h`, `render2d.h`, `font3d.h` —
+and the engine reaches them at five sites:
+
+| Site | Call |
+|:--|:--|
+| `W3DDisplayString.cpp:200` | `Build_Sentence( getText().str(), ... )` |
+| `W3DDisplayString.cpp:286` | `font->Get_Char_Spacing( ch )` — and `:281` declares `WideChar ch;` |
+| `W3DDisplayString.cpp:369` | `Get_Formatted_Text_Extents( getText().str() )` |
+| `W3DGameWindow.cpp:549` | `Build_Sentence( m_instData.getText().str(), ... )` |
+| `W3DGameWindow.cpp:586` | `Get_Text_Extents( m_instData.getText().str() )` |
+
+`getText()` returns a `UnicodeString`, so all five hand a `const WideChar*` to a `const WCHAR*`.
+They compile today only because both are `wchar_t`. After the flip: five hard errors.
+
+**Retype `WCHAR` to `WideChar` in those three headers** rather than converting at the boundary —
+converting means a `wchar_t` buffer allocated per string per frame in the text renderer.
+`FontCharsClass` then follows down to `Store_GDI_Char( WCHAR ch )`, whose Windows-only GDI
+rasterisation is D-track's, not B1's.
+
+**`WideStringClass` is NOT on this path, and an earlier claim that it was is withdrawn.** It
+appears in zero GameEngine files; `INIClass::Get_Wide_String` has no callers; `Xfer.cpp:209` xfers
+a `UnicodeString`. Its width reaches no file format and no checksum. The two wide-string classes
+are easy to conflate and only one of them is on the lockstep path.
+
+**D-track overlap, decided:** `render2d.cpp` has 29 `DX8Wrapper::` sites and
+`render2dsentence.cpp` has 2, so D1's later PRs will touch these files. B1 goes first — D1's PRs
+2–8 need a Windows machine for their pixel comparison and are stalled after PR1, so there is no
+live race. Whoever resumes D1 rebases onto the retype.
+
 ## Do
 
 1. `typedef char16_t WideChar`. `char16_t` is exactly 2 bytes on every conforming compiler, which
