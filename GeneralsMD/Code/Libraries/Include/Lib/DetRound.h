@@ -43,16 +43,41 @@
 //      anything that leaves the rounding mode somewhere else.  The whole class of bug that makes
 //      setFPMode() get called every frame on Windows does not exist here for this operation.
 //
-// Out-of-range inputs are the one place the two architectures genuinely differ: cvtss2si yields
-// the "integer indefinite" value 0x80000000 and FCVTNS saturates to 0x7FFFFFFF or 0x80000000.
-// Nothing in the simulation converts an out-of-range float - the callers are frame numbers,
-// scanline coordinates and pixel counts - so this is recorded rather than papered over.  If a
-// caller ever could, it wants a range check of its own, not a different instruction here.
+// Inputs outside the range of a 32-bit integer, and NaN, are where the two architectures genuinely
+// differ, and they differ in two separate ways.  Measured on both, not read off a manual:
+//
+//                    x86 cvtss2si / cvtsd2si      arm64 FCVTNS
+//   out of range     0x80000000 ("indefinite")    saturates: 0x7FFFFFFF or 0x80000000
+//   NaN              0x80000000                   0
+//
+// Neither is reachable from the simulation: the callers are frame numbers, scanline coordinates and
+// pixel counts, and a NaN arriving here means the arithmetic upstream has already diverged.  So
+// this is recorded rather than branched around - a range check in the two hottest conversions in
+// the renderer would cost more than the case is worth, and a caller that genuinely could produce
+// one wants its own check rather than a different instruction here.
+//
+// What is NOT left to chance is the width.  `long` is 64 bits on Darwin's LP64 and 32 on Windows'
+// LLP64, so the obvious arm64 spelling for the double overload - convert to a 64-bit integer and
+// let the return type narrow it - quietly means two different things on the two platforms, and on
+// macOS means no narrowing at all.  An earlier version of this header said "narrowing afterwards is
+// exact for every value a long can hold", which was true only on Windows and was the kind of
+// sentence someone later builds on.  Both overloads now produce a 32-bit result explicitly, which
+// is what cvtss2si and cvtsd2si produce and what every call site in the tree assigns to an int.
+//
+// Found by agent 21's cross-architecture harness, which runs the real x86 instructions under
+// Rosetta and compares them against these: 11 of 75 rows differed, all of them here, none of them
+// a tie or an in-range value.  Worth knowing why this file's own sweep could not see it: the sweep
+// checks against the C library's round-to-nearest, and the C library on this machine has the same
+// 64-bit long and the same saturation as the code under test.  Reference and code agreed with each
+// other while both differed from x86.  A reference that shares the property under test proves
+// nothing about it.
 
 #pragma once
 
 #ifndef DETROUND_H
 #define DETROUND_H
+
+#include <stdint.h>   // INT32_MIN / INT32_MAX, for the width pinning below
 
 #if defined(__aarch64__) || defined(_M_ARM64)
 #include <arm_neon.h>
@@ -77,13 +102,17 @@ namespace DetRound
 #endif
 	}
 
-	/// double -> long, rounding half to even.
+	/// double -> long, rounding half to even.  The result is a 32-bit quantity on both platforms.
 	inline long To_Long(double f)
 	{
 #if defined(DETROUND_ARM64)
-		// vcvtns_s32_f64 is not in the intrinsic set; the 64-bit form is, and narrowing afterwards
-		// is exact for every value a long can hold, which is the whole of this function's domain.
-		return (long)vcvtnd_s64_f64(f);
+		// There is no vcvtns_s32_f64 in clang's intrinsic set, only the 64-bit form, so the 32-bit
+		// saturation FCVTNS would have done has to be written out.  Without it this returns values a
+		// 32-bit x86 conversion cannot, on a platform where `long` is wide enough to carry them.
+		const int64_t wide = vcvtnd_s64_f64(f);
+		if (wide > INT32_MAX) return (long)INT32_MAX;
+		if (wide < INT32_MIN) return (long)INT32_MIN;
+		return (long)wide;
 #else
 		return (long)_mm_cvtsd_si32(_mm_set_sd(f));
 #endif
