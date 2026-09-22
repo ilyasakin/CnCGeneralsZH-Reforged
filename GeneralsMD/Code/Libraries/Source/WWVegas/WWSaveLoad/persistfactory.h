@@ -130,9 +130,32 @@ SimplePersistFactoryClass<T,CHUNKID>::Load(ChunkLoadClass & cload) const
 template<class T, int CHUNKID> void
 SimplePersistFactoryClass<T,CHUNKID>::Save(ChunkSaveClass & csave,PersistClass * obj) const 
 {
-	uint32 objptr = (uint32)obj;
+	/* The object's address, written as an identity token: Load() reads it back and hands it to
+	** SaveLoadSystemClass::Register_Pointer so that pointers held by other objects in the same
+	** stream can be remapped onto the newly constructed instance.  It is only ever a key into
+	** PointerRemapClass's table - never dereferenced - but it has to be the WHOLE address.
+	**
+	** This used to be `uint32 objptr = (uint32)obj` with a matching `sizeof(uint32)`.  That was
+	** right on Win32, where a pointer is four bytes.  It has been wrong since the x64 port, and
+	** not subtly: Load() has always read `sizeof(T *)`, so on a 64-bit build Save writes 4 bytes
+	** into the chunk and Load asks for 8.  ChunkLoadClass::Read refuses a read that would run past
+	** the end of the chunk and returns 0 WITHOUT touching the buffer, so old_obj keeps its NULL
+	** initialiser and every object in the stream registers under the key NULL.  Measured, not
+	** reasoned: with the real ChunkSaveClass and ChunkLoadClass, Read returns 0 and old_obj is
+	** NULL.  The remapping is not degraded on x64, it is entirely absent.
+	**
+	** Writing the pointer at its own width also puts this in line with how the rest of the engine
+	** stores the same token - AudibleSoundClass saves VARID_THIS_PTR with WRITE_MICRO_CHUNK, which
+	** is sizeof(the pointer variable), and reads it back with sizeof(old_ptr).  This template was
+	** the only place that narrowed it.
+	**
+	** `obj` is a PersistClass *, and that is deliberate: Win32 wrote the bits of the PersistClass
+	** subobject pointer, so keying on it preserves the behaviour that build had.  Under multiple
+	** inheritance that address can differ from the T * Load() reads it into, which was equally
+	** true before this change and is not introduced by it. */
+	PersistClass * objptr = obj;
 	csave.Begin_Chunk(SIMPLEFACTORY_CHUNKID_OBJPOINTER);
-	csave.Write(&objptr,sizeof(uint32));
+	csave.Write(&objptr,sizeof(objptr));
 	csave.End_Chunk();
 
 	csave.Begin_Chunk(SIMPLEFACTORY_CHUNKID_OBJDATA);
