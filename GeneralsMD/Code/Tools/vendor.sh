@@ -109,6 +109,7 @@ install_zlib() {
     # Still checked on a second run, and on a tree vendor.ps1 filled: zlib that arrived from the
     # PowerShell script is unpatched, and a shared checkout is exactly where that happens.
     patch_zlib_for_apple "$destination"
+    patch_zlib_zutil_for_apple "$destination"
     return 0
   fi
   local archive source
@@ -118,6 +119,7 @@ install_zlib() {
   copy_files "$destination" $(list_top_level "$source" '.c,.h' 'maketree.c')
   unset IFS
   patch_zlib_for_apple "$destination"
+  patch_zlib_zutil_for_apple "$destination"
   step "zlib 1.1.4 -> Libraries/Source/Compression/ZLib"
 }
 
@@ -159,6 +161,61 @@ patch_zlib_for_apple() {
   fi
   mv -f "$zconf.patched" "$zconf"
   step 'unguarded zlib Byte typedef for Apple (see the comment in this script)'
+}
+
+# zutil.h:113 is the same predicate a second time, and it was missed the first time round for a
+# reason worth keeping: the compiler stopped at zconf.h, so this one never got a chance to fail.
+# Fixing the error the compiler reports is not the same as fixing the file.
+#
+#     #if defined(MACOS) || defined(TARGET_OS_MAC)
+#     #  define OS_CODE  0x07
+#     #  ...
+#     #    ifndef fdopen
+#     #      define fdopen(fd,mode) NULL      /* No fdopen() */
+#
+# TARGET_OS_MAC arrives transitively here too, so on macOS this branch is live: OS_CODE becomes
+# 0x07 and fdopen becomes a macro expanding to NULL - `#ifndef fdopen` is true because fdopen is a
+# function, not a macro.  It was written for Classic Mac OS, where there genuinely was no fdopen
+# and MWERKS was the compiler; on Darwin, which is Unix, both statements are simply false.
+#
+# Nothing calls it today: OS_CODE is read only at gzio.c:165 and fdopen only at gzio.c:156, both
+# inside the gzip wrapper, and the game calls z_compress2/z_uncompress, which are zlib format.
+# gzio.c is compiled and never called.  So this is a landmine rather than a fire - and that is the
+# argument for spending six lines on it, not against.  The first caller of gzopen on a Mac would
+# get a FILE* built from NULL.
+#
+# Narrowed rather than deleted, because the Classic Mac branch is still correct for Classic Mac:
+# __APPLE__ is defined on Darwin and was not on Mac OS 9 or MWERKS.  Skipping the branch lets
+# zutil.h fall through to its own `#ifndef OS_CODE / #define OS_CODE 0x03 /* assume Unix */`,
+# which is what Darwin is, and leaves fdopen as the real function.
+#
+# Windows is untouched: neither MACOS nor TARGET_OS_MAC is ever defined there, so the branch was
+# already dead and the condition it is now guarded by is never evaluated.
+patch_zlib_zutil_for_apple() {
+  local zutil="$1/zutil.h"
+  [ -e "$zutil" ] || return 0
+
+  # Matched on meaning rather than on spacing: any #if that tests TARGET_OS_MAC and does not
+  # already exclude __APPLE__.  An exact-text match would silently do nothing if the upstream line
+  # were ever respelled, which is the same quiet failure this whole patch exists to avoid.
+  grep -nE '^[[:space:]]*#[[:space:]]*if.*TARGET_OS_MAC' "$zutil" | grep -qv '__APPLE__' || return 0
+
+  awk '
+    /^[[:space:]]*#[[:space:]]*if/ && /TARGET_OS_MAC/ && !/__APPLE__/ {
+      sub(/^[[:space:]]*#[[:space:]]*if[[:space:]]*/, "")
+      print "#if (" $0 ") && !defined(__APPLE__)"
+      next
+    }
+    { print }
+  ' "$zutil" > "$zutil.patched"
+
+  if grep -nE '^[[:space:]]*#[[:space:]]*if.*TARGET_OS_MAC' "$zutil.patched" | grep -qv '__APPLE__'; then
+    rm -f "$zutil.patched"
+    echo "[vendor] ERROR: could not narrow the Classic Mac branch in $zutil - it has moved" >&2
+    exit 1
+  fi
+  mv -f "$zutil.patched" "$zutil"
+  step 'narrowed zlib Classic Mac branch to Classic Mac (see the comment in this script)'
 }
 
 # --- LZH-Light 1.0. Lzhl_tcp.cpp is a socket layer nothing calls; Test.c has its own main().
