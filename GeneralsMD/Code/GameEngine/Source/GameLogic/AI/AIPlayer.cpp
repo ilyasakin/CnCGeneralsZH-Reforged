@@ -29,6 +29,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 #include "Common/GameMemory.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
@@ -197,7 +198,7 @@ static Real aiPlayerElapsedMS( const Int64 &from, const Int64 &to )
 {
 	static Int64 freq = 0;
 	if( freq == 0 )
-		QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+		freq = Clock_Ticks_Per_Second();
 	if( freq == 0 )
 		return 0.0f;
 	return (Real)( (double)(to - from) * 1000.0 / (double)freq );
@@ -218,7 +219,7 @@ static Int64 theAIBaseSubStart;
 /*static*/ void AIPlayer::profileBaseSubBegin( void )
 {
 #ifdef DEBUG_LOGGING
-	QueryPerformanceCounter( (LARGE_INTEGER *)&theAIBaseSubStart );
+	theAIBaseSubStart = Clock_Ticks();
 #endif
 }
 
@@ -228,7 +229,7 @@ static Int64 theAIBaseSubStart;
 	if( slot < 0 || slot >= BASE_SUB_COUNT )
 		return;
 	Int64 now;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&now );
+	now = Clock_Ticks();
 	theAIBaseSubMS[ slot ] += aiPlayerElapsedMS( theAIBaseSubStart, now );
 	++theAIBaseSubCalls[ slot ];
 #endif
@@ -4194,13 +4195,13 @@ static Int64 theAIPhaseStart;
 
 static void aiPhaseBegin( void )
 {
-	QueryPerformanceCounter( (LARGE_INTEGER *)&theAIPhaseStart );
+	theAIPhaseStart = Clock_Ticks();
 }
 
 static void aiPhaseEnd( Int phase )
 {
 	Int64 now;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&now );
+	now = Clock_Ticks();
 	theAIPhaseMS[ phase ] += aiPlayerElapsedMS( theAIPhaseStart, now );
 }
 
@@ -4245,7 +4246,7 @@ void AIPlayer::update( void )
 	//USE_PERF_TIMER(AIPlayer_update)
 #ifdef DEBUG_LOGGING
 	Int64 playerStart;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&playerStart );
+	playerStart = Clock_Ticks();
 #endif
 
 	AI_PHASE( AIP_BASE,    doBaseBuilding() );			// See if it's time to build another building.
@@ -4266,7 +4267,7 @@ void AIPlayer::update( void )
 
 #ifdef DEBUG_LOGGING
 	Int64 playerEnd;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&playerEnd );
+	playerEnd = Clock_Ticks();
 	const Real playerMS = aiPlayerElapsedMS( playerStart, playerEnd );
 	++theAIPlayersUpdated;
 	if( playerMS > theAIWorstPlayerMS )

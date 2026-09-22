@@ -29,6 +29,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
 
@@ -1605,7 +1606,7 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 	WOLPositionStartSpots();
 
 	lastSlotlistTime = 0;
-	enterTime = timeGetTime();
+	enterTime = Clock_Milliseconds();
 
 	// Set Keyboard to chat entry
 	TheWindowManager->winSetFocus( textEntryChat );
@@ -1770,7 +1771,7 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 
 		Bool isHosting = TheGameSpyInfo->amIHost(); // only while in game setup screen
 		isHosting = isHosting || (TheGameSpyGame && TheGameSpyGame->isInGame() && TheGameSpyGame->amIHost()); // while in game
-		if (!isHosting && !lastSlotlistTime && timeGetTime() > enterTime + 10000)
+		if (!isHosting && !lastSlotlistTime && Clock_Milliseconds() > enterTime + 10000)
 		{
 			// don't do this if we're disconnected
 			if (TheGameSpyPeerMessageQueue->isConnected())
@@ -2183,7 +2184,7 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 							newMapCRC = game->getMapCRC();
 							if (isInGame)
 							{
-								lastSlotlistTime = timeGetTime();
+								lastSlotlistTime = Clock_Milliseconds();
 								if ( (oldMapCRC ^ newMapCRC) || (!wasInGame && isInGame) )
 								{
 									// it changed.  send it

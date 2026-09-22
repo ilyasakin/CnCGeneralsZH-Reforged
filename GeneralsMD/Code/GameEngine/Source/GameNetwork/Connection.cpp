@@ -24,6 +24,7 @@
 
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "GameNetwork/Connection.h"
 #include "GameNetwork/NetworkUtil.h"
@@ -329,7 +330,7 @@ Bool Connection::isQueueEmpty() {
 void Connection::setQuitting( void )
 {
 	m_isQuitting = TRUE;
-	m_quitTime = timeGetTime();
+	m_quitTime = Clock_Milliseconds();
 	DEBUG_LOG(("Connection::setQuitting() at time %d\n", m_quitTime));
 }
 
@@ -339,7 +340,7 @@ void Connection::setQuitting( void )
  */
 UnsignedInt Connection::doSend() {
 	Int numpackets = 0;
-	time_t curtime = timeGetTime();
+	time_t curtime = Clock_Milliseconds();
 	Bool couldQueue = TRUE;
 
 	// Do this check first, since it's an important fail-safe
@@ -460,7 +461,7 @@ NetCommandRef * Connection::processAck(UnsignedShort commandID, UnsignedByte ori
 
 	Int index = temp->getCommand()->getID() % CONNECTION_LATENCY_HISTORY_LENGTH;
 	m_averageLatency -= ((Real)(m_latencies[index])) / CONNECTION_LATENCY_HISTORY_LENGTH;
-	Real lat = timeGetTime() - temp->getTimeLastSent();
+	Real lat = Clock_Milliseconds() - temp->getTimeLastSent();
 	m_averageLatency += lat / CONNECTION_LATENCY_HISTORY_LENGTH;
 	m_latencies[index] = lat;
 
@@ -488,7 +489,7 @@ void Connection::setFrameGrouping(time_t frameGrouping) {
 
 void Connection::doRetryMetrics() {
 	static Int numSeconds = 0;
-	time_t curTime = timeGetTime();
+	time_t curTime = Clock_Milliseconds();
 
 	if ((curTime - m_retryMetricsTime) > 10000) {
 		m_retryMetricsTime = curTime;

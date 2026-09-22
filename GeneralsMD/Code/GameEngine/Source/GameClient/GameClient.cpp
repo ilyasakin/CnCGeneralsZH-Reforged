@@ -29,6 +29,7 @@
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 #include "GameClient/GameClient.h"
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
@@ -627,8 +628,8 @@ void GameClient::update( void )
 				{				
 					legal->hide(FALSE);
 					legal->bringForward();
-					Int beginTime = timeGetTime();
-					while(beginTime + 4000 > timeGetTime() )
+					Int beginTime = Clock_Milliseconds();
+					while(beginTime + 4000 > Clock_Milliseconds() )
 					{
 						TheWindowManager->update();
 						// redraw all views, update the GUI
@@ -881,13 +882,13 @@ void GameClient::update( void )
 		{
 #ifdef DEBUG_LOGGING
 			Int64 drawStart, drawEnd;
-			QueryPerformanceCounter( (LARGE_INTEGER *)&drawStart );
+			drawStart = Clock_Ticks();
 #endif
 			TheDisplay->DRAW();
 #ifdef DEBUG_LOGGING
-			QueryPerformanceCounter( (LARGE_INTEGER *)&drawEnd );
+			drawEnd = Clock_Ticks();
 			Int64 freq;
-			QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+			freq = Clock_Ticks_Per_Second();
 			if( freq > 0 )
 				TheClientDrawMS = (Real)((double)(drawEnd - drawStart) * 1000.0 / (double)freq);
 #endif
@@ -1308,7 +1309,7 @@ void GameClient::preloadAssets( TimeOfDay timeOfDay )
 	const ThingTemplate *tTemplate;
 	Int preloaded = 0, considered = 0;
 	Int64 preloadStart, preloadEnd, preloadFreq = 0;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&preloadStart );
+	preloadStart = Clock_Ticks();
 	for( tTemplate = TheThingFactory->firstTemplate();
 			 tTemplate;
 			 tTemplate = tTemplate->friend_getNextTemplate() )
@@ -1334,8 +1335,8 @@ void GameClient::preloadAssets( TimeOfDay timeOfDay )
 		}  // end if
 
 	}  // end for
-	QueryPerformanceCounter( (LARGE_INTEGER *)&preloadEnd );
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&preloadFreq );
+	preloadEnd = Clock_Ticks();
+	preloadFreq = Clock_Ticks_Per_Second();
 	DEBUG_LOG(("PRELOAD: %d of %d templates in %.0f ms\n", preloaded, considered,
 						 preloadFreq ? (Real)((double)(preloadEnd - preloadStart) * 1000.0 / (double)preloadFreq) : 0.0f));
 	GlobalMemoryStatus(&after);

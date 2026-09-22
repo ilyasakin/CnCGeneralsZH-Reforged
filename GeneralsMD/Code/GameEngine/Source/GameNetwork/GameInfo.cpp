@@ -27,6 +27,7 @@
 // Author: Matthew D. Campbell, December 2001
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
 
@@ -383,7 +384,7 @@ void GameInfo::reset( void )
 	m_gameID = 0;
 	m_mapName = AsciiString("NOMAP");
 	m_mapMask = 0;
-	m_seed = GetTickCount(); //GameClientRandomValue(0, INT_MAX - 1);
+	m_seed = Clock_Milliseconds_Coarse(); //GameClientRandomValue(0, INT_MAX - 1);
 	m_useStats = TRUE;
 	m_surrendered = FALSE;
   m_oldFactionsOnly = FALSE;

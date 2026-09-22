@@ -68,6 +68,14 @@ typedef union {
  *=============================================================================================*/
 unsigned long Get_CPU_Rate(unsigned long & high)
 {
+/* B2 left this file's QueryPerformance* calls where they are, on purpose.
+	 The rest of the tree reads a clock to know the time; this reads the performance counter as a
+	 reference oscillator to measure the CPU's own frequency against __rdtsc, and it does that
+	 through LARGE_INTEGER's LowPart/HighPart halves, with REALTIME_PRIORITY_CLASS around it.
+	 Swapping four calls for Clock_Ticks() would leave a file that is still x86-and-Windows from
+	 top to bottom and buy nothing.  It wants one decision, by whoever ports cpudetect: either
+	 macOS answers the CPU frequency from sysctl, or it answers zero and the callers cope. */
+
 	union {
 		LARGE_INTEGER LargeInt;
 		struct {

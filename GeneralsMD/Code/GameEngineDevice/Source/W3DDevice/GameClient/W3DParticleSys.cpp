@@ -27,6 +27,7 @@
 // Author: Michael S. Booth, November 2001
 
 #include "common/GlobalData.h"
+#include "Lib/Clock.h"
 #include "GameClient/Color.h"
 #include "W3DDevice/GameClient/W3DParticleSys.h"
 #include "W3DDevice/GameClient/W3DAssetManager.h"
@@ -233,7 +234,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 
 #ifdef DEBUG_LOGGING
 	Int64 tFillStart, tFillEnd;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tFillStart );
+	tFillStart = Clock_Ticks();
 #endif
 
 	ParticleSystemManager::ParticleSystemList &particleSysList = TheParticleSystemManager->getAllParticleSystems();
@@ -533,10 +534,10 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 	TheParticleSystemManager->setOnScreenParticleCount(m_onScreenParticleCount);
 
 #ifdef DEBUG_LOGGING
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tFillEnd );
+	tFillEnd = Clock_Ticks();
 	{
 		Int64 freq;
-		QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+		freq = Clock_Ticks_Per_Second();
 		if( freq > 0 )
 			TheParticleFillMS += (Real)((double)(tFillEnd - tFillStart) * 1000.0 / (double)freq);
 	}

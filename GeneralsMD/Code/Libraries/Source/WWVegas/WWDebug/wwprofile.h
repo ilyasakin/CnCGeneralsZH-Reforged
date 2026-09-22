@@ -55,7 +55,7 @@ typedef signed long long _int64;
 #define ENABLE_WWPROFILE	
 #endif
 
-extern unsigned WWProfile_Get_System_Time();	// timeGetTime() wrapper
+extern unsigned WWProfile_Get_System_Time();	// Clock_Milliseconds() wrapper
 class FileClass;
 			
 /*

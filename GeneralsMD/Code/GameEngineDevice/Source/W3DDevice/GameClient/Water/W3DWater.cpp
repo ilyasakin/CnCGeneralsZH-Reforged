@@ -32,6 +32,7 @@
 										 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "stdio.h"
+#include "Lib/Clock.h"
 #include "W3DDevice/GameClient/W3DWater.h"
 #include "W3DDevice/GameClient/heightmap.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
@@ -1122,7 +1123,7 @@ Int WaterRenderObjClass::init(Real waterLevel, Real dx, Real dy, SceneClass *par
 	m_dy=dy;
 	m_level=waterLevel;
 
-	m_LastUpdateTime=timeGetTime();
+	m_LastUpdateTime=Clock_Milliseconds();
 	m_uScrollPerMs=0.001f;
 	m_vScrollPerMs=0.001f;
 	m_uOffset=0;
@@ -1368,18 +1369,18 @@ void WaterRenderObjClass::update( void )
 		// several hundred frames a second, so the per-frame delta alternated between 0 and 1ms
 		// and the surface advanced in visible lurches. The performance counter is sub-microsecond.
 		//
-		static LARGE_INTEGER perfFreq = { 0 };
-		static LARGE_INTEGER lastCount = { 0 };
-		LARGE_INTEGER nowCount;
+		static long long perfFreq = 0;
+		static long long lastCount = 0;
 
-		if (perfFreq.QuadPart == 0)
-			QueryPerformanceFrequency(&perfFreq);
-		QueryPerformanceCounter(&nowCount);
-		if (lastCount.QuadPart == 0)
-			lastCount.QuadPart = nowCount.QuadPart;
+		if (perfFreq == 0)
+			perfFreq = Clock_Ticks_Per_Second();
+		const long long nowCount = Clock_Ticks();
+		if (lastCount == 0)
+			lastCount = nowCount;
 
-		Real elapsedSec = (Real)((double)(nowCount.QuadPart - lastCount.QuadPart) / (double)perfFreq.QuadPart);
-		lastCount.QuadPart = nowCount.QuadPart;
+		Real elapsedSec = (perfFreq != 0)
+			? (Real)((double)(nowCount - lastCount) / (double)perfFreq) : 0.0f;
+		lastCount = nowCount;
 		if (elapsedSec > 0.1f)
 			elapsedSec = 0.1f;		// a level load must not jump the surface forward
 
@@ -2328,7 +2329,7 @@ void WaterRenderObjClass::renderSky(void)
 
 	Setting *setting=&m_settings[m_tod];
 
-	timeNow=timeGetTime();
+	timeNow=Clock_Milliseconds();
 
 	timeDiff=timeNow-m_LastUpdateTime;
 	m_LastUpdateTime=timeNow;

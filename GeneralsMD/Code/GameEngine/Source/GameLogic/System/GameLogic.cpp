@@ -28,6 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
 
@@ -1857,7 +1858,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	}
 
 	progressCount = LOAD_PROGRESS_LOOP_ALL_THE_FREAKN_OBJECTS;
-	Int timer = timeGetTime();
+	Int timer = Clock_Milliseconds();
 	if( loadingSaveGame ) {
 		// Loading a loadingSaveGame, need to add the trees to the client. jba. [8/11/2003]
 		for (pMapObj = MapObject::getFirstMapObject(); pMapObj; pMapObj = pMapObj->getNext()) 
@@ -1993,12 +1994,12 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 
 			}  // end if
 		
-			if(timeGetTime() > timer + 500)
+			if(Clock_Milliseconds() > timer + 500)
 			{
 				if(progressCount < LOAD_PROGRESS_MAX_ALL_THE_FREAKN_OBJECTS)
 					progressCount ++;
 				updateLoadProgress(progressCount);
-				timer = timeGetTime();
+				timer = Clock_Milliseconds();
 			}
 
 		}	// for, loading map objects
@@ -3371,8 +3372,8 @@ static void unitTimings(void)
 		settleFrames--;
 		if (settleFrames>0) return;
 
-		QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
-		QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
+		startTime64 = Clock_Ticks();
+		freq64 = Clock_Ticks_Per_Second();
 		timeFrames = TIME_FRAMES;
 
 		// reset the draw counter
@@ -3384,7 +3385,7 @@ static void unitTimings(void)
 		timeFrames--;
 		if (timeFrames>0) return;
 		
-		QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+		endTime64 = Clock_Ticks();
 		double timeToUpdate = ((double)(endTime64-startTime64) / (double)(freq64));
 
 //		Real timeToUpdateMicrosec = timeToUpdate*1E6/(TIME_FRAMES * TOTAL_UNITS);
@@ -3803,7 +3804,7 @@ static Real logicElapsedMS( const Int64 &from, const Int64 &to )
 {
 	static Int64 freq = 0;
 	if( freq == 0 )
-		QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+		freq = Clock_Ticks_Per_Second();
 	if( freq == 0 )
 		return 0.0f;
 	return (Real)( (double)(to - from) * 1000.0 / (double)freq );
@@ -3915,7 +3916,7 @@ static const char *getModuleProfileReport( void )
 {
 	static char report[ 512 ];
 	Int64 freq = 0;
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+	freq = Clock_Ticks_Per_Second();
 
 	if( theWorstModuleKey == NAMEKEY_INVALID )
 	{
@@ -4317,7 +4318,7 @@ void GameLogic::update( void )
 		 worst frames (101 of 115 ms on one), and it is five unrelated pieces of end-of-frame cleanup.
 		 Split so the log names which one. */
 	Int64 tDestroy = 0, tCommandList = 0, tStores = 0, tVictory = 0;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tFrameStart );
+	tFrameStart = Clock_Ticks();
 	PartitionManager::resetQueryCounts();	// counted per logic frame, reported by the slow-frame log
 	AI::resetEnemyScanCount();
 	Pathfinder::resetProfile();
@@ -4348,7 +4349,7 @@ void GameLogic::update( void )
 		 happens on a render pass and making an object has to happen in here, so the two are split. */
 	ControlServer_runCommands();
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tScripts );
+	tScripts = Clock_Ticks();
 
 	Bool freezeTime = TheTacticalView->isTimeFrozen() && !TheTacticalView->isCameraMovementFinished();
 	freezeTime = freezeTime || TheScriptEngine->isTimeFrozenDebug() || TheScriptEngine->isTimeFrozenScript();
@@ -4485,7 +4486,7 @@ void GameLogic::update( void )
 				const ObjectID profModuleObjID = u->friend_getObject() ? u->friend_getObject()->getID() : INVALID_ID;
 				const Int profModuleQueriesBefore = PartitionManager::getQueryCountThisFrame();
 				Int64 profModuleStart;
-				QueryPerformanceCounter( (LARGE_INTEGER *)&profModuleStart );
+				profModuleStart = Clock_Ticks();
 #endif
 
 				sleepLen = u->update();
@@ -4493,7 +4494,7 @@ void GameLogic::update( void )
 #ifdef DEBUG_LOGGING
 				{
 					Int64 profModuleEnd;
-					QueryPerformanceCounter( (LARGE_INTEGER *)&profModuleEnd );
+					profModuleEnd = Clock_Ticks();
 					theModuleUpdateCount++;
 					const Int64 profModuleTicks = profModuleEnd - profModuleStart;
 					addModuleProfile( profModuleKey, profModuleTicks,
@@ -4535,14 +4536,14 @@ void GameLogic::update( void )
 
 	validateSleepyUpdate();
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tObjects );
+	tObjects = Clock_Ticks();
 
 	// update the Artificial Intelligence system
 	{
 		TheAI->UPDATE();
 	}
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tAI );
+	tAI = Clock_Ticks();
 
 	// production updates
 	{
@@ -4554,7 +4555,7 @@ void GameLogic::update( void )
 		ThePartitionManager->UPDATE();
 	}
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tPartition );
+	tPartition = Clock_Ticks();
 
 	//
 	// End of frame clean-up
@@ -4563,21 +4564,21 @@ void GameLogic::update( void )
 	// destroy all pending objects
 	processDestroyList();
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tDestroy );
+	tDestroy = Clock_Ticks();
 
 	// reset the command list, destroying all messages
 	TheCommandList->reset();
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tCommandList );
+	tCommandList = Clock_Ticks();
 
 	TheWeaponStore->UPDATE();	
 	TheLocomotorStore->UPDATE();	
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tStores );
+	tStores = Clock_Ticks();
 
 	TheVictoryConditions->UPDATE();
 
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tVictory );
+	tVictory = Clock_Ticks();
 
 #ifdef DO_COPY_PROTECTION
 	if (!isInShellGame() && isInGame())
@@ -4607,7 +4608,7 @@ void GameLogic::update( void )
 
 
 	// how long did that take?  only a frame that ran over budget is worth a line in the log
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tFrameEnd );
+	tFrameEnd = Clock_Ticks();
 	{
 		// the logic gets 1/30th of a second, 33ms, per frame; -slowframe lowers the bar for a hunt
 		const Real SLOW_FRAME_MS = TheGlobalData ? TheGlobalData->m_slowFrameMS : 20.0f;
@@ -4978,10 +4979,10 @@ void GameLogic::sendObjectCreated( Object *obj )
 		 of a barracks cost 18ms of a 33ms frame.  The preload in startNewGame is what keeps this
 		 quiet; a line here is one that got past it, which is the only way anybody would notice. */
 	Int64 firstDrawStart, firstDrawEnd, firstDrawFreq = 0;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&firstDrawStart );
+	firstDrawStart = Clock_Ticks();
 	Drawable *draw = TheThingFactory->newDrawable(obj->getTemplate());
-	QueryPerformanceCounter( (LARGE_INTEGER *)&firstDrawEnd );
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&firstDrawFreq );
+	firstDrawEnd = Clock_Ticks();
+	firstDrawFreq = Clock_Ticks_Per_Second();
 	{
 		const Real ASSET_LOAD_WORTH_LOGGING_MS = 3.0f;
 		const Real drawMS = firstDrawFreq
@@ -5165,7 +5166,7 @@ void GameLogic::lastHeardFrom( Int playerId )
 {
 	if( playerId < 0 || playerId >= MAX_SLOTS)
 		return;
-	m_progressCompleteTimeout[playerId] = timeGetTime();
+	m_progressCompleteTimeout[playerId] = Clock_Milliseconds();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -5176,7 +5177,7 @@ void GameLogic::testTimeOut( void )
 	if(isProgressComplete())
 		return;
 
-	Int curTime = timeGetTime();
+	Int curTime = Clock_Milliseconds();
 	// Loop and test everyone in our game.
 	for(Int i =0; i < MAX_SLOTS; ++i)
 	{
@@ -5206,7 +5207,7 @@ void GameLogic::initTimeOutValues( void )
 		return;
 	for(Int i = 0; i < TheNetwork->getNumPlayers(); ++i)
 	{
-		m_progressCompleteTimeout[i] = timeGetTime();
+		m_progressCompleteTimeout[i] = Clock_Milliseconds();
 	}
 }
 

@@ -10,6 +10,7 @@
  */
 
 #include <windows.h>
+#include "Lib/Clock.h"
 #include <xaudio2.h>
 #include <deque>
 #include <stdlib.h>
@@ -56,8 +57,8 @@ struct Movie
 	bool audioEnabled;
 	float volume;
 
-	LARGE_INTEGER startTicks;
-	LARGE_INTEGER ticksPerSecond;
+	long long startTicks;			// Clock_Ticks() when the movie started playing
+	long long ticksPerSecond;		// Clock_Ticks_Per_Second() as it was then
 	bool started;
 	bool frameDecoded;
 	bool endOfFile;
@@ -67,16 +68,16 @@ bool soundEnabled = true;
 
 void startClock(Movie *movie)
 {
-	QueryPerformanceFrequency(&movie->ticksPerSecond);
-	QueryPerformanceCounter(&movie->startTicks);
+	movie->ticksPerSecond = Clock_Ticks_Per_Second();
+	movie->startTicks = Clock_Ticks();
 	movie->started = true;
 }
 
 double elapsedSeconds(Movie *movie)
 {
-	LARGE_INTEGER now;
-	QueryPerformanceCounter(&now);
-	return (double)(now.QuadPart - movie->startTicks.QuadPart) / (double)movie->ticksPerSecond.QuadPart;
+	if (movie->ticksPerSecond == 0) return 0.0;
+	const long long now = Clock_Ticks();
+	return (double)(now - movie->startTicks) / (double)movie->ticksPerSecond;
 }
 
 double frameDueSeconds(Movie *movie, unsigned int frameNumber)
@@ -437,8 +438,8 @@ int __stdcall BinkGoto(HBINK handle, unsigned int frame, int)
 	movie->pub.FrameNum = frame;
 	movie->frameDecoded = false;
 	movie->endOfFile = false;
-	QueryPerformanceCounter(&movie->startTicks);
-	movie->startTicks.QuadPart -= (LONGLONG)(seconds * (double)movie->ticksPerSecond.QuadPart);
+	movie->startTicks = Clock_Ticks();
+	movie->startTicks -= (long long)(seconds * (double)movie->ticksPerSecond);
 	return 1;
 }
 

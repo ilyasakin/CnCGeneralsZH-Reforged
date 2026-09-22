@@ -35,6 +35,7 @@ static void drawFramerateBar(void);
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include <stdlib.h>
+#include "Lib/Clock.h"
 #include <windows.h>
 #include <io.h>
 #include <time.h>
@@ -387,14 +388,14 @@ W3DAssetManager *W3DDisplay::m_assetManager = NULL;
 inline Int64 getPerformanceCounter()
 {
 	Int64 tmp;
-	QueryPerformanceCounter((LARGE_INTEGER*)&tmp);
+	tmp = Clock_Ticks();
 	return tmp;
 }
 
 inline Int64 getPerformanceCounterFrequency()
 {
 	Int64 tmp;
-	QueryPerformanceFrequency((LARGE_INTEGER*)&tmp);
+	tmp = Clock_Ticks_Per_Second();
 	return tmp;
 }
 
@@ -2042,7 +2043,7 @@ extern Real TheParticleUpdateMS;
 static Real w3dElapsedMS( const Int64 &from, const Int64 &to )
 {
 	Int64 freq;
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+	freq = Clock_Ticks_Per_Second();
 	if( freq < 1 )
 		return 0.0f;
 	return (Real)((double)(to - from) * 1000.0 / (double)freq);
@@ -2206,7 +2207,7 @@ AGAIN:
 		// the animations keep their authored speed at whatever frame rate the machine manages.
 		//
 		static UnsignedInt prevSyncMs = 0;
-		const UnsignedInt nowSyncMs = timeGetTime();
+		const UnsignedInt nowSyncMs = Clock_Milliseconds();
 		if (prevSyncMs == 0)
 			prevSyncMs = nowSyncMs;
 
@@ -2223,9 +2224,9 @@ AGAIN:
 
 	// Fast & Frozen time limits the time to 33 fps.
 	Int minTime = 30;
-	static Int prevTime = timeGetTime(), now;
+	static Int prevTime = Clock_Milliseconds(), now;
 
-	now=timeGetTime();
+	now=Clock_Milliseconds();
 	if (TheTacticalView->getTimeMultiplier()>1) 
 	{
 		static Int timeMultiplierCounter = 1;
@@ -2237,7 +2238,7 @@ AGAIN:
 	}	
 	else 
 	{
-		now = timeGetTime();
+		now = Clock_Milliseconds();
 		prevTime = now - minTime;		 // do the first frame immediately.
 	} 
 
@@ -2259,7 +2260,7 @@ AGAIN:
 				while(loopForCameraMovement && (now - prevTime) < minTime-1)
 				{
 					::Sleep(1);	// was a pure spin; this loop can run for whole camera pans
-					now = timeGetTime();
+					now = Clock_Milliseconds();
 				}
 				prevTime = now;
 			}
@@ -2273,7 +2274,7 @@ AGAIN:
 				updateViews();
 #ifdef DEBUG_LOGGING
 			Int64 tParticleStart, tParticleEnd;
-			QueryPerformanceCounter( (LARGE_INTEGER *)&tParticleStart );
+			tParticleStart = Clock_Ticks();
 #endif
      		TheParticleSystemManager->update();//LORENZEN AND WILCZYNSKI MOVED THIS FROM ITS NATIVE POSITION, ABOVE
                                            //FOR THE PURPOSE OF LETTING THE PARTICLE SYSTEM LOOK UP THE RENDER OBJECT"S
@@ -2285,7 +2286,7 @@ AGAIN:
                                            //-LORENZEN
 
 #ifdef DEBUG_LOGGING
-			QueryPerformanceCounter( (LARGE_INTEGER *)&tParticleEnd );
+			tParticleEnd = Clock_Ticks();
 			TheParticleUpdateMS = w3dElapsedMS( tParticleStart, tParticleEnd );
 #endif
 
@@ -2354,11 +2355,11 @@ AGAIN:
 				// draw all views of the world
 #ifdef DEBUG_LOGGING
 				Int64 tSceneStart, tSceneEnd, tUIEnd;
-				QueryPerformanceCounter( (LARGE_INTEGER *)&tSceneStart );
+				tSceneStart = Clock_Ticks();
 #endif
 				drawViews();
 #ifdef DEBUG_LOGGING
-				QueryPerformanceCounter( (LARGE_INTEGER *)&tSceneEnd );
+				tSceneEnd = Clock_Ticks();
 #endif
 
 				// W3DView::draw has normally run the chain already, at the point where the world
@@ -2370,7 +2371,7 @@ AGAIN:
 				// draw the user interface
 				TheInGameUI->DRAW();
 #ifdef DEBUG_LOGGING
-				QueryPerformanceCounter( (LARGE_INTEGER *)&tUIEnd );
+				tUIEnd = Clock_Ticks();
 				TheSceneDrawMS = w3dElapsedMS( tSceneStart, tSceneEnd );
 				TheUIDrawMS = w3dElapsedMS( tSceneEnd, tUIEnd );
 #endif
@@ -2632,7 +2633,7 @@ void W3DDisplay::createLightPulse( const Coord3D *pos, const RGBColor *color,
 void W3DDisplay::toggleLetterBox(void)
 {
 	m_letterBoxEnabled = !m_letterBoxEnabled;
-	m_letterBoxFadeStartTime = timeGetTime();
+	m_letterBoxFadeStartTime = Clock_Milliseconds();
 
 	//WST  9/18/2002 This is not a script api to prevent cheat. JSC Integrated 5/20/03
 	if( TheTacticalView )
@@ -2648,7 +2649,7 @@ void W3DDisplay::enableLetterBox(Bool enable)
 		if (!m_letterBoxEnabled)
 		{	//letterbox mode not previously enabled
 			m_letterBoxEnabled = TRUE;
-			m_letterBoxFadeStartTime = timeGetTime();
+			m_letterBoxFadeStartTime = Clock_Milliseconds();
 
 			//WST  9/18/2002 - This is not a script api to prevent cheat.  JSC Integrated 5/20/03
 			if( TheTacticalView )
@@ -2662,7 +2663,7 @@ void W3DDisplay::enableLetterBox(Bool enable)
 		if (m_letterBoxEnabled)
 		{	//letterbox mode no previously disabled
 			m_letterBoxEnabled = FALSE;
-			m_letterBoxFadeStartTime = timeGetTime();
+			m_letterBoxFadeStartTime = Clock_Milliseconds();
 
 			//WST  9/18/2002. JSC Integrated 5/20/03
 			if( TheTacticalView )
@@ -4216,8 +4217,8 @@ void W3DDisplay::dumpAssetUsage(const char* mapname)
 //-------------------------------------------------------------------------------------------------
 static void drawFramerateBar(void)
 {
-	static DWORD prevTime = timeGetTime();
-	DWORD now = timeGetTime();
+	static DWORD prevTime = Clock_Milliseconds();
+	DWORD now = Clock_Milliseconds();
 	Real percTime = (1000.0f / (now - prevTime) ) / (1000.0f / TheGlobalData->m_framesPerSecondLimit);
 
 	if (percTime > 1.0f)

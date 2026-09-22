@@ -27,6 +27,7 @@
 // Author: John Ahlquist, Nov. 2001
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "common/DataChunk.h"
 #include "Common/File.h"
@@ -5546,14 +5547,14 @@ static Int64 theSeqSubStart = 0;
 
 static void seqSubBegin( void )
 {
-	QueryPerformanceCounter( (LARGE_INTEGER *)&theSeqSubStart );
+	theSeqSubStart = Clock_Ticks();
 }
 
 static Real seqSubEnd( void )
 {
 	Int64 now, freq;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&now );
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+	now = Clock_Ticks();
+	freq = Clock_Ticks_Per_Second();
 	if( freq < 1 )
 		return 0.0f;
 	return (Real)((double)(now - theSeqSubStart) * 1000.0 / (double)freq);
@@ -5565,14 +5566,14 @@ static Real seqSubEnd( void )
 
 static void scriptPhaseBegin( void )
 {
-	QueryPerformanceCounter( (LARGE_INTEGER *)&theScriptPhaseStart );
+	theScriptPhaseStart = Clock_Ticks();
 }
 
 static void scriptPhaseEnd( Int phase )
 {
 	Int64 now, freq;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&now );
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&freq );
+	now = Clock_Ticks();
+	freq = Clock_Ticks_Per_Second();
 	if( freq > 0 )
 		theScriptPhaseMS[ phase ] += (Real)((double)(now - theScriptPhaseStart) * 1000.0 / (double)freq);
 }
@@ -5609,8 +5610,8 @@ void ScriptEngine::update( void )
 	__int64 startTime64;
 	double timeToUpdate=0.0f;
 	__int64 endTime64,freq64;
-	QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);//LORENZEN'S NOTE_TO_SELF: USE THIS
-	QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);//LORENZEN'S NOTE_TO_SELF: USE THIS
+	freq64 = Clock_Ticks_Per_Second();//LORENZEN'S NOTE_TO_SELF: USE THIS
+	startTime64 = Clock_Ticks();//LORENZEN'S NOTE_TO_SELF: USE THIS
 /* dump out the named objects table.  For extremely intense debug only.  jba. :P
 	for (VecNamedRequestsIt it = m_namedObjects.begin(); it != m_namedObjects.end(); ++it) {
 		AsciiString name = it->first;
@@ -5747,7 +5748,7 @@ void ScriptEngine::update( void )
 
 #ifdef SPECIAL_SCRIPT_PROFILING
 #ifdef DEBUG_LOGGING
-	QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);//LORENZEN'S NOTE_TO_SELF: USE THIS
+	endTime64 = Clock_Ticks();//LORENZEN'S NOTE_TO_SELF: USE THIS
 	timeToUpdate = ((double)(endTime64-startTime64) / (double)(freq64));//LORENZEN'S NOTE_TO_SELF: USE THIS
 	m_numFrames++;
 	m_totalUpdateTime+=timeToUpdate;
@@ -7107,8 +7108,8 @@ void ScriptEngine::executeScript( Script *pScript )
 	__int64 startTime64;
 	Real timeToEvaluate=0.0f;
 	__int64 endTime64,freq64;
-	QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
-	QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
+	freq64 = Clock_Ticks_Per_Second();
+	startTime64 = Clock_Ticks();
 #endif
 #endif
 
@@ -7172,7 +7173,7 @@ void ScriptEngine::executeScript( Script *pScript )
 	}
 #ifdef DEBUG_LOGGING
 #ifdef SPECIAL_SCRIPT_PROFILING
-	QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+	endTime64 = Clock_Ticks();
 	timeToEvaluate = ((Real)(endTime64-startTime64) / (Real)(freq64));
 	pScript->setCurTime(timeToEvaluate);
 	{
@@ -7733,8 +7734,8 @@ Bool ScriptEngine::evaluateConditions( Script *pScript, Team *thisTeam, Player *
 	__int64 startTime64;
 	Real timeToEvaluate=0.0f;
 	__int64 endTime64,freq64;
-	QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
-	QueryPerformanceCounter((LARGE_INTEGER *)&startTime64);
+	freq64 = Clock_Ticks_Per_Second();
+	startTime64 = Clock_Ticks();
 #endif
 	OrCondition *pCurCondition;
 	for (pCurCondition = pConditionHead; pCurCondition; pCurCondition = pCurCondition->getNextOrCondition()) {
@@ -7754,7 +7755,7 @@ Bool ScriptEngine::evaluateConditions( Script *pScript, Team *thisTeam, Player *
 		}
 	}
 #ifdef COLLECT_CONDITION_EVAL_TIMES
-	QueryPerformanceCounter((LARGE_INTEGER *)&endTime64);
+	endTime64 = Clock_Ticks();
 	timeToEvaluate = ((Real)(endTime64-startTime64) / (Real)(freq64));
 	pScript->incrementConditionCount();
 	pScript->addToConditionTime(timeToEvaluate);

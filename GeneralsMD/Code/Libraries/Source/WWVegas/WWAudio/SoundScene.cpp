@@ -36,6 +36,7 @@
 
 
 #include "soundscene.h"
+#include "Lib/Clock.h"
 #include "soundcullobj.h"
 #include "logicalsound.h"
 #include "logicallistener.h"
@@ -140,7 +141,7 @@ SoundSceneClass::Collect_Logical_Sounds (int listener_count)
 {
 	WWPROFILE ("Collect_Logical_Sounds");
 
-	uint32 timestamp = ::GetTickCount ();
+	uint32 timestamp = Clock_Milliseconds_Coarse();
 
 	//
 	//	Determine how many listeners to process

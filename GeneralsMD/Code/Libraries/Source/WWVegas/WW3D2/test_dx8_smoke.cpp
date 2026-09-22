@@ -7,6 +7,7 @@
 // Direct3D 12); each run requires to have really landed on its runtime.
 
 #include <windows.h>
+#include "Lib/Clock.h"
 #include <d3d8.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -390,8 +391,8 @@ int main(int argc, char **argv)
 	printf("Present hr=0x%08lx\n", (unsigned long)phr);
 	if (show) {
 		// keep clearing + presenting for 8 s while pumping messages, so a human can look
-		const DWORD until = GetTickCount() + 8000;
-		while (GetTickCount() < until) {
+		const DWORD until = Clock_Milliseconds_Coarse() + 8000;
+		while (Clock_Milliseconds_Coarse() < until) {
 			MSG msg;
 			while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageA(&msg); }
 			dev->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(160, 0, 200), 1.0f, 0);

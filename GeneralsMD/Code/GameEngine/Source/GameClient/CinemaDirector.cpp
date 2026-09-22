@@ -34,6 +34,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Common/file.h"
 #include "Common/FileSystem.h"
@@ -460,7 +461,7 @@ static void loadCinema( void )
 static Real cinemaNow( void )
 {
 	const UnsignedInt frame = TheGameLogic->getFrame();
-	const DWORD wall = timeGetTime();
+	const DWORD wall = Clock_Milliseconds();
 	if (frame != theCinemaSeenFrame)
 	{
 		theCinemaSeenFrame = frame;

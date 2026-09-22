@@ -30,6 +30,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
 
@@ -646,7 +647,7 @@ void HandleBuddyResponses( void )
 	{
 		DEBUG_CRASH(("No buddy message queue!\n"));
 	}
-	if(noticeLayout && timeGetTime() > noticeExpires)
+	if(noticeLayout && Clock_Milliseconds() > noticeExpires)
 	{
 		deleteNotificationBox();
 	}
@@ -679,7 +680,7 @@ void showNotificationBox( AsciiString nick, UnicodeString message)
 		message.format(message, nick.str());
 	GadgetButtonSetText(win, message);
 	//GadgetStaticTextSetText(win, message);
-	noticeExpires = timeGetTime() + NOTIFICATION_EXPIRES;
+	noticeExpires = Clock_Milliseconds() + NOTIFICATION_EXPIRES;
 	noticeLayout->bringForward();
 
 	AudioEventRTS buttonClick("GUICommunicatorIncoming");

@@ -34,6 +34,7 @@
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////////////////////////
 #include <stdlib.h>
+#include "Lib/Clock.h"
 #include <windows.h>
 
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
@@ -461,8 +462,8 @@ void W3DView::buildCameraTransform( Matrix3D *transform )
 	//WST 11/12/2002 New camera shaker system
 	// This runs once per render frame (and again on every scrollBy), not once per 30Hz
 	// tick, so step the shaker by real elapsed time to keep shakes framerate-independent.
-	static DWORD prevShakeTime = timeGetTime();
-	DWORD nowShakeTime = timeGetTime();
+	static DWORD prevShakeTime = Clock_Milliseconds();
+	DWORD nowShakeTime = Clock_Milliseconds();
 	Real shakeDt = (nowShakeTime - prevShakeTime) * 0.001f;
 	prevShakeTime = nowShakeTime;
 	if (shakeDt > 1.0f/30.0f)
@@ -1192,8 +1193,8 @@ void W3DView::update(void)
 #ifdef LOG_FRAME_TIMES
 	__int64 curTime64,freq64;
 	static __int64 prevTime64=0;
-	QueryPerformanceFrequency((LARGE_INTEGER *)&freq64);
-	QueryPerformanceCounter((LARGE_INTEGER *)&curTime64);
+	freq64 = Clock_Ticks_Per_Second();
+	curTime64 = Clock_Ticks();
 	freq64 /= 1000;
 
 	Int elapsedTimeMs = (curTime64 - prevTime64)/freq64;
@@ -1208,7 +1209,7 @@ void W3DView::update(void)
 	// the original wall-clock cadence so camera motion speed is framerate-independent,
 	// while the camera transform itself still updates every render frame.
 	static DWORD prevCameraStepTime = 0;
-	DWORD nowCameraStepTime = timeGetTime();
+	DWORD nowCameraStepTime = Clock_Milliseconds();
 	Bool stepTime = (nowCameraStepTime - prevCameraStepTime) >= (DWORD)TheW3DFrameLengthInMsec;
 	// During a scripted frozen-time pan, W3DDisplay::draw's inner loop calls us and
 	// paces itself to ~30fps already; gating on top of that ran the pan at half speed.
@@ -1803,7 +1804,7 @@ void W3DView::draw( void )
 		if (preRenderResult && !continueTheEffect && !skipRender)
 		{
 			static UnsignedInt lastFilterComplaintMs = 0;
-			const UnsignedInt nowMs = timeGetTime();
+			const UnsignedInt nowMs = Clock_Milliseconds();
 			if (lastFilterComplaintMs == 0 || nowMs - lastFilterComplaintMs >= 1000)
 			{
 				lastFilterComplaintMs = nowMs;
@@ -2132,7 +2133,7 @@ void W3DView::scrollBy( Coord2D *delta )
 {
 	// Sample every render tick, including zero movement. Measuring only nonzero scrolls
 	// includes all the idle time in the first move and produces a jump on every restart.
-	const Real scrollDtFactor = m_scrollClock.sample(timeGetTime(), TheW3DFrameLengthInMsec);
+	const Real scrollDtFactor = m_scrollClock.sample(Clock_Milliseconds(), TheW3DFrameLengthInMsec);
 	if (delta)
 		m_scrollAmount = *delta;
 

@@ -36,6 +36,7 @@
 
 
 #include "sound3d.h"
+#include "Lib/Clock.h"
 #include "soundbuffer.h"
 #include "wwaudio.h"
 #include "soundscene.h"
@@ -150,7 +151,7 @@ Sound3DClass::Play (bool alloc_handle)
 {
 	// Record our first 'tick' if we just started playing
 	if (m_State != STATE_PLAYING) {
-		m_LastUpdate = ::GetTickCount ();
+		m_LastUpdate = Clock_Milliseconds_Coarse();
 	}
 	
 	// Allow the base class to process this call
@@ -203,7 +204,7 @@ Sound3DClass::On_Frame_Update (unsigned int milliseconds)
 			//	Extrapolate our current velocity given the last time slice and the distance
 			// we moved.
 			//
-			float secs_since_last_update = (::GetTickCount () - m_LastUpdate);
+			float secs_since_last_update = (Clock_Milliseconds_Coarse() - m_LastUpdate);
 			if (secs_since_last_update > 0) {
 				curr_vel = ((curr_pos - last_pos) / secs_since_last_update);
 			} else {
@@ -216,7 +217,7 @@ Sound3DClass::On_Frame_Update (unsigned int milliseconds)
 
 	// Remember when the last time we updated our 'auto-calc'
 	// variables.
-	m_LastUpdate = ::GetTickCount ();
+	m_LastUpdate = Clock_Milliseconds_Coarse();
 	m_PrevTransform = m_Transform;
 
 	// Allow the base class to process this call

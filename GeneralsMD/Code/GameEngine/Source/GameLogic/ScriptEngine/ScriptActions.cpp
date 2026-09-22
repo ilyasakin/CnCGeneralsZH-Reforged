@@ -28,6 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
 
@@ -1791,7 +1792,7 @@ void ScriptActions::doTeamMoveToSkirmishApproachPath(const AsciiString& teamName
 		 timed apart so the next person does not have to guess which one it is. */
 #ifdef DEBUG_LOGGING
 	Int64 tStart, tWaypoint, tEnd, tFreq;
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tStart );
+	tStart = Clock_Ticks();
 #endif
 	Waypoint *way = TheTerrainLogic->getClosestWaypointOnPath( &pos, pathLabel );
 	if (!way) {
@@ -1799,12 +1800,12 @@ void ScriptActions::doTeamMoveToSkirmishApproachPath(const AsciiString& teamName
 	}
 	DEBUG_ASSERTLOG(TheTerrainLogic->isPurposeOfPath(way, pathLabel), ("***Wrong waypoint purpose. Make jba fix this.\n"));
 #ifdef DEBUG_LOGGING
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tWaypoint );
+	tWaypoint = Clock_Ticks();
 #endif
 	theGroup->groupMoveToPosition(way->getLocation(), false, CMD_FROM_SCRIPT);
 #ifdef DEBUG_LOGGING
-	QueryPerformanceCounter( (LARGE_INTEGER *)&tEnd );
-	QueryPerformanceFrequency( (LARGE_INTEGER *)&tFreq );
+	tEnd = Clock_Ticks();
+	tFreq = Clock_Ticks_Per_Second();
 	if( tFreq > 0 )
 	{
 		const Real wayMS = (Real)((double)(tWaypoint - tStart) * 1000.0 / (double)tFreq);

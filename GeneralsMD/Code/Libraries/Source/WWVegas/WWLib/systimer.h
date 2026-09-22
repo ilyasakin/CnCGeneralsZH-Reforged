@@ -38,6 +38,7 @@
 #ifndef _SYSTIMER_H
 
 #include "always.h"
+#include "Lib/Clock.h"
 #include <windows.h>
 #include "mmsys.h"
 
@@ -118,7 +119,7 @@ WWINLINE unsigned long SysTimeClass::Get(void)
 		is_init = true;
 	}
 
-	unsigned long time = timeGetTime();
+	unsigned long time = Clock_Milliseconds();
 	if (time > StartTime) {
 		return(time - StartTime);
 	}
@@ -131,10 +132,12 @@ WWINLINE unsigned long SysTimeClass::Get(void)
 
 
 
-#ifdef timeGetTime
-#undef timeGetTime
-#define timeGetTime SystemTime.Get
-#endif //timeGetTime
+/* This used to redirect timeGetTime to SystemTime.Get, but only #ifdef timeGetTime - and
+	 timeGetTime is a function in mmsystem.h, never a macro, so the redirect has never once fired.
+	 Removed rather than ported: a macro that renames a clock out from under its callers is the last
+	 thing a sweep like B2's wants to meet, and this one was doing nothing.  Callers that want the
+	 since-start clock call SysTimeClass::Get; callers that want the raw one call
+	 Clock_Milliseconds. */
 
 
 

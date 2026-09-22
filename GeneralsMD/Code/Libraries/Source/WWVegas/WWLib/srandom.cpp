@@ -23,6 +23,7 @@
 #pragma warning(disable : 4514)	// unreferenced inline function removed....
 
 #include "srandom.h"
+#include "Lib/Clock.h"
 #include <stdlib.h>
 #include <stdio.h>
 #ifdef _UNIX
@@ -212,7 +213,7 @@ void SecureRandomClass::Generate_Seed(void)
 		else if ((i % 4) == 1)
 			int_seeds[i]^=getpid();
 		else if ((i % 4) == 2)
-			int_seeds[i]^=GetTickCount();
+			int_seeds[i]^=Clock_Milliseconds_Coarse();
 		else if ((i % 4) == 3)
 			int_seeds[i]^=i;
 	}
