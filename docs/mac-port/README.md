@@ -174,7 +174,7 @@ you start. That commit is the lock.
 | B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | in progress | -21 |
 | B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | **done, merges with B7** | -14 |
 | B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | in review | -83 |
-| B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | in progress | -83 |
+| B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | in review | -83 |
 | B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | not started | |
 | B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress | -3a |
 | B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | in progress | -14 |
