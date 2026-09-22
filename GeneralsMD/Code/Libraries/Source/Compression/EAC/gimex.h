@@ -95,6 +95,20 @@ typedef unsigned char GCHANNEL;
 
 #ifndef ARGB
 #define ARGB ARGB
+/* The same 2003 shorthand as ggetm/gputm below, in a different disguise.  The first branch asks
+   "MSVC or i386?" and means "little-endian desktop"; everything that is neither that nor a PS2
+   falls through to the GameCube/Mac order, which is the big-endian one.  On Apple Silicon -
+   little-endian, like every x86 - none of _MSC_VER, __i386__, __R5900 or SGI is defined, so the
+   channels came out rotated.
+
+   The byte-order test is added as a fourth branch rather than replacing the first, so every
+   platform that already had an answer keeps exactly the answer it had: MSVC and i386 still take
+   the first branch, PS2 and SGI still take the second, and a genuinely big-endian machine still
+   takes the last.  Only the case that had no branch of its own changes.
+
+   Inert today - nothing in the built tree reads an ARGB, which is only GBITMAPINFO's 8-bit
+   palette - so this is a landmine rather than a fire, which is the argument for fixing it while
+   the file is open rather than against. */
 #if defined(_MSC_VER) || defined(__i386__)
 
     typedef struct
@@ -109,7 +123,14 @@ typedef unsigned char GCHANNEL;
         GCHANNEL r,g,b,a;
     } ARGB;
 
-#else /* GameCube/Mac */
+#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ /* arm64, x86-64 */
+
+    typedef struct
+    {
+        GCHANNEL b,g,r,a;
+    } ARGB;
+
+#else /* GameCube/Mac, and anything else big-endian */
 
     typedef struct
     {
