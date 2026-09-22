@@ -171,7 +171,8 @@ you start. That commit is the lock.
 | B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | not started | |
 | B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) | M1 | A1 | not started | |
 | B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in progress | -83 |
-| B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | not started | |
+| B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | in progress | -21 |
+| B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | not started | |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | not started | |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
