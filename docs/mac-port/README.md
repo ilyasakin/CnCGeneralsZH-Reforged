@@ -161,25 +161,25 @@ you start. That commit is the lock.
 | ID | Task | Milestone | Depends on | Status | Owner |
 |:--|:--|:--|:--|:--|:--|
 | A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | **configure done** | -95 |
-| A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | not started | |
-| A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | not started | |
-| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | recon done | |
-| B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | not started | |
-| B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | not started | |
-| B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done | |
-| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | recon done | |
-| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | not started | |
-| B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) | M1 | A1 | not started | |
-| B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in progress | -83 |
+| A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | in review (zlib reopen) | -21 |
+| A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | in review | -21 |
+| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | in progress (steps 1-3) | -3a |
+| B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | not started |  |
+| B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | in progress | -95 |
+| B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
+| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | recon done, held for -83 |  |
+| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | not started |  |
+| B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) | M1 | A1 | **done, held for B10** | -14 |
+| B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in review | -83 |
 | B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | in progress | -21 |
-| B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | not started | |
-| B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | not started | |
+| B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | in progress | -14 |
+| B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | in progress | -83 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | not started | |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
 | C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | not started | |
 | C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | not started | |
-| D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | recon in progress | |
+| D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | recon done; PR1 in progress | -8d |
 | D2 | [Abstract the backend interface](tasks/D2-backend-interface.md) | M3 | D1 | not started | |
 | D3 | [Shader generators emit an IR](tasks/D3-shader-generators-ir.md) | M3 | D2 | not started | |
 | D4 | [Metal backend](tasks/D4-metal-backend.md) | M4 | D3 | not started | |
@@ -188,6 +188,28 @@ you start. That commit is the lock.
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
+
+### M1 has doubled, and that is the finding
+
+It opened with six tasks. It has eleven. **Five of the six additions came from agents checking an
+assumption in this plan and finding it wrong**, which is the strongest argument available that the
+recon passes were worth the time:
+
+| Task | Found by | What the plan had assumed |
+|:--|:--|:--|
+| B7 | B4 recon | that B4's `#pragma pack` work covered the `.w3d` file format. All 8 of its regions are wire formats. |
+| B8 | B5 recon | that no task needed to own threading. `JobSystem.cpp` is a Win32 thread pool the allocator reaches. |
+| B9 | A1 | nothing — 147 backslash include directives, a hard error under clang, unowned. |
+| B10 | B7 | that `.w3d` structs were width-pinned. `uint32` is `unsigned long`: 8 bytes here, and `ChunkHeader` 16 where the format says 8. |
+| B11 | B8 | as B8 — `CriticalSection` is a raw `CRITICAL_SECTION` under the allocator and both string classes. |
+
+B10 is the one that would have hurt. Nothing about it fails loudly: the build succeeds, the game
+starts, and every `.w3d` read walks off its own chunk boundary.
+
+The pattern worth carrying into M2–M5: **the dangerous findings were all in things named to look
+safe.** `uint32` that is not 32 bits. `#pragma pack` that covers the wrong formats. A "type leak"
+task that was really a threading task. None was found by reading the plan; all were found by
+someone measuring what the plan asserted.
 
 ## Rules for anyone working this plan
 
