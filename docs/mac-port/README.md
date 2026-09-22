@@ -146,7 +146,7 @@ you start. That commit is the lock.
 
 | ID | Task | Milestone | Depends on | Status | Owner |
 |:--|:--|:--|:--|:--|:--|
-| A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | blocked: the four libraries need B3 B5 | mac-port-A1 |
+| A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | not started | |
 | A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | not started | |
 | A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | not started | |
 | B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | not started | |
