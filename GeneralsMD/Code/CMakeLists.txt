@@ -1,5 +1,34 @@
 cmake_minimum_required(VERSION 3.20)
 
+project(GeneralsMD CXX C)
+
+# Which operating system this build is for.  MSVC used to answer that question too, because for
+# twenty years there was only one answer, and this file used the two interchangeably from its first
+# line to its last.  They are different questions now.  Everything that is really about the
+# platform - the CRT, the Windows SDK import libraries, MIDL, DirectX, the window - asks
+# ZH_PLATFORM_WINDOWS; only a flag written in one compiler's own syntax asks which compiler is
+# reading it.  docs/mac-port/README.md has the rest of the plan.
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(ZH_PLATFORM_WINDOWS TRUE)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(ZH_PLATFORM_MACOS TRUE)
+else()
+  message(FATAL_ERROR
+    "Only Windows and macOS are configured here; CMAKE_SYSTEM_NAME is '${CMAKE_SYSTEM_NAME}'.")
+endif()
+
+# The other half of the split.  A target that only Windows can build is gated out below; a target
+# whose sources do not compile under clang *yet* is a different thing, and this is it.  Those stay
+# defined on macOS, so that tasks B1-B6 have something to drive with --target and see real errors
+# from, but out of the default build, so that a Mac build failure means a regression in what was
+# working rather than the next task's work showing through.  Take a name off the list as its task
+# lands.  On Windows this expands to no argument at all and changes no target.
+if(ZH_PLATFORM_MACOS)
+  set(ZH_NOT_YET_PORTABLE EXCLUDE_FROM_ALL)
+else()
+  set(ZH_NOT_YET_PORTABLE "")
+endif()
+
 # The zip goes to machines that have never installed a Visual Studio redistributable, and
 # generals.exe imported MSVCP140.dll and VCRUNTIME140.dll by name.  That fails in the Windows
 # loader before a line of our code runs, so there is no DebugLogFile.txt and no crash file to
@@ -8,10 +37,13 @@ cmake_minimum_required(VERSION 3.20)
 # it.  CMAKE_POLICY_DEFAULT is what reaches the vendored subdirectories: d3d8to9 declares
 # cmake_minimum_required(3.12), which predates CMP0091, and would otherwise ignore the setting
 # below and keep importing the DLL.
-set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-project(GeneralsMD CXX C)
+# Both of these are Windows concerns and both are read later than this - CMAKE_MSVC_RUNTIME_LIBRARY
+# when a target is created, CMAKE_POLICY_DEFAULT_CMP0091 when a vendored subdirectory is added - so
+# the guard costs the Windows build nothing.
+if(ZH_PLATFORM_WINDOWS)
+  set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 # x64 only.  The 32-bit build was dropped once this one was proven against it: same simulation to
 # the bit, same picture to within sub-pixel sampling, and sound and video of its own that do not
@@ -26,18 +58,34 @@ set(COMP ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/Compression)
 # The third-party sources EA stripped out, which this repository does not carry either.  build.bat
 # fetches them before it configures; say so here rather than let the generator report a missing
 # source file per library.
-foreach(vendored
+set(VENDORED
     ${COMP}/ZLib/deflate.c
-    ${COMP}/LZHCompress/CompLibSource/Lzhl.cpp
+    ${COMP}/LZHCompress/CompLibSource/Lzhl.cpp)
+# The DirectX 8 headers and the GameSpy SDK are only read by targets this file does not define on
+# macOS, and A2 decides what a Mac fetch pulls down.  Demanding them here would stop a Mac
+# configure over files nothing portable includes.
+if(ZH_PLATFORM_WINDOWS)
+  list(APPEND VENDORED
     ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/DirectX/Include/d3d8.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/GameSpy/CMakeLists.txt)
+endif()
+foreach(vendored ${VENDORED})
   if(NOT EXISTS ${vendored})
     message(FATAL_ERROR
       "${vendored} is missing. Run Tools\\vendor.ps1 (build.bat does it for you).")
   endif()
 endforeach()
 
-add_compile_definitions(WIN32 _WINDOWS _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS)
+# The _CRT_ pair only tells MSVC's own headers to stop deprecating the C library this code is
+# written against.  They mean nothing to any other compiler and cost nothing there, so they stay
+# unconditional.  WIN32 and _WINDOWS are statements about the operating system, and most of the
+# tree reads them as exactly that, so they move into the Windows branch: defining them on a Mac
+# would tell several hundred #ifdefs the wrong thing.  A few places read WIN32 to mean "not
+# 16-bit" instead; those are source fixes for tracks B and C, not a reason to define it here.
+add_compile_definitions(_CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS)
+if(ZH_PLATFORM_WINDOWS)
+  add_compile_definitions(WIN32 _WINDOWS)
+endif()
 
 # EA's own switch for exactly this situation ("Good for startup problems", Debug.h):
 # it turns DEBUG_LOG back on in a Release build so the hundreds of existing log
@@ -79,6 +127,42 @@ if(MSVC)
   # what the 32-bit build had to ask for explicitly, and why it pinned the x87 precision control.
   # See dettrig.h and FPUControl.h.
   add_link_options(/DEBUG)
+elseif(ZH_PLATFORM_MACOS)
+  # The clang half of the same decisions.  None of the switches above transfers: /EHa is there for
+  # _set_se_translator, which is a Windows structured-exception mechanism; /Oy- and /Zi are there
+  # for StackDump.cpp's hand-written EBP walk, which no arm64 build has ever had; /FS and /MP are
+  # about one MSBuild project writing one PDB.  Those are Windows reasons and they do not cross.
+  # What is left is the short list of places where clang's defaults differ from cl.exe's in a way
+  # this code notices.
+  #
+  # -fexceptions: the engine throws from the bottom and catches at the top - GameEngine::init's
+  # catch (ErrorCode) and WinMain's outer catch (...) are structural, not decoration.  clang turns
+  # them on for C++ by itself; saying so keeps a -fno-exceptions in some future preset from
+  # deleting the error handling without a diagnostic.
+  add_compile_options(-fexceptions)
+  # -ffp-contract=off: the most important line in this file, and not optional.  clang on arm64
+  # contracts a*b+c into one fused multiply-add, which rounds once where two operations round
+  # twice.  MSVC on x64 never does it.  The simulation is full of multiply-adds, so a single
+  # contracted instruction inside it makes this build compute different numbers from the Windows
+  # build - and that surfaces as a replay that diverges and a network game that desyncs, not as a
+  # compile error.  dettrig.h went to integer arithmetic over a committed table for exactly this
+  # reason; this is the other half of the same promise, and E1 is the test that holds it.
+  add_compile_options(-ffp-contract=off)
+  # -fno-strict-aliasing: 2003 C++.  The .big and .w3d readers cast a byte buffer to a struct
+  # pointer and read through it, which the standard does not allow and an optimiser is entitled to
+  # act on.  MSVC does no type-based alias analysis, so this code has never been compiled by
+  # anything that would.
+  add_compile_options(-fno-strict-aliasing)
+  # -fsigned-char: MSVC's plain char is signed and code here compares one against zero.  Darwin on
+  # arm64 already signs it, unlike the ARM EABI, so this pins a default rather than changing one -
+  # which is the point, because the default is the kind of thing that is cheap to state and
+  # expensive to discover.
+  add_compile_options(-fsigned-char)
+  # -g for the reason /Zi is there: there is no debugger on the porting machine, so a symbolised
+  # stack is the only stack anyone gets.  Deliberately no -fno-omit-frame-pointer - that would be
+  # propping up StackDump.cpp's frame walk, and C5 replaces that mechanism with the platform's own
+  # rather than teaching an EBP chain to a machine that never had one.
+  add_compile_options(-g)
 endif()
 
 # ---- wwdebug --------------------------------------------------------------
@@ -151,10 +235,18 @@ target_link_libraries(compression_selfcheck PRIVATE compression)
 # Guards the hand-rolled Matrix3D::Get_Inverse that replaced D3DXMatrixInverse.
 add_executable(wwmath_selfcheck ${WW}/WWMath/test_inverse.cpp)
 target_include_directories(wwmath_selfcheck PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
-target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwsaveload wwlib wwdebug)
+if(ZH_PLATFORM_WINDOWS)
+  target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwsaveload wwlib wwdebug)
+else()
+  # test_inverse.cpp includes matrix3d.h and nothing else, and wwmath's own objects resolve against
+  # wwdebug alone.  wwsaveload and wwlib are on the Windows line because they were free there;
+  # neither compiles under clang yet, and this self-check is the first evidence that determinism
+  # survives clang on arm64, so it is not allowed to wait for them.  Put them back with wwlib.
+  target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwdebug)
+endif()
 
 # ---- wwlib ----------------------------------------------------------------
-add_library(wwlib STATIC
+add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE}
   ${WW}/WWLib/_convert.cpp   ${WW}/WWLib/_mono.cpp      ${WW}/WWLib/argv.cpp
   ${WW}/WWLib/b64pipe.cpp    ${WW}/WWLib/b64straw.cpp   ${WW}/WWLib/base64.cpp
   ${WW}/WWLib/blit.cpp       ${WW}/WWLib/blowfish.cpp   ${WW}/WWLib/buff.cpp
@@ -184,12 +276,16 @@ add_library(wwlib STATIC
   ${WW}/WWLib/wwfile.cpp     ${WW}/WWLib/wwfont.cpp     ${WW}/WWLib/wwstring.cpp
   ${WW}/WWLib/xpipe.cpp      ${WW}/WWLib/xstraw.cpp     ${WW}/WWLib/xsurface.cpp)
 target_include_directories(wwlib PUBLIC ${WW}/WWLib PRIVATE ${WW}/WWMath ${WW}/Wwutil)
-# winmm: timeGetTime/timeBeginPeriod.  version: verchk.cpp's GetFileVersionInfo,
-# which Wwutil drags in for Get_File_Id_String.
-target_link_libraries(wwlib PRIVATE wwdebug PUBLIC winmm version)
+target_link_libraries(wwlib PRIVATE wwdebug)
+if(ZH_PLATFORM_WINDOWS)
+  # winmm: timeGetTime/timeBeginPeriod.  version: verchk.cpp's GetFileVersionInfo,
+  # which Wwutil drags in for Get_File_Id_String.  Both are Windows import libraries; B2 replaces
+  # the first with a platform clock and B3 the second.
+  target_link_libraries(wwlib PUBLIC winmm version)
+endif()
 
 # ---- wwsaveload -----------------------------------------------------------
-add_library(wwsaveload STATIC
+add_library(wwsaveload STATIC ${ZH_NOT_YET_PORTABLE}
   ${WW}/WWSaveLoad/definition.cpp          ${WW}/WWSaveLoad/definitionfactory.cpp
   ${WW}/WWSaveLoad/definitionfactorymgr.cpp ${WW}/WWSaveLoad/definitionmgr.cpp
   ${WW}/WWSaveLoad/parameter.cpp           ${WW}/WWSaveLoad/persistfactory.cpp
@@ -198,6 +294,14 @@ add_library(wwsaveload STATIC
   ${WW}/WWSaveLoad/twiddler.cpp            ${WW}/WWSaveLoad/wwsaveload.cpp)
 target_include_directories(wwsaveload PUBLIC ${WW}/WWSaveLoad PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/Wwutil)
 target_link_libraries(wwsaveload PRIVATE wwdebug wwlib wwmath)
+
+# ===========================================================================
+# Windows only, from here down to dx9_smoke: every target in this block links d3d9, d3d11 or dxgi,
+# or is built out of something that does.  Nothing is removed and nothing is stubbed - tracks D2
+# through D5 abstract the backend interface and add a Metal one behind the same seam, and they
+# bring these back one at a time.  Left unindented so the diff that added the guard is the guard.
+# ===========================================================================
+if(ZH_PLATFORM_WINDOWS)
 
 # ---- d3dx9runtime ---------------------------------------------------------
 # The D3DX9 entry points the renderer binds at run time, in a library of their own
@@ -385,12 +489,17 @@ set_target_properties(eip_sampler PROPERTIES CXX_STANDARD 17)
 # Libraries/DirectX/Include.
 add_executable(dx9_smoke ${WW}/WW3D2/test_dx9_smoke.cpp)
 target_link_libraries(dx9_smoke PRIVATE d3dx9runtime user32)
+endif()  # ZH_PLATFORM_WINDOWS - renderer, Direct3D 9/11 backends, dx9_smoke
 
 # ===========================================================================
 # Phase 2 - remaining support libs.  None of these touch DX8.
 # ===========================================================================
 set(LIBSRC ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source)
 
+# The next three link Windows import libraries and nothing else stands in for them yet: debug wants
+# dbghelp and comctl32, profile is built on debug, and wwdownload is FTP over winsock.  C5 replaces
+# the crash reporting and B6 decides what wwdownload becomes on macOS.
+if(ZH_PLATFORM_WINDOWS)
 # ---- debug ----------------------------------------------------------------
 # EA's in-repo debug/logging lib (RTS.dsp links it as debug.lib).  Self-contained
 # apart from the Win32 SDK.  The test1-6/, netserv/ and debug_dlg/ subdirs are
@@ -429,6 +538,7 @@ add_library(wwdownload STATIC
   ${WW}/WWDownload/registry.cpp ${WW}/WWDownload/urlBuilder.cpp)
 target_include_directories(wwdownload PUBLIC ${WW}/WWDownload ${WW})
 target_link_libraries(wwdownload PUBLIC wsock32 winmm)
+endif()  # ZH_PLATFORM_WINDOWS - debug, profile, wwdownload
 
 # ---- benchmark ------------------------------------------------------------
 # BYTEmark sources are missing; benchmark_stub.c stands in for them.  See the
@@ -437,6 +547,9 @@ add_library(benchmark STATIC ${LIBSRC}/Benchmark/benchmark_stub.c)
 target_include_directories(benchmark PUBLIC ${LIBSRC}/Benchmark)
 
 # ---- eabrowserdispatch ----------------------------------------------------
+# MIDL is a Windows SDK tool and this whole library is its output, so there is nothing to generate
+# on a Mac.  B6 puts a null WebBrowser in Stubs/ for the macOS side.
+if(ZH_PLATFORM_WINDOWS)
 # Only BrowserDispatch.idl shipped; the .h/_i.c that GameEngine's WebBrowser.h
 # expects are MIDL output.  Generate them at build time (MSBuild puts cl.exe,
 # MIDL's preprocessor, on PATH) into a dir laid out so the shipped
@@ -461,8 +574,13 @@ add_library(eabrowserdispatch STATIC
   ${EABD_GEN}/BrowserDispatch_i.c ${EABD_GEN}/BrowserDispatch.h)
 target_include_directories(eabrowserdispatch
   PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/generated)
+endif()  # ZH_PLATFORM_WINDOWS - MIDL-generated browser dispatch
 
 # ---- gamespy --------------------------------------------------------------
+# Windows for now, and only for now: the SDK is CMake-based and portable, and B6 is the task that
+# tries it for real on macOS rather than stubbing it.  Until then a Mac configure does not need the
+# vendored SDK on disk, which is why the guard is around add_subdirectory and not just the flags.
+if(ZH_PLATFORM_WINDOWS)
 # PLAN.md called for hand-written stubs behind the five GameSpy* libs, but the
 # real SDK is open source (TheSuperHackers/GamespySDK, itself CMake-based), so
 # vendor and build it instead: correct signatures, structs and enum values
@@ -475,6 +593,7 @@ set(GS_SECURESECONNECT  OFF CACHE BOOL "" FORCE)
 set(GS_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
 set(GS_INCLUDE_VOICE    OFF CACHE BOOL "" FORCE)
 add_subdirectory(${LIBSRC}/GameSpy ${CMAKE_CURRENT_BINARY_DIR}/gamespy)
+endif()  # ZH_PLATFORM_WINDOWS - GameSpy SDK
 
 # d3d8to9 is no longer built.  It was a d3d8.dll next to generals.exe that translated
 # every D3D8 call to Direct3D 9, which is how the renderer ran on a modern runtime
@@ -512,7 +631,9 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 list(REMOVE_ITEM GAMEENGINE_SOURCES
   ${GE}/Source/GameNetwork/GameSpyGameInfo.cpp)
 
-add_library(gameengine STATIC ${GAMEENGINE_SOURCES})
+# ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.
+# The link list below is left exactly as it is on purpose - B6 owns it.
+add_library(gameengine STATIC ${ZH_NOT_YET_PORTABLE} ${GAMEENGINE_SOURCES})
 target_include_directories(gameengine PUBLIC
   ${GE}/Include ${GE}/Include/Precompiled
   ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
@@ -540,6 +661,12 @@ target_link_libraries(gameengine PUBLIC
 # ===========================================================================
 # Phase 4 - GameEngineDevice + Main -> generals.exe
 # ===========================================================================
+# All of Phase 4 is Windows: Win32Device is the platform layer, the audio and video backends are
+# XAudio2 and a Windows FFmpeg build linked from .lib files, and generals.exe itself is a WIN32
+# subsystem binary started from WinMain.  C1 through C4 build the macOS equivalents, one at a
+# time, and this guard is what they open up.  The block is left unindented so that the diff which
+# added the guard is the guard.
+if(ZH_PLATFORM_WINDOWS)
 set(GED ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice)
 set(STUBS ${CMAKE_CURRENT_SOURCE_DIR}/Stubs)
 
@@ -687,6 +814,7 @@ set(FFMPEG_RUNTIME
 add_custom_command(TARGET generals POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
           ${FFMPEG_RUNTIME} ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+endif()  # ZH_PLATFORM_WINDOWS - GameEngineDevice, the backends and generals.exe
 
 # ===========================================================================
 # Tests.  Run with:  ctest --test-dir build -C Release --output-on-failure
@@ -700,32 +828,51 @@ set(TESTS ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
 add_library(test_harness STATIC ${TESTS}/test_main.cpp)
 target_include_directories(test_harness PUBLIC ${TESTS})
 
-# add_lib_test(<name> <libs...>) -> Tests/<name>.cpp, built and registered.
+# add_lib_test(<name> [PENDING_MACOS] <libs...>) -> Tests/<name>.cpp, built and registered.
+#
+# PENDING_MACOS says the test's libraries are ones the macOS port has not brought up yet.  On a Mac
+# the executable is still defined - tasks B1-B6 need something to compile - but it stays out of the
+# default build and out of ctest, because a test that cannot be linked is not a failing test, it is
+# a test that does not exist here yet.  On Windows the keyword changes nothing at all.
 function(add_lib_test name)
-  add_executable(${name} ${TESTS}/${name}.cpp)
-  target_link_libraries(${name} PRIVATE test_harness ${ARGN})
-  add_test(NAME ${name} COMMAND ${name})
+  set(libs ${ARGN})
+  set(exclude "")
+  if("PENDING_MACOS" IN_LIST libs)
+    list(REMOVE_ITEM libs PENDING_MACOS)
+    set(exclude "${ZH_NOT_YET_PORTABLE}")
+  endif()
+  add_executable(${name} ${exclude} ${TESTS}/${name}.cpp)
+  target_link_libraries(${name} PRIVATE test_harness ${libs})
+  if(exclude STREQUAL "")
+    add_test(NAME ${name} COMMAND ${name})
+  endif()
 endfunction()
 
-add_lib_test(test_wwmath wwmath wwlib wwsaveload wwdebug)
+add_lib_test(test_wwmath PENDING_MACOS wwmath wwlib wwsaveload wwdebug)
 target_include_directories(test_wwmath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
 
-add_lib_test(test_wwlib wwlib wwmath wwsaveload wwdebug)
+add_lib_test(test_wwlib PENDING_MACOS wwlib wwmath wwsaveload wwdebug)
 target_include_directories(test_wwlib PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWSaveLoad ${WW}/Wwutil)
 # generals.exe is linked /LARGEADDRESSAWARE, and that flag changes what
 # GlobalMemoryStatus saturates its 32-bit fields to (0xFFFFFFFF, not 0x7FFFFFFF).
 # cpudetect_memory_fits_in_the_signed_int_its_callers_use only means anything in a
 # binary that sees the same value the game does.
-target_link_options(test_wwlib PRIVATE /LARGEADDRESSAWARE)
+# A cl.exe linker switch, so it asks the compiler rather than the platform.
+if(MSVC)
+  target_link_options(test_wwlib PRIVATE /LARGEADDRESSAWARE)
+endif()
 
-add_lib_test(test_wwsaveload wwsaveload wwlib wwmath wwdebug)
+add_lib_test(test_wwsaveload PENDING_MACOS wwsaveload wwlib wwmath wwdebug)
 target_include_directories(test_wwsaveload PRIVATE ${WW}/WWSaveLoad ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/Wwutil)
 
-add_lib_test(test_wwutil wwutil wwmath wwlib wwdebug)
+add_lib_test(test_wwutil PENDING_MACOS wwutil wwmath wwlib wwdebug)
 target_include_directories(test_wwutil PRIVATE ${WW}/Wwutil ${WW}/WWLib ${WW}/WWMath)
 
 add_lib_test(test_compression compression)
 
+# Every test from here to test_pixelcentre links the renderer or a Direct3D backend, so they exist
+# only where those targets do.  D2 through D5 bring the Metal side back with tests of its own.
+if(ZH_PLATFORM_WINDOWS)
 add_lib_test(test_ww3d2 ww3d2 wwsaveload wwlib wwmath wwdebug)
 target_include_directories(test_ww3d2 PRIVATE
   ${WW}/WW3D2 ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/WWSaveLoad ${WW}/Wwutil)
@@ -750,17 +897,21 @@ add_lib_test(test_dx11texture dx11texture dx11device user32)
 # Both runtimes in one binary, so where a triangle edge lands is a measurement rather than a reading
 # of two sets of documentation that describe the same thing in different words.
 add_lib_test(test_pixelcentre dx11backend dx11resource dx11device d3d9 user32)
+endif()  # ZH_PLATFORM_WINDOWS - renderer and Direct3D backend tests
 
+# wwdownload, debug and eabrowserdispatch are Windows-only libraries above, so their tests are too.
+if(ZH_PLATFORM_WINDOWS)
 add_lib_test(test_wwdownload wwdownload)
 target_include_directories(test_wwdownload PRIVATE ${WW}/WWDownload)
 
 add_lib_test(test_debug debuglib)
 
 add_lib_test(test_support benchmark eabrowserdispatch)
+endif()  # ZH_PLATFORM_WINDOWS - Windows-only support library tests
 
 # Phase 3 checkpoint: boots the memory manager, name keys and file system, then
 # runs a real INI file through the parser.
-add_lib_test(test_gameengine gameengine)
+add_lib_test(test_gameengine PENDING_MACOS gameengine)
 # the well-known Dict keys and a handful of device/exe entry points live in
 # GameEngineDevice, which Phase 4 ports; stand-ins until then.
 target_sources(test_gameengine PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
@@ -780,6 +931,8 @@ target_compile_definitions(test_gameengine PRIVATE
 # too so one command covers everything.
 add_test(NAME wwmath_selfcheck COMMAND wwmath_selfcheck)
 add_test(NAME compression_selfcheck COMMAND compression_selfcheck)
+# The device and codec smoke tests below belong to targets only a Windows configuration defines.
+if(ZH_PLATFORM_WINDOWS)
 # dx9_smoke creates a device the way the renderer does, with nothing next to it to
 # translate anything, and puts the D3D8 calls that have no D3D9 counterpart through their
 # replacements.  "-msaa 4" adds the multisampled back buffer and the plain render target
@@ -807,6 +960,7 @@ target_link_libraries(miles_smoke PRIVATE milesaudio)
 # From Run/, where the FFmpeg DLLs the backend decodes with are.
 add_test(NAME miles_smoke COMMAND miles_smoke
          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../Run)
+endif()  # ZH_PLATFORM_WINDOWS - device and codec smoke tests
 
 # Tools/bigfile.py reads and writes the game's BIG archives (that is how the shipped INIs
 # come out for editing).  Its selfcheck round-trips synthetic files, so it needs no game
@@ -858,8 +1012,10 @@ endif()
 
 if(RELEASE_DEBUG_LOGGING)
   target_compile_definitions(gameengine PRIVATE RELEASE_DEBUG_LOGGING)
-  target_compile_definitions(gameenginedevice PRIVATE RELEASE_DEBUG_LOGGING)
-  target_compile_definitions(generals PRIVATE RELEASE_DEBUG_LOGGING)
+  if(ZH_PLATFORM_WINDOWS)
+    target_compile_definitions(gameenginedevice PRIVATE RELEASE_DEBUG_LOGGING)
+    target_compile_definitions(generals PRIVATE RELEASE_DEBUG_LOGGING)
+  endif()
 endif()
 
 # THREADING-ROADMAP.md section 0: the measurement build.  EA's PerfGather call sites are all
@@ -875,12 +1031,18 @@ endif()
 option(PERF_TIMERS "Compile EA's PerfGather scopes in (measurement build, not for shipping)" OFF)
 if(PERF_TIMERS)
   target_compile_definitions(gameengine PRIVATE PERF_TIMERS)
-  target_compile_definitions(gameenginedevice PRIVATE PERF_TIMERS)
-  target_compile_definitions(generals PRIVATE PERF_TIMERS)
-  # A measurement build is not the build anyone plays, and its post-build step copies into the
-  # same Run/ directory the shipping one does.  Renaming the output keeps the two side by side -
-  # which is also the only way to measure one against the other without rebuilding in between
-  # (ai-batch.ps1 -Exe takes the name).
-  set_target_properties(generals PROPERTIES OUTPUT_NAME generals_perf)
-  message(STATUS "PERF_TIMERS ON - measurement build, timers cost real time; exe is generals_perf.exe")
+  # gameenginedevice and generals are only defined in a Windows configuration; see the platform
+  # split at the top of this file.
+  if(ZH_PLATFORM_WINDOWS)
+    target_compile_definitions(gameenginedevice PRIVATE PERF_TIMERS)
+    target_compile_definitions(generals PRIVATE PERF_TIMERS)
+    # A measurement build is not the build anyone plays, and its post-build step copies into the
+    # same Run/ directory the shipping one does.  Renaming the output keeps the two side by side -
+    # which is also the only way to measure one against the other without rebuilding in between
+    # (ai-batch.ps1 -Exe takes the name).
+    set_target_properties(generals PROPERTIES OUTPUT_NAME generals_perf)
+    message(STATUS "PERF_TIMERS ON - measurement build, timers cost real time; exe is generals_perf.exe")
+  else()
+    message(STATUS "PERF_TIMERS ON - measurement build, timers cost real time")
+  endif()
 endif()

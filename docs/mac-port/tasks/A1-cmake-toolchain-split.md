@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** nothing
 - **Blocks:** B1 B2 B3 B4 B5
-- **Status:** not started
+- **Status:** blocked: configure is done; the four libraries need B3 and B5 first (see Notes)
 - **Size:** one file, `GeneralsMD/Code/CMakeLists.txt` (~810 lines), plus a new toolchain include
 
 ## Why
@@ -93,6 +93,72 @@ identical in effect.
 - Do not delete the MSVC comments. Move them, and add why they are Windows-only.
 - Do not add `-w` or `-Wno-everything`. The warnings clang finds in this tree are worth reading
   once; B3 and B5 will act on some of them.
+
+## What was done, and what turned out to be wrong
+
+`cmake -S GeneralsMD/Code -B build-mac -DCMAKE_BUILD_TYPE=Release` configures clean on an arm64 Mac
+(CMake 4.4.3, AppleClang 21.0.0), which is what B1-B5 were waiting for. The flag set went in as
+specified, plus `-fsigned-char`: MSVC's plain `char` is signed and this code compares one against
+zero, and although Darwin/arm64 already signs it — unlike the ARM EABI — pinning a default that
+matters to the simulation costs one line and stops it being a discovery.
+
+`-ffp-contract=off` was measured rather than assumed. Compiling `a * b + c` with the exact flags
+CMake generates for `wwmath`:
+
+| Flags | arm64 output |
+|:--|:--|
+| as configured | `fmul` then `fadd` — two roundings, as MSVC does |
+| same, minus `-ffp-contract=off` | `fmadd` — one rounding |
+
+Two contractions in a two-line file, so the flag is doing the only job it exists for. E1 still owns
+proving it holds across the whole simulation.
+
+**The "Done when" build cannot be reached from this task.** The four libraries it names are not
+portable, and the plan has A1 -> B3/B5 while this half of A1 needs B3 and B5. Measured:
+
+| Target | What stops it | Owner |
+|:--|:--|:--|
+| `wwdebug` | all three sources `#include <windows.h>`; `wwmemlog.cpp` also wants `<intrin.h>`; `wwprofile.cpp` also wants `systimer.h`, `cpudetect.h`, `rawfile.h`, `ffactory.h` — i.e. the whole of `wwlib` | B2 B3 B5 B6 |
+| `wwutil` | `miscutil.cpp` includes `win.h`, `mmsys.h`, `rawfile.h`, `ffactory.h` | B3 B6 |
+| `wwmath` | nothing of its own. Two `.cpp` reach a `wwlib` Windows header; the rest is clean, and every `<float.h>` in it is standard | — |
+| `compression` | `BaseType.h`'s `__int64`, `#include <windef.h>` and `#include <emmintrin.h>` (SSE2 on arm64) | B5 |
+| shared by all four | `always.h` uses `size_t` with no `<stddef.h>` and spells `__cdecl` 13 times; `vector.h` includes `<new.h>` rather than `<new>` | B3 |
+
+So `wwmath` is the one that is genuinely nearly ready, and it is the one the task file says is the
+meaningful one — but it cannot link `wwmath_selfcheck` until `wwdebug` compiles, and `wwdebug`
+needs a `windows.h` story. The right order is A1 -> B3 + B5 -> the four libraries and the two
+self-checks, not A1 -> all of it.
+
+## Three things found on the way that belong to other tasks
+
+- **Backslash `#include` paths.** `#include "..\..\..\..\gameengine\include\common\debug.h"`
+  in `WWDebug/wwdebug.h` — MSVC takes either separator, clang takes only `/`. Fixed here because it
+  was the first error out of the compiler and `wwdebug` is on this task's critical path; the real
+  spelling on disk went in with it, so a case-sensitive volume works too. **There are about 150
+  more**, almost all in `GameEngine/Source/GameLogic/Object/Update/` (`SpectreGunshipUpdate.cpp`
+  alone has 30), plus `WWAudio/WWAudio.cpp` and `WW3D2/textdraw.h`. No task in this plan owns them
+  and every one of them is a hard error under clang. B1 will hit them first.
+- **A 64-bit truncation in `Compression/EAC/huffencode.cpp:1053`.** `((int) bptr1 - (int) EC->buffer)`
+  casts two 64-bit pointers to `int` and subtracts. MSVC makes that warning C4311 and the Windows
+  x64 build gets the right answer by accident, because truncating both before subtracting is correct
+  modulo 2^32 for a small difference. clang makes it an error. `(int)(bptr1 - EC->buffer)` is the
+  same value on both. Belongs to B5.
+- **zlib 1.1.4 does not typedef `Byte` on a Mac.** `zconf.h:213` is
+  `#if !defined(MACOS) && !defined(TARGET_OS_MAC)`, because Apple's `MacTypes.h` owns that name —
+  and `TARGET_OS_MAC` arrives transitively through the system headers. Under `Z_PREFIX` the typedef
+  would have been `z_Byte`, so Apple's `Byte` does not stand in for it and every zlib translation
+  unit fails. It cannot be fixed in-repo: `zconf.h` is vendored and gitignored. **A2 has to patch it
+  as it fetches**, and no compile definition can substitute, because the guard tests `defined()`.
+
+## What the macOS configuration builds today
+
+`wwdebug wwutil wwmath compression` and the two self-checks are still in the default build and still
+fail — deliberately, so the gap stays visible. What does build and pass: `benchmark`, and all seven
+of the `Tools/*.py` selfchecks under `ctest`. Defined but held out of the default build until their
+tasks land: `wwlib`, `wwsaveload`, `gameengine`, `test_wwmath`, `test_wwlib`, `test_wwsaveload`,
+`test_wwutil`, `test_gameengine`. Not defined on macOS at all: the renderer, both Direct3D backends,
+`gameenginedevice`, `generals`, the Miles and Bink backends, MIDL's browser dispatch, the GameSpy
+SDK, `debug`, `profile`, `wwdownload` and every test belonging to them.
 
 ## Notes
 
