@@ -35,6 +35,25 @@ What is left is small, specific, and has to be proved rather than assumed:
 - **Struct layout**, which B4's `#pragma pack` asserts cover, and **`WideChar` width**, which B1's
   CRC test covers.
 
+## What this task can and cannot do right now
+
+**Read this before scoping the work.** There is no Windows machine on this project, and E1 was
+designed around having one. Its central experiment — same seed, both platforms, same checksum —
+**cannot be performed**. See [`../WINDOWS-DEBT.md`](../WINDOWS-DEBT.md).
+
+What remains possible, and is still worth doing:
+
+- Everything in steps 1 and 2 below (the libm sweep and the FMA contraction check). These are
+  single-platform tests and they are the ones most likely to catch a real bug early.
+- Step 3 becomes: run the headless skirmish on macOS, **record** the checksums for a set of seeds,
+  and commit them as the Mac baseline. Self-consistency across runs on one machine is a genuine
+  property worth testing — it catches uninitialised memory, map iteration order and address-
+  dependent behaviour, which are real bugs this would find.
+
+What is **not** established by any of that: whether a Mac build desyncs against a Windows one. Do
+not describe this task's output as determinism parity, in a commit message, a test name or a
+comment. Name the committed values `mac_baseline_*` so nobody later mistakes them for agreed ones.
+
 ## Do
 
 1. Extend `simulation_uses_no_runtime_trig` to cover the rest of libm: `powf`, `expf`, `logf`,

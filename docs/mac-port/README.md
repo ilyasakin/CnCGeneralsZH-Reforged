@@ -165,7 +165,7 @@ you start. That commit is the lock.
 | D3 | [Shader generators emit an IR](tasks/D3-shader-generators-ir.md) | M3 | D2 | not started | |
 | D4 | [Metal backend](tasks/D4-metal-backend.md) | M4 | D3 | not started | |
 | D5 | [Texture formats](tasks/D5-texture-formats.md) | M4 | D4 | not started | |
-| E1 | [Determinism gate](tasks/E1-determinism-gate.md) | M1 | B6 | not started | |
+| E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | not started | |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
@@ -174,9 +174,31 @@ Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, 
 
 These are not style preferences. Breaking one of them costs somebody else a day.
 
-1. **The Windows build never regresses.** Every commit here configures, builds and passes `ctest`
-   on Windows. A change that only compiles on Mac is not finished. If you cannot build Windows,
-   say so in the pull request and someone who can will check it before merge.
+1. **The Windows build never regresses — but nobody here can prove it.** Read this whole rule
+   before your first commit; it overrides the "Windows full build and `ctest` green" line in every
+   task file.
+
+   **There is no Windows machine on this project.** Decided 2026-09-22, with the risk accepted
+   deliberately and knowingly. Windows verification is therefore **deferred, not waived**. What
+   that means for you, concretely:
+
+   - You still must not knowingly break Windows. Before you change a line, read the MSVC branch
+     around it. Most of the MSVC-specific code in this tree carries a comment explaining why it is
+     there; those comments are the closest thing to a Windows reviewer you have.
+   - Platform-specific changes go behind the platform guard, and the **Windows branch keeps its
+     existing behaviour unchanged**. When you move an MSVC flag or an `#ifdef`, the goal is that a
+     Windows build produces the same compiler command line it did before. Say so in the PR and
+     show the reasoning.
+   - **Every change you cannot verify gets a line in [`WINDOWS-DEBT.md`](WINDOWS-DEBT.md).** That
+     file is the whole point of accepting this risk with open eyes: it converts an invisible
+     problem into a list somebody can work through in an afternoon once a Windows machine exists.
+     A task is not done until its debt is written down.
+   - **Do not claim verification you did not perform.** Write "not verified on Windows" in the pull
+     request, plainly. A green Mac build described as if it were both is how this port silently
+     forks into two games.
+
+   The moment a Windows machine or a CI runner appears, E2 is promoted to the top of the queue and
+   `WINDOWS-DEBT.md` is worked from the top down.
 
 2. **No `#ifdef _WIN32` scattered through game code.** Platform differences go behind a named
    header with a reason in its comment, the way `dettrig.h` does it. If you are adding the tenth
