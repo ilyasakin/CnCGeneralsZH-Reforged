@@ -43,6 +43,73 @@ There is no version of this port where B1 is skipped or deferred.
   `wsprintf` 6, `wcstrim` 4, `wcsicmp` 3, `wcscat` 3, `swprintf` 3, and singles of `wcspbrk`,
   `wcstol`, `wcstok`, `wcstod`, `wcsspn`, `wcsrchr`, `wcsnicmp`, `wcsncmp`, `wcslcpy`
 
+## Recon findings, 2026-09-22 — several of this file's numbers were wrong
+
+Survey at `docs/mac-port/B1-widechar-survey.md`. Corrections, and two things this file missed
+entirely.
+
+**Counts.** "724 `L"` literals" came from a naive grep that also counted narrow strings ending in
+a capital L (`"ALL"`, `"CONTROL"`). The real figure is **~533 wide string literals in 80 files**,
+and **57** files name `WideChar`, not 48.
+
+**The "handful" bound to Win32 wide APIs is 14 literals on 10 lines in 3 files** — and my guess at
+which files was wrong. There is no `L"..."` near a `MessageBoxW` or a registry call; the registry
+code is all `AsciiString`/`TCHAR`. The real set is `EarlyCommandLine.h`'s four callers
+(`WinMain.cpp:1242`, `Debug.cpp:168`, `Debug.cpp:403`, `JobSystem.cpp:113` — that header is
+deliberately `wchar_t` throughout because `WinMain` tokenises `lpCmdLine` in place, so
+`GetCommandLineA` is truncated), plus `urllaunch.cpp` and `simpleplayer.cpp`, which are `LPWSTR`
+shell-association code that never mentions `WideChar`.
+
+**Consequence for the shim, and it is load-bearing:** because those files call the real `wcsstr`,
+`wcscpy` and friends on real `LPWSTR`s, `WideCharFns.h` **must not be macros over the `wcs*`
+names**, and should not be overloads on them either. Use distinct names. `Language.h:77-99` already
+defines twenty `Game*` macros over the CRT wide functions and only five are called — repoint those
+twenty at the new header in one commit and the live call sites port themselves.
+
+**MISSED ENTIRELY: 1,016 wide CHARACTER literals (`L'x'`), 914 of them in `Keyboard.cpp`.** These
+**convert silently** — `L'x'` to `char16_t` is an integral conversion with no diagnostic — so
+unlike the string literals, the compiler will not hand you this worklist. Two need a human:
+`Keyboard.cpp:467` is U+FFFD, a mojibake'd euro on the UK layout, and MSVC and clang already
+disagree about it because nothing passes `/utf-8`; `NetworkUtil.cpp:451-463` tests
+`L'\xd800'`–`L'\xdfff'`, which is code that means "this is UTF-16".
+
+**MISSED: ~140 `%ls`/`%ws`/`%S` specifiers, 91 of them in NARROW format strings** being handed a
+`WideChar*`. `printf("%ls", p)` promises the CRT a `wchar_t*`; on Windows with `char16_t` that
+stays true by layout accident, and on macOS the CRT reads the buffer as UCS-4 and prints garbage.
+**This compiles clean on both platforms.** Four are `CRCDEBUG_LOG` in `Player.cpp` — so leaving
+them alone removes the instrument you would use to debug the very desync B1 exists to prevent. It
+need not be fixed in B1; it must be **decided** in B1.
+
+**My `sizeof(WideChar)` list was correct but incomplete.** Four more literal sites, of which
+`NetPacket.cpp:365` and `:5109` belong next to `XferCRC.cpp:355` in the argument above — they size
+a `WideChar` argument in the **lockstep command stream**. Plus twelve sites that say it another way
+(`* 2`, `/ 2`, `sizeof(UnsignedShort)`) and work only because the widths coincide under MSVC;
+`UnicodeString.cpp:350` is a bare magic `2` inside the string class itself.
+
+**Three format funnels, not one.** `_vsnwprintf` (5 sites) is the one this file named. Also
+`swscanf` (`NetworkDirectConnect.cpp:122,150`) and `fwprintf` (`Recorder.cpp:590` and neighbours) —
+and that last one writes the **replay file header**, so doing it first gives B1 a canary that
+`replay-check.ps1` runs straight through. Make the funnel present MSVC's truncation contract on
+both platforms: MSVC's `_vsnwprintf` returns negative and does not terminate, C99's `vswprintf`
+returns the would-be length, and all five call sites throw `ERROR_OUT_OF_MEMORY` on negative.
+
+**One signature has to change**, and it is the only one: `ThreadUtils.cpp:33-78` allocates a
+`WideChar *dest` and returns `std::wstring ret = dest;`. No boundary cast fixes a wrong return
+type. Decide it before the sweep.
+
+`IMEManager.cpp` is the dangerous file: `ImmGetCompositionStringW` and `ImmGetCandidateListW` take
+`LPVOID`, so nothing in its Win32→`WideChar` direction produces a diagnostic, and it is also where
+the `/2` and `*2` live. Read it by hand.
+
+**Recommended order** (§6 of the survey): `Language.h` + `WideCharFns.h`, then the three format
+funnels, **then** the typedef — which generates the worklist — then the compiler's list, then the
+1,016 `L'x'` separately, then normalise the `*2` idioms, then decide the `%ls`. Steps 1, 2 and 6
+are no-ops on Windows by construction.
+
+Nothing in `GameLogic` touches a Win32 wide API. Nothing was compiled for this survey, so every
+"hard error" and "silent" claim is read off the language rules; the first clang build is what turns
+them into facts.
+
 ## Do
 
 1. `typedef char16_t WideChar`. `char16_t` is exactly 2 bytes on every conforming compiler, which
