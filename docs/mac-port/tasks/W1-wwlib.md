@@ -24,7 +24,9 @@ different attributions for `wwmath` earlier today.
 | after `bool.h` | 35 | 47 |
 | after `point.h` | 40 | 42 |
 | after B14 merged | 43 | 39 |
-| after the CRT and conformance work below | **49** | 33 |
+| after the CRT and conformance work below | 49 | 33 |
+| after guarding the Win32-only wide strings | 56 | 26 |
+| after the tail that revealed | **58** | 24 |
 
 ## What is left, and whose it is
 
@@ -119,14 +121,34 @@ width is almost irrelevant to `StringClass` itself; what matters is that the onl
 Win32 API that does not exist on macOS. A typedef would compile the header and leave a function that
 cannot link, or invite a second conversion path.
 
-Meanwhile the only in-tree callers are `widestring.h:775,782`, and `WideStringClass` genuinely does
-store a `WCHAR *m_Buffer`. That is the class B1 is converting to `char16_t`, precisely because
-`wchar_t` is 2 bytes on MSVC and 4 on clang and that width reaches the replay CRC through `Xfer.cpp`.
-Adding `typedef wchar_t WCHAR` would reintroduce the 4-byte type into a class every WWVegas target
-links — the exact bug B1 exists to prevent.
+**A correction, because this task file said something false.** It claimed that `WideStringClass`'s
+width "reaches the replay CRC through `Xfer.cpp`", and it does not. Agent 3a checked the chain and I
+verified it independently: `WideStringClass` is named nowhere in `GameEngine` or `GameEngineDevice`
+(zero files), `INIClass::Get_Wide_String` has no callers anywhere in the tree, `RegistryClass`'s
+overload is Win32-only, and `Xfer.cpp:209` is `xferUnicodeString`, which xfers a `UnicodeString`
+using `sizeof(WideChar)`. Two wide-string classes exist; **`UnicodeString` is on the lockstep path
+and `WideStringClass` is not**, and the consequence had been attached to the wrong one. Nothing
+`WideStringClass` holds reaches a file, a socket or a checksum.
 
-So this is not a shim. It is B1 arriving at `wwstring.h`/`widestring.h`, and the right answer is
-whatever B1 decides `char16_t` narrows through.
+So the Win32-API argument above is the whole reason, and it is sufficient on its own. It never needed
+the CRC claim bolted onto it — and that claim would have made the next person treat a cosmetic
+question as a lockstep one.
+
+### What was done instead
+
+3a confirmed that nothing in B1 constrains these files and that the 14 should not wait for the flip:
+the wide half of `wwstring.h` and `widestring.h` has no portable caller. So it is behind
+`#if defined(_WIN32)` — `StringClass`'s three wide declarations and their two inline definitions,
+`Copy_Wide`'s body, the whole of `WideStringClass`, and `INIClass::Get_Wide_String`, which has no
+callers at all. That unblocked 7 files directly and the rest of the tail behind them.
+
+**WW3D2's `WCHAR` is deliberately untouched.** 3a's survey had said WWVegas' wide strings were "not
+reached by `WideChar`", which is true of `wwstring.h` and `widestring.h` and false of WW3D2:
+`render2dsentence.h`, `render2d.h` and `font3d.h` carry a `WCHAR` interface that the engine reaches
+at five sites in `W3DDisplayString.cpp` and `W3DGameWindow.cpp` — one of which declares `WideChar ch`
+and passes it to `Get_Char_Spacing(WCHAR ch)` on the next line. Those are five real conversions for
+B1 to meet as compile errors, and guarding them would hide them. That correction came out of asking
+this question, which is the argument for asking rather than choosing.
 
 ## Notes
 

@@ -113,7 +113,9 @@
 #include	"pk.h"
 #include	"pipe.h"
 #include	"wwstring.h"
-#include "widestring.h"
+#if defined(_WIN32)
+#include "widestring.h"   // Get_Wide_String only; see INI.H
+#endif
 #include "nstrdup.h"
 
 #if defined(__WATCOMC__)
@@ -980,6 +982,7 @@ int INIClass::Get_UUBlock(char const * section, void * block, int len) const
 
 
 
+#if defined(_WIN32)
 /***********************************************************************************************
  * INIClass::Get_Wide_String -- Get a wide string from an .INI                                 *
  *                                                                                             *
@@ -1067,6 +1070,8 @@ bool INIClass::Put_Wide_String(char const * section, char const * entry, wchar_t
 	}
 	return(true);
 }
+#endif // _WIN32
+
 
 
 

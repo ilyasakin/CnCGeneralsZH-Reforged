@@ -54,7 +54,9 @@
 
 #include	"always.h"
 #include	"rawfile.h"
-#include	<direct.h>
+#if defined(_MSC_VER)
+#include	<direct.h>   // _mkdir, _chdir; the POSIX spellings come from the shim via always.h
+#endif
 //#include	<share.h>
 #include	<stddef.h>
 #include	<stdio.h>

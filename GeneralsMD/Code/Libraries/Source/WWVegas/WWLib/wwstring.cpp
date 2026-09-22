@@ -328,6 +328,7 @@ StringClass::Release_Resources (void)
 // Copy_Wide
 //
 ///////////////////////////////////////////////////////////////////
+#if defined(_WIN32)   // WideCharToMultiByte; see wwstring.h
 bool StringClass::Copy_Wide (const WCHAR *source)
 {
 	if (source != NULL) {
@@ -352,3 +353,4 @@ bool StringClass::Copy_Wide (const WCHAR *source)
 	// Failure.
 	return (false);
 }
+#endif
