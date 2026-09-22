@@ -196,6 +196,33 @@ you start. That commit is the lock.
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
 
+### Rule: grep the vendored sources for platform predicates
+
+Added 2026-09-22 after three instances in one afternoon, all the same shape — **a platform
+predicate that was correct when it was written and is silently wrong now** — and all three in
+**vendored third-party code, which is the code nobody reviews**:
+
+| Where | The predicate | Why it is wrong now |
+|:--|:--|:--|
+| zlib `zconf.h` | `#if !defined(MACOS) && !defined(TARGET_OS_MAC)` around the `Byte` typedef | `TARGET_OS_MAC` arrives transitively; under `Z_PREFIX` nothing stands in |
+| `gimex.h` | `#if defined(__APPLE__)` → native load of a big-endian field | 2003 shorthand for PowerPC. Apple Silicon is little-endian, so every RefPack header field was byte-swapped |
+| LZH-Light `_lzhl.h` | `#define UINT32 unsigned long` | 64 bits on LP64; the hash index runs off its table. SIGBUS on the first buffer |
+
+**None was found by reading this plan. Each was found by a compiler or a round-trip failing.** Two
+of the three corrupt data rather than fail to build, and both reach the bytes that save games and
+network packets are made of.
+
+So: before assuming a vendored library ports cleanly, grep it for `__APPLE__`, `MACOS`,
+`TARGET_OS_*`, `_WIN32`, `__BIG_ENDIAN__`, `unsigned long` and `#ifdef` around type definitions.
+Treat every one as a claim about 2003 hardware until checked.
+
+**A corollary about fixing them**, learned the same afternoon: the fix can be as
+platform-dependent as the bug. B3's `UINT32=unsigned int` compile definition is correct on Darwin
+and would probably break the Windows build — `UINT32` is an SDK *typedef* and the definition makes
+it a *macro*, so a TU reaching `windef.h` preprocesses to `typedef unsigned int unsigned int`. It
+also buys nothing there, because the header's guard is `#ifndef UINT32` and a typedef does not
+satisfy it. Guarded to non-Windows at merge.
+
 ### Defects found in the shipping Windows game
 
 Not port artefacts. These were found by porting, because porting means reading code with a compiler
