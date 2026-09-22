@@ -152,6 +152,23 @@ TEST(crcengine_byte_at_a_time_matches_block)
 	CHECK_EQ((long)drip, whole);
 }
 
+TEST(crcengine_accumulator_is_32_bits_wide)
+{
+	/* The test above cannot see the bug this one exists for.  CRCEngine's accumulator was `long`
+	   and its staging buffer was char[sizeof(long)], so on Windows it rotated within 32 bits and
+	   blocked on four bytes, and on an LP64 platform it would rotate within 64 and block on eight -
+	   computing a different CRC from the same input.  Byte-at-a-time and bulk stay equal to each
+	   other either way, so a self-consistency check passes on both and says nothing.
+
+	   The value below is the four-byte-blocking answer, which is what every Windows build has
+	   produced since 1996.  If a platform disagrees with it the CRC has changed width underneath
+	   somebody, and this fails loudly instead of a .big index or an obfuscated string quietly
+	   hashing differently. */
+	CRCEngine engine;
+	const long crc = engine("Westwood Studios", 16);
+	CHECK_EQ((unsigned long)(unsigned int)crc, 0x93b0f838UL);
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Base64
 //////////////////////////////////////////////////////////////////////////////
