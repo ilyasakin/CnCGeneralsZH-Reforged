@@ -580,9 +580,43 @@ one that needs `replay-check.ps1`.
   particularly in templates and macros, which a grep does not expand.
 - **`Generals/Code` was not surveyed.** The README puts it out of scope and it has no `CMakeLists.txt`.
   It has its own copy of `BaseType.h` with the same typedef. If it is ever built, it needs its own B1.
-- **`Libraries/Source/WWVegas`** was surveyed only far enough to establish that `wcstrim`, `wcslcpy`
-  and `widestring.h` are `wchar_t`-typed, self-contained, and not reached by `WideChar`. That is
-  enough for B1 to leave them alone; it is not enough to say they are portable, which is B6's problem.
+- **`Libraries/Source/WWVegas` — this section was wrong, and here is the correction.** It said the
+  library's wide strings are "self-contained, and not reached by `WideChar`". That is true of
+  `wwstring.h` and `widestring.h`, which is all it looked at. It is **false of `WW3D2`**, which was
+  not looked at at all, and which is where the engine draws every character of text it displays.
+
+  Three WW3D2 headers carry a `WCHAR` interface — `render2dsentence.h`, `render2d.h`, `font3d.h` —
+  and the engine reaches it at **five sites**, all in `GameEngineDevice/Source/W3DDevice/GameClient`:
+
+  | Site | Call |
+  |:--|:--|
+  | `W3DDisplayString.cpp:200` | `m_textRenderer.Build_Sentence( getText().str(), NULL, NULL )` |
+  | `W3DDisplayString.cpp:286` | `font->Get_Char_Spacing( ch )`, where line 281 declares `WideChar ch;` |
+  | `W3DDisplayString.cpp:369` | `m_textRenderer.Get_Formatted_Text_Extents( getText().str() )` |
+  | `W3DGameWindow.cpp:549` | `m_textRenderer.Build_Sentence( m_instData.getText().str(), NULL, NULL )` |
+  | `W3DGameWindow.cpp:586` | `m_textRenderer.Get_Text_Extents( m_instData.getText().str() )` |
+
+  `getText()` returns a `UnicodeString`, so every one of these hands a `const WideChar*` to a
+  `const WCHAR*` parameter. It compiles today only because both are `wchar_t`. **After the typedef
+  moves these are five hard errors**, and they belong on B1's worklist: the text being drawn is
+  engine text, so `WCHAR` in those three headers becomes `WideChar` rather than the engine
+  converting at the boundary — converting would mean a `wchar_t` buffer allocated per string per
+  frame, which is the wrong answer for the reason it is always the wrong answer.
+
+  `FontCharsClass` then follows, down to `Store_GDI_Char( WCHAR ch )` — whose name says what it is
+  and whose Windows-only rasterisation is D-track's problem, not this one.
+
+  **`wwstring.h` and `widestring.h` really are disjoint**, and the correction does not reach them.
+  `GameEngine` names `WideStringClass` zero times; `StringClass::Copy_Wide`'s only in-tree callers
+  are `widestring.h:775` and `:782`; `INIClass::Get_Wide_String` has no caller at all; and nothing
+  a `WideStringClass` holds is ever xfer'd, so its width reaches no file format and no checksum.
+  Its `WCHAR` is a Win32 convenience with no portable implementation — `Copy_Wide` is two calls to
+  `WideCharToMultiByte` — and that, rather than any width argument, is why it should not gain a
+  compatibility typedef. What it wants is a platform guard or deletion, and it is wwlib's
+  question, not B1's.
+
+- `wcstrim` and `wcslcpy` in `WWLib` are `wchar_t`-typed, used only by `widestring.h` and
+  `readline.cpp`, and unreached by `WideChar`. B1 leaves them alone.
 - **`Tests/test_gameengine.cpp`** has one `wchar_t` literal (line 8551, a command-line parsing test)
   and no `UnicodeString` round-trip coverage of the kind B1's "done when" requires. The test the task
   file asks for does not exist yet in any form to build on.
