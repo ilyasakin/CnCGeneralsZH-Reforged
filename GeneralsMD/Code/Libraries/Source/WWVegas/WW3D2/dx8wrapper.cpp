@@ -1334,11 +1334,13 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 	//must be either resetting existing device or creating a new one.
 	WWASSERT(reset_device || D3DDevice == NULL);
 
-	// The Direct3D 11 device is built beside the Direct3D 9 one rather than instead of it: 236
-	// places still call the D3D9 device directly, so taking it away would be a black screen.  It
-	// is on unless -d3d9 or -headless turned it off.  It comes first, so everything the Direct3D 9
-	// device makes has a Direct3D 11 copy, and only with a new device: a device refused at startup
-	// and created on a reset (an Alt-Tab) drew every building already standing as its shadow alone.
+	// The Direct3D 11 device is built beside the Direct3D 9 one rather than instead of it: the
+	// engine still calls the D3D9 device directly from 148 places outside this wrapper (measured
+	// 2026-09-22; docs/mac-port/D1-call-site-survey.md), so taking it away would be a black
+	// screen.  It is on unless -d3d9 or -headless turned it off.  It comes first, so everything the
+	// Direct3D 9 device makes has a Direct3D 11 copy, and only with a new device: a device refused
+	// at startup and created on a reset (an Alt-Tab) drew every building already standing as its
+	// shadow alone.
 	if (!reset_device && Direct3D11_Is_Enabled() && !Direct3D11_Is_Active()) {
 		const bool created = Direct3D11_Create((HWND)_Hwnd, ResolutionWidth, ResolutionHeight);
 		WWDEBUG_SAY(("-dx11: Direct3D 11 device %s\n", created ? "created" : "refused"));
@@ -5115,4 +5117,427 @@ const char* DX8Wrapper::Get_DX8_Blend_Op_Name(unsigned value)
 WW3DFormat	DX8Wrapper::getBackBufferFormat( void )
 {
 	return D3DFormat_To_WW3DFormat( _PresentParameters.BackBufferFormat );
+}
+
+
+/*******************************************************************************************
+** Geometry a caller builds and draws itself, and the rest of what D1 needs to stop the engine
+** reaching past this wrapper.  See dx8wrapper.h for why each of these is shaped the way it is.
+**
+** Nothing in the engine calls any of it yet.  The call sites move in their own pull requests,
+** because the acceptance test for moving one is a pixel comparison and that needs a device.
+*******************************************************************************************/
+
+OwnedGeometryClass::OwnedGeometryClass()
+	:
+	Vertices(NULL),
+	Indices(NULL),
+	VertexTwin(NULL),
+	IndexTwin(NULL),
+	VertexByteCount(0),
+	IndexCount(0),
+	VerticesAreDynamic(false),
+	IndicesAreDynamic(false)
+{
+}
+
+OwnedGeometryClass::~OwnedGeometryClass()
+{
+	Release();
+}
+
+bool OwnedGeometryClass::Create_Vertices(unsigned byte_count, bool refilled_every_frame)
+{
+	WWASSERT(Vertices==NULL);
+	if (byte_count==0) return false;
+
+	IDirect3DDevice9 * device=DX8Wrapper::_Get_D3D_Device();
+	if (device==NULL) return false;
+
+	// Write-only because nothing reads these back, and that is also what lets the Direct3D 11
+	// copy below be the only readable record of what was written.
+	DWORD usage=D3DUSAGE_WRITEONLY;
+	D3DPOOL pool=D3DPOOL_MANAGED;
+	if (refilled_every_frame) {
+		usage|=D3DUSAGE_DYNAMIC;
+		pool=D3DPOOL_DEFAULT;		// a dynamic buffer cannot live in the managed pool
+	}
+
+	// The FVF argument is zero: these vertices are described by the format or the layout the
+	// caller binds before it draws, not by the buffer.
+	if (FAILED(device->CreateVertexBuffer(byte_count, usage, 0, pool, &Vertices, NULL))) {
+		Vertices=NULL;
+		return false;
+	}
+
+	VertexByteCount=byte_count;
+	VerticesAreDynamic=refilled_every_frame;
+	VertexTwin=Direct3D11_Twin_Vertex_Buffer(byte_count, refilled_every_frame);
+	return true;
+}
+
+bool OwnedGeometryClass::Create_Indices(unsigned index_count, bool refilled_every_frame)
+{
+	WWASSERT(Indices==NULL);
+	if (index_count==0) return false;
+
+	IDirect3DDevice9 * device=DX8Wrapper::_Get_D3D_Device();
+	if (device==NULL) return false;
+
+	const unsigned byte_count=(unsigned)(index_count*sizeof(unsigned short));
+
+	DWORD usage=D3DUSAGE_WRITEONLY;
+	D3DPOOL pool=D3DPOOL_MANAGED;
+	if (refilled_every_frame) {
+		usage|=D3DUSAGE_DYNAMIC;
+		pool=D3DPOOL_DEFAULT;
+	}
+
+	if (FAILED(device->CreateIndexBuffer(byte_count, usage, D3DFMT_INDEX16, pool, &Indices, NULL))) {
+		Indices=NULL;
+		return false;
+	}
+
+	IndexCount=index_count;
+	IndicesAreDynamic=refilled_every_frame;
+	IndexTwin=Direct3D11_Twin_Index_Buffer(byte_count, refilled_every_frame);
+	return true;
+}
+
+void OwnedGeometryClass::Release()
+{
+	if (Vertices!=NULL) {
+		Vertices->Release();
+		Vertices=NULL;
+	}
+	if (Indices!=NULL) {
+		Indices->Release();
+		Indices=NULL;
+	}
+	delete VertexTwin;
+	VertexTwin=NULL;
+	delete IndexTwin;
+	IndexTwin=NULL;
+	VertexByteCount=0;
+	IndexCount=0;
+	VerticesAreDynamic=false;
+	IndicesAreDynamic=false;
+}
+
+// ----------------------------------------------------------------------------
+
+OwnedGeometryClass::VertexLockClass::VertexLockClass(OwnedGeometryClass & geometry,
+	unsigned byte_offset, unsigned byte_count, bool discard)
+	:
+	Geometry(&geometry),
+	Vertices(NULL)
+{
+	DX8_THREAD_ASSERT();
+	if (geometry.Vertices==NULL) return;
+
+	// D3DLOCK_DISCARD is only legal on a dynamic buffer; asking for it on a static one fails the
+	// lock outright, which would lose the caller's vertices silently.
+	const unsigned flags=(discard && geometry.VerticesAreDynamic) ? D3DLOCK_DISCARD : 0;
+
+	void * memory=NULL;
+	if (FAILED(geometry.Vertices->Lock(byte_offset, byte_count, &memory, flags)) || memory==NULL) {
+		return;
+	}
+
+	// With a Direct3D 11 copy the write is redirected into the copy's block and written out to
+	// both buffers on unlock; without one this answers null and the Direct3D 9 pointer stands.
+	void * redirected=DX11Lock.Begin(geometry.VertexTwin, memory, byte_offset, byte_count, flags);
+	Vertices=(redirected!=NULL) ? redirected : memory;
+}
+
+OwnedGeometryClass::VertexLockClass::~VertexLockClass()
+{
+	if (Vertices==NULL) return;
+
+	// The copy has to be written while the Direct3D 9 memory is still mapped.
+	DX11Lock.End();
+	Geometry->Vertices->Unlock();
+	Vertices=NULL;
+}
+
+OwnedGeometryClass::IndexLockClass::IndexLockClass(OwnedGeometryClass & geometry,
+	unsigned first_index, unsigned index_count, bool discard)
+	:
+	Geometry(&geometry),
+	Indices(NULL)
+{
+	DX8_THREAD_ASSERT();
+	if (geometry.Indices==NULL) return;
+
+	const unsigned flags=(discard && geometry.IndicesAreDynamic) ? D3DLOCK_DISCARD : 0;
+	const unsigned byte_offset=(unsigned)(first_index*sizeof(unsigned short));
+	const unsigned byte_count=(unsigned)(index_count*sizeof(unsigned short));
+
+	void * memory=NULL;
+	if (FAILED(geometry.Indices->Lock(byte_offset, byte_count, &memory, flags)) || memory==NULL) {
+		return;
+	}
+
+	void * redirected=DX11Lock.Begin(geometry.IndexTwin, memory, byte_offset, byte_count, flags);
+	Indices=(unsigned short *)((redirected!=NULL) ? redirected : memory);
+}
+
+OwnedGeometryClass::IndexLockClass::~IndexLockClass()
+{
+	if (Indices==NULL) return;
+
+	DX11Lock.End();
+	Geometry->Indices->Unlock();
+	Indices=NULL;
+}
+
+// ----------------------------------------------------------------------------
+
+AssembledPixelShaderClass::~AssembledPixelShaderClass()
+{
+	Release();
+}
+
+bool AssembledPixelShaderClass::Assemble(const char * source, const char * name)
+{
+	Release();
+
+	if (source==NULL) return false;
+
+	IDirect3DDevice9 * device=DX8Wrapper::_Get_D3D_Device();
+	if (device==NULL || D3DXAssembleShader==NULL) return false;
+
+	LPD3DXBUFFER compiled=NULL;
+	if (FAILED(D3DXAssembleShader(source, (UINT)strlen(source), NULL, NULL, 0, &compiled, NULL))
+		|| compiled==NULL) {
+		return false;
+	}
+
+	const HRESULT made=device->CreatePixelShader((DWORD *)compiled->GetBufferPointer(), &Shader);
+	compiled->Release();
+	if (FAILED(made)) {
+		Shader=NULL;
+		return false;
+	}
+
+	// In the same call as the creation on purpose.  Registering is what lets the backend's reports
+	// name the file a refused draw had bound, and a registration that is left out is not an error
+	// anywhere - it turns into a draw refused under a cause that names nothing.
+	Direct3D11_Register_Engine_Shader(Shader, (name!=NULL) ? name : "assembled pixel shader");
+	return true;
+}
+
+void AssembledPixelShaderClass::Release()
+{
+	if (Shader!=NULL) {
+		Shader->Release();
+		Shader=NULL;
+	}
+}
+
+// ----------------------------------------------------------------------------
+
+void DX8Wrapper::Set_Owned_Geometry(const OwnedGeometryClass & geometry, unsigned vertex_stride,
+	unsigned first_vertex_byte)
+{
+	DX8_THREAD_ASSERT();
+	WWASSERT(geometry.Vertices!=NULL);
+
+	DX8CALL(SetStreamSource(0, geometry.Vertices, first_vertex_byte, vertex_stride));
+	Direct3D11_Mirror_Stream_Source(geometry.VertexTwin, vertex_stride, first_vertex_byte);
+
+	if (geometry.Indices!=NULL) {
+		DX8CALL(SetIndices(geometry.Indices));
+		Direct3D11_Mirror_Indices(geometry.IndexTwin);
+	}
+
+	// What the device holds is no longer what this wrapper's cache says it holds.  Without this
+	// the next mesh draw would find its own buffer "already bound" and read the caller's vertices
+	// instead - which is the same shape of bug as a texture stage set behind the wrapper's back.
+	render_state_changed|=VERTEX_BUFFER_CHANGED;
+	render_state_changed|=INDEX_BUFFER_CHANGED;
+}
+
+void DX8Wrapper::Draw_Owned_Triangles(unsigned first_index, unsigned triangle_count,
+	unsigned first_vertex, unsigned vertex_count, bool as_strip)
+{
+	DX8_THREAD_ASSERT();
+	if (triangle_count==0) return;
+
+	// A strip of n triangles is n+2 indices; a list is three each.  Direct3D 9 counts primitives
+	// and the backend counts indices, so both forms are spelled out here rather than at the call
+	// sites, which had them written out by hand and not always the same way.
+	const unsigned index_count=as_strip ? (triangle_count+2) : (triangle_count*3);
+
+	DX8CALL(DrawIndexedPrimitive(
+		as_strip ? D3DPT_TRIANGLESTRIP : D3DPT_TRIANGLELIST,
+		0,						// BaseVertexIndex: the stream offset already moved the vertices
+		first_vertex,
+		vertex_count,
+		first_index,
+		triangle_count));
+
+	if (as_strip) {
+		Direct3D11_Draw_Indexed_Strip(index_count, first_index, 0);
+	}
+	else {
+		Direct3D11_Draw_Indexed_Triangles(index_count, first_index, 0);
+	}
+
+	DX8_RECORD_DRAW_CALLS();
+}
+
+void DX8Wrapper::Draw_Owned_Points(unsigned first_vertex, unsigned point_count)
+{
+	DX8_THREAD_ASSERT();
+	if (point_count==0) return;
+
+	DX8CALL(DrawPrimitive(D3DPT_POINTLIST, first_vertex, point_count));
+
+	// No mirror: the Direct3D 11 backend resolves triangles out of the fixed-function state and
+	// has no point path at all, and a point sized by D3DRS_POINTSCALE_* is not a triangle anybody
+	// can generate from what it is told.  This draw is Direct3D 9 only until something gives the
+	// backend points, and saying so here is better than mirroring it into a draw it refuses.
+	DX8_RECORD_DRAW_CALLS();
+}
+
+void DX8Wrapper::Set_Engine_Vertex_Shader(const EngineVertexShaderClass & shader)
+{
+	DX8_THREAD_ASSERT();
+
+	// The layout first, then the program: a program bound against the previous layout reads its
+	// dcl_ inputs out of a stream described the wrong way, which is zeros rather than an error.
+	if (shader.Layout!=NULL) {
+		DX8CALL(SetVertexDeclaration(shader.Layout));
+	}
+
+	Set_Vertex_Shader(shader.Shader);
+}
+
+void DX8Wrapper::Set_Assembled_Pixel_Shader(const AssembledPixelShaderClass & shader)
+{
+	Set_Pixel_Shader(shader.Shader);
+}
+
+// ----------------------------------------------------------------------------
+
+bool DX8Wrapper::Get_Render_Target_Description(unsigned & width, unsigned & height,
+	WW3DFormat & format)
+{
+	width=0;
+	height=0;
+	format=WW3D_FORMAT_UNKNOWN;
+
+	IDirect3DDevice9 * device=_Get_D3D_Device();
+	if (device==NULL) return false;
+
+	IDirect3DSurface9 * target=NULL;
+	if (FAILED(device->GetRenderTarget(PRIMARY_RENDER_TARGET, &target)) || target==NULL) {
+		return false;
+	}
+
+	D3DSURFACE_DESC description;
+	const bool described=SUCCEEDED(target->GetDesc(&description));
+	target->Release();
+	if (!described) return false;
+
+	width=description.Width;
+	height=description.Height;
+	format=D3DFormat_To_WW3DFormat(description.Format);
+	return true;
+}
+
+SurfaceClass * DX8Wrapper::Read_Back_Render_Target()
+{
+	DX8_THREAD_ASSERT();
+
+	IDirect3DDevice9 * device=_Get_D3D_Device();
+	if (device==NULL) return NULL;
+
+	IDirect3DSurface9 * target=NULL;
+	if (FAILED(device->GetRenderTarget(PRIMARY_RENDER_TARGET, &target)) || target==NULL) {
+		return NULL;
+	}
+
+	SurfaceClass * read_back=Copy_Surface_To_System_Memory(target);
+	target->Release();
+	return read_back;
+}
+
+SurfaceClass * DX8Wrapper::Read_Back_Frame()
+{
+	DX8_THREAD_ASSERT();
+
+	IDirect3DDevice9 * device=_Get_D3D_Device();
+	if (device==NULL) return NULL;
+
+	IDirect3DSurface9 * back_buffer=NULL;
+	if (FAILED(device->GetBackBuffer(PRIMARY_SWAP_CHAIN, 0, D3DBACKBUFFER_TYPE_MONO, &back_buffer))
+		|| back_buffer==NULL) {
+		return NULL;
+	}
+
+	D3DSURFACE_DESC description;
+	if (FAILED(back_buffer->GetDesc(&description))) {
+		back_buffer->Release();
+		return NULL;
+	}
+
+	// GetRenderTargetData refuses a multisampled source, and with anti-aliasing on the back buffer
+	// is exactly that.  StretchRect between two render targets of the same size is Direct3D 9's
+	// resolve, so the samples are averaged into a plain target and the read comes off that.  Miss
+	// this and a screenshot falls through to photographing the desktop.
+	IDirect3DSurface9 * source=back_buffer;
+	IDirect3DSurface9 * resolved=NULL;
+	if (description.MultiSampleType!=D3DMULTISAMPLE_NONE
+		&& SUCCEEDED(device->CreateRenderTarget(description.Width, description.Height,
+				description.Format, D3DMULTISAMPLE_NONE, 0, FALSE, &resolved, NULL))
+		&& resolved!=NULL
+		&& SUCCEEDED(device->StretchRect(back_buffer, NULL, resolved, NULL, D3DTEXF_NONE))) {
+		source=resolved;
+	}
+
+	SurfaceClass * read_back=Copy_Surface_To_System_Memory(source);
+
+	if (resolved!=NULL) resolved->Release();
+	back_buffer->Release();
+	return read_back;
+}
+
+SurfaceClass * DX8Wrapper::Copy_Surface_To_System_Memory(IDirect3DSurface9 * source)
+{
+	if (source==NULL) return NULL;
+
+	IDirect3DDevice9 * device=_Get_D3D_Device();
+	if (device==NULL) return NULL;
+
+	D3DSURFACE_DESC description;
+	if (FAILED(source->GetDesc(&description))) return NULL;
+	if (description.MultiSampleType!=D3DMULTISAMPLE_NONE) return NULL;
+
+	IDirect3DSurface9 * copy=NULL;
+	if (FAILED(device->CreateOffscreenPlainSurface(description.Width, description.Height,
+			description.Format, D3DPOOL_SYSTEMMEM, &copy, NULL)) || copy==NULL) {
+		return NULL;
+	}
+
+	if (FAILED(device->GetRenderTargetData(source, copy))) {
+		copy->Release();
+		return NULL;
+	}
+
+	SurfaceClass * surface=NEW_REF(SurfaceClass,(copy));
+	copy->Release();
+	return surface;
+}
+
+bool DX8Wrapper::Device_Is_Ready()
+{
+	IDirect3DDevice9 * device=_Get_D3D_Device();
+	if (device==NULL) return false;
+
+	// Asked of the device, not of Is_Device_Lost: that flag is what the last present reported, and
+	// the four callers ask this before building geometry, which can be a long way from a present.
+	// Deliberately not a DX8CALL - a lost device is the answer here, not an error to log.
+	return device->TestCooperativeLevel()==D3D_OK;
 }

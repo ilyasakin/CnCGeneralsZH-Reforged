@@ -19,7 +19,7 @@
 /*
 ** The fixed-function texture stages, written out as HLSL.
 **
-** D3D11 has no texture stage combiners, so RENDERER-ROADMAP.md's phase 2 has to say in a shader
+** D3D11 has no texture stage combiners, so the Direct3D 11 backend has to say in a shader
 ** what the stages were computing.  -ffprobe counted what the game actually asks for across four
 ** maps: 28 distinct combiner programs, never more than two stages, and a vocabulary of five
 ** operations over four arguments.  This turns one of those descriptions into the shader.
