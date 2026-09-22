@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A2
 - **Blocks:** nothing
-- **Status:** not started
+- **Status:** claimed
 - **Size:** one new script, ~120 lines, mirroring `build.bat`
 
 ## Why
