@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** in review — mac-port-B3 (renames and shim done; four findings handed on)
+- **Status:** in review — mac-port-B3
 - **Size:** `stricmp` 71 files, `_snprintf` 12, `_vsnprintf` 8, `_stricmp` 5, `_access` 4,
   `_mkdir` 1, `__int64` 22
 
@@ -160,6 +160,44 @@ sweeps must exclude it.
 The other one: a case-sensitive grep for `_Interlocked` missed `_interlockedbittestandset`, and two
 committed comments claimed a file named no intrinsic when it named that one. Search for MSVC
 intrinsics case-insensitively.
+
+## Late additions
+
+**`compression_selfcheck` passes all six codecs on arm64** once B5's one-line `<windef.h>` guard on
+`BaseType.h` is in. Two runtime defects had to be fixed to get there, and neither was findable before
+the library linked — which is the argument for landing a library, not just compiling one:
+
+- `gimex.h`'s `ggetm`/`gputm` read and write a big-endian field with a single native load or store
+  under `#if defined(__APPLE__)`. True in 2003, when `__APPLE__` meant PowerPC. On Apple Silicon the
+  macro is still defined and the machine is not big-endian, so every two- and four-byte RefPack
+  header field was silently byte-swapped: the round-trip returned 1131375981 bytes for a 65536-byte
+  buffer. The guard now asks about byte order, which is what the code depends on.
+- LZH-Light's `_lzhl.h` says `#define UINT32 unsigned long` — 32 bits on LLP64, 64 on LP64. `LZHASH`
+  and `LZPOS` are both `UINT32`, so at 64 bits the hash index runs past the end of its table and
+  `LZHLCompressor::compress` walks into unmapped memory. SIGBUS on the first buffer. Fixed from
+  CMake rather than by patching the vendored header, which `vendor.sh` would re-fetch over.
+
+Both reach the compressed bytes that save games and network packets are made of, so they are parity
+defects rather than merely portability ones. Same class as B10's `unsigned long`, now with an actual
+crash and an actual silent corruption behind it rather than a theoretical risk.
+
+**`DetRound::To_Long` matches x86 for every input, not just the reachable ones.** Agent 21's E3
+harness cross-compiles the header to x86_64 and runs the real instructions under Rosetta; it found
+two defects the 400,000-value sweep here could not. The fix took the arm64 branch from 10 unrecorded
+differences to 0.
+
+The reason the sweep could not find them is the part worth keeping: its reference was the C library's
+round-to-nearest, and the C library on this machine has the same 64-bit `long` and the same
+saturation as the arm64 code under test. Reference and code agreed with each other while both
+differed from x86. **A reference that shares the property under test proves nothing about it.** That
+paragraph is now in `DetRound.h` itself.
+
+**`<malloc.h>` and `<tchar.h>`** are shimmed, which unblocked `FastAllocator.h`, `ini.cpp`,
+`TARGA.CPP`, `GameMemory.h` and `wwstring.h`. Only `_alloca` was actually wanted from `malloc.h`, at
+`chunkio.h`'s read macro and `ini.cpp`'s line buffer. `TCHAR` is narrow because `_UNICODE` is defined
+nowhere in this build; the shim `#error`s if that changes rather than following it into B1's and
+B15's territory. Inventoried and untouched, all in files no macOS target builds yet: `<io.h>` ×11,
+`<direct.h>` ×4, `<process.h>` ×4, `<crtdbg.h>` ×2, three of them in `PreRTS.h` and B5's.
 
 ## Do not
 
