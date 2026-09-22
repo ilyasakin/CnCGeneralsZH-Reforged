@@ -122,6 +122,10 @@
 // Fundamental type definitions
 //--------------------------------------------------------------------
 #include <stdint.h>   // int64_t and uint64_t, for Int64/UnsignedInt64 below
+// __forceinline on the four inline helpers further down, and the CRT spellings for everything
+// that reaches this header - which is most of GameEngine, and all of compression.  always.h
+// brings the same header to WWVegas; this is the other door into it.
+#include "Platform/MSVCCompat.h"
 typedef float							Real;							// 4 bytes 
 typedef int								Int;							// 4 bytes 
 typedef unsigned int			UnsignedInt;	  	// 4 bytes
