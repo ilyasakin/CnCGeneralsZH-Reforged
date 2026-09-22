@@ -31,6 +31,7 @@
 
 #define DEFINE_SHADOW_NAMES
 
+#include "Lib/WideCharFns.h"
 #include "Common/ActionManager.h"
 #include "Common/DrawnPath.h"
 #include "Common/GameAudio.h"
@@ -3450,7 +3451,9 @@ void InGameUI::message( AsciiString stringManagerLabel, ... )
 	WideChar buf[ UnicodeString::MAX_FORMAT_BUF_LEN ];
   // truncate rather than throw: an uncaught engine exception aborts with 0xC0000409 and no log
   // at all, so an over-long chat or script message used to be a silent hard crash.
-  if( _vsnwprintf(buf, sizeof( buf )/sizeof( WideChar ) - 1, stringManagerString.str(), args ) < 0 )
+  // WideCharFormatV, not _vsnwprintf: buf is WideChar and there is no char16_t printf anywhere.
+  // It keeps _vsnwprintf's contract, so the negative test below still means "it did not fit".
+  if( WideCharFormatV(buf, sizeof( buf )/sizeof( WideChar ) - 1, stringManagerString.str(), args ) < 0 )
 			DEBUG_LOG(("InGameUI::message - text truncated to %d characters\n", (Int)(sizeof( buf )/sizeof( WideChar ) - 1)));
 	buf[ sizeof( buf )/sizeof( WideChar ) - 1 ] = 0;
 	formattedMessage.set( buf );
@@ -3475,7 +3478,7 @@ void InGameUI::message( UnicodeString format, ... )
 	WideChar buf[ UnicodeString::MAX_FORMAT_BUF_LEN ];
   // truncate rather than throw: an uncaught engine exception aborts with 0xC0000409 and no log
   // at all, so an over-long chat or script message used to be a silent hard crash.
-  if( _vsnwprintf(buf, sizeof( buf )/sizeof( WideChar ) - 1, format.str(), args ) < 0 )
+  if( WideCharFormatV(buf, sizeof( buf )/sizeof( WideChar ) - 1, format.str(), args ) < 0 )
 			DEBUG_LOG(("InGameUI::message - text truncated to %d characters\n", (Int)(sizeof( buf )/sizeof( WideChar ) - 1)));
 	buf[ sizeof( buf )/sizeof( WideChar ) - 1 ] = 0;
 	formattedMessage.set( buf );
@@ -3500,7 +3503,7 @@ void InGameUI::messageColor( const RGBColor *rgbColor, UnicodeString format, ...
 	WideChar buf[ UnicodeString::MAX_FORMAT_BUF_LEN ];
   // truncate rather than throw: an uncaught engine exception aborts with 0xC0000409 and no log
   // at all, so an over-long chat or script message used to be a silent hard crash.
-  if( _vsnwprintf(buf, sizeof( buf )/sizeof( WideChar ) - 1, format.str(), args ) < 0 )
+  if( WideCharFormatV(buf, sizeof( buf )/sizeof( WideChar ) - 1, format.str(), args ) < 0 )
 			DEBUG_LOG(("InGameUI::message - text truncated to %d characters\n", (Int)(sizeof( buf )/sizeof( WideChar ) - 1)));
 	buf[ sizeof( buf )/sizeof( WideChar ) - 1 ] = 0;
 	formattedMessage.set( buf );

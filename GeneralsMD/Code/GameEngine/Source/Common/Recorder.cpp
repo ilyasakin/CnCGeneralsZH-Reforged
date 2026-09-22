@@ -24,6 +24,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
 #include "Common/Recorder.h"
 #include "Common/FileSystem.h"
 #include "Common/playerlist.h"
@@ -585,9 +586,15 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	}
 
 	// Print out the name of the replay.
+	//
+	// WideCharFileWrite rather than fwprintf: the argument is a WideChar*, and "%ws" tells the C
+	// library it is a wchar_t* - two bytes under MSVC and four under clang.  The bytes on disk do
+	// not change; readUnicodeString below reads them back one fgetwc at a time and has to keep
+	// working.  See Lib/WideCharFns.h, which also records why this whole function needs a
+	// byte-oriented rewrite before it runs on a Mac at all.
 	UnicodeString replayName;
 	replayName = TheGameText->fetch("GUI:LastReplay");
-	fwprintf(m_file, L"%ws", replayName.str());
+	WideCharFileWrite(m_file, replayName.str());
 	fputwc(0, m_file);
 
 	// Date and Time
@@ -599,9 +606,9 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	UnicodeString versionString = TheVersion->getUnicodeVersion();
 	UnicodeString versionTimeString = TheVersion->getUnicodeBuildTime();
 	UnsignedInt versionNumber = TheVersion->getVersionNumber();
-	fwprintf(m_file, L"%ws", versionString.str());
+	WideCharFileWrite(m_file, versionString.str());
 	fputwc(0, m_file);
-	fwprintf(m_file, L"%ws", versionTimeString.str());
+	WideCharFileWrite(m_file, versionTimeString.str());
 	fputwc(0, m_file);
 	fwrite(&versionNumber, sizeof(UnsignedInt), 1, m_file);
 	fwrite(&(TheGlobalData->m_exeCRC), sizeof(UnsignedInt), 1, m_file);

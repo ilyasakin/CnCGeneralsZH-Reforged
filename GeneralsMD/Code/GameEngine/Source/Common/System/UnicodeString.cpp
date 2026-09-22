@@ -44,6 +44,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
 #include "Common/CriticalSection.h"
 
 #ifdef _INTERNAL
@@ -309,7 +310,10 @@ void UnicodeString::format_va(const UnicodeString& format, va_list args)
 {
 	validate();
 	WideChar buf[MAX_FORMAT_BUF_LEN];
-  if (_vsnwprintf(buf, sizeof(buf)/sizeof(WideChar)-1, format.str(), args) < 0)
+	// WideCharFormatV, not _vsnwprintf: buf and format are WideChar and the C library has no
+	// char16_t printf on any platform.  It keeps _vsnwprintf's contract - negative means the text
+	// did not fit - which is what the throw below is written against.  See Lib/WideCharFns.h.
+  if (WideCharFormatV(buf, sizeof(buf)/sizeof(WideChar)-1, format.str(), args) < 0)
 			throw ERROR_OUT_OF_MEMORY;
 	set(buf);
 	validate();
@@ -320,7 +324,7 @@ void UnicodeString::format_va(const WideChar* format, va_list args)
 {
 	validate();
 	WideChar buf[MAX_FORMAT_BUF_LEN];
-  if (_vsnwprintf(buf, sizeof(buf)/sizeof(WideChar)-1, format, args) < 0)
+  if (WideCharFormatV(buf, sizeof(buf)/sizeof(WideChar)-1, format, args) < 0)
 			throw ERROR_OUT_OF_MEMORY;
 	set(buf);
 	validate();
