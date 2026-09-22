@@ -31,6 +31,8 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 #include "Common/GameEngine.h"
 #include "Common/QuickmatchPreferences.h"
 #include "Common/LadderPreferences.h"
@@ -1454,7 +1456,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 			UnicodeString munkee;
 			munkee.format(L"inQM:%d %d ms, %d messages", s_inQM, frameTime, responses.size());
 			TheGameSpyInfo->addText(munkee, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
-			PERF_LOG(("%ls\n", munkee.str()));
+			PERF_LOG(("%s\n", WideCharAsUtf8( munkee.str() ).str()));
 
 			std::list<Int>::const_iterator it;
 			for (it = responses.begin(); it != responses.end(); ++it)

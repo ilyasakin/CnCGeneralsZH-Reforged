@@ -48,6 +48,8 @@
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Lib/WideCharFns.h"
+
 //-----------------------------------------------------------------------------
 // USER INCLUDES //////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
@@ -342,7 +344,7 @@ void StatsCollector::createFileName( void )
 					if (slot && slot->isHuman())
 					{
 						AsciiString player;
-						player.format("%ls_", slot->getName().str());
+						player.format("%s_", WideCharAsUtf8( slot->getName().str() ).str());
 						players.concat(player);
 					}
 				}
