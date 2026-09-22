@@ -1020,6 +1020,22 @@ if(Python3_Interpreter_FOUND)
                    ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gametext.py selfcheck)
 endif()
 
+# The x86_64/arm64 differential harness.  Rosetta 2 runs an x86_64 binary on an Apple Silicon Mac
+# and clang cross-compiles to it, so one machine can build the same source for both architectures
+# and compare what they compute.  That recovers the architecture half of the determinism question
+# without waiting for a Windows machine - and only that half.  It is clang on both sides, so it
+# proves nothing about MSVC's codegen, its optimiser or its 32-bit long; Tests/arch_diff/
+# run_arch_diff.sh says so at length and should be read before anyone calls a green run here
+# "determinism verified".
+#
+# It skips rather than fails where the cross toolchain or Rosetta is absent, because it is a
+# capability of a developer's machine and not a requirement of the build.  ctest reads 77 as a skip.
+add_test(NAME arch_differential
+         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/arch_diff/run_arch_diff.sh
+                 ${CMAKE_CURRENT_SOURCE_DIR}
+                 ${CMAKE_CURRENT_BINARY_DIR}/arch_diff)
+set_tests_properties(arch_differential PROPERTIES SKIP_RETURN_CODE 77)
+
 if(RELEASE_DEBUG_LOGGING)
   target_compile_definitions(gameengine PRIVATE RELEASE_DEBUG_LOGGING)
   if(ZH_PLATFORM_WINDOWS)
