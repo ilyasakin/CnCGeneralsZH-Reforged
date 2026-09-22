@@ -119,7 +119,7 @@ AggregateDefClass::~AggregateDefClass (void)
 	// Free the name buffer if necessary
 	if (m_pName != NULL) {
 		
-		// free() is used because the buffer was allocated with ::_strdup().
+		// free() is used because the buffer was allocated with ::strdup().
 		::free (m_pName);
 		m_pName = NULL;
 	}	
@@ -593,7 +593,7 @@ AggregateDefClass::Read_Header (ChunkLoadClass &chunk_load)
 	if (chunk_load.Read (&header, sizeof (header)) == sizeof (header)) {
 
 		// Copy the name from the header structure
-		m_pName = ::_strdup (header.Name);
+		m_pName = ::strdup (header.Name);
 		m_Version = header.Version;
 
 		// Success!

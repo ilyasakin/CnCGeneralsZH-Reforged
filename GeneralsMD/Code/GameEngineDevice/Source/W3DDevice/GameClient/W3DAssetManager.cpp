@@ -183,7 +183,7 @@ TextureClass *	W3DAssetManager::Get_Texture
 	//Just call the base implementation after adjusting reduction to deal
 	//with our special types.
 
-	if (filename && *filename && _strnicmp(filename,"ZHC",3) == 0)
+	if (filename && *filename && strncasecmp(filename,"ZHC",3) == 0)
 		allow_reduction = false;	//don't allow reduction on our infantry textures.
 
 	return WW3DAssetManager::Get_Texture(	filename, 
@@ -744,7 +744,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 	Bool isGranny = false;
 	char *pext=strrchr(name,'.');	//find file extension
 	if (pext)
-		isGranny=(strnicmp(pext,".GR2",4) == 0);
+		isGranny=(strncasecmp(pext,".GR2",4) == 0);
 #endif
 	Bool reallyscale = (WWMath::Fabs(scale - ident_scale) > scale_epsilon);
 	Bool reallycolor = (color & 0xFFFFFF) != 0;	//black is not a valid color and assumes no custom coloring.
@@ -939,7 +939,7 @@ int W3DAssetManager::Recolor_Mesh(RenderObjClass *robj, const int color)
 
 	// recolor vertex material (assuming mesh is housecolor)
 	if ( (( (meshName=strchr(mesh->Get_Name(),'.') ) != 0 && *(meshName++)) || ( (meshName=mesh->Get_Name()) != NULL)) &&
-		_strnicmp(meshName,"HOUSECOLOR", 10) == 0)
+		strncasecmp(meshName,"HOUSECOLOR", 10) == 0)
 	{	for (i=0; i<material->Vertex_Material_Count(); i++)
 			Recolor_Vertex_Material(material->Peek_Vertex_Material(i),color);
 		didRecolor=1;
@@ -950,7 +950,7 @@ int W3DAssetManager::Recolor_Mesh(RenderObjClass *robj, const int color)
 	for (i=0; i<material->Texture_Count(); i++)
 	{
 		oldtex=material->Peek_Texture(i);
-		if (_strnicmp(oldtex->Get_Texture_Name(),"ZHC", 3) == 0)
+		if (strncasecmp(oldtex->Get_Texture_Name(),"ZHC", 3) == 0)
 		{	//This texture needs to be adjusted for housecolor
 			newtex=Recolor_Texture(oldtex,color);
 			if (newtex)
@@ -1032,7 +1032,7 @@ bool W3DAssetManager::Load_3D_Assets( const char * filename )
 	Bool isGranny = false;
 	char *pext=strrchr(filename,'.');	//find file extension
 	if (pext)
-		isGranny=(strnicmp(pext,".GR2",4) == 0);
+		isGranny=(strncasecmp(pext,".GR2",4) == 0);
 	if (!isGranny)
 #endif
 
@@ -1135,7 +1135,7 @@ HAnimClass *	W3DAssetManager::Get_HAnim(const char * name)
 	Bool isGranny = false;
 	char *pext=strrchr(name,'.');	//find file extension
 	if (pext)
-		isGranny=(strnicmp(pext,".GR2",4) == 0);
+		isGranny=(strncasecmp(pext,".GR2",4) == 0);
 	if (!isGranny)
 #endif
 	{
@@ -1217,7 +1217,7 @@ static Bool getMeshColorMethods(MeshClass *mesh, Bool &vertexColor, Bool &textur
 	MaterialInfoClass *material = mesh->Get_Material_Info();
 	if (material)
 	{	for (int j=0; j<material->Texture_Count(); j++)
-			if (_strnicmp(material->Peek_Texture(j)->Get_Texture_Name(),"ZHC",3) == 0)
+			if (strncasecmp(material->Peek_Texture(j)->Get_Texture_Name(),"ZHC",3) == 0)
 			{	textureColor = true;
 				break;
 			}
@@ -1230,7 +1230,7 @@ static Bool getMeshColorMethods(MeshClass *mesh, Bool &vertexColor, Bool &textur
 	const char *meshName;
 	if ( ( (meshName=strchr(mesh->Get_Name(),'.') ) != 0 && *(meshName++)) || ( (meshName=mesh->Get_Name()) != NULL) )
 	{	//Check if this object has housecolors on mesh
-		if ( _strnicmp(meshName,"HOUSECOLOR", 10) == 0)
+		if ( strncasecmp(meshName,"HOUSECOLOR", 10) == 0)
 			vertexColor = true;
 	}
 
@@ -1460,7 +1460,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(const char * name,float scal
 #ifdef	INCLUDE_GRANNY_IN_BUILD
 	char *pext=strrchr(name,'.');	//find file extension
 	if (pext)
-		isGranny=(strnicmp(pext,".GR2",4) == 0);
+		isGranny=(strncasecmp(pext,".GR2",4) == 0);
 #endif
 	Bool reallyscale = (WWMath::Fabs(scale - ident_scale) > scale_epsilon);
 	Bool reallyhsv_shift = (WWMath::Fabs(hsv_shift.X - ident_HSV.X) > H_epsilon ||

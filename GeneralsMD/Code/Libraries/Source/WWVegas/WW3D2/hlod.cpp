@@ -658,7 +658,7 @@ bool HLodDefClass::read_header(ChunkLoadClass & cload)
 	cload.Close_Chunk();
 
 	// Copy the name into our internal variable
-	Name = ::_strdup(header.Name);
+	Name = ::strdup(header.Name);
 	HierarchyTreeName = ::strdup(header.HierarchyName);
 	LodCount = header.LodCount;
 	Lod = W3DNEWARRAY SubObjectArrayClass[LodCount];
@@ -3434,7 +3434,7 @@ void HLodClass::Update_Obj_Space_Bounding_Volumes(void)
 			//
 			//	Does the name match the designator we are looking for?
 			//
-			if (::stricmp (name, "BOUNDINGBOX") == 0) {				
+			if (::strcasecmp (name, "BOUNDINGBOX") == 0) {				
 				BoundingBoxIndex = index;
 			}
 		}

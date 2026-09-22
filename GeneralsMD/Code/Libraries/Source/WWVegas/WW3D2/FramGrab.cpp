@@ -51,7 +51,7 @@ FrameGrabClass::FrameGrabClass(const char *filename, MODE mode, int width, int h
 	char file[256];
 	do {
 		sprintf(file, "%s%d.AVI", filename, counter++);
-		result = _access(file, 0);
+		result = access(file, 0);
 	} while(result != -1);
 
 	// Create new AVI file using AVIFileOpen. 

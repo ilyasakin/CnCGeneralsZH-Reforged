@@ -37,7 +37,7 @@
 // MBL Update for CNC3 INCURSION - 10.23.2002 - Expanded param handling, Added STOP command
 //
 
-#include <string.h>	// stricmp()
+#include <string.h>	// strcasecmp()
 #include "animatedsoundmgr.h"
 #include "ini.h"
 #include "inisup.h"
@@ -123,7 +123,7 @@ Build_List_From_String
 			//
 			// Move past the current delimiter (if necessary)
 			//
-			if ((::strnicmp (entry, delimiter, delim_len) == 0) && (count > 0)) {
+			if ((::strncasecmp (entry, delimiter, delim_len) == 0) && (count > 0)) {
 				entry += delim_len;
 			}
 
@@ -150,7 +150,7 @@ Build_List_From_String
 				//
 				// Move past the current delimiter (if necessary)
 				//
-				if ((::strnicmp (entry, delimiter, delim_len) == 0) && (count > 0)) {
+				if ((::strncasecmp (entry, delimiter, delim_len) == 0) && (count > 0)) {
 					entry += delim_len;
 				}
 
@@ -227,7 +227,7 @@ Is_In_Param_List
 			// OutputDebugString( param_to_check );
 			// OutputDebugString( "\n" );
 
-			// if ( stricmp( string.Peek_Buffer(), param_to_check ) == 0 ) // Breaks with whitespaces
+			// if ( strcasecmp( string.Peek_Buffer(), param_to_check ) == 0 ) // Breaks with whitespaces
 			if ( strstr( string.Peek_Buffer(), param_to_check ) != 0 )
 			{
 			 	return( true );

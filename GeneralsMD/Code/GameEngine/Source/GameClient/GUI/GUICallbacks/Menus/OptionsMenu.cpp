@@ -397,7 +397,7 @@ Bool OptionPreferences::getRetaliationModeEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_clientRetaliationModeEnabled;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -409,7 +409,7 @@ Bool OptionPreferences::getDoubleClickAttackMoveEnabled(void)
 	if( it == end() )
 		return TheGlobalData->m_doubleClickAttackMove;
 
-	if( stricmp( it->second.str(), "yes" ) == 0 )
+	if( strcasecmp( it->second.str(), "yes" ) == 0 )
 		return TRUE;
 
 	return FALSE;
@@ -436,7 +436,7 @@ Bool OptionPreferences::usesSystemMapDir(void)
 	if (it == end())
 		return TRUE;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -448,7 +448,7 @@ Bool OptionPreferences::saveCameraInReplays(void)
 	if (it == end())
 		return TRUE;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -460,7 +460,7 @@ Bool OptionPreferences::useCameraInReplays(void)
 	if (it == end())
 		return TRUE;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -490,7 +490,7 @@ Bool OptionPreferences::getSendDelay(void)
 	if (it == end())
 		return TheGlobalData->m_firewallSendDelay;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -629,7 +629,7 @@ Bool OptionPreferences::getCloudShadowsEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_useCloudMap;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -641,7 +641,7 @@ Bool OptionPreferences::getLightmapEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_useLightMap;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -653,7 +653,7 @@ Bool OptionPreferences::getSmoothWaterEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_showSoftWaterEdge;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -665,7 +665,7 @@ Bool OptionPreferences::getTreesEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_useTrees;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -677,7 +677,7 @@ Bool OptionPreferences::getExtraAnimationsDisabled(void)
 	if (it == end())
 		return TheGlobalData->m_useDrawModuleLOD;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return FALSE;	//we are enabling extra animations, so disabled LOD
 	}
 	return TRUE;
@@ -691,7 +691,7 @@ Bool OptionPreferences::getTreeSwayEnabled(void)
 	if (it == end())
 		return !getExtraAnimationsDisabled();
 
-	return stricmp(it->second.str(), "yes") == 0;
+	return strcasecmp(it->second.str(), "yes") == 0;
 }
 
 Bool OptionPreferences::getUseHeatEffects(void)
@@ -700,7 +700,7 @@ Bool OptionPreferences::getUseHeatEffects(void)
 	if (it == end())
 		return TheGlobalData->m_useHeatEffects;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -712,7 +712,7 @@ Bool OptionPreferences::getDynamicLODEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_enableDynamicLOD;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -724,7 +724,7 @@ Bool OptionPreferences::getFPSLimitEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_useFpsLimit;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -736,7 +736,7 @@ Bool OptionPreferences::get3DShadowsEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_useShadowVolumes;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -748,7 +748,7 @@ Bool OptionPreferences::get2DShadowsEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_useShadowDecals;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -760,7 +760,7 @@ Bool OptionPreferences::getBuildingOcclusionEnabled(void)
 	if (it == end())
 		return TheGlobalData->m_enableBehindBuildingMarkers;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;
@@ -1166,7 +1166,7 @@ static void fillMonitorList( void )
 			text.format( L"%d", monitor.number );
 		GadgetComboBoxAddEntry( comboBoxMonitor, text, MENU_ENTRY_COLOR );
 
-		if( ::_stricmp( monitor.device, current.device ) == 0 )
+		if( ::strcasecmp( monitor.device, current.device ) == 0 )
 			selected = index;
 	}
 	GadgetComboBoxSetSelectedPos( comboBoxMonitor, selected );
@@ -1412,7 +1412,7 @@ static void saveOptions( void )
 	const Bool sizeChanged = ( oldDispSettings.xRes != xres || oldDispSettings.yRes != yres );
 	const Bool modeChanged = ( oldWindowMode != TheGlobalData->m_windowMode );
 	const Bool vsyncChanged = ( oldVSync != TheGlobalData->m_vsync );
-	const Bool monitorChanged = ( ::_stricmp( oldMonitor.device, monitor.device ) != 0 );
+	const Bool monitorChanged = ( ::strcasecmp( oldMonitor.device, monitor.device ) != 0 );
 
 	if( sizeChanged || modeChanged || vsyncChanged || monitorChanged )
 	{

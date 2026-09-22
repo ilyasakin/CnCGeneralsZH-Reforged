@@ -139,7 +139,7 @@ GrannyRenderObjClass::GrannyRenderObjClass(const GrannyPrototypeClass &proto)
 		{
 			granny_model *sourceModel =  fileInfo->Models[modelIndex];
 			//ignore bounding boxes since they are never rendered
-			if (stricmp(sourceModel->Name,"AABOX") != 0)
+			if (strcasecmp(sourceModel->Name,"AABOX") != 0)
 				m_modelInstance =  GrannyInstantiateModel(fileInfo->Models[modelIndex]);
 		}
 
@@ -452,7 +452,7 @@ PrototypeClass * GrannyLoaderClass::Load_W3D(const char *filename)
 			for (Int modelIndex=0; modelIndex<fileInfo->ModelCount; modelIndex++)
 			{
 				granny_model *sourceModel =  fileInfo->Models[modelIndex];
-				if (stricmp(sourceModel->Name,"AABOX") == 0)
+				if (strcasecmp(sourceModel->Name,"AABOX") == 0)
 				{	//found a collision box, copy out data
 					int MeshCount = sourceModel->MeshBindingCount;
 					if (MeshCount==1)
