@@ -59,7 +59,17 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
+/*
+**	Off Windows there is no <windows.h> to include, and this header's job - wrapping that include
+**	in the warning pragmas above - has nothing left to do.  The _WINDOWS block below already had an
+**	#else branch for exactly this case; it has simply never been reachable before now.  Guarded on
+**	_WIN32 rather than _WINDOWS because _WIN32 is the compiler's own and does not depend on the
+**	build system defining anything, and because the block below wants to stay keyed on _WINDOWS as
+**	it is.  B5.
+*/
+#if defined(_WIN32)
 #include	<windows.h>
+#endif
 //#include <mmsystem.h>
 //#include	<windowsx.h>
 //#include	<winnt.h>
