@@ -32,6 +32,20 @@ invent anything.
   `dx11twin`, `dx11post`
 - The 22 WW3D2 headers that leak D3D9 types
 
+## Recon findings, 2026-09-22
+
+From `docs/mac-port/D1-call-site-survey.md`:
+
+**Your header target is 14, not 22.** The 22 are not 22 of the same thing. 14 are real leaks; the
+other 8 are the D3DX shim (3) and the D3D11 backend's own headers (5), which D2 changes rather than
+hides. Two headers dominate: `dx8wrapper.h` (29 includes from outside WW3D2) and `texture.h` (21)
+are 50 of the 82 include sites between them, and expose every D3D9 type the engine can name.
+
+**A surface this file did not account for:** `Peek_D3D_Texture()` and friends hand raw
+`IDirect3D*9` resources straight out of the texture classes — **134 uses, 64 of them outside
+WW3D2**. Not D1's problem (they are not device calls), but they are D2's, and they are most of why
+`texture.h` leaks.
+
 ## Do
 
 1. **Decide Metal versus MoltenVK, and write the reason down here.** This is the decision point the

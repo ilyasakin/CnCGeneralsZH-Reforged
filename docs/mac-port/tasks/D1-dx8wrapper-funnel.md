@@ -25,6 +25,76 @@ still says a D3D11 frame costs 13.6 ms against D3D9's 8.6 ms; it was last edited
 landed on 2026-09-19. D3D11 is already the faster path on that scene and the README is stale.
 Re-measure before quoting either number, and fix the README while you are in there.
 
+## Recon findings, 2026-09-22 — this file's central number was stale and its scope was wrong in BOTH directions
+
+Survey at `docs/mac-port/D1-call-site-survey.md`. Read it before starting.
+
+**The 236 is stale.** It was written by `bfb60e17` on 2026-09-09 and counts every textual reference
+to `_Get_D3D_Device()`/`_Get_D3D()` in the tree at that commit (233, or 246 counting leftover
+`_Get_D3D_Device8()` spellings). The very next renderer commit the same day, `ef8303a9` "draw the
+game through the Direct3D 11 backend", took it from 246 to 135. **The comment was overtaken within
+24 hours of being written** and has claimed for two weeks that none of the funnel had happened. It
+appears three times — `dx11runtime.h:29`, `dx11backend.h:23`, `dx8wrapper.cpp:1337` — and this
+task file copied it forward a fourth time. Comparable figure today: 125. Fix the three comments.
+The companion "5600 calls" matches no static count and reads as a per-frame figure off
+`number_of_DX8_calls`; do not try to grep it.
+
+**And the 60 in this file undercounts, in the more expensive direction.** Two thirds of the device
+calls do not look like `_Get_D3D_Device()->`. They look like a local — or, in `W3DWater.cpp`, a
+class member assigned at `:960`/`:1174` and used twenty times, so the device pointer outlives the
+function that fetched it:
+
+    LPDIRECT3DDEVICE9 m_pDev = DX8Wrapper::_Get_D3D_Device();   // one grep hit
+    m_pDev->SetRenderState(...);                                 // twenty calls
+
+Real surface: **89 escapes from the wrapper → 148 device calls, plus 22 `DX8CALL` sites outside
+`dx8wrapper.{cpp,h}` = 170 sites across 22 files.** Five files hold 114 of the 148;
+`W3DProjectedShadow.cpp` alone is 28%.
+
+The good news: **73 of the 148 already have an exact `DX8Wrapper` method that already mirrors into
+the D3D11 backend** — a swap, not a design. Only 75 need new API, and 39 of those are the single
+problem of streams and draws.
+
+**This file was wrong that `DX8CALL` is always wrapper-internal.** True of the 69 inside
+`dx8wrapper.{cpp,h}`; false of the 22 outside, which are in D1's scope.
+
+### A live bug, not just a funnel gap
+
+`shader.cpp:954-961` and `:1003-1012` set **texture stage 2** through raw `DX8CALL`, with the
+comment "bypass the wrapper since it only supports 2 texture stages". `DX8CALL` expands to
+`_Get_D3D_Device()->x` and mirrors nothing — so under `-dx11` the D3D11 backend never sees stage 2
+(despite `DX11_BACKEND_TEXTURE_STAGES` being 4 and able to), **and** the wrapper's own
+`TextureStageStates` shadow never records it, which its redundant-state filter then compares
+against. Check this against any open rendering defect before treating it as port work. It cannot be
+verified here — no Windows machine — so it is recorded in `WINDOWS-DEBT.md` as a suspected live
+defect rather than fixed blind.
+
+### Two more corrections
+
+- **`Enable_Reports` does not exist.** Step 4 of this file told you to use it; it appears exactly
+  once in the tree, inside the same stale comment block as the 236. What exists is better and
+  should be named instead: `W3DDisplay.cpp:490-545` already logs a seven-way refusal taxonomy (no
+  buffer / no texture stage / no input layout / no program / no device object / engine shader
+  bound / unmirrored texture) plus per-pipeline and foreign-shader reports. That is the progress
+  meter.
+- **`RENDERER-ROADMAP.md` has never existed in this repository** — not on any branch, not in any
+  commit, though ten files cite it. "Phase 2", which this task is defined as finishing, has no
+  definition anyone can read. Treat the survey's batching plan as the definition.
+
+### Batching (from the survey, 8 PRs)
+
+PR1 adds API and **calls nothing** — additive, zero behaviour change by construction, and the only
+part of D1 safe to do without a Windows machine. PRs 2–4 are the 71 no-new-API swaps; PR2 is
+`W3DProjectedShadow.cpp`'s 34 alone, the right place to prove the pixel comparison. PR5 is
+`shader.cpp` on its own, because it is the only batch that can change pixels. PRs 6–8 consume PR1,
+streams and draws (39) last.
+
+**Move the 7 `W3DMouse` cursor calls out of D1 into C3** — they are the D3D9 hardware cursor, Metal
+has no equivalent, and wrapping them would invent an abstraction for one platform's accident. That
+leaves D1 at 141. Two sites are worth deleting rather than moving: `HeightMap.cpp`'s two
+`ProcessVertices` calls (D3D9-only; check with `-ffprobe` whether the path still runs) and
+`W3DScene.cpp:1333`, which captures the device and never uses it.
+
 ## Scope
 
 ```console
