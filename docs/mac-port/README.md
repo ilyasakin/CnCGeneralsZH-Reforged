@@ -176,6 +176,7 @@ you start. That commit is the lock.
 | B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | in review | -83 |
 | B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | in progress | -83 |
 | B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | not started | |
+| B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress | -3a |
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | absorbed by B3 | — |
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | in progress | -21 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
