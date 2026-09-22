@@ -105,7 +105,9 @@ void					WWDebug_DBWin32_Message_Handler( const char * message);
 ** WWDEBUG_SAY(("dir = %f\n",dir));
 */
 
-#include "..\..\..\..\gameengine\include\common\debug.h"
+// Forward slashes and the real spelling on disk: MSVC takes either separator, clang takes
+// only this one, and a case-sensitive volume takes only this capitalisation.
+#include "../../../../GameEngine/Include/Common/Debug.h"
 
 #ifdef DEBUG_LOGGING
 #define WWDEBUG_SAY(x)							DEBUG_LOG(x)
