@@ -46,15 +46,18 @@
 // Inputs outside the range of a 32-bit integer, and NaN, are where the two architectures genuinely
 // differ, and they differ in two separate ways.  Measured on both, not read off a manual:
 //
-//                    x86 cvtss2si / cvtsd2si      arm64 FCVTNS
+//                    x86 cvtss2si / cvtsd2si      arm64 FCVTNS, raw
 //   out of range     0x80000000 ("indefinite")    saturates: 0x7FFFFFFF or 0x80000000
 //   NaN              0x80000000                   0
 //
-// Neither is reachable from the simulation: the callers are frame numbers, scanline coordinates and
-// pixel counts, and a NaN arriving here means the arithmetic upstream has already diverged.  So
-// this is recorded rather than branched around - a range check in the two hottest conversions in
-// the renderer would cost more than the case is worth, and a caller that genuinely could produce
-// one wants its own check rather than a different instruction here.
+// Neither is reachable from the simulation - the callers are frame numbers, scanline coordinates
+// and pixel counts, and a NaN arriving here means the arithmetic upstream has already diverged - so
+// the first version of this header recorded the difference and left it.  That was the wrong call.
+// Undoing the saturation costs two compares that never branch, and it buys something worth more
+// than two compares: DetRound::To_Long now returns the same bits as the x86 instruction for *every*
+// input, so "is this conversion architecture-independent" stops being a question with a footnote.
+// A property that holds only on the inputs somebody once reasoned about is a property the next
+// person has to re-derive.
 //
 // What is NOT left to chance is the width.  `long` is 64 bits on Darwin's LP64 and 32 on Windows'
 // LLP64, so the obvious arm64 spelling for the double overload - convert to a 64-bit integer and
@@ -96,7 +99,15 @@ namespace DetRound
 	inline long To_Long(float f)
 	{
 #if defined(DETROUND_ARM64)
-		return (long)vcvtns_s32_f32(f);
+		const int32_t v = vcvtns_s32_f32(f);
+		// FCVTNS saturates where cvtss2si yields 0x80000000, so the two disagree at the edges unless
+		// the saturation is undone.  INT32_MAX can only ever be saturation - 2147483647 is not a
+		// float - so it always means "x86 would have said indefinite".  INT32_MIN needs no test at
+		// all: whether it is saturation or the legitimate conversion of -2147483648.0f, x86 answers
+		// INT32_MIN either way.  NaN is the one case FCVTNS does not signal, giving 0.
+		if (v == INT32_MAX) return (long)INT32_MIN;
+		if (f != f) return (long)INT32_MIN;
+		return (long)v;
 #else
 		return (long)_mm_cvtss_si32(_mm_set_ss(f));
 #endif
@@ -106,12 +117,13 @@ namespace DetRound
 	inline long To_Long(double f)
 	{
 #if defined(DETROUND_ARM64)
-		// There is no vcvtns_s32_f64 in clang's intrinsic set, only the 64-bit form, so the 32-bit
-		// saturation FCVTNS would have done has to be written out.  Without it this returns values a
-		// 32-bit x86 conversion cannot, on a platform where `long` is wide enough to carry them.
+		// There is no vcvtns_s32_f64 in clang's intrinsic set, only the 64-bit form.  Rounding in 64
+		// bits and range-checking the result afterwards is exact - the rounding cannot overflow an
+		// int64 for any double - and it is what makes the answer agree with a 32-bit cvtsd2si for
+		// every input, infinities included, since those saturate to an int64 edge and fail the test.
 		const int64_t wide = vcvtnd_s64_f64(f);
-		if (wide > INT32_MAX) return (long)INT32_MAX;
-		if (wide < INT32_MIN) return (long)INT32_MIN;
+		if (f != f) return (long)INT32_MIN;                          // NaN: FCVTNS gives 0
+		if (wide < INT32_MIN || wide > INT32_MAX) return (long)INT32_MIN;
 		return (long)wide;
 #else
 		return (long)_mm_cvtsd_si32(_mm_set_sd(f));
