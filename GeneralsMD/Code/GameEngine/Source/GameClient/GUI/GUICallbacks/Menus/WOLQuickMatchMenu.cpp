@@ -1119,7 +1119,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 			{
 			case PeerResponse::PEERRESPONSE_PLAYERUTM:
 				{
-					if (!stricmp(resp.command.c_str(), "STATS"))
+					if (!strcasecmp(resp.command.c_str(), "STATS"))
 					{
 						DEBUG_LOG(("Saw STATS from %s, data was '%s'\n", resp.nick.c_str(), resp.commandOptions.c_str()));
 						AsciiString data = resp.commandOptions.c_str();
@@ -1148,7 +1148,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 						}
 					}
 					Int slotNum = TheGameSpyGame->getSlotNum(resp.nick.c_str());
-					if ((slotNum >= 0) && (slotNum < MAX_SLOTS) && (!stricmp(resp.command.c_str(), "NAT"))) {
+					if ((slotNum >= 0) && (slotNum < MAX_SLOTS) && (!strcasecmp(resp.command.c_str(), "NAT"))) {
 						// this is a command for NAT negotiations, pass if off to TheNAT
 						sawImportantMessage = TRUE;
 						if (TheNAT != NULL) {

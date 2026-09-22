@@ -639,7 +639,7 @@ TEST(stream_format)
 
 TEST(stream_format_truncates_and_stays_terminated)
 {
-	/* _vsnprintf writes no NUL when it fills the buffer, and m_buffer has no
+	/* vsnprintf writes no NUL when it fills the buffer, and m_buffer has no
 	   initialiser - this used to run off the end of the object. */
 	std::string out = run("test.fmtlong");
 	std::string payload = out.substr(strlen("> test.fmtlong\n"));

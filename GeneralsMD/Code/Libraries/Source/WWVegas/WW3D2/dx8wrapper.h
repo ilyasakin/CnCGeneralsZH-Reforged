@@ -1159,7 +1159,7 @@ WWINLINE void DX8Wrapper::Set_Texture(unsigned stage,TextureBaseClass* texture)
 WWINLINE void DX8Wrapper::Set_Material(const VertexMaterialClass* material)
 {
 /*	if (material && render_state.material &&
-		// !stricmp(material->Get_Name(),render_state.material->Get_Name())) {
+		// !strcasecmp(material->Get_Name(),render_state.material->Get_Name())) {
 		material->Get_CRC()!=render_state.material->Get_CRC()) {
 		return;
 	}

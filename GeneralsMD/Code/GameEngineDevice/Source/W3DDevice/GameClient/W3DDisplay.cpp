@@ -3845,7 +3845,7 @@ static void saveScreenShot(void)
 #endif
 		strlcpy(pathname, TheGlobalData->getPath_UserData().str(), ARRAY_SIZE(pathname));
 		strlcat(pathname, leafname, ARRAY_SIZE(pathname));
-		if (_access( pathname, 0 ) == -1)
+		if (access( pathname, 0 ) == -1)
 			done = true;
 	}
 
@@ -4195,7 +4195,7 @@ void W3DDisplay::dumpAssetUsage(const char* mapname)
 	while (true)
 	{
 		sprintf(buf, "AssetUsage_%s_%04d.txt",leafname,idx);
-		if (_access(buf, 0) != 0)
+		if (access(buf, 0) != 0)
 			break;	// it exists, we're good
 		++idx;
 	}

@@ -121,7 +121,7 @@ static void parseFXLocInfo( INI *ini, void *instance, BoneLocInfo *locInfo )
 {
 	const char *token = ini->getNextToken( ini->getSepsColon() );
 
-	if( stricmp( token, "bone" ) == 0 )
+	if( strcasecmp( token, "bone" ) == 0 )
 	{
 
 		// save bone name and location type
@@ -174,7 +174,7 @@ void BoneFXUpdateModuleData::parseFXList( INI *ini, void *instance,
 
 	// make sure we have an "OnlyOnce:" token
 	token = ini->getNextToken( ini->getSepsColon() );
-	if (stricmp( token, "onlyonce" ) != 0)
+	if (strcasecmp( token, "onlyonce" ) != 0)
 	{
 
 		// error
@@ -188,7 +188,7 @@ void BoneFXUpdateModuleData::parseFXList( INI *ini, void *instance,
 
 	// make sure we have an "FXList:" token
 	token = ini->getNextToken( ini->getSepsColon() );
-	if( stricmp( token, "fxlist" ) != 0 )
+	if( strcasecmp( token, "fxlist" ) != 0 )
 	{
 
 		// error
@@ -216,7 +216,7 @@ void BoneFXUpdateModuleData::parseObjectCreationList( INI *ini, void *instance,
 
 	// make sure we have an "OnlyOnce:" token
 	token = ini->getNextToken( ini->getSepsColon() );
-	if (stricmp( token, "onlyonce" ) != 0)
+	if (strcasecmp( token, "onlyonce" ) != 0)
 	{
 
 		// error
@@ -230,7 +230,7 @@ void BoneFXUpdateModuleData::parseObjectCreationList( INI *ini, void *instance,
 
 	// make sure we have an "OCL:" token
 	token = ini->getNextToken( ini->getSepsColon() );
-	if( stricmp( token, "ocl" ) != 0 )
+	if( strcasecmp( token, "ocl" ) != 0 )
 	{
 
 		// error
@@ -258,7 +258,7 @@ void BoneFXUpdateModuleData::parseParticleSystem( INI *ini, void *instance,
 
 	// make sure we have an "OnlyOnce:" token
 	token = ini->getNextToken( ini->getSepsColon() );
-	if (stricmp( token, "onlyonce" ) != 0)
+	if (strcasecmp( token, "onlyonce" ) != 0)
 	{
 
 		// error
@@ -272,7 +272,7 @@ void BoneFXUpdateModuleData::parseParticleSystem( INI *ini, void *instance,
 
 	// make sure we have an "PSys:" token
 	token = ini->getNextToken( ini->getSepsColon() );
-	if( stricmp( token, "psys" ) != 0 )
+	if( strcasecmp( token, "psys" ) != 0 )
 	{
 
 		// error

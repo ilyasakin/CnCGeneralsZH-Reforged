@@ -504,7 +504,7 @@ void DebugCrash(const char *format, ...)
 	const size_t used = strlen(theCrashBuffer);
 	va_list arg;
   va_start(arg, format);
-  const int wanted = _vsnprintf(theCrashBuffer + used, ARRAY_SIZE(theCrashBuffer) - used, format, arg);
+  const int wanted = vsnprintf(theCrashBuffer + used, ARRAY_SIZE(theCrashBuffer) - used, format, arg);
   va_end(arg);
 	theCrashBuffer[ ARRAY_SIZE(theCrashBuffer) - 1 ] = 0;
 
@@ -769,7 +769,7 @@ void ReleaseCrash(const char *reason)
 	}
 //#if defined(_DEBUG) || defined(_INTERNAL)
 //	/* static */ char buff[8192]; // not so static so we can be threadsafe
-//	_snprintf(buff, 8192, "Sorry, a serious error occurred. (%s)", reason);/
+//	snprintf(buff, 8192, "Sorry, a serious error occurred. (%s)", reason);/
 //	buff[8191] = 0;
 //	::MessageBox(NULL, buff, "Technical Difficulties...", MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
 //#else
@@ -832,7 +832,7 @@ void ReleaseCrash(const char *reason)
 
 #if defined(_DEBUG) || defined(_INTERNAL)
 	/* static */ char buff[8192]; // not so static so we can be threadsafe
-	_snprintf(buff, 8192, "Sorry, a serious error occurred. (%s)", reason);
+	snprintf(buff, 8192, "Sorry, a serious error occurred. (%s)", reason);
 	buff[8191] = 0;
 	::MessageBox(NULL, buff, "Technical Difficulties...", MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
 #else

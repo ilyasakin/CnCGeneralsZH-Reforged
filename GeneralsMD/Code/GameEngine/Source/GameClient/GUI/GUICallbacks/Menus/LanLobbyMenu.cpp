@@ -152,7 +152,7 @@ Bool LANPreferences::usesSystemMapDir(void)
 	if (it == end())
 		return TRUE;
 
-	if (stricmp(it->second.str(), "yes") == 0) {
+	if (strcasecmp(it->second.str(), "yes") == 0) {
 		return TRUE;
 	}
 	return FALSE;

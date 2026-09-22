@@ -166,17 +166,22 @@ elseif(ZH_PLATFORM_MACOS)
 endif()
 
 # ---- wwdebug --------------------------------------------------------------
+# Libraries/Include is on the WWVegas targets from B3 onward: Platform/MSVCCompat.h lives
+# there, always.h includes it, and every WWVegas library reaches always.h.  Nothing in that
+# directory can shadow a WWVegas header - its only headers are under Lib/, rts/ and Platform/.
 add_library(wwdebug STATIC
   ${WW}/WWDebug/wwdebug.cpp
   ${WW}/WWDebug/wwmemlog.cpp
   ${WW}/WWDebug/wwprofile.cpp)
-target_include_directories(wwdebug PUBLIC ${WW}/WWDebug PRIVATE ${WW}/WWLib ${WW}/Wwutil)
+target_include_directories(wwdebug PUBLIC ${WW}/WWDebug
+  PRIVATE ${WW}/WWLib ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 
 # ---- wwutil ---------------------------------------------------------------
 add_library(wwutil STATIC
   ${WW}/Wwutil/mathutil.cpp
   ${WW}/Wwutil/miscutil.cpp)
-target_include_directories(wwutil PUBLIC ${WW}/Wwutil PRIVATE ${WW}/WWLib ${WW}/WWMath)
+target_include_directories(wwutil PUBLIC ${WW}/Wwutil
+  PRIVATE ${WW}/WWLib ${WW}/WWMath ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwutil PRIVATE wwdebug)
 
 # ---- wwmath ---------------------------------------------------------------
@@ -200,7 +205,8 @@ add_library(wwmath STATIC
   ${WW}/WWMath/tri.cpp            ${WW}/WWMath/v3_rnd.cpp
   ${WW}/WWMath/vehiclecurve.cpp   ${WW}/WWMath/vp.cpp
   ${WW}/WWMath/wwmath.cpp)
-target_include_directories(wwmath PUBLIC ${WW}/WWMath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
+target_include_directories(wwmath PUBLIC ${WW}/WWMath
+  PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwmath PRIVATE wwdebug)
 
 # ---- compression ----------------------------------------------------------
@@ -227,10 +233,25 @@ target_include_directories(compression
 # CompressionManager calls z_compress2/z_uncompress and BaseType.h owns 'Byte',
 # so zlib must be built with its Z_PREFIX renames on.
 target_compile_definitions(compression PRIVATE Z_PREFIX)
+# LZH-Light's _lzhl.h says `#define UINT32 unsigned long`, which is 32 bits under Windows' LLP64
+# and 64 under Darwin's LP64.  LZHASH and LZPOS are both UINT32, so at 64 bits the hash index runs
+# off the end of its table and LZHLCompressor::compress walks into unmapped memory - a SIGBUS on the
+# first buffer it is handed.  The header asks first (#ifndef UINT32), so saying it here fixes the
+# width without patching a vendored file that A2 re-fetches.  `unsigned int` is 32 bits on both, so
+# Windows is unchanged and macOS now agrees with it - which is the point, because these widths reach
+# the compressed bytes that save games and network packets are made of.
+target_compile_definitions(compression PRIVATE UINT32=unsigned\ int UINT16=unsigned\ short)
 
 # Round-trip check over every codec CompressionManager exposes.
 add_executable(compression_selfcheck ${COMP}/test_compression.cpp)
 target_link_libraries(compression_selfcheck PRIVATE compression)
+
+# DetRound::To_Long has to round half to even on every architecture, because the simulation's
+# callers were written against an instruction that does.  Lib/DetRound.h is header-only and this
+# links nothing, so it runs before any library in the tree compiles - which is what makes it usable
+# as the first evidence that determinism survives a new architecture.  See Tests/test_detround.cpp.
+add_executable(detround_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_detround.cpp)
+target_include_directories(detround_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 
 # Guards the hand-rolled Matrix3D::Get_Inverse that replaced D3DXMatrixInverse.
 add_executable(wwmath_selfcheck ${WW}/WWMath/test_inverse.cpp)
@@ -275,7 +296,8 @@ add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE}
   ${WW}/WWLib/widestring.cpp ${WW}/WWLib/win.cpp        ${WW}/WWLib/WWCOMUtil.cpp
   ${WW}/WWLib/wwfile.cpp     ${WW}/WWLib/wwfont.cpp     ${WW}/WWLib/wwstring.cpp
   ${WW}/WWLib/xpipe.cpp      ${WW}/WWLib/xstraw.cpp     ${WW}/WWLib/xsurface.cpp)
-target_include_directories(wwlib PUBLIC ${WW}/WWLib PRIVATE ${WW}/WWMath ${WW}/Wwutil)
+target_include_directories(wwlib PUBLIC ${WW}/WWLib
+  PRIVATE ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwlib PRIVATE wwdebug)
 if(ZH_PLATFORM_WINDOWS)
   # winmm: timeGetTime/timeBeginPeriod.  version: verchk.cpp's GetFileVersionInfo,
@@ -292,7 +314,8 @@ add_library(wwsaveload STATIC ${ZH_NOT_YET_PORTABLE}
   ${WW}/WWSaveLoad/pointerremap.cpp        ${WW}/WWSaveLoad/saveload.cpp
   ${WW}/WWSaveLoad/saveloadstatus.cpp      ${WW}/WWSaveLoad/saveloadsubsystem.cpp
   ${WW}/WWSaveLoad/twiddler.cpp            ${WW}/WWSaveLoad/wwsaveload.cpp)
-target_include_directories(wwsaveload PUBLIC ${WW}/WWSaveLoad PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/Wwutil)
+target_include_directories(wwsaveload PUBLIC ${WW}/WWSaveLoad
+  PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwsaveload PRIVATE wwdebug wwlib wwmath)
 
 # ===========================================================================
@@ -939,6 +962,7 @@ target_compile_definitions(test_gameengine PRIVATE
 
 # The three hand-written self-checks predate the harness; run them from ctest
 # too so one command covers everything.
+add_test(NAME detround_selfcheck COMMAND detround_selfcheck)
 add_test(NAME wwmath_selfcheck COMMAND wwmath_selfcheck)
 add_test(NAME compression_selfcheck COMMAND compression_selfcheck)
 # The device and codec smoke tests below belong to targets only a Windows configuration defines.
@@ -1019,6 +1043,22 @@ if(Python3_Interpreter_FOUND)
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gametext.py selfcheck)
 endif()
+
+# The x86_64/arm64 differential harness.  Rosetta 2 runs an x86_64 binary on an Apple Silicon Mac
+# and clang cross-compiles to it, so one machine can build the same source for both architectures
+# and compare what they compute.  That recovers the architecture half of the determinism question
+# without waiting for a Windows machine - and only that half.  It is clang on both sides, so it
+# proves nothing about MSVC's codegen, its optimiser or its 32-bit long; Tests/arch_diff/
+# run_arch_diff.sh says so at length and should be read before anyone calls a green run here
+# "determinism verified".
+#
+# It skips rather than fails where the cross toolchain or Rosetta is absent, because it is a
+# capability of a developer's machine and not a requirement of the build.  ctest reads 77 as a skip.
+add_test(NAME arch_differential
+         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/arch_diff/run_arch_diff.sh
+                 ${CMAKE_CURRENT_SOURCE_DIR}
+                 ${CMAKE_CURRENT_BINARY_DIR}/arch_diff)
+set_tests_properties(arch_differential PROPERTIES SKIP_RETURN_CODE 77)
 
 if(RELEASE_DEBUG_LOGGING)
   target_compile_definitions(gameengine PRIVATE RELEASE_DEBUG_LOGGING)

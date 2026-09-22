@@ -485,11 +485,11 @@ Int parseRandomMap(char *args[], int num)
 	else if (num > eaten)
 	{
 		RandomMapSize size = RANDOM_MAP_SIZE_COUNT;
-		if (stricmp( args[eaten], "small" ) == 0)
+		if (strcasecmp( args[eaten], "small" ) == 0)
 			size = RANDOM_MAP_SIZE_SMALL;
-		else if (stricmp( args[eaten], "normal" ) == 0)
+		else if (strcasecmp( args[eaten], "normal" ) == 0)
 			size = RANDOM_MAP_SIZE_NORMAL;
-		else if (stricmp( args[eaten], "large" ) == 0)
+		else if (strcasecmp( args[eaten], "large" ) == 0)
 			size = RANDOM_MAP_SIZE_LARGE;
 
 		if (size != RANDOM_MAP_SIZE_COUNT)
@@ -1600,7 +1600,7 @@ Int parseTextLanguage(char *args[], int num)
 	{
 		for (Int language = 0; language < TEXT_LANGUAGE_COUNT; ++language)
 		{
-			if (stricmp(args[1], TheTextLanguageNames[language]) == 0)
+			if (strcasecmp(args[1], TheTextLanguageNames[language]) == 0)
 			{
 				TheWritableGlobalData->m_textLanguage = language;
 				DEBUG_LOG(("-language: %s\n", TheTextLanguageNames[language]));
@@ -2439,7 +2439,7 @@ void parseCommandLine(int argc, char *argv[])
 			int len2 = strlen(argv[arg]);
 			if (len2 != len)
 				continue;
-			if (!strnicmp(argv[arg], params[param].name, len))
+			if (!strncasecmp(argv[arg], params[param].name, len))
 			{
 				arg += params[param].func(argv+arg, argc-arg);
 				found = true;

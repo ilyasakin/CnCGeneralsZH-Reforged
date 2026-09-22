@@ -466,7 +466,7 @@ AsciiString GameState::findNextSaveFilename( UnicodeString desc )
 		leaf.format("%s_%04d%s", adesc.str(), i, SAVE_GAME_EXTENSION);
 
 		AsciiString path = getFilePathInSaveDirectory(leaf);
-		if( _access( path.str(), 0 ) == -1 )
+		if( access( path.str(), 0 ) == -1 )
 			return leaf;	// note that this returns the leaf, not the full path
 	}
 #else
@@ -513,7 +513,7 @@ AsciiString GameState::findNextSaveFilename( UnicodeString desc )
 			fullPath = getFilePathInSaveDirectory(filename);
 
 			// if file does not exist we're all good
-			if( _access( fullPath.str(), 0 ) == -1 )
+			if( access( fullPath.str(), 0 ) == -1 )
 				return filename;
 
 			// test the text filename
@@ -1028,7 +1028,7 @@ void GameState::getSaveGameInfoFromFile( AsciiString filename, SaveGameInfo *sav
 			blockSize = xferLoad.beginBlock();
 
 			// is this the block of game info data
-			if( stricmp( token.str(), GAME_STATE_BLOCK_STRING ) == 0 )
+			if( strcasecmp( token.str(), GAME_STATE_BLOCK_STRING ) == 0 )
 			{
 				GameState tempGameState;
 
@@ -1293,7 +1293,7 @@ void GameState::iterateSaveFiles( IterateSaveFileCallback callback, void *userDa
 
 			// see if there is a ".sav" at end of this filename
 			Char *c = strrchr( item.cFileName, '.' );
-			if( c && stricmp( c, ".sav" ) == 0 )
+			if( c && strcasecmp( c, ".sav" ) == 0 )
 			{
 
 				// construction asciistring filename

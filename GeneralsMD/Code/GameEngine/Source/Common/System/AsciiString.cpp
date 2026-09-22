@@ -293,7 +293,13 @@ void AsciiString::format_va(const AsciiString& format, va_list args)
 {
 	validate();
 	char buf[MAX_FORMAT_BUF_LEN];
-  if (_vsnprintf(buf, sizeof(buf)/sizeof(char)-1, format.str(), args) < 0)
+  // vsnprintf, not vsnprintf, and the test is not the same test.  Microsoft's returns -1 when it
+	// truncates; C99's always returns the length it wanted, so "< 0" would stop noticing.  Passing
+	// the full sizeof is also deliberate: C99 counts the terminator inside the bound, so the usable
+	// length is unchanged at sizeof(buf)-1 - and a string that exactly filled the old bound used to
+	// leave buf unterminated for set() to read past, which this no longer permits.
+	const int wanted = vsnprintf(buf, sizeof(buf), format.str(), args);
+	if (wanted < 0 || (size_t)wanted >= sizeof(buf))
 			throw ERROR_OUT_OF_MEMORY;
 	set(buf);
 	validate();
@@ -304,7 +310,8 @@ void AsciiString::format_va(const char* format, va_list args)
 {
 	validate();
 	char buf[MAX_FORMAT_BUF_LEN];
-  if (_vsnprintf(buf, sizeof(buf)/sizeof(char)-1, format, args) < 0)
+  const int wanted = vsnprintf(buf, sizeof(buf), format, args);
+	if (wanted < 0 || (size_t)wanted >= sizeof(buf))
 			throw ERROR_OUT_OF_MEMORY;
 	set(buf);
 	validate();
@@ -335,7 +342,7 @@ Bool AsciiString::startsWithNoCase(const char* p) const
 	if (lenThis < lenThat)
 		return false;	// that must be smaller than this
 
-	return strnicmp(peek(), p, lenThat) == 0;
+	return strncasecmp(peek(), p, lenThat) == 0;
 }
 
 // -----------------------------------------------------
@@ -363,13 +370,13 @@ Bool AsciiString::endsWithNoCase(const char* p) const
 	if (lenThis < lenThat)
 		return false;	// that must be smaller than this
 
-	return strnicmp(peek() + lenThis - lenThat, p, lenThat) == 0;
+	return strncasecmp(peek() + lenThis - lenThat, p, lenThat) == 0;
 }
 
 //-----------------------------------------------------------------------------
 Bool AsciiString::isNone() const
 {
-	return m_data && stricmp(peek(), "None") == 0;
+	return m_data && strcasecmp(peek(), "None") == 0;
 }
 
 //-----------------------------------------------------------------------------

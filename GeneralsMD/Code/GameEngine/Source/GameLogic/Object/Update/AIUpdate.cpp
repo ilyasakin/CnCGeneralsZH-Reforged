@@ -248,7 +248,7 @@ static void AIUpdate_traceMove( const Object *obj, Bool blocked, Int blockedFram
 	self->m_locomotorTemplates[set].clear();
 	for (const char* locoName = ini->getNextToken(); locoName; locoName = ini->getNextTokenOrNull())
 	{
-		if (!*locoName || !stricmp(locoName, "None"))
+		if (!*locoName || !strcasecmp(locoName, "None"))
 			continue;
 
 		NameKeyType locoKey = NAMEKEY(locoName);

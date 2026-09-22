@@ -25,7 +25,14 @@
 
 #include "always.h"
 #include "thread.h"
+// MSVC's compiler-intrinsics header, for the _interlockedbittestandset spin in
+// CriticalSectionClass::Lock below.  clang ships an <intrin.h> that #include_nexts Microsoft's and
+// fails where there is none, so this is guarded and the Windows translation unit is unchanged.  The
+// intrinsic is then undeclared on arm64 on purpose - the error names the one thing to replace
+// instead of hiding behind a missing header.  B8 owns that replacement and this file.
+#if defined(_MSC_VER)
 #include <intrin.h>
+#endif
 
 
 // Always use mutex or critical section when accessing the same data from multiple threads!

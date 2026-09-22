@@ -53,7 +53,7 @@
 #include "bittype.h"
 #include "wwdebug.h"
 #include "mutex.h"
-#include <new.h>
+#include <new>   // was <new.h>, which only MSVC has
 #include <stdlib.h>
 #include <stddef.h>
 
@@ -160,8 +160,11 @@ private:
 ** Macro to declare the allocator for your class.  Put this in the cpp file for
 ** the class.
 */
+// template<> is the standard spelling for defining an explicit specialization of a class
+// template's static data member, and MSVC accepts it as readily as it accepts leaving it out.  One
+// line here covers all ten DEFINE_AUTO_POOL users rather than ten edits at the call sites.
 #define DEFINE_AUTO_POOL(T,BLOCKSIZE) \
-ObjectPoolClass<T,BLOCKSIZE> AutoPoolClass<T,BLOCKSIZE>::Allocator;
+template<> ObjectPoolClass<T,BLOCKSIZE> AutoPoolClass<T,BLOCKSIZE>::Allocator;
 
 
 /***********************************************************************************************

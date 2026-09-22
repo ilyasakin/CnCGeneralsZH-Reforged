@@ -419,7 +419,7 @@ const Int TheOptionCatalogCount = (sizeof( TheOptionCatalog ) / sizeof( TheOptio
 const OptionDef *findOptionDef( const char *iniKey )
 {
 	for( Int i = 0; i < TheOptionCatalogCount; ++i )
-		if( stricmp( TheOptionCatalog[ i ].iniKey, iniKey ) == 0 )
+		if( strcasecmp( TheOptionCatalog[ i ].iniKey, iniKey ) == 0 )
 			return &TheOptionCatalog[ i ];
 
 	return NULL;
@@ -438,7 +438,7 @@ Int clampOptionValue( const OptionDef& def, Int value )
 //-----------------------------------------------------------------------------
 /** Read one stored string.
 	*
-	* The option getters this replaces tested `stricmp(s, "yes") == 0` and called everything else
+	* The option getters this replaces tested `strcasecmp(s, "yes") == 0` and called everything else
 	* false, so a hand-edited `ZoomToCursor = true` silently did nothing.  UserPreferences::getBool
 	* has always been the lenient one; the catalog follows it.  Writing still produces "yes"/"no". */
 static Int parseOptionValue( const OptionDef& def, const AsciiString& stored )
@@ -446,12 +446,12 @@ static Int parseOptionValue( const OptionDef& def, const AsciiString& stored )
 	if( def.kind == OPTION_BOOL )
 	{
 		const char *s = stored.str();
-		const Bool on = stricmp( s, "yes" ) == 0
-									|| stricmp( s, "true" ) == 0
-									|| stricmp( s, "on" ) == 0
-									|| stricmp( s, "y" ) == 0
-									|| stricmp( s, "t" ) == 0
-									|| stricmp( s, "1" ) == 0;
+		const Bool on = strcasecmp( s, "yes" ) == 0
+									|| strcasecmp( s, "true" ) == 0
+									|| strcasecmp( s, "on" ) == 0
+									|| strcasecmp( s, "y" ) == 0
+									|| strcasecmp( s, "t" ) == 0
+									|| strcasecmp( s, "1" ) == 0;
 		return on ? 1 : 0;
 	}
 

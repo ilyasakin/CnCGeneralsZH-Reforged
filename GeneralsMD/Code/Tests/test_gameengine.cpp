@@ -10839,7 +10839,7 @@ TEST(option_catalog_rows_are_well_formed)
 			CHECK( strncmp( def.widgetName, "OptionsMenu.wnd:", 16 ) == 0 );
 
 		for( Int j = 0; j < i; ++j )
-			CHECK_NE( stricmp( TheOptionCatalog[ j ].iniKey, def.iniKey ), 0 );
+			CHECK_NE( strcasecmp( TheOptionCatalog[ j ].iniKey, def.iniKey ), 0 );
 	}
 
 	/* the table is terminated as well as counted, so a walk may use either */
