@@ -177,6 +177,7 @@ you start. That commit is the lock.
 | B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | in progress | -83 |
 | B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | not started | |
 | B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress | -3a |
+| B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | in progress | -14 |
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | absorbed by B3 | — |
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | in progress | -21 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
@@ -193,6 +194,26 @@ you start. That commit is the lock.
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
+
+### "ctest is green" was not what it looked like
+
+Recorded 2026-09-22, because this plan's own status reports leaned on it. A1's `PENDING_MACOS`
+keyword built five targets `EXCLUDE_FROM_ALL` and then **skipped `add_test` entirely**, so
+`ctest -N` listed **11 on macOS against 16 on Windows** and nothing said so. `test_wwmath`,
+`test_wwlib`, `test_wwsaveload`, `test_wwutil` and `test_gameengine` did not exist as far as ctest
+was concerned. Green was green over a smaller set than anyone knew.
+
+Separately, B7's own target sat inside a Windows guard, so the test written to protect the `.w3d`
+format ran only on the platform that did not need it.
+
+Both are now fixed: deferred tests are registered `DISABLED` rather than dropped, configure prints
+how many, and the output distinguishes "Not Run (Disabled)" from a plain "Not Run" so a deferred
+test and a broken one no longer look alike.
+
+**The audit deliberately did not make ctest green.** Three tests fail on macOS and were left
+failing, because their targets carry no deferral marker and so are expected to build here today.
+Marking them disabled would have hidden three real regressions behind the exact move the audit
+existed to stop.
 
 ### M1 has doubled, and that is the finding
 
