@@ -40,6 +40,8 @@
 #include "win.h"
 #include <stdio.h>
 
+#if defined(_WIN32)   // see widestring.h
+
 
 ///////////////////////////////////////////////////////////////////
 //	Static member initialzation
@@ -366,3 +368,6 @@ bool WideStringClass::Is_ANSI(void)
 	return true;
 	}
 
+
+
+#endif // _WIN32

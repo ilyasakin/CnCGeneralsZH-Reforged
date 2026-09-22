@@ -697,7 +697,7 @@ bool TextureFileCache::Open_Texture_Handle(const char *fname)
 {
 	if (TextureHandle) {
 		assert(CurrentTexture);
-		if (!strcmpi(fname, CurrentTexture)) {
+		if (!strcasecmp(fname, CurrentTexture)) {
 			return(true);
 		}
 		// Wrong texture, close it down so we can open another.
