@@ -1411,6 +1411,12 @@ TEST(threadclass_stop_returns_promptly_when_called_unlocked)
 // where a recursive one was needed, a poll that blocks, a thread id that is the same for every
 // thread.  None of them would fail as a wrong answer; they fail as a hang or as an assert that
 // passes from the wrong thread.
+//
+// Note the std::atomic on every flag these worker classes share with the thread that starts them.
+// The first draft of these tests used `volatile bool`, which is exactly the defect B14 had just
+// removed from ThreadClass::running - and ThreadSanitizer reported it, in the tests, on the run
+// meant to prove the fix.  `volatile` is the reflex; it orders nothing and it is not an atomic.
+// Anything shared with a worker here wants std::atomic, including in a test.
 
 TEST(criticalsectionclass_is_recursive)
 {
