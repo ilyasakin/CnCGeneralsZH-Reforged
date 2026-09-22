@@ -37,7 +37,19 @@
 #pragma once
 #endif // _MSC_VER >= 1000
 
-#if !defined(TRUE_FALSE_DEFINED) && !defined(__BORLANDC__) && (_MSC_VER < 1100) && !defined(__WATCOMC__)
+/*
+**	This whole file is a 1994 workaround for compilers that did not have `bool` yet, and its own
+**	condition says so: (_MSC_VER < 1100) is false on every MSVC since Visual C++ 5, so it has been
+**	inert on Windows for twenty-five years.  The trouble is what the condition does on a compiler
+**	that does not define _MSC_VER at all - the preprocessor reads the undefined name as 0, (0 < 1100)
+**	passes, and clang walks into the #else branch below and tries to `typedef int bool` over a
+**	keyword.  Eighteen of wwlib's translation units stopped there.
+**
+**	Requiring _MSC_VER to be defined says what was meant.  Every compiler that reached the old test
+**	reaches the same answer: modern MSVC inert, MSVC before 5 active, Borland and Watcom excluded by
+**	their own clauses.  Only the case nobody had in 1994 changes.
+*/
+#if !defined(TRUE_FALSE_DEFINED) && !defined(__BORLANDC__) && defined(_MSC_VER) && (_MSC_VER < 1100) && !defined(__WATCOMC__)
 #define TRUE_FALSE_DEFINED
 
 /**********************************************************************

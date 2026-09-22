@@ -39,10 +39,13 @@
 #include	"mpmath.h"
 #include	"rng.h"
 
-int bignum::Error = 0;
-bool bignum::Carry = false;
-bool bignum::Borrow = false;
-bignum bignum::Remainder;
+// bignum is a typedef for Int<MAX_UNIT_PRECISION>, so each of these defines a static member of a
+// class template specialisation and needs template<> in front of it.  MSVC accepts the standard
+// spelling as readily as it accepts leaving it out.
+template<> int bignum::Error = 0;
+template<> bool bignum::Carry = false;
+template<> bool bignum::Borrow = false;
+template<> bignum bignum::Remainder;
 
 
 

@@ -38,7 +38,11 @@ extern "C" {
 #else
 
 #include "win.h"
-#include <process.h>
+#if defined(_MSC_VER)
+#include <process.h>   // Microsoft declares getpid here
+#else
+#include <unistd.h>    // POSIX declares it here
+#endif
 #endif
 #include <time.h>
 #include <assert.h>
