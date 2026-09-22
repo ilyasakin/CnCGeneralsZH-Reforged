@@ -148,6 +148,14 @@ inline int mkdir(const char* path, int /* mode */) { return _mkdir(path); }
 #error "TCHAR here is narrow-only by assumption; _UNICODE needs B1's char16_t work, not this shim."
 #endif
 
+// WCHAR is deliberately absent, and must not become a compatibility alias here.  The only
+// implementations behind it are Win32 APIs - StringClass::Copy_Wide is two calls to
+// WideCharToMultiByte - so a typedef would make files compile and leave declared functions with no
+// possible body off Windows, or invite a second UTF-16-to-narrow conversion beside the engine's own.
+// Where WW3D2's text interface takes a WCHAR it is really taking engine text and becomes WideChar
+// under B1; where wwstring.h and widestring.h take one they are Win32-only and have a platform
+// guard.  See docs/mac-port/B1-widechar-survey.md.  Agreed with B1's owner rather than assumed.
+
 typedef char TCHAR;
 
 #ifndef _T
