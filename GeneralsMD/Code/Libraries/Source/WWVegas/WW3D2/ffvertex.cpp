@@ -21,10 +21,10 @@
 #include <stdio.h>
 
 // The high half of D3DTSS_TEXCOORDINDEX is the generation mode and the low half the coordinate set.
-static const DWORD COORDINATE_SET_MASK = 0xffff;
+static const FixedFunctionValue COORDINATE_SET_MASK = 0xffff;
 
 // D3DTTFF_PROJECTED sits above the count, which is the low three bits.
-static const DWORD TEXTURE_TRANSFORM_COUNT_MASK = 0x07;
+static const FixedFunctionValue TEXTURE_TRANSFORM_COUNT_MASK = 0x07;
 
 // The constant registers the D3D9 profile uses, in the order they are declared.  A vs_2_0 shader
 // has 256 float4 registers and this uses fewer than 70 of them, so the layout is written for
@@ -55,24 +55,24 @@ static const unsigned REGISTER_VIEWPORT = VERTEX_REGISTER_VIEWPORT;
 static const unsigned REGISTER_LIGHTS = VERTEX_REGISTER_LIGHTS;
 static const unsigned REGISTERS_PER_LIGHT = VERTEX_REGISTERS_PER_LIGHT;
 
-static bool has_normal(DWORD fvf)
+static bool has_normal(FixedFunctionValue fvf)
 {
-	return (fvf & D3DFVF_NORMAL) != 0;
+	return (fvf & FF_FVF_NORMAL) != 0;
 }
 
-static bool has_diffuse(DWORD fvf)
+static bool has_diffuse(FixedFunctionValue fvf)
 {
-	return (fvf & D3DFVF_DIFFUSE) != 0;
+	return (fvf & FF_FVF_DIFFUSE) != 0;
 }
 
-static bool is_pretransformed(DWORD fvf)
+static bool is_pretransformed(FixedFunctionValue fvf)
 {
-	return (fvf & D3DFVF_POSITION_MASK) == D3DFVF_XYZRHW;
+	return (fvf & FF_FVF_POSITION_MASK) == FF_FVF_XYZRHW;
 }
 
-static unsigned texture_coordinate_set_count(DWORD fvf)
+static unsigned texture_coordinate_set_count(FixedFunctionValue fvf)
 {
-	return (fvf & D3DFVF_TEXCOUNT_MASK) >> D3DFVF_TEXCOUNT_SHIFT;
+	return (fvf & FF_FVF_TEXCOUNT_MASK) >> FF_FVF_TEXCOUNT_SHIFT;
 }
 
 // A material source resolves to a constant or to a vertex colour.  D3DMCS_COLOR1 reads the diffuse
@@ -80,15 +80,15 @@ static unsigned texture_coordinate_set_count(DWORD fvf)
 // back to the material in both of those cases rather than reading a register that is not there.
 // D3DMCS_COLOR2 is the specular vertex colour, which no format in the game carries, so a
 // description asking for it is refused rather than quietly given the material instead.
-static bool material_source_expression(DWORD source, const char * material_constant,
+static bool material_source_expression(FixedFunctionValue source, const char * material_constant,
 	const VertexPipelineDescription & description, std::string & expression)
 {
 	switch (source) {
-	case D3DMCS_MATERIAL:
+	case FF_MCS_MATERIAL:
 		expression = material_constant;
 		return true;
 
-	case D3DMCS_COLOR1:
+	case FF_MCS_COLOR1:
 		if (has_diffuse(description.FVF) && description.ColourVertexEnabled) {
 			expression = "input.Diffuse";
 		}
@@ -102,7 +102,7 @@ static bool material_source_expression(DWORD source, const char * material_const
 	}
 }
 
-static void append_light(std::string & body, unsigned index, DWORD type, const char * accumulator)
+static void append_light(std::string & body, unsigned index, FixedFunctionValue type, const char * accumulator)
 {
 	char line[1024];
 
@@ -112,7 +112,7 @@ static void append_light(std::string & body, unsigned index, DWORD type, const c
 		"        float attenuation;\n");
 	body += line;
 
-	if (type == D3DLIGHT_DIRECTIONAL) {
+	if (type == FF_LIGHT_DIRECTIONAL) {
 		// A directional light's direction is the way the light travels, so the vector towards it
 		// is the negative of it and there is nothing to attenuate.
 		snprintf(line, sizeof(line),
@@ -134,7 +134,7 @@ static void append_light(std::string & body, unsigned index, DWORD type, const c
 		body += line;
 	}
 
-	if (type == D3DLIGHT_SPOT) {
+	if (type == FF_LIGHT_SPOT) {
 		// D3D9's cone is a smooth falloff between the inner and the outer cosine raised to the
 		// falloff power.  Light%uSpot carries cos(theta/2), cos(phi/2) and the falloff.
 		snprintf(line, sizeof(line),
@@ -167,12 +167,12 @@ static bool append_texture_coordinates(std::string & body,
 {
 	for (unsigned stage = 0; stage < description.StageCount; ++stage) {
 		const VertexStageDescription & source = description.Stages[stage];
-		const DWORD generation = source.TextureCoordinateIndex & ~COORDINATE_SET_MASK;
+		const FixedFunctionValue generation = source.TextureCoordinateIndex & ~COORDINATE_SET_MASK;
 		const unsigned set = source.TextureCoordinateIndex & COORDINATE_SET_MASK;
 
 		char line[1024];
 		switch (generation) {
-		case D3DTSS_TCI_PASSTHRU:
+		case FF_TSS_TCI_PASSTHRU:
 			if (set >= texture_coordinate_set_count(description.FVF)) {
 				// The format does not carry the set the stage is asking for, which the engine does
 				// on purpose: a shadow quad has a texture stage on and no coordinates in its
@@ -187,17 +187,17 @@ static bool append_texture_coordinates(std::string & body,
 			}
 			break;
 
-		case D3DTSS_TCI_CAMERASPACEPOSITION:
+		case FF_TSS_TCI_CAMERASPACEPOSITION:
 			snprintf(line, sizeof(line), "    float4 generated%u = float4(view_position.xyz, 1.0);\n",
 				stage);
 			break;
 
-		case D3DTSS_TCI_CAMERASPACENORMAL:
+		case FF_TSS_TCI_CAMERASPACENORMAL:
 			snprintf(line, sizeof(line), "    float4 generated%u = float4(view_normal, 1.0);\n",
 				stage);
 			break;
 
-		case D3DTSS_TCI_CAMERASPACEREFLECTIONVECTOR:
+		case FF_TSS_TCI_CAMERASPACEREFLECTIONVECTOR:
 			snprintf(line, sizeof(line),
 				"    float4 generated%u = float4(reflect(normalize(view_position.xyz), view_normal), 1.0);\n",
 				stage);
@@ -208,13 +208,13 @@ static bool append_texture_coordinates(std::string & body,
 		}
 		body += line;
 
-		const DWORD transform_count = source.TextureTransformFlags & TEXTURE_TRANSFORM_COUNT_MASK;
-		if (transform_count != D3DTTFF_DISABLE) {
+		const FixedFunctionValue transform_count = source.TextureTransformFlags & TEXTURE_TRANSFORM_COUNT_MASK;
+		if (transform_count != FF_TTFF_DISABLE) {
 			snprintf(line, sizeof(line), "    generated%u = mul(generated%u, TextureMatrix%u);\n",
 				stage, stage, stage);
 			body += line;
 
-			if ((source.TextureTransformFlags & D3DTTFF_PROJECTED) != 0) {
+			if ((source.TextureTransformFlags & FF_TTFF_PROJECTED) != 0) {
 				// A projected transform divides by the last coordinate the count named, which for
 				// every projected stage the game sets is the third.
 				snprintf(line, sizeof(line),
@@ -466,8 +466,8 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 	}
 
 	for (unsigned index = 0; index < description.LightCount; ++index) {
-		const DWORD type = description.Lights[index].Type;
-		if (type != D3DLIGHT_DIRECTIONAL && type != D3DLIGHT_POINT && type != D3DLIGHT_SPOT) {
+		const FixedFunctionValue type = description.Lights[index].Type;
+		if (type != FF_LIGHT_DIRECTIONAL && type != FF_LIGHT_POINT && type != FF_LIGHT_SPOT) {
 			return false;
 		}
 	}
@@ -511,8 +511,8 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 		body += "    float3 local_light = float3(0.0, 0.0, 0.0);\n";
 		body += "    float3 specular_light = float3(0.0, 0.0, 0.0);\n";
 		for (unsigned index = 0; index < description.LightCount; ++index) {
-			const DWORD type = description.Lights[index].Type;
-			append_light(body, index, type, type == D3DLIGHT_DIRECTIONAL ? "diffuse_light" : "local_light");
+			const FixedFunctionValue type = description.Lights[index].Type;
+			append_light(body, index, type, type == FF_LIGHT_DIRECTIONAL ? "diffuse_light" : "local_light");
 		}
 		body += "    diffuse_light += local_light;\n";
 
@@ -569,14 +569,14 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 		// FogParameters carries the start, the end and the density; the mode picks which two of
 		// them are read.  D3D9's factor is the weight of the unfogged colour, so 1 is no fog.
 		switch (description.FogVertexMode) {
-		case D3DFOG_LINEAR:
+		case FF_FOG_LINEAR:
 			body += "    output.Fog = saturate((FogParameters.y - view_position.z)"
 				" / max(FogParameters.y - FogParameters.x, 0.0001));\n";
 			break;
-		case D3DFOG_EXP:
+		case FF_FOG_EXP:
 			body += "    output.Fog = saturate(exp(-FogParameters.z * view_position.z));\n";
 			break;
-		case D3DFOG_EXP2:
+		case FF_FOG_EXP2:
 			body += "    output.Fog = saturate(exp(-FogParameters.z * FogParameters.z"
 				" * view_position.z * view_position.z));\n";
 			break;
