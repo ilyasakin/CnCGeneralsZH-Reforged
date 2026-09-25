@@ -1170,8 +1170,11 @@ GlobalData::GlobalData()
 	
 	// lets CRC the executable!  Whee!
 	const Int blockSize = 65536;
+#ifdef _WIN32
 	Char buffer[ _MAX_PATH ];
+#endif
 	CRC exeCRC;
+#ifdef _WIN32
 	GetModuleFileName( NULL, buffer, sizeof( buffer ) );
 	File *fp = TheFileSystem->openFile(buffer, File::READ | File::BINARY);
 	if (fp != NULL) {
@@ -1184,6 +1187,15 @@ GlobalData::GlobalData()
 		fp->close();
 		fp = NULL;
 	}
+#else
+	/* No executable bytes off Windows: a Mac or Linux binary can never have generals.exe's, so
+		 hashing them would only guarantee a mismatch.  Decision 5 in docs/mac-port/README.md replaces
+		 this term on every platform with a build fingerprint over the source (task N1).  Until N1
+		 lands, this build hashes the version and the two script files only, in the same order, and
+		 so its m_exeCRC matches NO Windows build: it cannot join a Windows LAN or GameSpy game, and
+		 its replays say "different executable" there, and theirs here. */
+	File *fp = NULL;
+#endif
 	if (TheVersion)
 	{
 		UnsignedInt version = TheVersion->getVersionNumber();
