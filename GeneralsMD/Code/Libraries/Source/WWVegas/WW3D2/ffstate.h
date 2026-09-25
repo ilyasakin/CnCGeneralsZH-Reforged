@@ -25,9 +25,11 @@
 ** generators switch on, and each one is asserted equal to the SDK's here: the literals are checked
 ** by every Windows build that compiles a generator.
 **
-** Off Windows it is the table alone.  FixedFunctionValue is unsigned long on both: DWORD is
-** unsigned long on Windows (minwindef.h), so a description field is the type it was there, and on
-** an LP64 platform it is merely wider than the values it holds.
+** Off Windows it is the table alone, and FixedFunctionValue is uint32_t: the width DWORD has on
+** Windows, not unsigned long, which is 64 bits on an LP64 platform.  At 64 bits a ~ or a shift on a
+** state value would differ from Windows in its upper bits, and so would anything that hashes or
+** compares a description's raw bytes.  The type differs between the two (DWORD is unsigned long),
+** so whatever prints a value casts it: the generators' keys print (unsigned long) with %lu.
 */
 
 #ifndef FFSTATE_H
@@ -37,7 +39,8 @@
 #include <d3d9.h>
 typedef DWORD FixedFunctionValue;
 #else
-typedef unsigned long FixedFunctionValue;
+#include <stdint.h>
+typedef uint32_t FixedFunctionValue;
 #endif
 
 #include "ffstate_values.h"

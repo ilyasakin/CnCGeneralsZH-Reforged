@@ -203,6 +203,20 @@ That is a reading of the licence files, not legal advice; whoever vendors them s
 - **Windows compiles exactly what it did, apart from the rename.** The generated D3D9 and D3D11
   text is byte-identical (next section).
 
+### FixedFunctionValue is 32 bits off Windows (2026-09-26, after the merge)
+
+- **Why.** It was `unsigned long`, which is 64 bits on LP64, where `DWORD` is 32. A `~`, a shift or a
+  hash over a description's bytes would then differ from Windows in the upper bits. It is `uint32_t`
+  off Windows now; Windows keeps `typedef DWORD`.
+- **What depended on `long`.** The three key functions, which printed each value with `%lu`. They
+  cast to `unsigned long` now, a no-op on Windows. Nothing else did: no overload, no other format.
+- **Proof.** `ffshader_dump` also writes every case's pipeline key (`keys.txt`). The 177 programs,
+  the index and the keys are identical before and after, under mingw-w64 in Wine and on macOS, both
+  built with `-Wall -Wformat` and no warnings.
+- **Linux.** `test_shader_sdl` through `ctest -V` shows `spirv-val` running on 49/49 and 20/20 in all
+  four rows (arm64 and amd64, gcc and clang). Each row's dump is byte-identical to macOS's, and each
+  row drew the generated route on lavapipe.
+
 ### The byte-identical proof
 
 `Tests/shader_cases.h` holds 69 cases:
