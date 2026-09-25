@@ -31,6 +31,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "Platform/DoubleClickTime.h"
 
 #define DEFINE_TERRAIN_LOD_NAMES
 #define DEFINE_TIME_OF_DAY_NAMES
@@ -565,19 +566,6 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 
 };
 
-
-//-------------------------------------------------------------------------------------------------
-/* How far apart two clicks may be and still be a double click, in milliseconds: the player's own
-	 setting, on Windows.  Off Windows that setting is C3's to read (input is C3's), and until then this
-	 is 500, which is Windows' own default. */
-static UnsignedInt systemDoubleClickTimeMS( void )
-{
-#if defined(_WIN32)
-	return GetDoubleClickTime();
-#else
-	return 500;
-#endif
-}
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
