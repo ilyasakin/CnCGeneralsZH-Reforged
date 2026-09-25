@@ -99,11 +99,17 @@ if(ZH_PLATFORM_WINDOWS)
   list(APPEND VENDORED
     ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/DirectX/Include/d3d8.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/GameSpy/CMakeLists.txt)
+  set(VENDOR_HINT "Run Tools\\vendor.ps1 (build.bat does it for you).")
+else()
+  # SDL3 and miniaudio are the platform layer everywhere but Windows (decision 3).
+  list(APPEND VENDORED
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/SDL3/CMakeLists.txt
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/miniaudio/miniaudio.c)
+  set(VENDOR_HINT "Run Tools/vendor.sh (build.sh does it for you).")
 endif()
 foreach(vendored ${VENDORED})
   if(NOT EXISTS ${vendored})
-    message(FATAL_ERROR
-      "${vendored} is missing. Run Tools\\vendor.ps1 (build.bat does it for you).")
+    message(FATAL_ERROR "${vendored} is missing. ${VENDOR_HINT}")
   endif()
 endforeach()
 
@@ -735,6 +741,44 @@ endif()  # ZH_PLATFORM_WINDOWS - GameSpy SDK
 # alone, and brings the gumbo HTML parser with it.
 set(LITEHTML_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 add_subdirectory(${LIBSRC}/litehtml ${CMAKE_CURRENT_BINARY_DIR}/litehtml)
+
+# ---- SDL3 and miniaudio: the platform layer off Windows (decision 3) -------------------------------
+# Both are fetched by Tools/vendor.sh and neither is fetched on Windows, which keeps Win32Device and
+# Miles.  Nothing links either yet: C2/C3 take SDL3's window and events, D4 its GPU API, C4 miniaudio.
+# They are built by default all the same, so that a break shows up in the build that caused it
+# rather than in the first task to link them.
+if(ZH_PLATFORM_POSIX)
+  # SDL3 static, and only the subsystems decision 3 uses.  On: video (window, events, message boxes)
+  # and GPU (the renderer - Metal on macOS, Vulkan on Linux).  Off: audio (miniaudio has that job),
+  # render (SDL's 2D renderer; D4 uses the GPU API directly), camera, joystick, haptic, hidapi,
+  # power, sensor, dialog and tray, and the OpenGL/GLES video drivers, which the GPU API does not
+  # use.  C3 turns joystick back on if it wants gamepads.  Tests, examples and install are off.
+  foreach(_sdl_off SDL_SHARED SDL_TEST_LIBRARY SDL_TESTS SDL_EXAMPLES SDL_INSTALL SDL_UNINSTALL
+                   SDL_AUDIO SDL_RENDER SDL_CAMERA SDL_JOYSTICK SDL_HAPTIC SDL_HIDAPI SDL_POWER
+                   SDL_SENSOR SDL_DIALOG SDL_TRAY SDL_OPENGL SDL_OPENGLES)
+    set(${_sdl_off} OFF CACHE BOOL "" FORCE)
+  endforeach()
+  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU)
+    set(${_sdl_on} ON CACHE BOOL "" FORCE)
+  endforeach()
+  add_subdirectory(${LIBSRC}/SDL3 ${CMAKE_CURRENT_BINARY_DIR}/SDL3)
+
+  # miniaudio: one C file.  Its own CMakeLists builds extras and examples this does not want.
+  # It opens the platform's audio libraries at run time by default, so the static library needs
+  # nothing at link beyond threads, libm and libdl, which are its consumers' to carry.
+  find_package(Threads REQUIRED)
+  add_library(miniaudio STATIC ${LIBSRC}/miniaudio/miniaudio.c)
+  target_include_directories(miniaudio PUBLIC ${LIBSRC}/miniaudio)
+  target_link_libraries(miniaudio INTERFACE Threads::Threads ${CMAKE_DL_LIBS})
+  if(ZH_PLATFORM_LINUX)
+    target_link_libraries(miniaudio INTERFACE m)
+  endif()
+
+  # What SDL3's GPU API can do on this machine: the evidence D2 and D5 need before the backend
+  # interface is designed.  Needs a GPU and a display, so it is built but not registered with ctest.
+  add_executable(sdl_gpu_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/sdl_gpu_probe.cpp)
+  target_link_libraries(sdl_gpu_probe PRIVATE SDL3::SDL3-static)
+endif()
 
 # d3d8to9 is no longer built.  It was a d3d8.dll next to generals.exe that translated
 # every D3D8 call to Direct3D 9, which is how the renderer ran on a modern runtime
