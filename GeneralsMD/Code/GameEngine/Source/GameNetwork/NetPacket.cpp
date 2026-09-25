@@ -563,7 +563,7 @@ UnsignedInt NetPacket::GetDisconnectChatCommandSize(NetCommandMsg *msg) {
 	++msglen; // the 'D'
 	msglen += sizeof(UnsignedByte); // string msglength
 	UnsignedByte textmsglen = usableChatTextLength(cmdMsg->getText());
-	msglen += textmsglen * sizeof(UnsignedShort);
+	msglen += textmsglen * sizeof(WideChar);
 
 	return msglen;
 }
@@ -600,7 +600,7 @@ UnsignedInt NetPacket::GetChatCommandSize(NetCommandMsg *msg) {
 	++msglen; // the 'D'
 	msglen += sizeof(UnsignedByte); // string msglength
 	UnsignedByte textmsglen = usableChatTextLength(cmdMsg->getText());
-	msglen += textmsglen * sizeof(UnsignedShort);
+	msglen += textmsglen * sizeof(WideChar);
 	msglen += sizeof(Int); // playerMask
 
 	return msglen;
@@ -1480,8 +1480,8 @@ void NetPacket::FillBufferWithDisconnectChatCommand(UnsignedByte *buffer, NetCom
 	memcpy(buffer + offset, &length, sizeof(UnsignedByte));
 	offset += sizeof(UnsignedByte);
 
-	memcpy(buffer + offset, unitext.str(), length * sizeof(UnsignedShort));
-	offset += length * sizeof(UnsignedShort);
+	memcpy(buffer + offset, unitext.str(), length * sizeof(WideChar));
+	offset += length * sizeof(WideChar);
 }
 
 void NetPacket::FillBufferWithDisconnectVoteCommand(UnsignedByte *buffer, NetCommandRef *msg) {
@@ -1582,8 +1582,8 @@ void NetPacket::FillBufferWithChatCommand(UnsignedByte *buffer, NetCommandRef *m
 	memcpy(buffer + offset, &length, sizeof(UnsignedByte));
 	offset += sizeof(UnsignedByte);
 
-	memcpy(buffer + offset, unitext.str(), length * sizeof(UnsignedShort));
-	offset += length * sizeof(UnsignedShort);
+	memcpy(buffer + offset, unitext.str(), length * sizeof(WideChar));
+	offset += length * sizeof(WideChar);
 
 	memcpy(buffer + offset, &playerMask, sizeof(Int));
 	offset += sizeof(Int);
@@ -3460,8 +3460,8 @@ Bool NetPacket::addDisconnectChatCommand(NetCommandRef *msg) {
 		memcpy(m_packet + m_packetLen, &length, sizeof(UnsignedByte));
 		m_packetLen += sizeof(UnsignedByte);
 
-		memcpy(m_packet + m_packetLen, unitext.str(), length * sizeof(UnsignedShort));
-		m_packetLen += length * sizeof(UnsignedShort);
+		memcpy(m_packet + m_packetLen, unitext.str(), length * sizeof(WideChar));
+		m_packetLen += length * sizeof(WideChar);
 
 //		DEBUG_LOG(("NetPacket - added disconnect chat command\n"));
 
@@ -3495,7 +3495,7 @@ Bool NetPacket::isRoomForDisconnectChatMessage(NetCommandRef *msg) {
 	++len; // the 'D'
 	len += sizeof(UnsignedByte); // string length
 	UnsignedByte textLen = usableChatTextLength(cmdMsg->getText());
-	len += textLen * sizeof(UnsignedShort);
+	len += textLen * sizeof(WideChar);
 	if ((len + m_packetLen) > MAX_PACKET_SIZE) {
 		return FALSE;
 	}
@@ -3574,8 +3574,8 @@ Bool NetPacket::addChatCommand(NetCommandRef *msg) {
 		memcpy(m_packet + m_packetLen, &length, sizeof(UnsignedByte));
 		m_packetLen += sizeof(UnsignedByte);
 
-		memcpy(m_packet + m_packetLen, unitext.str(), length * sizeof(UnsignedShort));
-		m_packetLen += length * sizeof(UnsignedShort);
+		memcpy(m_packet + m_packetLen, unitext.str(), length * sizeof(WideChar));
+		m_packetLen += length * sizeof(WideChar);
 
 		memcpy(m_packet + m_packetLen, &playerMask, sizeof(Int));
 		m_packetLen += sizeof(Int);
@@ -3620,7 +3620,7 @@ Bool NetPacket::isRoomForChatMessage(NetCommandRef *msg) {
 	++len; // the 'D'
 	len += sizeof(UnsignedByte); // string length
 	UnsignedByte textLen = usableChatTextLength(cmdMsg->getText());
-	len += textLen * sizeof(UnsignedShort);
+	len += textLen * sizeof(WideChar);
 	len += sizeof(Int); // playerMask
 	if ((len + m_packetLen) > MAX_PACKET_SIZE) {
 		return FALSE;
@@ -5758,14 +5758,15 @@ NetCommandMsg * NetPacket::readDisconnectChatMessage(UnsignedByte *data, Int &i)
 	NetDisconnectChatCommandMsg *msg = newInstance(NetDisconnectChatCommandMsg);
 
 	// was UnsignedShort: VC6 typedef'd wchar_t to it, so UnicodeString::set took
-	// the buffer directly.  wchar_t is its own type now; the byte counts below
-	// still use sizeof(UnsignedShort), which is the same two bytes.
+	// the buffer directly.  The byte counts below used to say sizeof(UnsignedShort),
+	// which was the same two bytes only while WideChar happened to be; they say
+	// sizeof(WideChar) now, and WideChar is two bytes by static_assert (B1).
 	WideChar text[256];
 	UnsignedByte length;
 	memcpy(&length, data + i, sizeof(UnsignedByte));
 	++i;
-	memcpy(text, data + i, length * sizeof(UnsignedShort));
-	i += length * sizeof(UnsignedShort);
+	memcpy(text, data + i, length * sizeof(WideChar));
+	i += length * sizeof(WideChar);
 	text[length] = 0;
 
 	UnicodeString unitext;
@@ -5784,15 +5785,16 @@ NetCommandMsg * NetPacket::readChatMessage(UnsignedByte *data, Int &i) {
 	NetChatCommandMsg *msg = newInstance(NetChatCommandMsg);
 
 	// was UnsignedShort: VC6 typedef'd wchar_t to it, so UnicodeString::set took
-	// the buffer directly.  wchar_t is its own type now; the byte counts below
-	// still use sizeof(UnsignedShort), which is the same two bytes.
+	// the buffer directly.  The byte counts below used to say sizeof(UnsignedShort),
+	// which was the same two bytes only while WideChar happened to be; they say
+	// sizeof(WideChar) now, and WideChar is two bytes by static_assert (B1).
 	WideChar text[256];
 	UnsignedByte length;
 	Int playerMask;
 	memcpy(&length, data + i, sizeof(UnsignedByte));
 	++i;
-	memcpy(text, data + i, length * sizeof(UnsignedShort));
-	i += length * sizeof(UnsignedShort);
+	memcpy(text, data + i, length * sizeof(WideChar));
+	i += length * sizeof(WideChar);
 	text[length] = 0;
 	memcpy(&playerMask, data + i, sizeof(Int));
 	i += sizeof(Int);
