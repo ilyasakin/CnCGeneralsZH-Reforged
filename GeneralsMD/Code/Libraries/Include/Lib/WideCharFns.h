@@ -171,7 +171,7 @@ Int WideCharScan ( const WideChar *in, const WideChar *format, ... );
 
 /** What fgetwc returns at the end of a binary stream under MSVC: WEOF, which is 0xFFFF there.
 	  Not EOF (-1) - so Recorder.cpp's `c == EOF` tests never fire on a truncated header, on
-	  Windows or here (docs/mac-port/README.md, defect 13). */
+	  Windows or here (docs/mac-port/README.md, defect 14). */
 enum { WIDECHAR_FILE_EOF = 0xFFFF };
 
 /** fputwc(c, f) on a binary stream: two bytes, low first.  Returns the unit written, or
