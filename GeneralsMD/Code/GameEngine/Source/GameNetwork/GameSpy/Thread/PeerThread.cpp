@@ -1769,7 +1769,7 @@ void PeerThreadClass::Thread_Function()
 		Switch_Thread();
 	}
 
-	DEBUG_LOG(("voluntarily ending peer thread %d\n", running));
+	DEBUG_LOG(("voluntarily ending peer thread %d\n", (Int)running.load()));	// an atomic cannot go through varargs; B14 made it one
 	peerShutdown( peer );
 
 	} catch ( ... ) {
