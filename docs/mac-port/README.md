@@ -170,7 +170,7 @@ you start. That commit is the lock.
 | A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | done: configure on arm64; the four libraries its first acceptance named now build (was -95) | |
 | A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | done: merged, including the zlib reopen (was -21) | |
 | A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | done: merged with A2 (`build.sh`) (was -21) | |
-| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | flip committed on `feature/mac-port-B1-flip`, awaiting merge; `.csf` round trip still open | -47 |
+| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | done on macOS: flip merged, `.csf` test (`gametext_csf`) on `feature/mac-port-B1-csf`; Windows half is debt | -47 |
 | B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | done: merged; not verified on Windows (was -8d) | |
 | B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | done: merged; later CRT spellings land in `MSVCCompat.h` as found (was -95) | |
 | B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
@@ -806,7 +806,9 @@ hunting a crash or corruption that only one platform shows, look here first.**
   `new char; delete ...` makes, and it `exit(-1)`s if the count is wrong. C++14 lets a compiler omit
   a new-expression's allocation when nothing else uses the pointer. clang `-O2` did, the count stayed
   0, and a Release build exited silently at startup. Found by C1's linked file-system test, the first
-  thing to run `GameMemory.cpp` off Windows. Fixed by making the pointer `volatile`, so it escapes.
+  thing to run `GameMemory.cpp` off Windows, and independently by B1's `.csf` test at `-O3`. Fixed by
+  calling `::operator new` and `::operator delete` by name, which no compiler may drop (B1's fix;
+  C1's first fix, a `volatile` pointer, was redundant once both merged, and was removed).
   Windows builds evidently keep the calls, since the game starts there. The fix is a
   `WINDOWS-DEBT.md` row.
 - **A mismatched `delete` in the saved-login obfuscation - fixed.** `WOLLoginMenu.cpp`'s

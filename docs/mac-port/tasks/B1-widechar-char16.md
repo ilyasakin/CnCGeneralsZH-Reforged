@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** flip committed on `feature/mac-port-B1-flip`, awaiting merge (-47). Open: the `.csf` round trip under "Done when"; Windows verification (`WINDOWS-DEBT.md`, B1 rows)
+- **Status:** merged. `.csf` round trip done on macOS (`gametext_csf`); its Windows half and the rest of Windows verification are `WINDOWS-DEBT.md`'s B1 rows
 - **Size:** 48 files mention `WideChar`, 724 `L"` literals in engine + device + Main, ~20 distinct
   `wcs*` calls
 
@@ -255,6 +255,23 @@ retyped from `WCHAR`, and a commented `reinterpret_cast` at each Win32 `W` call.
   they were put back by hand: "do not let a script land unreviewed" earned its place.
 - `iswspace` in the "C" locale is ASCII-only on macOS; MSVC's is not. Pre-existing, recorded under
   the plan's locale rule.
+
+## The .csf test, 2026-09-26
+
+`gametext_csf` loads the install's own `Data\English\generals.csf` (out of `EnglishZH.big`, via
+`ZH_GAME_DATA`) through the real `GameText.cpp`, `RAMFile`, `File` and memory manager, and checks all
+6,422 labels against the test's own reading of the format, nine against their English text by hand -
+including the (c) of `GUI:EACopyright`, the o-umlaut of `CREDITS:JorgLindner`, and the two records
+whose lengths are 26, which puts a 0x1A (Ctrl-Z, text-mode end of file on Windows) in the file - and
+prints a golden hash, `0x62CF1DC2`, that a separate Python reader computes too. With `parseCSF`
+reading four bytes a unit, as the POSIX build did before the flip, it fails: nothing loads.
+
+It found a port defect on the way: `initMemoryManager`'s link test exits the program under clang -O3,
+because the compiler elides the six new/delete pairs it counts. Fixed by calling the operators by
+name.
+
+What it does not cover: the engine's BIG reader (the test reads the .big itself), the `.str` path and
+its `WideCharIsSpace` trimming, the overlays, and rendering.
 
 ## Do
 
