@@ -347,6 +347,14 @@ Those two have been replaced. **The other fifty-eight have not been read.** Defi
 compile errors for silent misbehaviour, which is exactly what B5's task file forbids for a
 `WinTypes.h`. Port the file in front of you; do not switch on someone's abandoned 1990s branch.
 
+**The same goes for a compiler's MSVC mode.** `-fms-compatibility` would accept GameEngine's
+forward-declared enums, the one construct behind every one of its 602 files failing, and it was
+rejected by measurement, not taste (B5, 2026-09-25): on `GameLOD.cpp` it **doubled** the errors,
+every new one inside Apple's libc++ (`<__locale>`, `char_traits.h`, `<string>`, `<string_view>`).
+MSVC-compatibility mode breaks the platform's own standard library. It is also a compiler-wide
+switch that changes name lookup and template parsing to hide one construct, and GCC has no
+equivalent, so a Linux build could not follow. Fix the construct: the enums got an explicit `: Int`.
+
 ### Rule: grep the vendored sources for platform predicates
 
 Added 2026-09-22 after three instances in one afternoon, all the same shape — **a platform
