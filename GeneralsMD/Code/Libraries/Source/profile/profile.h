@@ -134,7 +134,7 @@ public:
 
     \return number of CPU clock cycles per second
   */
-  static _int64 GetClockCyclesPerSecond(void);
+  static long long GetClockCyclesPerSecond(void);
   
   /**
     \brief Add the given result function interface.
@@ -219,7 +219,7 @@ private:
   static FrameName *m_frameNames;
 
   /// CPU clock cycles/second
-  static _int64 m_clockCycles;
+  static long long m_clockCycles;
 };
 
 #endif // PROFILE_H
