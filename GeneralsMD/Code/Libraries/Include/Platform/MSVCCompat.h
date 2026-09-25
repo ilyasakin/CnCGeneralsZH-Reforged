@@ -205,6 +205,19 @@ inline int _wcsicmp(const wchar_t* a, const wchar_t* b)
 	}
 }
 
+// _wcsnicmp: _wcsicmp above, stopping after n code units.  Its one caller is EarlyCommandLine.h,
+// matching ASCII option names such as -logPrefix against the command line.
+inline int _wcsnicmp(const wchar_t* a, const wchar_t* b, size_t n)
+{
+	for (; n != 0; --n) {
+		wchar_t ca = *a++, cb = *b++;
+		if (ca >= L'A' && ca <= L'Z') ca += L'a' - L'A';
+		if (cb >= L'A' && cb <= L'Z') cb += L'a' - L'A';
+		if (ca != cb || ca == 0) return (int)(ca - cb);
+	}
+	return 0;
+}
+
 // ---------------------------------------------------------------------------
 // TCHAR.
 //

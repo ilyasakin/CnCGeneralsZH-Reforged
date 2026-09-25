@@ -28,7 +28,9 @@
 // buffer is the process's ANSI command line, so GetCommandLineA is truncated to the exe name and
 // the first switch by the time anything asks.  GetCommandLineW is untouched.
 
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 #include <wchar.h>
 #include <wctype.h>
 
@@ -69,6 +71,12 @@ inline bool findCommandLineValueIn( const wchar_t *cmdLine, const wchar_t *optio
 	return i > 0;
 }
 
+/* The two above read the process's own command line.  Off Windows there is no GetCommandLineW to
+	 ask: the command line is main's argv, and main is C2's.  Until C2 hands it over, every option
+	 reads as not given, which is each caller's default - JobSystem's -jobthreads picks its own
+	 count, Debug.cpp's -logPrefix adds no prefix, and -headless reads as windowed.  That last one
+	 matters to C2: a headless run off Windows needs argv here first. */
+#if defined(_WIN32)
 inline const wchar_t *findEarlyCommandLineOption( const wchar_t *option )
 {
 	return findCommandLineOptionIn( GetCommandLineW(), option );
@@ -78,3 +86,14 @@ inline bool findEarlyCommandLineValue( const wchar_t *option, char *out, size_t 
 {
 	return findCommandLineValueIn( GetCommandLineW(), option, out, outSize );
 }
+#else
+inline const wchar_t *findEarlyCommandLineOption( const wchar_t * )
+{
+	return NULL;
+}
+
+inline bool findEarlyCommandLineValue( const wchar_t *, char *, size_t )
+{
+	return false;
+}
+#endif
