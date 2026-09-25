@@ -540,6 +540,9 @@ set_target_properties(eip_sampler PROPERTIES CXX_STANDARD 17)
 # Libraries/DirectX/Include.
 add_executable(dx9_smoke ${WW}/WW3D2/test_dx9_smoke.cpp)
 target_link_libraries(dx9_smoke PRIVATE d3dx9runtime user32)
+# Tests/ for d3dx_golden.h: dx9_smoke prints what this machine's d3dx9_43.dll computes for
+# B17's golden rows, and which of its CPU-dispatched bodies ran.
+target_include_directories(dx9_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
 endif()  # ZH_PLATFORM_WINDOWS - renderer, Direct3D 9/11 backends, dx9_smoke
 
 # ===========================================================================
