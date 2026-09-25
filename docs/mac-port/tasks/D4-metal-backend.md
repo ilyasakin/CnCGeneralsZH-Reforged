@@ -1,4 +1,4 @@
-# D4 — Metal backend
+# D4 — SDL3 GPU backend (was: Metal backend)
 
 - **Milestone:** M4
 - **Depends on:** D3
@@ -6,6 +6,8 @@
 - **Status:** not started
 - **Size:** the largest single piece of new code in the plan; `dx11backend.cpp` is 2,339 lines and
   is the closest model
+
+> **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** This task is now the **SDL3 GPU backend**, not a Metal backend. The file keeps its name so links survive. Read "Metal" below as "SDL3 GPU API": no Objective-C++ at all, and no `CAMetalLayer` (SDL3 owns the window and swapchain). MSL is still one of the shader outputs D3 decides on. The same backend has to draw on Linux over Vulkan.
 
 ## Why
 

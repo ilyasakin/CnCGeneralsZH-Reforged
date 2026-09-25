@@ -7,6 +7,8 @@
 - **Size:** `MilesAudioManager.cpp` is 3,637 lines; the XAudio2 implementation under it is
   `Libraries/Source/WWVegas/Miles6/xaudio2/miles_xaudio2.cpp`
 
+> **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** Step 2 is decided: **miniaudio**, vendored through `Tools/vendor.sh` like litehtml and nanosvg. `AVAudioEngine` is rejected as macOS-only. The reasons are in the plan.
+
 ## Why
 
 The retail game used the Miles Sound System, a binary-only 32-bit DLL a 64-bit process cannot load.

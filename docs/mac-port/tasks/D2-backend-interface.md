@@ -7,6 +7,8 @@
 - **Size:** 22 WW3D2 headers expose D3D9 types; `dx11backend.h/.cpp` is 2,970 lines and is the
   model
 
+> **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** Step 1 is decided: the non-Windows backend is **SDL3's GPU API** (Metal underneath on macOS, Vulkan on Linux). The fallback, if you find something the game needs that it cannot express, is one Vulkan backend with MoltenVK on macOS. Record the gap that forced it here. The interface stays abstract either way.
+
 ## Why
 
 Once D1 has everything going through `DX8Wrapper`, the wrapper still talks to a concrete

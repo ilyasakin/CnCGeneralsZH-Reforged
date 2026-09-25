@@ -1,6 +1,8 @@
-# Porting Zero Hour Reforged to macOS
+# Porting Zero Hour Reforged to macOS and Linux
 
-This is the working plan for a macOS build. It is written to be picked up piecemeal: every task
+This is the working plan for a macOS build, and, since 2026-09-25, for Linux alongside it (decision
+3 below). macOS is still the first target and the one the milestones are phrased for; Linux is held
+to "builds and passes the same tests" at every step, and ships at M5. It is written to be picked up piecemeal: every task
 under `tasks/` says what it touches, what it has to prove before it is done, and what it must not
 touch, so an agent or a contributor can take one without reading the rest.
 
@@ -19,6 +21,10 @@ worth attempting rather than starting over, because the hard half of it is alrea
 ## Not in scope
 
 - **Intel Macs.** arm64 only. A universal binary can come later; it changes nothing structural.
+  Linux is x86_64 and arm64 both, because that is where Linux players are.
+- **Platforms beyond Windows, macOS and Linux** are not targets, but nothing may be written in a
+  way that shuts them out. Code is Windows or POSIX first, and Darwin or Linux only as a refinement
+  of POSIX; a platform nobody has ported hits an `#error`, never a silent fallthrough. See decision 3.
 - **The `Generals/` tree.** Only `GeneralsMD/Code` has a `CMakeLists.txt` and only Zero Hour is
   built. Unchanged here.
 - **The Windows tools.** WorldBuilder, GUIEdit, ImagePacker and the rest of `Tools/` stay Windows.
@@ -119,7 +125,8 @@ existing D3D11 path. Every D3D call goes through `DX8Wrapper`; the backend inter
 the shader generators emit an IR rather than HLSL text.
 → D1 D2 D3
 
-**M4 — it draws.** Metal backend, textures, the window. The game is visible on a Mac.
+**M4 — it draws.** The SDL3 GPU backend (Metal underneath on macOS, Vulkan on Linux), textures,
+the window. The game is visible on a Mac, and on Linux from the same code.
 → D4 D5 C3
 
 **M5 — it is a game.** Sound, input polish, LAN, packaging, CI.
@@ -190,7 +197,7 @@ you start. That commit is the lock.
 | D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | recon done; PR1 in progress | -8d |
 | D2 | [Abstract the backend interface](tasks/D2-backend-interface.md) | M3 | D1 | not started | |
 | D3 | [Shader generators emit an IR](tasks/D3-shader-generators-ir.md) | M3 | D2 | not started | |
-| D4 | [Metal backend](tasks/D4-metal-backend.md) | M4 | D3 | not started | |
+| D4 | [SDL3 GPU backend](tasks/D4-metal-backend.md) (file keeps its old name) | M4 | D3 | not started | |
 | D5 | [Texture formats](tasks/D5-texture-formats.md) | M4 | D4 | not started | |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | not started | |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
@@ -226,6 +233,45 @@ menu background runs once then never; (b) a nominal MHz, because it puts a chose
 whose job is measurement; (d) a named arm64 CPU type, as more code for the same result. Every Apple
 Silicon Mac exceeds a 2003 game's requirements by orders of magnitude, so "top tier" is not in
 doubt — only where to say it. Verifiable once `gameengine` compiles, which is B5's GameEngine half.
+
+**3. Linux is a target, and the non-Windows platform layer is chosen for it (taken 2026-09-25).**
+The user asked for everything to be abstracted so that Linux and further platforms can follow. What
+that decides, task by task:
+
+- **Build (done, `f25b7395`).** CMake knows `ZH_PLATFORM_WINDOWS` and `ZH_PLATFORM_POSIX`, with
+  `ZH_PLATFORM_MACOS` and `ZH_PLATFORM_LINUX` only as refinements. The determinism flags
+  (`-ffp-contract=off -fsigned-char -fno-strict-aliasing`) key on the *compiler*, Clang or GNU, and
+  an unknown compiler is a configure error. Before that commit they sat under `macOS`, and a Linux
+  build would have got GCC's default `-ffp-contract=fast` on the CRC path and aarch64's unsigned
+  plain `char` — a desync nobody would have seen until a replay diverged.
+- **Window, events, timers, entry point — C2, C3: SDL3.** One dependency serves both platforms and is
+  the ordinary answer for a C++ game leaving Win32. Rejected: Cocoa plus a separate X11/Wayland
+  layer, which is two implementations of the same thing, and GLFW, which has no GPU API (below) and
+  no text-input model worth the name. Windows keeps `Win32Device`; nothing here changes the Windows
+  build.
+- **Audio — C4: miniaudio**, vendored like the other single-file libraries. It is the only
+  candidate that brings mixing, 3D panning and MP3/WAV decoding together, which is what
+  `MilesAudioManager` asks of the layer beneath it. Rejected: `AVAudioEngine` (macOS only),
+  OpenAL Soft (LGPL, and decoding is still ours), and SDL3's audio (a device and a stream, nothing
+  above that).
+- **Renderer — D2, D4: SDL3's GPU API.** It is Metal on macOS and Vulkan on Linux underneath, so
+  it is one backend with a native API under it on each platform, and its window already comes
+  from the SDL3 chosen above. Its model — pipeline objects built from state, resolved at draw time —
+  is the shape `dx11backend.cpp` already has, which is why D2 generalises that file. Rejected:
+  native Metal plus a later Vulkan backend (two backends to keep in step), and Vulkan with MoltenVK
+  on macOS (one backend, but a translation layer on the primary platform and much more boilerplate).
+  **Fallback, decided now so nobody re-argues it:** if D2 finds something the game needs that SDL3's
+  GPU API cannot express, the second choice is one Vulkan backend with MoltenVK on macOS. D2 records
+  the gap that forced it. D2's interface stays abstract either way, so a native backend is never
+  shut out. The shader question (what D3's IR emits: MSL and SPIR-V, or SPIR-V alone with
+  SDL_shadercross converting) belongs to D3 and gets written down there.
+- **Verification.** Linux is checkable on this machine, unlike Windows: a Linux container (OrbStack)
+  builds the tree with GCC and Clang and runs `ctest`. That gets run before any merge that touches
+  platform code. Its first run found three defects the macOS build had hidden. `uintptr_t` was used
+  without `<stdint.h>`, because Apple's headers include it transitively and glibc's do not.
+  `always.h` declares `operator delete` without the `noexcept` the standard gives it, which clang
+  forgives and GCC rejects. And `cpudetect.cpp` has no Linux answer, which failed at its `#error`
+  exactly as intended.
 
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
@@ -620,13 +666,13 @@ These are not style preferences. Breaking one of them costs somebody else a day.
 
 ## Open questions that need an answer before the milestone that depends on them
 
-- **Metal and BC textures.** The art is DXT/BC (44 files in WW3D2 reference it). Apple Silicon
-  exposes `MTLDevice.supportsBCTextureCompression`, but which Macs and which macOS versions is
-  worth confirming rather than assuming. If the answer is patchy, D5 decompresses on load and eats
-  the memory. **Owner: D5, answer before D4 finishes.**
-- **Metal vs MoltenVK.** This plan assumes native Metal. MoltenVK buys a Linux port for free and
-  costs a dependency plus a second translation layer. **Owner: D2, decide in D2, record the reason
-  in the task file either way.**
+- **BC textures.** The art is DXT/BC (44 files in WW3D2 reference it). SDL3's GPU API exposes BC
+  formats where the device supports them. Apple Silicon reports `supportsBCTextureCompression`, and
+  desktop Vulkan drivers almost always do, but which Macs, which macOS versions and which Linux
+  drivers is worth confirming rather than assuming. If the answer is patchy, D5 decompresses on load
+  and eats the memory. **Owner: D5, answer before D4 finishes.**
+- ~~**Metal vs MoltenVK.**~~ Answered by decision 3: SDL3's GPU API, with Vulkan plus MoltenVK as the
+  named fallback.
 - **Where the game data comes from.** There is no Mac Zero Hour. Users will have to bring `.big`
   files from a Windows or Steam install, and the launcher's install flow assumes a local one.
   **Owner: unassigned. Needs a product answer before M5, not an engineering one.**

@@ -7,6 +7,8 @@
 - **Size:** `Win32Mouse.cpp`, `Win32DIKeyboard.cpp` (`Win32DIMouse.cpp` is already out of the
   build)
 
+> **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** Keyboard and mouse come from SDL3 events on macOS and Linux, not `NSEvent`. The mapping from SDL scancodes to the game's DirectInput key codes is the piece of real work, and it lives in one table.
+
 ## Why
 
 DirectInput for the keyboard, Win32 window messages for the mouse. Neither exists on macOS. This

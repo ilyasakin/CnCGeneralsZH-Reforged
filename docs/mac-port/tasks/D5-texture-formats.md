@@ -6,6 +6,8 @@
 - **Status:** not started
 - **Size:** 44 files in WW3D2 reference DXT or DDS
 
+> **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** The question is now whether SDL3's GPU API takes BC formats on the devices we care about: Apple Silicon under Metal, and Linux Vulkan drivers. It is no longer about Metal alone.
+
 ## Why
 
 The art is block-compressed. `README.md` advertises "481 originals at four times the resolution",

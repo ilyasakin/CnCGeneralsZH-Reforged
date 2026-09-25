@@ -6,6 +6,8 @@
 - **Status:** not started
 - **Size:** `Main/WinMain.cpp` is ~1,400 lines with `WinMain.h` and `RTS.RC`
 
+> **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** The entry point is `SDL3`-based, one `main` for macOS and Linux, in plain C++ (`PosixMain.cpp` or similar). The `MacMain.mm` / Cocoa option below is withdrawn: SDL3 owns the window and the event loop at M4.
+
 ## Why
 
 `generals.exe` starts at `WinMain`, which creates the window, installs the crash handler, parses

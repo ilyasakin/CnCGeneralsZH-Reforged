@@ -6,6 +6,8 @@
 - **Status:** not started
 - **Size:** new workflow files; no application code
 
+> **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** The matrix gets a Linux job (x86_64 and arm64, GCC and Clang) beside macOS arm64 and Windows. Until there is CI, the Linux container check in `docs/mac-port/README.md` decision 3 is the stand-in.
+
 ## Why
 
 `README.md`: "There is no CI and no debugger on the machine this is built on. The game tests itself

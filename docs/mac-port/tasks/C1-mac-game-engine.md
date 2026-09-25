@@ -6,6 +6,8 @@
 - **Status:** first piece (`mixfile.cpp`) in review; the rest not started
 - **Size:** mirrors `GameEngineDevice/Source/Win32Device`, 10 files / 2,756 lines
 
+> **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** The engine subclass and its file systems are POSIX code that builds on macOS and Linux both; name new files for what they are (`Posix*` for the file systems, the SDL-backed pieces after SDL) rather than `Mac*`. Darwin-only calls go behind `__APPLE__` as a refinement of the POSIX path.
+
 ## Why
 
 `GameEngine` is an abstract class with a pure-virtual factory for every subsystem
