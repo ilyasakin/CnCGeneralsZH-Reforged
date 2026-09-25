@@ -175,6 +175,18 @@ inline char* _strupr(char* s) { for (char* p = s; *p; ++p) *p = (char)toupper((u
 inline char* strlwr(char* s) { return _strlwr(s); }
 inline char* strupr(char* s) { return _strupr(s); }
 
+// __max and __min: MSVC's <stdlib.h> macros, spelled here exactly as MSVC spells them, so each
+// argument is evaluated exactly as often, and a NaN compares exactly as it does on Windows.
+// Their nine callers are all simulation code (Player, PartitionManager, SpecialAbilityUpdate,
+// ParticleUplinkCannonUpdate), where std::max would differ: std::max(NaN, x) is NaN, and
+// __max(NaN, x) is x.
+#ifndef __max
+#define __max(a,b) (((a) > (b)) ? (a) : (b))
+#endif
+#ifndef __min
+#define __min(a,b) (((a) < (b)) ? (a) : (b))
+#endif
+
 // _wcsicmp: the same argument as _strlwr above, for wide strings.  Its one caller is
 // UnicodeString::compareNoCase, which sorts the lobby's game list and matches UI labels.  MSVC's
 // is locale-dependent, and this tree never leaves the "C" locale, where MSVC folds 'A'-'Z' only,
