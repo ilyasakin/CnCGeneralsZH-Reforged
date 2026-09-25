@@ -401,6 +401,36 @@ audit: Windows-only sources (GameEngineDevice, Main, Tools).
 
 </details>
 
+## Bucket (c): exclude, fence or move, 2026-09-26
+
+The rule (PM): **exclude** a file from the POSIX build when it is a Windows-only *feature* the game
+can run without off Windows; **move** it behind a seam when the game *needs* that function on every
+platform. Every exclusion is listed in CMake's platform split with its reason and the callers it
+was checked against. **A Windows-only feature whose file also holds portable logic under test is
+fenced, not excluded** - excluding it would take the tests with it.
+
+Check callers by symbol, tests included, before excluding anything: ChromaKeyboard looked like an
+exclusion until test_gameengine turned out to check its key mappings.
+
+| File | Outcome | Off Windows |
+|:--|:--|:--|
+| `StackDump.cpp` | moved | `StackDumpPosix.cpp`: backtrace() and dladdr(), no allocation; crash reporting proper is C5's |
+| `EarlyCommandLine.h` | moved | every option reads as not given until C2 hands over argv |
+| `EarlyOptions.h` | moved | no user data directory until C1, so saves go to the current directory |
+| `Monitors.h` | moved | one 800x600 primary monitor with that one mode, until C2's SDL3 display list |
+| `WebBrowser.cpp` | excluded, null interface | `WebBrowserPosix.cpp`: TheWebBrowser NULL, WebBrowserURL for INIWebpageURL |
+| `DownloadManager.cpp` | excluded, null interface | `DownloadManagerPosix.cpp`: TheDownloadManager NULL; DownloadMenu.cpp still built, for FunctionLexicon |
+| `ChromaKeyboard.cpp` | **fenced** | the WinINet transport and worker are Windows-only; mappings and composition built everywhere |
+| `IMEManager.cpp` | excluded | `IMEManagerPosix.cpp`: no IME manager; C3's |
+| `<io.h>` | two guarded includes | `RAMFile.cpp`, `StreamingArchiveFile.cpp` used nothing from it; `LocalFile.cpp` is C1's |
+| GameSpy threads | not yet | `MainMenuUtils.cpp`, the ping and game-results threads: dead service, next |
+
+Found on the way: `INI::parseWebpageURLDefinition` dereferences an uninitialized `url` whenever
+TheWebBrowser is NULL, which it always is. It is unreachable, because only `WebBrowser::init`
+loads `Webpages.ini` and it never runs, so it is recorded here and not in the defects list.
+`ChromaKeyboard.cpp` has three `FKEY_` constants that nothing uses, on Windows too; clang warns
+about them and MSVC does not.
+
 ## File operations are C1's: the worklist, 2026-09-26
 
 Decided (PM, decision 4 of the B5 review): `CopyFile`, `CreateDirectory`, the current directory,
