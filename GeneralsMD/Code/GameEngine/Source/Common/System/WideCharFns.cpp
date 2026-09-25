@@ -563,6 +563,60 @@ size_t WideCharToUtf8( const WideChar *s, char *out, size_t outBytes )
 	return written;
 }
 
+size_t WideCharFromUtf8( const char *in, WideChar *out, size_t outUnits )
+{
+	if (out == NULL || outUnits == 0)
+		return 0;
+
+	size_t written = 0;
+	const unsigned char *p = (const unsigned char *)in;
+	while (p != NULL && *p != 0)
+	{
+		// Read one code point, or U+FFFD for one bad byte.
+		unsigned long cp = 0xFFFDul;
+		size_t length = 1;
+		const unsigned char lead = p[0];
+		if (lead < 0x80)
+		{
+			cp = lead;
+		}
+		else
+		{
+			size_t follow = 0;
+			unsigned long value = 0, least = 0;
+			if ((lead & 0xE0) == 0xC0)			{ follow = 1; value = lead & 0x1F; least = 0x80ul; }
+			else if ((lead & 0xF0) == 0xE0)	{ follow = 2; value = lead & 0x0F; least = 0x800ul; }
+			else if ((lead & 0xF8) == 0xF0)	{ follow = 3; value = lead & 0x07; least = 0x10000ul; }
+			size_t k = 1;
+			for (; follow != 0 && k <= follow && (p[k] & 0xC0) == 0x80; ++k)
+				value = (value << 6) | (p[k] & 0x3F);
+			if (follow != 0 && k == follow + 1 && value >= least && value <= 0x10FFFFul
+				&& !(value >= 0xD800ul && value <= 0xDFFFul))
+			{
+				cp = value;
+				length = follow + 1;
+			}
+		}
+
+		// Write it, and stop on a whole character rather than half of one.
+		const size_t need = (sizeof(WideChar) == 2 && cp >= 0x10000ul) ? 2 : 1;
+		if (written + need >= outUnits)
+			break;
+		if (need == 2)
+		{
+			out[written++] = (WideChar)(0xD800ul + ((cp - 0x10000ul) >> 10));
+			out[written++] = (WideChar)(0xDC00ul + ((cp - 0x10000ul) & 0x3FFul));
+		}
+		else
+		{
+			out[written++] = (WideChar)cp;
+		}
+		p += length;
+	}
+	out[written] = 0;
+	return written;
+}
+
 Int WideCharFileWrite( FILE *f, const WideChar *s )
 {
 	if (f == NULL || s == NULL)

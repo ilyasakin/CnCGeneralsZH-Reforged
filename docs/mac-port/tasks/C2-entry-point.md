@@ -8,6 +8,16 @@
 
 > **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** The entry point is `SDL3`-based, one `main` for macOS and Linux, in plain C++ (`PosixMain.cpp` or similar). The `MacMain.mm` / Cocoa option below is withdrawn: SDL3 owns the window and the event loop at M4.
 
+> **Locale, 2026-09-25 (B5): a hard constraint, see the plan's rule "the only locale category the
+> game may set is `LC_TIME`".** Call `setlocale(LC_TIME, "")` early so that the replay and save
+> lists show dates in the user's format (`GameState.cpp`'s `getUnicodeDateBuffer` and
+> `getUnicodeTimeBuffer` use `strftime`). Set nothing broader: `LC_NUMERIC` would change how the
+> INI parser reads decimals, and the string shims assume `LC_CTYPE` is "C". Until C2 sets it, dates
+> show in the "C" format (`MM/DD/YY`, 24-hour). One known difference from Windows: the time shows
+> seconds (`%X`), because `strftime` has no "this locale's format without seconds" and Windows
+> passes `TIME_NOSECONDS`. `nl_langinfo(T_FMT)` with the seconds removed would match, if anyone
+> cares.
+
 ## Why
 
 `generals.exe` starts at `WinMain`, which creates the window, installs the crash handler, parses

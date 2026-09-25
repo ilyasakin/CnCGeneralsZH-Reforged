@@ -356,6 +356,23 @@ MSVC-compatibility mode breaks the platform's own standard library. It is also a
 switch that changes name lookup and template parsing to hide one construct, and GCC has no
 equivalent, so a Linux build could not follow. Fix the construct: the enums got an explicit `: Int`.
 
+### Rule: the only locale category the game may set is `LC_TIME`
+
+Added 2026-09-25 with the POSIX date and time formatting (B5). This tree assumes the "C" locale
+everywhere except in how a date is shown, and on Windows it gets that for free. On POSIX, a
+process's locale is whatever the entry point asks for, so this is written down before C2 writes one.
+
+- **`setlocale(LC_TIME, "")` is allowed, and nothing broader.** Never `LC_ALL`, `LC_NUMERIC` or
+  `LC_CTYPE`.
+- **`LC_NUMERIC` decides how `strtod`, `atof`, `sscanf` and `printf` read and write a decimal.** On a
+  comma-decimal locale the INI parser (`INI.cpp:1628`, `:1637`: `sscanf(token, "%f", ...)`) would read
+  `1.5` as `1`, report success and carry on, which is a determinism
+  bug keyed on the user's region settings. It would not be a crash.
+- **`LC_CTYPE` is what `_strlwr`, `_strupr` and `_wcsicmp` in `MSVCCompat.h` assume is "C"**. They
+  build hash keys and sort orders that have to match across machines.
+- **Text that comes back from an `LC_TIME` call is decoded as UTF-8 explicitly**
+  (`WideCharFromUtf8`), never with `mbstowcs`, which decodes by `LC_CTYPE`.
+
 ### Rule: grep the vendored sources for platform predicates
 
 Added 2026-09-22 after three instances in one afternoon, all the same shape — **a platform

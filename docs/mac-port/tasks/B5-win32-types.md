@@ -277,6 +277,10 @@ this paragraph is the reason to check its width.
 - `GameMemory.h`'s global `operator new`/`delete` are **-47's** (`feature/mac-port-linux`), not
   this task's.
 
+- **GameSpy's own `_strlwr`/`_strupr` are left as they are, deliberately** (`gsplatformutil.c`). Their
+  `tolower` on a plain `char` is undefined for bytes above 0x7F under `-fsigned-char`. It is dead-service
+  code, and changing vendored behaviour is out of scope; only the C++ declaration clash is patched.
+
 <details><summary>The 62 enums</summary>
 
 | Enum | Definition | Forward declarations |
