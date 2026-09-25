@@ -39,6 +39,12 @@
 ** changed, which matters: the engine probes the local file system before the archives for every
 ** asset, and most of those probes miss.
 **
+** On a volume with coarse timestamps - exFAT, where the Steam installs on this project's machines
+** sit, keeps them to two seconds - two changes inside one tick leave the time where it was.  That is
+** harmless there and not a reason to change the cache: exFAT is case-insensitive, so the exact try
+** always finds an existing file and the cache is never consulted.  The case-sensitive volumes the
+** cache exists for (APFS case-sensitive, ext4, overlayfs) keep nanoseconds.
+**
 ** POSIX only.  Windows opens the engine's spelling as it is.
 */
 
