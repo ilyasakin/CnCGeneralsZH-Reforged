@@ -429,7 +429,9 @@ Details worth carrying into the implementation half:
 
   The accompanying `static int theLinkTester` at `:3270`, and the `++theLinkTester` in
   `STLSpecialAlloc::allocate`, are the "we do debug checking to ensure that's the case" half of the
-  trick. They are inert but harmless.
+  trick. ~~They are inert but harmless.~~ **Wrong, found 2026-09-26 (B1's .csf test):** clang at -O3
+  elides `initMemoryManager`'s six paired new-expressions, the count stays 0 and it calls `exit(-1)`,
+  silently in a release build. It now calls the operators by name; see `WINDOWS-DEBT.md`.
 
 - **#4 `/force:multiple`** is guarded by `MEMORYPOOL_OVERRIDE_MALLOC`, which is not defined
   anywhere in `CMakeLists.txt`. If it ever is, the clang equivalent is *not* a flag — it is

@@ -3508,17 +3508,20 @@ void initMemoryManager()
 	
 	theLinkTester = 0; 
 
-	linktest = new char;
-	delete linktest;
+	// The operators are called by name, not through new-expressions.  Since C++14 a compiler may
+	// leave out a new-expression's allocation together with its matching delete, and clang at -O3
+	// leaves out all six: theLinkTester stayed 0 and this exited, silently in a release build.  An
+	// explicit call to ::operator new is an ordinary function call, which no compiler may drop.
+	linktest = (char*)::operator new(sizeof(char));
+	::operator delete(linktest);
 
-	linktest = new char[8];
-	delete [] linktest;
+	linktest = (char*)::operator new[](8);
+	::operator delete[](linktest);
 
-	// Was new char("",1): VC6 read the parentheses as an initializer with a comma
-	// operator, i.e. a third plain scalar new, which is what theLinkTester == 6
-	// counts.  Modern C++ reads it as a two-argument initializer and rejects it.
-	linktest = new char(1);
-	delete linktest;
+	// The third plain scalar pair.  It was new char("",1), which VC6 read as a comma operator
+	// inside an initializer, i.e. one more scalar new - what theLinkTester == 6 counts.
+	linktest = (char*)::operator new(sizeof(char));
+	::operator delete(linktest);
 
 #ifdef MEMORYPOOL_OVERRIDE_MALLOC
 	linktest = (char*)malloc(1);
