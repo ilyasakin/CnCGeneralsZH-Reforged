@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6, and M2 leans on it
-- **Status:** not started
+- **Status:** in progress (B17)
 - **Risk:** the highest left in M1. This is arithmetic on the replay and network CRC path.
 
 ## Why
