@@ -32,7 +32,7 @@
 
 #include "Common/XferCRC.h"
 #include "Common/XferDeepCRC.h"
-#include "Common/CRC.h"
+#include "Common/crc.h"
 #include "Common/Snapshot.h"
 #if defined(_WIN32)
 #include "winsock2.h" // for htonl

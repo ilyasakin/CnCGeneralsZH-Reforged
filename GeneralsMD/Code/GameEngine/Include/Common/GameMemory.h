@@ -867,10 +867,10 @@ extern void userMemoryAdjustPoolSize(const char *poolName, Int& initialAllocatio
 	#define _OPERATOR_NEW_DEFINED_
 
 	extern void * __cdecl operator new		(size_t size);
-	extern void __cdecl operator delete		(void *p);
+	extern void __cdecl operator delete		(void *p) WW_NOEXCEPT_DELETE;
 
 	extern void * __cdecl operator new[]	(size_t size);
-	extern void __cdecl operator delete[]	(void *p);
+	extern void __cdecl operator delete[]	(void *p) WW_NOEXCEPT_DELETE;
 
 	// additional overloads to account for VC/MFC funky versions
 	extern void* __cdecl operator new(size_t nSize, const char *, int);
@@ -882,7 +882,10 @@ extern void userMemoryAdjustPoolSize(const char *poolName, Int& initialAllocatio
 	// additional overloads for 'placement new'
 	//inline void* __cdecl operator new							(size_t s, void *p) { return p; }
 	//inline void __cdecl operator delete						(void *, void *p)		{ }
-	#if _MSC_VER < 1300
+	// Was `#if _MSC_VER < 1300`, which is true off MSVC, where an undefined macro reads as 0: every
+	// standard <new> already defines these two, so clang reported a redefinition.  always.h made the
+	// same correction.  MSVC evaluates both spellings the same way.
+	#if defined(_MSC_VER) && _MSC_VER < 1300
 	// vcruntime declares the placement array forms itself now, exactly as
 	// WWLib/always.h already had to work around.
 	inline void* __cdecl operator new[]						(size_t s, void *p) { return p; }

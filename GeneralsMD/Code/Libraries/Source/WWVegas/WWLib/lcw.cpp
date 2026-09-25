@@ -38,6 +38,7 @@
 
 #include	"always.h"
 #include	"lcw.h"
+#include	<stdint.h>	// uintptr_t, in LCW_Uncomp; Apple's headers happened to supply it, glibc's do not
 #include	<string.h>
 
 /***************************************************************************

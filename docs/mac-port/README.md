@@ -273,6 +273,12 @@ that decides, task by task:
   `always.h` declares `operator delete` without the `noexcept` the standard gives it, which clang
   forgives and GCC rejects. And `cpudetect.cpp` has no Linux answer, which failed at its `#error`
   exactly as intended.
+  **The check is `GeneralsMD/Code/Tools/linux-check.sh`**: {gcc, clang} × {linux/arm64, linux/amd64},
+  configure, build and `ctest`, one table, and a nonzero exit on any failure, a missing tool or an
+  empty tree. It builds from a case-sensitive copy of git's own file names, because the OrbStack
+  mount folds case. That copy is what found the largest defect class of the three: 298 includes
+  spelled in a case other than their file's. `include_case_check` in `ctest` now catches that class
+  on a Mac.
 
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
@@ -410,6 +416,14 @@ could not have found: `gimex.h:99` selected the `ARGB` channel order with
 `#if defined(_MSC_VER) || defined(__i386__)`, meaning "little-endian desktop", and Apple Silicon
 fell through it to the GameCube/Mac big-endian order. A 2003 "which machine am I?" test is written
 as a positive CPU test at least as often as a negative platform one.
+
+**A sixth, 2026-09-25: the undefined macro that reads as zero.** `GameMemory.h` guarded placement
+array new/delete with `#if _MSC_VER < 1300`, meaning "a compiler older than VC7". Off MSVC,
+`_MSC_VER` is undefined, the preprocessor reads it as `0`, and `0 < 1300` is true. So every
+non-MSVC compiler took the branch meant for VC6, and redefined two operators every standard
+`<new>` already has. `always.h` had carried the same guard and been corrected earlier; its twin had
+not. **A version comparison against a vendor's macro is also a claim that the vendor's compiler is
+the one running.** Write `defined(X) && X < N`.
 
 **Running the rule immediately found a fourth**, in the same library and the same file family as
 the first: `zlib-1.1.4/zutil.h:113` repeats `#if defined(MACOS) || defined(TARGET_OS_MAC)` and,

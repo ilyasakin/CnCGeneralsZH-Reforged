@@ -78,7 +78,20 @@ section. In order of how much time they will save:
 - **WWLib's filenames are mixed case** (`CRC.H`, `Point.h`, `INI.H`, `TARGA.CPP`). A
   case-insensitive volume hides it, but `git show branch:path/crc.h` **fails silently and returns
   nothing**, which reads exactly like "content absent".
-- `zsh` does not word-split unquoted variables, which silently corrupted two sweeps.
+- `zsh` does not word-split unquoted variables, which silently corrupted two sweeps. It did it
+  again on 2026-09-25: `$FLAGS` holding five `-I` options reached the compiler as one argument.
+- **Never `git reset` staged case-only renames on this volume.** With `core.ignorecase`, the index
+  goes back to `BUFF.H` while the disk keeps `buff.h`, and a later `git add -A` sees the same file,
+  not a rename. 37 renames were lost that way while every check read the disk and passed.
+  `include_case_check` now fails when a tracked file's on-disk name differs from its index name.
+- **`git grep -E` does not understand `\s`.** It matches nothing and says nothing. Use
+  `[[:space:]]`, or `git grep -P`.
+- **The OrbStack bind mount folds case inside a Linux container.** `Vector.H` and `vector.h` were
+  one inode there, so a Linux build of the mounted tree hides every include-case bug. It hid 298.
+  `Tools/linux-check.sh` copies git's file names onto the container's own filesystem first, and
+  checks that a wrongly-cased name really fails to resolve before trusting the copy.
+- **A git worktree's `.git` is a file naming a host path.** Inside a container that mounts only the
+  worktree, git cannot run. Compute file lists on the host.
 
 ## Still true and still open
 

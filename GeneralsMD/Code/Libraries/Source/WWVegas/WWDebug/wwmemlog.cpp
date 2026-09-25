@@ -41,7 +41,7 @@
 #include "always.h"
 #include "wwmemlog.h"
 #include "wwdebug.h"
-#include "vector.h"
+#include "Vector.H"
 #include "fastallocator.h"
 #include "thread.h"
 
