@@ -36,11 +36,6 @@
 #include "GameClient/Display.h"
 #include "GameClient/GraphDraw.h"
 
-__forceinline void ProfileGetTime(__int64 &t)
-{
-  t = (__int64)__rdtsc();
-}
-
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
