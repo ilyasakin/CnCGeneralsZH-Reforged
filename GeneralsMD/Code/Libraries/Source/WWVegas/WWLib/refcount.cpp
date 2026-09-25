@@ -41,12 +41,11 @@
 
 #include "refcount.h"
 /*
-**	For DebugBreak, in the !NDEBUG half only.  Off Windows that half does not compile yet, and should
-**	not until wwdebug has a portable break (B16); a release build needs nothing from here.  B5.
+**	breakIntoDebugger, for BreakOnReference in the !NDEBUG half: DebugBreak() on Windows, which is what
+**	this file called before, and raise(SIGTRAP) elsewhere.  The header includes <windows.h> on Windows,
+**	as this file did here.
 */
-#if defined(_WIN32)
-#include <windows.h>
-#endif
+#include "Platform/BreakIntoDebugger.h"
 
 
 #ifndef NDEBUG
@@ -180,7 +179,7 @@ void RefCountClass::Add_Ref(void) const
 
 	// See if programmer set break on for a specific address.
 	if (this == BreakOnReference) {
-		DebugBreak();  // trigger the debugger
+		breakIntoDebugger();  // trigger the debugger
 	}
 	Inc_Total_Refs(this);
 }
@@ -207,7 +206,7 @@ void	RefCountClass::Dec_Total_Refs(const RefCountClass * obj)
 
 	// See if programmer set break on for a specific address.
 	if (obj == BreakOnReference) {
-		 DebugBreak();  // trigger the debugger
+		 breakIntoDebugger();  // trigger the debugger
 	}
 }
 
