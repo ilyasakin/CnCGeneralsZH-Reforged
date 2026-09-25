@@ -65,6 +65,69 @@ comment describes it exactly:
 Resolve-at-draw is the right shape for Metal too. D2 generalises `DX11BackendClass`; it does not
 invent anything.
 
+## What the D-spike learned about SDL3 GPU against the game's needs: 2026-09-25
+
+The D-spike (`Tests/w3d_view`, [its task file](D-spike-sdl3-gpu-model.md)) drew a real model with
+real textures through SDL 3.4.16's GPU API: on Metal (Apple M3 Pro, macOS 27.0) and on Vulkan
+(lavapipe, Linux arm64). The findings below are what an interface designed for SDL3 GPU has to
+account for. Each says whether it was **run** or only **read**.
+
+**It fits as the game expects:**
+
+- **Clip space and winding are the same on both backends.** SDL presents Direct3D's clip space
+  (Y up, depth 0 to 1) on Metal and on Vulkan, flipping Vulkan's viewport itself. A right-handed
+  projection with front faces counter-clockwise and back faces culled reproduced the game's
+  `D3DCULL_CW` on both. The two frames overlay; nothing in the backend is per-API. *Run.*
+- **BC1, BC2 and BC3 go straight from the DDS, with every mip level.** Full chains down to 1×1 were
+  uploaded unchanged on both backends, with no block-alignment fix-up for the small levels. *Run.*
+- **Depth needs exactly one mapping function.**
+  - Apple has no D24S8. `mapDepthStencilFormat` in `w3d_view.cpp` asks for D24S8 and falls back to
+    D32S8, keeping the stencil the shadow volumes need.
+  - lavapipe took D24S8 and the Mac took D32S8, so both branches were exercised.
+  - This function can move into the backend as it is. *Run.*
+- **The alpha test and fog are shader code, as in D3D11.** SDL has no alpha-test state, and the
+  spike's fragment shader discards against the game's reference (0x60/255). `dx11backend` already
+  works this way, so the D3D11 design carries over. *Run for the alpha test; fog only read.*
+- **Readback works.** `SDL_DownloadFromGPUTexture` from a colour target made every screenshot here,
+  on both backends. That is the game's screenshot and any readback path. *Run.*
+- **Dynamic state is where the game needs it.** Viewport, scissor, blend constants and the stencil
+  reference are command-buffer state in SDL, not pipeline state. The shadow volumes' stencil
+  reference is therefore not a pipeline key. *Read (SDL_gpu.h).*
+
+**It needs design:**
+
+- **Everything else is baked into a pipeline.** Blend, depth test and write, cull, fill, the vertex
+  layout, the target formats and the shaders are one immutable `SDL_GPUGraphicsPipeline`. The
+  game's render states therefore reach SDL through a pipeline cache keyed by the state D1 funnels,
+  the way `dx11backend` caches D3D11 state objects. The spike's 13 draws needed 2 pipelines. *Run.*
+- **Samplers are immutable objects.** D3D's per-stage sampler states (address, filter, mip filter,
+  LOD bias, anisotropy) become a sampler cache keyed by those values, bound with the texture as a
+  pair. SDL binds textures only in texture-sampler pairs, one per stage, and the game uses 4. *Run
+  with one stage.*
+- **There is no BGRA vertex format.** `dx11layout.cpp:26` declares vertex colours
+  `DXGI_FORMAT_B8G8R8A8_UNORM`, which is D3DCOLOR's memory order. SDL has only
+  `UBYTE4_NORM` (RGBA). The backend therefore either swizzles `.bgra` in the generated vertex
+  shader, a generator change (D3), or converts every vertex buffer on upload. The first is cheaper
+  and keeps the buffers byte-identical. *Read; the Crusader has no vertex colours.*
+- **Uniforms are pushed, not bound.** `SDL_PushGPUVertexUniformData`/`...FragmentUniformData` gives
+  up to 4 slots per stage, copied per draw. The generated shaders use one constant buffer per stage
+  (`CombinerConstants`, `VertexPipeline`), so they fit. They do have to sit in SDL's register spaces:
+  vertex uniforms in space1, fragment uniforms in space3. *Run.*
+- **Shaders compile at runtime and cost time the first time.** Handing MSL to the Metal driver took
+  50 to 225 ms per program on average on a first run. The operating system then caches the result: 0.2 ms on
+  the second run. The backend should create its pipelines ahead of need, for example on the loading
+  screen, rather than on the frame that first draws something. Numbers in D3's task file. *Run.*
+- **House colour needs CPU access to texture pixels.** `W3DAssetManager::Recolor_Texture` recolours
+  team-colour textures on the CPU, through `SurfaceClass`, with a 16-step palette scale. The spike
+  tinted in a shader instead, which is not what the game computes. The backend, or D5, has to give
+  that code pixels to work on, whether decoded BC or the original data. *Read.*
+
+**Not tested by the spike:**
+
+- MSAA, render-to-texture chains and post-processing (`dx11post.cpp`).
+- 16-bit textures (B5G6R5 and friends; the probe says they sample) and multi-pass materials.
+- Any real Vulkan GPU, and MoltenVK.
+
 ## Scope
 
 - `Libraries/Source/WWVegas/WW3D2/dx8wrapper.h/.cpp`

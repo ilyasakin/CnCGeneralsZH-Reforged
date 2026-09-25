@@ -200,6 +200,7 @@ you start. That commit is the lock.
 | D3 | [Shader generators emit an IR](tasks/D3-shader-generators-ir.md) | M3 | D2 | not started | |
 | D4 | [SDL3 GPU backend](tasks/D4-metal-backend.md) (file keeps its old name) | M4 | D3 | not started | |
 | D5 | [Texture formats](tasks/D5-texture-formats.md) | M4 | D4 | not started | |
+| D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done, in review: the Crusader on Metal and on Vulkan (lavapipe); D3 shader route recommended | -a9 |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | not started | |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
