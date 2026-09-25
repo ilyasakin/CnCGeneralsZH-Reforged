@@ -769,10 +769,9 @@ if(ZH_PLATFORM_POSIX)
   find_package(Threads REQUIRED)
   add_library(miniaudio STATIC ${LIBSRC}/miniaudio/miniaudio.c)
   target_include_directories(miniaudio PUBLIC ${LIBSRC}/miniaudio)
-  target_link_libraries(miniaudio INTERFACE Threads::Threads ${CMAKE_DL_LIBS})
-  if(ZH_PLATFORM_LINUX)
-    target_link_libraries(miniaudio INTERFACE m)
-  endif()
+  # libm on every POSIX system: separate from libc on Linux and the BSDs, part of libSystem on macOS,
+  # where -lm is accepted and does nothing.  Not keyed on Linux, so the next platform needs no edit.
+  target_link_libraries(miniaudio INTERFACE Threads::Threads ${CMAKE_DL_LIBS} m)
 
   # What SDL3's GPU API can do on this machine: the evidence D2 and D5 need before the backend
   # interface is designed.  Needs a GPU and a display, so it is built but not registered with ctest.
