@@ -30,9 +30,21 @@
 // inverse or transform would be a rounding difference nobody could see until a replay
 // diverged.  D3DXVec4Dot and D3DXMatrixIdentity are the two the DirectX SDK inlined, so
 // those two are written out here, matching d3dx8math.inl term for term.
+//
+// That holds on Windows, where there is a DLL to bind.  Elsewhere there is none, so the
+// non-Windows branch at the bottom of this file declares the four names GameEngine reaches and
+// nothing else: D3DXVECTOR4, D3DXMATRIX, D3DXVec4Transform and D3DXVec4Dot.  They go to
+// d3dxportable.h, which copies the DLL's term order from Microsoft's machine code, and which
+// explains why "the DLL's term order" turned out to be two orders chosen by CPU vendor.  That
+// branch includes no d3d9.h, so GameLogic's path through BezierSegment.h stops pulling in the
+// Direct3D header on macOS.  The renderer's names are absent on purpose: nothing outside WW3D2
+// and GameEngineDevice uses them, neither compiles on macOS, and the Metal backend will decide
+// what they become.
 
 #ifndef D3DX9MATH_H
 #define D3DX9MATH_H
+
+#if defined(_WIN32)
 
 #include <d3d9.h>
 
@@ -163,5 +175,92 @@ inline D3DXMATRIX * D3DXMatrixIdentity(D3DXMATRIX * out)
 	out->m[0][0] = out->m[1][1] = out->m[2][2] = out->m[3][3] = 1.0f;
 	return out;
 }
+
+#else // !_WIN32
+
+#include "d3dxportable.h"
+
+#include <string.h>
+
+// Laid out exactly as the D3DX types are, so that a struct holding one of these has the same
+// shape on both platforms.
+struct D3DXVECTOR4
+{
+public:
+	D3DXVECTOR4() {}
+	D3DXVECTOR4(float x_value, float y_value, float z_value, float w_value)
+		: x(x_value), y(y_value), z(z_value), w(w_value) {}
+
+	operator float * () { return &x; }
+	operator const float * () const { return &x; }
+
+	float x;
+	float y;
+	float z;
+	float w;
+};
+
+struct D3DXMATRIX
+{
+public:
+	D3DXMATRIX() {}
+	D3DXMATRIX(float m11, float m12, float m13, float m14,
+	           float m21, float m22, float m23, float m24,
+	           float m31, float m32, float m33, float m34,
+	           float m41, float m42, float m43, float m44)
+	{
+		_11 = m11; _12 = m12; _13 = m13; _14 = m14;
+		_21 = m21; _22 = m22; _23 = m23; _24 = m24;
+		_31 = m31; _32 = m32; _33 = m33; _34 = m34;
+		_41 = m41; _42 = m42; _43 = m43; _44 = m44;
+	}
+
+	operator float * () { return &_11; }
+	operator const float * () const { return &_11; }
+
+	float & operator()(unsigned int row, unsigned int column) { return m[row][column]; }
+	float operator()(unsigned int row, unsigned int column) const { return m[row][column]; }
+
+	// D3DMATRIX's own layout: the named elements and the array alias each other.
+	union {
+		struct {
+			float _11, _12, _13, _14;
+			float _21, _22, _23, _24;
+			float _31, _32, _33, _34;
+			float _41, _42, _43, _44;
+		};
+		float m[4][4];
+	};
+};
+
+static_assert(sizeof(D3DXVECTOR4) == 16, "D3DXVECTOR4 is four floats");
+static_assert(sizeof(D3DXMATRIX) == 64, "D3DXMATRIX is sixteen floats");
+
+// Plain functions where Windows has function pointers, so call sites read the same.  The values
+// are copied through arrays so that the arithmetic in d3dxportable.h indexes real float[4] and
+// float[16] objects.  Copying a float is exact.
+inline D3DXVECTOR4 * D3DXVec4Transform(D3DXVECTOR4 * out, const D3DXVECTOR4 * vector,
+	const D3DXMATRIX * matrix)
+{
+	const float in[4] = { vector->x, vector->y, vector->z, vector->w };
+	float rows[16];
+	memcpy(rows, matrix->m, sizeof(rows));
+	float result[4];
+	D3DXPortable::Vec4Transform(result, in, rows);
+	out->x = result[0];
+	out->y = result[1];
+	out->z = result[2];
+	out->w = result[3];
+	return out;
+}
+
+inline float D3DXVec4Dot(const D3DXVECTOR4 * left, const D3DXVECTOR4 * right)
+{
+	const float l[4] = { left->x, left->y, left->z, left->w };
+	const float r[4] = { right->x, right->y, right->z, right->w };
+	return D3DXPortable::Vec4Dot(l, r);
+}
+
+#endif // _WIN32
 
 #endif // D3DX9MATH_H
