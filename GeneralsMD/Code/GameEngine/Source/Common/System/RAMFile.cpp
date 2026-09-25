@@ -49,7 +49,9 @@
 
 #include <stdio.h>
 #include <fcntl.h>
-#include <io.h>
+#if defined(_WIN32)
+#include <io.h>		// nothing here calls it; kept on Windows so its include set is unchanged
+#endif
 #include <string.h>
 #include <sys/stat.h>
 

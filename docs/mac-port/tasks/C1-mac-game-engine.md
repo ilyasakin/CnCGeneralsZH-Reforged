@@ -267,6 +267,26 @@ and `-all_load` of it with `libwwdebug.a` resolves every symbol.
   `Build_Internal_Filename_List()` fills. Without that call, a delete-and-flush silently does nothing.
   The test does it that way and says so.
 
+## What B5 left for C1 to replace, 2026-09-26
+
+B5 made these compile off Windows with a stand-in. Each stand-in is a placeholder, not a design,
+and C1 replaces it:
+
+- **The user data directory.** `EarlyOptions.h`'s `findUserDataDirectory` returns false off
+  Windows. GlobalData then logs "Could not find the Documents folder" and leaves `m_userDataDir`
+  empty, so saves, replays, Options.ini and the crash log go to the **current directory**. That
+  is GlobalData's own fallback, not a choice. Where they belong on macOS and Linux is C1's call,
+  and until it is made no early option (window mode, monitor, MSAA) can be read either.
+- **The file operations**: B5's task file, "File operations are C1's", lists every site in 11
+  files.
+- **`LocalFile.cpp`**: `_open`/`_read`/`_write`/`_lseek`/`_close` and `_O_BINARY` from `<io.h>`.
+  It is the engine's local file system and the core of this task, so it was left failing rather
+  than renamed. (`RAMFile.cpp` and `StreamingArchiveFile.cpp` included `<io.h>` for nothing; B5
+  put those includes under `_WIN32`.)
+- **The `'\\'` joins after `getExecutableDirectory()`**: MiniLog, `MemoryInit.cpp`'s
+  `Data\INI\MemoryPools.ini` (until then every pool keeps its compiled-in size) and Debug.cpp's
+  log names.
+
 ## Do not
 
 - Do not change `GameEngine`'s factory interface. If a factory does not fit macOS, that is worth

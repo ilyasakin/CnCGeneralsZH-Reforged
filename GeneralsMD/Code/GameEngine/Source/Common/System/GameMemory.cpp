@@ -44,7 +44,15 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
-// SYSTEM INCLUDES 
+// SYSTEM INCLUDES
+#ifndef _WIN32
+#include <stdlib.h>
+#if defined(__APPLE__)
+#include <malloc/malloc.h>		// malloc_size
+#elif defined(__linux__)
+#include <malloc.h>						// malloc_usable_size
+#endif
+#endif
 
 // USER INCLUDES 
 #include "Common/GameMemory.h"
@@ -229,7 +237,41 @@ static Int roundUpMemBound(Int i)
 }
 
 //-----------------------------------------------------------------------------
-/** 
+/* The operating system's allocator, which sysAllocateDoNotZero and sysFree below are built on.
+	 Windows: GlobalAlloc(GMEM_FIXED), GlobalSize and GlobalFree, as this file always called them.
+	 Elsewhere: malloc and free, and the block's usable size from the C library.
+
+	 One difference, Debug builds only: GlobalSize reports what was asked for, and the usable size can
+	 be more.  sysMemorySize is only used under MEMORYPOOL_DEBUG - the filler value and the
+	 system-allocation totals - so off Windows those totals can read higher than Windows' for the same
+	 allocations, and the filler covers the slack as well.  Release is unaffected.
+
+	 Alignment: nothing here needs more than 4 bytes (MEM_BOUND_ALIGNMENT; memset32; the Debug check
+	 in allocateBytesDoNotZeroImplementation), and where blocks sit inside a blob is fixed by
+	 MEM_BOUND_ALIGNMENT and the block header, not by this allocator.  GlobalAlloc promises 8-byte
+	 alignment; malloc gives 16 on Darwin and on glibc for x86-64 and arm64. */
+#ifdef _WIN32
+static void *sysMemoryAllocate(Int numBytes) { return ::GlobalAlloc(GMEM_FIXED, numBytes); }
+static void sysMemoryRelease(void *p) { ::GlobalFree(p); }
+#ifdef MEMORYPOOL_DEBUG
+static size_t sysMemorySize(void *p) { return ::GlobalSize(p); }
+#endif
+#else
+static void *sysMemoryAllocate(Int numBytes) { return ::malloc(numBytes); }
+static void sysMemoryRelease(void *p) { ::free(p); }
+#ifdef MEMORYPOOL_DEBUG
+#if defined(__APPLE__)
+static size_t sysMemorySize(void *p) { return ::malloc_size(p); }
+#elif defined(__linux__)
+static size_t sysMemorySize(void *p) { return ::malloc_usable_size(p); }
+#else
+#error "GameMemory: find a malloc'd block's usable size on this platform"
+#endif
+#endif
+#endif
+
+//-----------------------------------------------------------------------------
+/**
 	this is the low-level allocator that we use to request memory from the OS.
 	all (repeat, all) memory allocations in this module should ultimately
 	go thru this routine (or sysAllocate).
@@ -238,7 +280,7 @@ static Int roundUpMemBound(Int i)
 */
 static void* sysAllocateDoNotZero(Int numBytes)
 {
-	void* p = ::GlobalAlloc(GMEM_FIXED, numBytes);
+	void* p = sysMemoryAllocate(numBytes);
 	if (!p)
 		throw ERROR_OUT_OF_MEMORY;
 #ifdef MEMORYPOOL_DEBUG
@@ -247,10 +289,10 @@ static void* sysAllocateDoNotZero(Int numBytes)
 		#ifdef USE_FILLER_VALUE
 		{
 			USE_PERF_TIMER(MemoryPoolInitFilling)
-			::memset32(p, s_initFillerValue, ::GlobalSize(p));
+			::memset32(p, s_initFillerValue, sysMemorySize(p));
 		}
 		#endif
-		theTotalSystemAllocationInBytes += ::GlobalSize(p);
+		theTotalSystemAllocationInBytes += sysMemorySize(p);
 		if (thePeakSystemAllocationInBytes < theTotalSystemAllocationInBytes)
 			thePeakSystemAllocationInBytes = theTotalSystemAllocationInBytes;
 	}
@@ -270,11 +312,11 @@ static void sysFree(void* p)
 #ifdef MEMORYPOOL_DEBUG
 		{
 			USE_PERF_TIMER(MemoryPoolDebugging)
-			::memset32(p, GARBAGE_FILL_VALUE, ::GlobalSize(p));
-			theTotalSystemAllocationInBytes -= ::GlobalSize(p);
+			::memset32(p, GARBAGE_FILL_VALUE, sysMemorySize(p));
+			theTotalSystemAllocationInBytes -= sysMemorySize(p);
 		}
 #endif
-		::GlobalFree(p);
+		sysMemoryRelease(p);
 	}
 }
 

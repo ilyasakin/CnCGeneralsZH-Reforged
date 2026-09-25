@@ -107,6 +107,42 @@ void INI::parseLanguageDefinition( INI *ini )
 	ini->initFromINI( TheGlobalLanguageData, TheGlobalLanguageDataFieldParseTable );
 }
 
+/* The font files a language ships next to the game (Language.ini's LocalFontFile entries, kept in
+	 m_localFonts).  On Windows they are installed for this process with AddFontResource and removed on
+	 shutdown, and GDI draws every glyph from them.  Elsewhere text rasterisation is D6's (decision 6:
+	 FreeType behind a seam), and there is no process-wide font table to install into: these do nothing,
+	 and m_localFonts - public, filled the same way on every platform - is the list D6 loads. */
+static Bool installLocalFont( const AsciiString &font )
+{
+#if defined(_WIN32)
+	return AddFontResource(font.str()) != 0;
+#else
+	(void)font;
+	return TRUE;
+#endif
+}
+
+static void removeLocalFont( const AsciiString &font )
+{
+#if defined(_WIN32)
+	RemoveFontResource(font.str());
+#else
+	(void)font;
+#endif
+}
+
+/* Whether this is Windows 95, 98 or Me, which Language9x.ini's fonts are for.  Nothing else is. */
+static Bool isWindows9x( void )
+{
+#if defined(_WIN32)
+	OSVERSIONINFO	osvi;
+	osvi.dwOSVersionInfoSize=sizeof(OSVERSIONINFO);
+	return GetVersionEx(&osvi)  &&  osvi.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS;
+#else
+	return FALSE;
+#endif
+}
+
 GlobalLanguage::GlobalLanguage()
 {
 	m_unicodeFontName.clear();
@@ -127,7 +163,7 @@ GlobalLanguage::~GlobalLanguage()
 	while( it != m_localFonts.end())
 	{
 		AsciiString font = *it;
-		RemoveFontResource(font.str());
+		removeLocalFont(font);
 		//SendMessage( HWND_BROADCAST, WM_FONTCHANGE, 0, 0);
 		++it;
 	}
@@ -140,14 +176,11 @@ void GlobalLanguage::init( void )
 	AsciiString fname;
 	fname.format("Data\\%s\\Language.ini", GetRegistryLanguage().str());
 
-	OSVERSIONINFO	osvi;
-	osvi.dwOSVersionInfoSize=sizeof(OSVERSIONINFO);
-
 	//GS NOTE: Must call doesFileExist in either case so that NameKeyGenerator will stay in sync
 	AsciiString tempName;
 	tempName.format("Data\\%s\\Language9x.ini", GetRegistryLanguage().str());
 	bool isExist = TheFileSystem->doesFileExist(tempName.str());
-	if (GetVersionEx(&osvi)  &&  osvi.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS  && isExist)
+	if (isWindows9x()  && isExist)
 	{	//check if we're running Win9x variant since they may need different fonts
 		fname = tempName;
 	}
@@ -165,7 +198,7 @@ void GlobalLanguage::init( void )
 	while( it != m_localFonts.end())
 	{
 		AsciiString font = *it;
-		if(AddFontResource(font.str()) == 0)
+		if(!installLocalFont(font))
 		{
 			DEBUG_ASSERTCRASH(FALSE,("GlobalLanguage::init Failed to add font %s", font.str()));
 		}

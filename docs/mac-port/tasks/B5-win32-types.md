@@ -318,6 +318,20 @@ dead `osdep.h` include is left in place on purpose, because it is what makes a l
 - `Debug.h`'s `SimpleProfiler` counters are `Int64`. The other `__int64` sites (`SubsystemInterface.cpp`,
   `Debug.cpp`, `PerfTimer.cpp`) are Debug-profiling code with `__rdtsc`, left for their own pass.
 
+**`min`/`max`, 2026-09-26: an audit that ended up unnecessary, kept because its facts are.**
+`BaseType.h:101/105` define `min` and `max` as macros, which evaluate the chosen argument twice.
+WWLib's `always.h` `#undef`s both and defines one-type templates. To learn which calls use the
+macro, it was temporarily redefined to expand to a marker, and all 602 `gameengine` files were
+preprocessed in Release and Debug, each marker attributed to its source line. The 22 files that stop
+at a missing header were re-read with stub headers until none was fatal. **The macro expands at
+exactly one place: `BaseType.h:350-351` itself, `RealRange::combine`, on plain members.** Every
+other engine `min`/`max` comes after `always.h`'s `#undef` (`PreRTS.h` reaches it through `Thing.h`
+-> `matrix3d.h`), and so already calls the single-evaluating template, on Windows too. The macro is
+live only between `BaseType.h` and `always.h`, which is exactly where `STLTypedefs.h` includes
+`<algorithm>`, and that is why only libstdc++ broke. -47's fix (the standard headers included
+before the macros, the macros unchanged) was taken instead of a template rewrite. Not covered by the
+audit: Windows-only sources (GameEngineDevice, Main, Tools).
+
 <details><summary>The 62 enums</summary>
 
 | Enum | Definition | Forward declarations |
@@ -386,6 +400,74 @@ dead `osdep.h` include is left in place on purpose, because it is what makes a l
 | `WeaponStatus` | `GameLogic/WeaponStatus.h:33` | 1 |
 
 </details>
+
+## Bucket (c): exclude, fence or move, 2026-09-26
+
+The rule (PM): **exclude** a file from the POSIX build when it is a Windows-only *feature* the game
+can run without off Windows; **move** it behind a seam when the game *needs* that function on every
+platform. Every exclusion is listed in CMake's platform split with its reason and the callers it
+was checked against. **A Windows-only feature whose file also holds portable logic under test is
+fenced, not excluded** - excluding it would take the tests with it.
+
+Check callers by symbol, tests included, before excluding anything: ChromaKeyboard looked like an
+exclusion until test_gameengine turned out to check its key mappings.
+
+| File | Outcome | Off Windows |
+|:--|:--|:--|
+| `StackDump.cpp` | moved | `StackDumpPosix.cpp`: backtrace() and dladdr(), no allocation; crash reporting proper is C5's |
+| `EarlyCommandLine.h` | moved | every option reads as not given until C2 hands over argv |
+| `EarlyOptions.h` | moved | no user data directory until C1, so saves go to the current directory |
+| `Monitors.h` | moved | one 800x600 primary monitor with that one mode, until C2's SDL3 display list |
+| `WebBrowser.cpp` | excluded, null interface | `WebBrowserPosix.cpp`: TheWebBrowser NULL, WebBrowserURL for INIWebpageURL |
+| `DownloadManager.cpp` | excluded, null interface | `DownloadManagerPosix.cpp`: TheDownloadManager NULL; DownloadMenu.cpp still built, for FunctionLexicon |
+| `ChromaKeyboard.cpp` | **fenced** | the WinINet transport and worker are Windows-only; mappings and composition built everywhere |
+| `IMEManager.cpp` | excluded | `IMEManagerPosix.cpp`: no IME manager; C3's |
+| `<io.h>` | two guarded includes | `RAMFile.cpp`, `StreamingArchiveFile.cpp` used nothing from it; `LocalFile.cpp` is C1's |
+| GameSpy threads | not yet | `MainMenuUtils.cpp`, the ping and game-results threads: dead service, next |
+
+Found on the way: `INI::parseWebpageURLDefinition` dereferences an uninitialized `url` whenever
+TheWebBrowser is NULL, which it always is. It is unreachable, because only `WebBrowser::init`
+loads `Webpages.ini` and it never runs, so it is recorded here and not in the defects list.
+`ChromaKeyboard.cpp` has three `FKEY_` constants that nothing uses, on Windows too; clang warns
+about them and MSVC does not.
+
+## File operations are C1's: the worklist, 2026-09-26
+
+Decided (PM, decision 4 of the B5 review): `CopyFile`, `CreateDirectory`, the current directory,
+`FindFirstFile`/`FindNextFile`/`FindClose`, `DeleteFile` and `MoveFile` go behind C1's
+`LocalFileSystem`, which is already the seam (`TheLocalFileSystem`; PopupReplay calls its
+`doesFileExist` two lines before its `CopyFile`). B5 does not wrap them one by one. **These sites
+are left failing on purpose**, and this list is C1's starting worklist.
+
+How it was made: every `GameEngine` file naming one of those functions, then each file's POSIX view
+through `Tools/windows_view_diff.py`'s own `view()` (Windows macros unset, `__APPLE__` set), so a
+site already inside `#ifdef _WIN32` is not listed. 13 files matched and 11 have live sites. Not
+listed: `Compression.cpp:190`'s `CopyFile` (inside a comment), `ControlBarScheme.cpp` (a name
+match only), and `PopupReplay.cpp:290`'s `DeleteFile` (B5 gave it a `remove()` and `strerror` branch off
+Windows). Line numbers are at `d384f2a7`.
+
+| File | Lines | Calls | What for |
+|:--|:--|:--|:--|
+| `Common/System/Directory.cpp` | 75, 78, 86, 112, 119, 122 | Get/SetCurrentDirectory, FindFirst/Next/Close | the directory lister itself: chdir in, list `*`, chdir back |
+| `Common/System/SaveGame/GameState.cpp` | 606 | CreateDirectory | make the save folder |
+| `Common/System/SaveGame/GameState.cpp` | 1348, 1351, 1366, 1396, 1402, 1405 | Get/SetCurrentDirectory, FindFirst/Next/Close | enumerate saves (chdir in and back) |
+| `Common/System/SaveGame/GameStateMap.cpp` | 465, 468, 487, 512, 517, 522, 525 | Get/SetCurrentDirectory, FindFirst/Next/Close, DeleteFile | delete the scratch-pad maps (maps written out of loaded saves) in the save folder |
+| `Common/Recorder.cpp` | 301, 323, 768 | CopyFile | copy the replay into the stats directory; copy the debug file there; archive a replay |
+| `Common/GameEngine.cpp` | 275, 276 | MoveFileExA, DeleteFileA | atomic replace of the model-checksum cache |
+| `Common/GameEngine.cpp` | 879 | DeleteFile | patch 1.01's removal of a stray `Data\INI\INIZH.big` |
+| `Common/GameEngine.cpp` | 937 | GetCurrentDirectory | the "game files are not in <dir>" message |
+| `GameClient/InGameUI.cpp` | 2310, 2317, 2318, 2319 | FindFirst/Next/Close (A), DeleteFileA | forget the replay checkpoints (`*.sav`) |
+| `GameClient/InGameUI.cpp` | 2334, 2335, 2337 | CreateDirectoryA | make the checkpoint folders |
+| `GameClient/System/Image.cpp` | 272 | FindFirstFile | "are there user MappedImages?"; the handle is never closed (defects list, 11) |
+| `GUICallbacks/Menus/PopupReplay.cpp` | 323 | CopyFile | save a replay under a new name |
+| `GUICallbacks/Menus/ReplayMenu.cpp` | 639, 677 | DeleteFile, CopyFile | delete and copy a replay |
+| `GameNetwork/GameSpy/PeerDefs.cpp` | 624, 626, 628 | CreateDirectory | the user-data, GeneralsOnline and Ladders folders |
+| `Include/Common/EarlyOptions.h` | 109 | CreateDirectoryA | the writable-directory probe; this header is a bucket-(c) move of B5's, and its `CreateDirectory` takes C1's call when that exists |
+
+Also C1's: the `'\\'` joins after `getExecutableDirectory()` (`MiniLog.cpp`, `MemoryInit.cpp`'s
+`"\\Data\\INI\\MemoryPools.ini"`, `Debug.cpp`'s log names). The seam returns the directory with the
+platform's separator; what is appended to it is still Windows-spelled. Until C1, a POSIX build does
+not find `MemoryPools.ini`, and every pool keeps its compiled-in size from MemoryInit's table.
 
 ## Do
 

@@ -300,6 +300,25 @@ GameTextManager::~GameTextManager()
 extern const Char *g_strFile;
 extern const Char *g_csfFile;
 
+/* Names the game's window.  On Windows that is ApplicationHWnd, set here as it always was.  The window
+	 is C2's everywhere else (SDL_SetWindowTitle), and until C2 creates one there is nothing to name, so
+	 off Windows this does nothing. */
+static void setApplicationWindowTitle( const UnicodeString &ourName, const AsciiString &ourNameA )
+{
+#if defined(_WIN32)
+	extern HWND ApplicationHWnd;  ///< our application window handle
+	if (ApplicationHWnd) {
+		//Set it twice because Win 9x does not support SetWindowTextW.
+		::SetWindowText(ApplicationHWnd, ourNameA.str());
+		// Win32's W API: WideChar and WCHAR are the same two bytes on Windows, which makes the cast honest.
+		::SetWindowTextW(ApplicationHWnd, reinterpret_cast<LPCWSTR>(ourName.str()));
+	}
+#else
+	(void)ourName;
+	(void)ourNameA;
+#endif
+}
+
 void GameTextManager::init( void )
 {
 	AsciiString csfFile;
@@ -460,13 +479,7 @@ void GameTextManager::init( void )
 	AsciiString ourNameA;
 	ourNameA.translate(ourName);	//get ASCII version for Win 9x
 
-	extern HWND ApplicationHWnd;  ///< our application window handle
-	if (ApplicationHWnd) {
-		//Set it twice because Win 9x does not support SetWindowTextW.
-		::SetWindowText(ApplicationHWnd, ourNameA.str());
-		// Win32's W API: WideChar and WCHAR are the same two bytes on Windows, which makes the cast honest.
-		::SetWindowTextW(ApplicationHWnd, reinterpret_cast<LPCWSTR>(ourName.str()));
-	}
+	setApplicationWindowTitle( ourName, ourNameA );
 
 }
 

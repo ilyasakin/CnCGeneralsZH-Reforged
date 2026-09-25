@@ -36,11 +36,13 @@
 // If callback is NULL then will write using OuputDebugString
 void StackDump(void (*callback)(const char*));
 
+#if defined(_WIN32)
 // Writes a stackdump (provide a callback : gets called per line)
 // If callback is NULL then will write using OuputDebugString
 // The three are the instruction, stack and frame pointers of the context to walk, pointer-wide so
 // the same call carries an x64 Rip/Rsp/Rbp.
 void StackDumpFromContext(DWORD_PTR eip,DWORD_PTR esp,DWORD_PTR ebp, void (*callback)(const char*));
+#endif
 
 // Gets count* addresses from the current stack
 void FillStackAddresses(void**addresses, unsigned int count, unsigned int skip = 0);
@@ -50,8 +52,11 @@ void StackDumpFromAddresses(void**addresses, unsigned int count, void (*callback
 
 void GetFunctionDetails(void *pointer, char*name, size_t nameSize, char*filename, size_t filenameSize, unsigned int* linenumber, unsigned int* address);
 
-// Dumps out the exception info and stack trace.
+#if defined(_WIN32)
+// Dumps out the exception info and stack trace.  Windows only: EXCEPTION_POINTERS is a structured
+// exception's, and C5 owns what a crash reports elsewhere.  StackDumpPosix.cpp is the other body.
 void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info );
+#endif
 
 #else
 
@@ -65,8 +70,10 @@ __inline void StackDumpFromAddresses(void**addresses, unsigned int count, void (
 
 __inline void GetFunctionDetails(void *pointer, char*name, size_t nameSize, char*filename, size_t filenameSize, unsigned int* linenumber, unsigned int* address) {}
 
+#if defined(_WIN32)
 // Dumps out the exception info and stack trace.
 __inline void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info ) {};
+#endif
 
 #endif
 

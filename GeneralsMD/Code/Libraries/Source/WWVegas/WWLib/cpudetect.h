@@ -253,6 +253,12 @@ public:
 	static unsigned Get_Available_Page_File_Size() { return AvailablePageMemory; }
 	static unsigned Get_Total_Virtual_Memory() { return TotalVirtualMemory; }
 	static unsigned Get_Available_Virtual_Memory() { return AvailableVirtualMemory; }
+#if !defined(WIN32)
+	// The same figures, unclamped and asked again now; see cpudetect.cpp.
+	static void Query_Memory(unsigned long long& totalPhysical, unsigned long long& availablePhysical,
+		unsigned long long& totalPage, unsigned long long& availablePage,
+		unsigned long long& totalVirtual, unsigned long long& availableVirtual);
+#endif
 
 	static unsigned Get_Processor_Type() { return ProcessorType; }
 

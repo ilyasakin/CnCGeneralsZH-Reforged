@@ -175,6 +175,33 @@ inline char* _strupr(char* s) { for (char* p = s; *p; ++p) *p = (char)toupper((u
 inline char* strlwr(char* s) { return _strlwr(s); }
 inline char* strupr(char* s) { return _strupr(s); }
 
+// __max and __min: MSVC's <stdlib.h> macros, spelled here exactly as MSVC spells them, so each
+// argument is evaluated exactly as often, and a NaN compares exactly as it does on Windows.
+// Their nine callers are all simulation code (Player, PartitionManager, SpecialAbilityUpdate,
+// ParticleUplinkCannonUpdate), where std::max would differ: std::max(NaN, x) is NaN, and
+// __max(NaN, x) is x.
+#ifndef __max
+#define __max(a,b) (((a) > (b)) ? (a) : (b))
+#endif
+#ifndef __min
+#define __min(a,b) (((a) < (b)) ? (a) : (b))
+#endif
+
+// _wcsnicmp: MSVC's in the "C" locale this tree never leaves - fold 'A'-'Z' only, compare the folded
+// units, return their difference - stopping after n code units.  Its one caller is EarlyCommandLine.h,
+// matching ASCII option names such as -logPrefix against the command line, which stays wchar_t by
+// B1's decision.  Engine text (WideChar) compares through Lib/WideCharFns.h's WideCharICmp instead.
+inline int _wcsnicmp(const wchar_t* a, const wchar_t* b, size_t n)
+{
+	for (; n != 0; --n) {
+		wchar_t ca = *a++, cb = *b++;
+		if (ca >= L'A' && ca <= L'Z') ca += L'a' - L'A';
+		if (cb >= L'A' && cb <= L'Z') cb += L'a' - L'A';
+		if (ca != cb || ca == 0) return (int)(ca - cb);
+	}
+	return 0;
+}
+
 // ---------------------------------------------------------------------------
 // TCHAR.
 //

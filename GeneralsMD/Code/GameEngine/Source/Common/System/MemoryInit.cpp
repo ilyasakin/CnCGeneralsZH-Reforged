@@ -48,6 +48,7 @@
 // USER INCLUDES 
 #include "Lib/BaseType.h"
 #include "Common/GameMemory.h"
+#include "Common/ExecutableDirectory.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -762,17 +763,7 @@ void userMemoryManagerInitPools()
 	// since we're called prior to main, the cur dir might not be what
 	// we expect. so do it the hard way.
 	char buf[_MAX_PATH];
-	::GetModuleFileName(NULL, buf, sizeof(buf));
-	char* pEnd = buf + strlen(buf);
-	while (pEnd != buf) 
-	{
-		if (*pEnd == '\\') 
-		{
-			*pEnd = 0;
-			break;
-		}
-		--pEnd;
-	}
+	getExecutableDirectory(buf, sizeof(buf), FALSE);
 	strlcat(buf, "\\Data\\INI\\MemoryPools.ini", ARRAY_SIZE(buf));
 
 	FILE* fp = fopen(buf, "r");
