@@ -17,6 +17,7 @@
 */
 
 #include "ffvertex.h"
+#include "sdl3target.h"
 
 #include <stdio.h>
 
@@ -442,6 +443,12 @@ static bool generate_pretransformed(const VertexPipelineDescription & descriptio
 bool VertexShader_Generate(const VertexPipelineDescription & description,
 	VertexShaderTarget target, std::string & hlsl)
 {
+	// The SDL3 GPU program is the D3D11 one with its bindings rewritten, so everything below only
+	// ever sees the two profiles it was written for.
+	if (target == VERTEX_SHADER_TARGET_SDL3_GPU) {
+		return VertexShader_Generate(description, VERTEX_SHADER_TARGET_D3D11, hlsl)
+			&& SDL3_Shader_Retarget(hlsl, true);
+	}
 	if (description.StageCount > MAXIMUM_VERTEX_STAGES
 		|| description.LightCount > MAXIMUM_VERTEX_LIGHTS) {
 		return false;

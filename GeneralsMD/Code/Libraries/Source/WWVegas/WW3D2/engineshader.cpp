@@ -18,6 +18,7 @@
 
 #include "engineshader.h"
 #include "ffvertex.h"
+#include "sdl3target.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -484,8 +485,20 @@ EngineShaderProgram EngineShader_From_File(const char * file_path)
 	return ENGINE_SHADER_NONE;
 }
 
-bool EngineShader_Vertex_Program(EngineShaderProgram program, std::string & hlsl)
+bool EngineShader_Vertex_Program(EngineShaderProgram program, std::string & hlsl,
+	VertexShaderTarget target)
 {
+	// Transcribed for the D3D11 profile only: on D3D9 the shipped .vso ran on the device itself.
+	// SDL3 GPU is the D3D11 text with its bindings rewritten.
+	if (target == VERTEX_SHADER_TARGET_D3D9) {
+		hlsl.clear();
+		return false;
+	}
+	if (target == VERTEX_SHADER_TARGET_SDL3_GPU) {
+		return EngineShader_Vertex_Program(program, hlsl, VERTEX_SHADER_TARGET_D3D11)
+			&& SDL3_Shader_Retarget(hlsl, true);
+	}
+
 	hlsl.clear();
 	switch (program) {
 	case ENGINE_SHADER_TREES:
@@ -497,8 +510,19 @@ bool EngineShader_Vertex_Program(EngineShaderProgram program, std::string & hlsl
 }
 
 bool EngineShader_Pixel_Program(EngineShaderProgram program,
-	const PixelPipelineDescription & pipeline, std::string & hlsl, bool bumped)
+	const PixelPipelineDescription & pipeline, std::string & hlsl, bool bumped,
+	CombinerShaderTarget target)
 {
+	// As the vertex half: D3D11 only, and SDL3 GPU as the D3D11 text rebound.
+	if (target == COMBINER_SHADER_TARGET_D3D9) {
+		hlsl.clear();
+		return false;
+	}
+	if (target == COMBINER_SHADER_TARGET_SDL3_GPU) {
+		return EngineShader_Pixel_Program(program, pipeline, hlsl, bumped, COMBINER_SHADER_TARGET_D3D11)
+			&& SDL3_Shader_Retarget(hlsl, false);
+	}
+
 	hlsl.clear();
 	if (bumped && !EngineShader_Can_Bump(program)) {
 		return false;
