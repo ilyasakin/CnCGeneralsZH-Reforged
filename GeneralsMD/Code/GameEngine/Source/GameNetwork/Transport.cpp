@@ -26,7 +26,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "Lib/Clock.h"
 
-#include "Common/CRC.h"
+#include "Common/crc.h"
 #include "GameNetwork/LinkSimulation.h"
 #include "GameNetwork/Transport.h"
 #include "GameNetwork/NetworkInterface.h"

@@ -44,8 +44,8 @@
 #include "Common/AsciiString.h"
 #include "GameLogic/GameLogic.h"
 #include "Lib/BaseType.h"
-#include "wwmath/vector3.h"
-#include "wwmath/matrix3d.h"
+#include "WWMath/vector3.h"
+#include "WWMath/matrix3d.h"
 
 	extern Int TheCRCFirstFrameToLog;
 	extern UnsignedInt TheCRCLastFrameToLog;

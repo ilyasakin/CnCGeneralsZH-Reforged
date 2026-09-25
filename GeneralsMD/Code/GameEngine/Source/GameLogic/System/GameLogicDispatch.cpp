@@ -130,7 +130,7 @@ static void considerBuilderProc( Object *obj, void *userData )
 #include "GameClient/GameText.h"
 #include "GameClient/GameWindowTransitions.h"
 #include "GameClient/GameWindowManager.h"
-#include "GameClient/GuiCallbacks.h"
+#include "GameClient/GUICallbacks.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/Mouse.h"

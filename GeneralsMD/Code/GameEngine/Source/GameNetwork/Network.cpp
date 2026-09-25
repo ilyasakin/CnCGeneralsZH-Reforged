@@ -39,7 +39,7 @@
 #include "Common/PlayerList.h"
 #include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/CushionMetrics.h"
-#include "GameNetwork/Udp.h"
+#include "GameNetwork/udp.h"
 #include "GameNetwork/Transport.h"
 #include "strtok_r.h"
 #include "GameClient/Shell.h"

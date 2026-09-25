@@ -91,7 +91,7 @@
 #endif
 
 #ifdef PM_CACHE_TERRAIN_HEIGHT
-#include "common/mapobject.h"
+#include "Common/MapObject.h"
 #endif
 
 /* Range queries this logic frame, and objects looked at inside them. Zeroed by
