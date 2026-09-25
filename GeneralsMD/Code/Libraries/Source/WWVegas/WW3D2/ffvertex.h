@@ -39,7 +39,7 @@
 #ifndef FFVERTEX_H
 #define FFVERTEX_H
 
-#include <d3d9.h>
+#include "ffstate.h"
 
 #include <string>
 
@@ -85,7 +85,7 @@ const unsigned VERTEX_REGISTERS_PER_LIGHT = 6;
 struct VertexLightDescription
 {
 	// D3DLIGHT_DIRECTIONAL, D3DLIGHT_POINT or D3DLIGHT_SPOT.
-	DWORD Type;
+	FixedFunctionValue Type;
 };
 
 struct VertexStageDescription
@@ -93,18 +93,18 @@ struct VertexStageDescription
 	// D3DTSS_TEXCOORDINDEX whole: the generation mode in the high half, the coordinate set in the
 	// low one.  Unlike the pixel half, both matter here - generating the coordinate is this
 	// shader's job now.
-	DWORD TextureCoordinateIndex;
+	FixedFunctionValue TextureCoordinateIndex;
 
 	// D3DTSS_TEXTURETRANSFORMFLAGS: a count of how many coordinates the texture matrix produces,
 	// optionally with D3DTTFF_PROJECTED.  D3DTTFF_DISABLE means the matrix is not applied at all.
-	DWORD TextureTransformFlags;
+	FixedFunctionValue TextureTransformFlags;
 };
 
 struct VertexPipelineDescription
 {
 	// The flexible vertex format the draw is reading, which says whether there is a normal and
 	// whether there is a vertex colour to read D3DMCS_COLOR out of.
-	DWORD FVF;
+	FixedFunctionValue FVF;
 
 	bool LightingEnabled;
 	bool SpecularEnabled;
@@ -115,10 +115,10 @@ struct VertexPipelineDescription
 
 	// D3DMCS_MATERIAL or D3DMCS_COLOR, one each.  D3DMCS_COLOR2 is the specular vertex colour and
 	// nothing in the game selects it.
-	DWORD DiffuseMaterialSource;
-	DWORD AmbientMaterialSource;
-	DWORD EmissiveMaterialSource;
-	DWORD SpecularMaterialSource;
+	FixedFunctionValue DiffuseMaterialSource;
+	FixedFunctionValue AmbientMaterialSource;
+	FixedFunctionValue EmissiveMaterialSource;
+	FixedFunctionValue SpecularMaterialSource;
 
 	unsigned LightCount;
 	VertexLightDescription Lights[MAXIMUM_VERTEX_LIGHTS];
@@ -130,7 +130,7 @@ struct VertexPipelineDescription
 
 	// D3DRS_FOGVERTEXMODE: D3DFOG_LINEAR, D3DFOG_EXP or D3DFOG_EXP2.  D3DFOG_NONE with the fog
 	// enabled is table fog, which is the pixel half's business and not this one's.
-	DWORD FogVertexMode;
+	FixedFunctionValue FogVertexMode;
 
 	// Stage zero's texture has a normal map beside it, so the lights are summed per
 	// pixel instead of here.  The program still lights the vertex, and past the fog factor it also
@@ -141,11 +141,13 @@ struct VertexPipelineDescription
 };
 
 // Which profile the generated text is for.  The two differ in the output semantic and in how the
-// constants are declared; the arithmetic between them is the same text.
+// constants are declared; the arithmetic between them is the same text.  SDL3_GPU is the D3D11 text
+// with its bindings rewritten for SDL3's GPU API (sdl3target.h), for the Metal and Vulkan backend.
 enum VertexShaderTarget
 {
 	VERTEX_SHADER_TARGET_D3D9,
-	VERTEX_SHADER_TARGET_D3D11
+	VERTEX_SHADER_TARGET_D3D11,
+	VERTEX_SHADER_TARGET_SDL3_GPU
 };
 
 bool VertexShader_Generate(const VertexPipelineDescription & description,
