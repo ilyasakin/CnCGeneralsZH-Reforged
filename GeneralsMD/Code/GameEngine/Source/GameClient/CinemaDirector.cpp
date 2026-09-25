@@ -383,10 +383,10 @@ static CinemaTween theCinemaZoom;
 static CinemaTween theCinemaAngle;
 static CinemaTween theCinemaPitch;
 static UnsignedInt theCinemaSeenFrame = 0;
-static DWORD theCinemaSeenFrameAt = 0;
+static UnsignedInt theCinemaSeenFrameAt = 0;
 static Bool theCinemaClockStarted = FALSE;
 static Real theCinemaClock = 0.0f;
-static DWORD theCinemaClockWall = 0;
+static UnsignedInt theCinemaClockWall = 0;
 
 static Bool cinemaShotIsEarlier( const CinemaShot &left, const CinemaShot &right )
 {
@@ -461,7 +461,7 @@ static void loadCinema( void )
 static Real cinemaNow( void )
 {
 	const UnsignedInt frame = TheGameLogic->getFrame();
-	const DWORD wall = Clock_Milliseconds();
+	const UnsignedInt wall = Clock_Milliseconds();
 	if (frame != theCinemaSeenFrame)
 	{
 		theCinemaSeenFrame = frame;

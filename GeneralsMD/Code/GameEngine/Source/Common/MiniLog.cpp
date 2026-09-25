@@ -29,23 +29,14 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "Common/MiniLog.h"
+#include "Common/ExecutableDirectory.h"
 
 #ifdef DEBUG_LOGGING
 
 LogClass::LogClass(const char *fname)
 {
 	char buffer[ _MAX_PATH ];
-	GetModuleFileName( NULL, buffer, sizeof( buffer ) );
-	char *pEnd = buffer + strlen( buffer );
-	while( pEnd != buffer )
-	{
-		if( *pEnd == '\\' )
-		{
-			*pEnd = 0;
-			break;
-		}
-		pEnd--;
-	}
+	getExecutableDirectory( buffer, sizeof( buffer ), FALSE );
 	AsciiString fullPath;
 	fullPath.format("%s\\%s", buffer, fname);
 	m_fp = fopen(fullPath.str(), "wt");

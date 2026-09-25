@@ -21,7 +21,9 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "Lib/Clock.h"
 
+#if defined(_WIN32)
 #include <wininet.h>
+#endif
 #include <math.h>
 
 #include "GameClient/ChromaKeyboard.h"
@@ -89,6 +91,11 @@ static const ChromaDevice CHROMA_DEVICES[] =
 };
 static const Int CHROMA_DEVICE_COUNT = sizeof( CHROMA_DEVICES ) / sizeof( CHROMA_DEVICES[ 0 ] );
 
+/* The WinINet transport - these constants, the worker hand-off below, and the HTTP side further
+	 down - is Windows-only: off Windows nothing talks to the Chroma server, so there is no hardware to
+	 feed and updateChromaKeyboard returns at once.  The mappings and the frame composition are
+	 portable and built everywhere; test_gameengine checks the mappings. */
+#if defined(_WIN32)
 static const char *CHROMA_HOST = "localhost";
 static const INTERNET_PORT CHROMA_PORT = 54235;
 static const char *CHROMA_INIT_PATH = "/razer/chromasdk";
@@ -108,6 +115,7 @@ static const DWORD CHROMA_SEND_INTERVAL_MS = 33;
 /// The session dies after about ten idle seconds - measured, not assumed - so a
 /// still frame is resent well inside that.
 static const DWORD CHROMA_KEEPALIVE_MS = 4000;
+#endif
 
 //-----------------------------------------------------------------------------
 // Colours, packed the way the device takes them: blue in the high byte, red in
@@ -206,10 +214,13 @@ static const UnsignedInt MONEY_PER_SEGMENT = 1000;
 // The main thread writes s_pendingCells, the worker reads it.  One lock over the
 // whole array: it is 840 bytes copied ten times a second.
 //-----------------------------------------------------------------------------
+#if defined(_WIN32)
 static CRITICAL_SECTION s_cellLock;
 static Int s_pendingCells[ CHROMA_CELLS ];
 static Bool s_workerRunning = FALSE;
+#endif
 static Bool s_disabled = FALSE;
+#if defined(_WIN32)
 static volatile LONG s_workerShouldStop = 0;
 /// Whether the hardware is ours right now: the option is on and a match is being
 /// played.  Anywhere else the session is closed and Synapse lights the board.
@@ -218,6 +229,7 @@ static HANDLE s_workerThread = NULL;
 
 /// How long the worker waits before asking an absent Chroma server again.
 static const DWORD CHROMA_RETRY_MS = 5000;
+#endif
 
 //-----------------------------------------------------------------------------
 // Pure helpers.
@@ -839,6 +851,7 @@ static void chromaPaintEffect( Int *cells, UnsignedInt frame )
 	}
 }
 
+#if defined(_WIN32)
 //-----------------------------------------------------------------------------
 // The HTTP side.  Everything below here runs on the worker thread.
 //-----------------------------------------------------------------------------
@@ -1075,6 +1088,7 @@ static DWORD WINAPI chromaWorkerMain( LPVOID )
 	InternetCloseHandle( internet );
 	return 0;
 }
+#endif
 
 //-----------------------------------------------------------------------------
 // The walk.  Everything below here runs on the main thread.
@@ -1796,6 +1810,12 @@ static void chromaFillAlarm( Int *cells, Real alarm )
 }
 
 //-----------------------------------------------------------------------------
+#if !defined(_WIN32)
+/* Off Windows nothing sends a frame (see the transport above), so nothing composes one: only
+	 updateChromaKeyboard's Windows half calls this.  It is kept, and built, for the transport that
+	 will - a macOS or Linux lighting backend would call it from updateChromaKeyboard. */
+[[maybe_unused]] static void chromaFillCells( Int *cells, Bool inMatch );
+#endif
 static void chromaFillCells( Int *cells, Bool inMatch )
 {
 	Real red = 0.5f, green = 0.5f, blue = 0.5f;
@@ -1882,12 +1902,14 @@ static void chromaFillCells( Int *cells, Bool inMatch )
 			lastGridFrame = frame;
 			for( Int row = 0; row < KEYBOARD_ROWS; ++row )
 			{
+				// At most 18 + 22 * 7 + 1 characters, so it never truncates, where snprintf and MSVC's
+				// _snprintf, which it replaced, would differ.
 				char line[ 256 ];
-				Int used = _snprintf( line, sizeof( line ), "CHROMADRILL: row %d", row );
+				Int used = snprintf( line, sizeof( line ), "CHROMADRILL: row %d", row );
 				for( Int column = 0; column < KEYBOARD_COLUMNS; ++column )
-					used += _snprintf( line + used, sizeof( line ) - used, " %06X",
+					used += snprintf( line + used, sizeof( line ) - used, " %06X",
 														 cells[ chromaKeyboardCell( row, column ) ] );
-				_snprintf( line + used, sizeof( line ) - used, "\n" );
+				snprintf( line + used, sizeof( line ) - used, "\n" );
 				line[ sizeof( line ) - 1 ] = 0;
 				DEBUG_LOG(( "%s", line ));
 			}
@@ -1906,6 +1928,7 @@ void updateChromaKeyboard( void )
 {
 	if( s_disabled )
 		return;
+#if defined(_WIN32)
 
 	if( !s_workerRunning )
 	{
@@ -1935,6 +1958,7 @@ void updateChromaKeyboard( void )
 	EnterCriticalSection( &s_cellLock );
 	memcpy( s_pendingCells, cells, sizeof( s_pendingCells ) );
 	LeaveCriticalSection( &s_cellLock );
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -1946,6 +1970,7 @@ void disableChromaKeyboard( void )
 //-----------------------------------------------------------------------------
 void shutdownChromaKeyboard( void )
 {
+#if defined(_WIN32)
 	if( !s_workerRunning )
 		return;
 
@@ -1955,4 +1980,5 @@ void shutdownChromaKeyboard( void )
 	s_workerThread = NULL;
 	DeleteCriticalSection( &s_cellLock );
 	s_workerRunning = FALSE;
+#endif
 }
