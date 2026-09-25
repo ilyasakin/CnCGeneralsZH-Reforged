@@ -29,7 +29,6 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "Lib/Clock.h"
-
 #include "Lib/WideCharFns.h"
 
 #include "Common/AudioAffect.h"
@@ -241,6 +240,8 @@ GameLogic::GameLogic( void )
 	m_peaceTimeEndFrame = 0;
 	m_unitCap = 0;
 	m_proRules = FALSE;
+	m_incomeSharing = INCOME_SHARING_OFF;
+	m_techRespawnDelay = 0;
 	m_gamePaused = FALSE;
 	m_inputEnabledMemory = TRUE;
 	m_mouseVisibleMemory = TRUE;
@@ -252,6 +253,7 @@ GameLogic::GameLogic( void )
 
 	m_loadingMap = FALSE;
 	m_loadingSave = FALSE;
+	m_loadingWithoutScreen = FALSE;
 	m_clearingGameData = FALSE;
 }
 
@@ -447,6 +449,7 @@ void GameLogic::reset( void )
 	destroyAllObjectsImmediate();
 
 	m_nextObjID = (ObjectID)1;
+	m_pendingTechBuildings.clear();
 
 	m_frameObjectsChangedTriggerAreas = 0;
 
@@ -617,7 +620,10 @@ static void placeNetworkBuildingsForPlayer(Int slotNum, const GameSlot *pSlot, P
 // ------------------------------------------------------------------------------------------------
 LoadScreen *GameLogic::getLoadScreen( Bool loadingSaveGame )
 {
-	switch (m_gameMode) 
+	if( m_loadingWithoutScreen )
+		return NULL;
+
+	switch (m_gameMode)
 	{
 	case GAME_SHELL:
 		return NEW ShellGameLoadScreen;
@@ -1073,7 +1079,7 @@ static void populateRandomStartPosition( GameInfo *game )
 // ------------------------------------------------------------------------------------------------
 void GameLogic::updateLoadProgress( Int progress )
 {
-	
+
 	if( m_loadScreen )
 		m_loadScreen->update( progress );
 
@@ -1173,9 +1179,24 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		 is written. */
 	if (isInMultiplayerGame())
 	{
-		TheWritableGlobalData->m_scenarioFile.clear();		// -scenario
+		/* A -netgame match is the exception for -scenario: it has no lobby, every machine in it was
+			 started from a script with the same command line, and a busy network game is the one load
+			 the multiplayer catch-up could not otherwise be tested under.  Only one that actually
+			 started, though: a -netgame that failed its own checks leaves this copy at the menus, and
+			 a LAN lobby joined from there is an ordinary match.  The file itself is agreed on by
+			 nobody, so this stays a test route; a replay of it needs the same -scenario again. */
+		if (!TheGlobalData->m_netGameStarted)
+			TheWritableGlobalData->m_scenarioFile.clear();		// -scenario
 		TheWritableGlobalData->m_peaceTime = 0;						// -peacetime, and the host's options string is read below
 		TheWritableGlobalData->m_unitLimit = FALSE;						// -unitlimit, the same
+	}
+	/* The playback of a network game is not a network game, but it replays one that ran the host's
+		 options, so a switch given to the playback has to be dropped the same way. */
+	else if (TheRecorder && TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK
+					 && (TheRecorder->getGameMode() == GAME_LAN || TheRecorder->getGameMode() == GAME_INTERNET))
+	{
+		TheWritableGlobalData->m_peaceTime = 0;
+		TheWritableGlobalData->m_unitLimit = FALSE;
 	}
 
 	m_showBehindBuildingMarkers = TRUE;
@@ -1230,6 +1251,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
       m_peaceTimeEndFrame = TheGameInfo->getPeaceTime() * 60 * LOGICFRAMES_PER_SECOND;
       m_unitCap = TheGameInfo->getUnitLimit()
                   ? (UnsignedInt)UnitLimitPerPlayer( TheGameInfo->getNumNonObserverPlayers() ) : 0;
+      m_incomeSharing = TheGameInfo->getIncomeSharing();
+      m_techRespawnDelay = TheGameInfo->getTechRespawn() * 60 * LOGICFRAMES_PER_SECOND;
     }
     else
     {
@@ -1237,6 +1260,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
       m_superweaponRestriction = 0;
       m_peaceTimeEndFrame = 0;
       m_unitCap = 0;
+      m_incomeSharing = INCOME_SHARING_OFF;
+      m_techRespawnDelay = 0;
     }
 
     /* Pro Rules hold in the modes people play each other in, when the lobby's check box is ticked,
@@ -1564,7 +1589,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	// update the player list to match the new map.
 	TheTeamFactory->reset();
 	ThePlayerList->newGame();
-	
+
 	// update the loadscreen 
 	updateLoadProgress(LOAD_PROGRESS_POST_PLAYER_LIST_RESET);
 
@@ -2092,9 +2117,11 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	// a unit's models on whichever logic frame the first one of its kind appeared: 18ms of a 33ms
 	// frame for the first Ranger out of a barracks, and the opening of a match is nothing but
 	// first appearances.  It is not a flag any more.  The shell map is the one exception - it
-	// builds none of this and would only pay the loading second for nothing.
+	// builds none of this and would only pay the loading second for nothing.  Nor does a replay's
+	// rewind, which reloads the map it was just drawing: the models are all still in memory, and
+	// the walk over them held the picture for three quarters of a second.
 	//
-	if( !isInShellGame() )
+	if( !isInShellGame() && !m_loadingWithoutScreen )
 	{
 		if (TheGlobalData->m_preloadEverything)
 		{
@@ -2530,6 +2557,7 @@ void GameLogic::loadMapINI( AsciiString mapName )
 	if (TheFileSystem->doesFileExist(fullFledgeFilename)) {
 		DEBUG_LOG(("Loading map.ini\n"));
 		INI ini;
+		ini.setSkipUnknownFields( TRUE );
 		ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, NULL );
 	}
 
@@ -2537,6 +2565,7 @@ void GameLogic::loadMapINI( AsciiString mapName )
 	if (TheFileSystem->doesFileExist(fullFledgeFilename)) {
 		DEBUG_LOG(("Loading solo.ini\n"));
 		INI ini;
+		ini.setSkipUnknownFields( TRUE );
 		ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, NULL );
 	}
 	
@@ -2652,6 +2681,10 @@ void GameLogic::processCommandList( CommandList *list )
 #endif
 		logicMessageDispatcher( msg, NULL );
 	}
+
+	// a shift prefix belongs to the order right behind it in the same frame, never to a later one
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); i++ )
+		ThePlayerList->getNthPlayer( i )->getOrderQueue()->forgetNextOrderMode();
 
 	if (m_shouldValidateCRCs && !TheNetwork->sawCRCMismatch())
 	{
@@ -2770,8 +2803,10 @@ void GameLogic::writeMismatchDump( Int numPlayers )
 	}
 
 	fprintf( fp, "Mismatch detected on frame %d\n", m_frame );
-	fprintf( fp, "Local player is slot %d of %d connected players; %d CRCs were compared\n\n",
+	fprintf( fp, "Local player is slot %d of %d connected players; %d CRCs were compared\n",
 		TheNetwork ? TheNetwork->getLocalPlayerID() : 0, numPlayers, m_cachedCRCs.size() );
+	// every player's dump carries the same two, which is how the reports from one match are paired up
+	fprintf( fp, "Map %s, seed %d\n\n", TheGameInfo->getMap().str(), TheGameInfo->getSeed() );
 
 	/* Two machines that never agreed about arithmetic produce a mismatch that looks exactly like a
 		 logic bug.  This number depends on the machine's math and nothing else, so the first thing to
@@ -2802,6 +2837,8 @@ void GameLogic::writeMismatchDump( Int numPlayers )
 	{
 		fprintf( fp, "\nNo CRC snapshot was retained for this frame.\n" );
 		fclose( fp );
+		// the launcher finds the log of this match by this line, so it is written either way
+		DEBUG_LOG(( "Mismatch on frame %d (no snapshot) - wrote %s\n", m_frame, fname.str() ));
 		return;
 	}
 
@@ -4258,6 +4295,114 @@ static void salvageCrateTick( void )
 	}
 }
 
+/* Tech building respawn, asked for in GitHub #23.  In the retail game an oil derrick blown up in
+	 the first fight is gone for the rest of the match, and so is everything the map had put there
+	 to fight over.  With the lobby's option on, TechBuildingBehavior::onDie writes the building
+	 down, and once the delay has run out a neutral one of the same kind stands on the same spot,
+	 full health and waiting for an engineer.
+
+	 A derrick, a refinery, a hospital and an artillery platform die into a ruin that KeepObjectDie
+	 keeps; the ruin goes when the new building comes.  The two pads die with DestroyDie and leave
+	 nothing.  Either way the spot has to be empty first.  Anything a player built there, a tank
+	 parked on the ruin or a squad standing in the yard holds the respawn back, and it tries again
+	 every second until they are gone, so a building never comes up around somebody's units. */
+void GameLogic::scheduleTechRespawn( const Object *ruin )
+{
+	if( m_techRespawnDelay == 0 )
+		return;
+
+	PendingTechBuilding pending;
+	pending.m_template = ruin->getTemplate();
+	pending.m_position = *ruin->getPosition();
+	pending.m_angle = ruin->getOrientation();
+	pending.m_ruinID = ruin->getID();
+	pending.m_dueFrame = m_frame + m_techRespawnDelay;
+	m_pendingTechBuildings.push_back( pending );
+	DEBUG_LOG(("TECH RESPAWN frame %d %s down at (%.0f, %.0f), due frame %d\n", m_frame,
+		pending.m_template->getName().str(), pending.m_position.x, pending.m_position.y, pending.m_dueFrame));
+}
+
+/** Would a building of this kind here stand on something?  Shrubbery, rubble, mines and whatever is
+	 in the air are what a dozer would build over as well (BuildAssistant::isRemovableForConstruction).
+	 What holds it back is anything that can move away and any building a player owns. */
+static Bool techBuildingSpotIsTaken( const ThingTemplate *building, const Coord3D *position, Real angle, ObjectID ruinID )
+{
+	const GeometryInfo &footprint = building->getTemplateGeometryInfo();
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( position, footprint.getBoundingCircleRadius(),
+																																					FROM_BOUNDINGSPHERE_2D );
+	MemoryPoolObjectHolder hold( iter );
+	for( Object *them = iter->first(); them != NULL; them = iter->next() )
+	{
+		if( them->getID() == ruinID || them->isEffectivelyDead() || them->isAirborneTarget() )
+			continue;
+		if( them->isKindOf( KINDOF_INERT ) || them->isKindOf( KINDOF_MINE )
+				|| them->isKindOf( KINDOF_SHRUBBERY ) || them->isKindOf( KINDOF_CLEARED_BY_BUILD ) )
+			continue;
+		// the map's own civilian buildings and walls stood there with the first one, sometimes touching it
+		if( them->isKindOf( KINDOF_IMMOBILE ) && !them->getControllingPlayer()->isPlayableSide() )
+			continue;
+
+		if( ThePartitionManager->geomCollidesWithGeom( them->getPosition(), them->getGeometryInfo(), them->getOrientation(),
+																									 position, footprint, angle ) )
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+void GameLogic::techRespawnTick( void )
+{
+	if( m_pendingTechBuildings.empty() || m_frame % LOGICFRAMES_PER_SECOND != 0 )
+		return;
+
+	for( size_t i = 0; i < m_pendingTechBuildings.size(); )
+	{
+		const PendingTechBuilding pending = m_pendingTechBuildings[ i ];
+		if( pending.m_dueFrame > m_frame )
+		{
+			++i;
+			continue;
+		}
+
+		// a load hands out IDs again from the highest one alive, so the ID of a ruin that is gone can
+		// name a newer unit; only a dead one of the same kind is the ruin
+		Object *ruin = findObjectByID( pending.m_ruinID );
+		if( ruin != NULL && ( ruin->getTemplate() != pending.m_template || !ruin->isEffectivelyDead() ) )
+			ruin = NULL;
+
+		if( techBuildingSpotIsTaken( pending.m_template, &pending.m_position, pending.m_angle,
+																 ruin != NULL ? ruin->getID() : INVALID_ID ) )
+		{
+			++i;
+			continue;
+		}
+
+		m_pendingTechBuildings.erase( m_pendingTechBuildings.begin() + i );
+
+		if( ruin != NULL )
+		{
+			// pathfind cells are a flag, not a count: the ruin gives its back before the building marks
+			// its own, or the ruin's destructor would clear the building's (ReplaceObjectUpgrade does the same)
+			TheAI->pathfinder()->removeObjectFromPathfindMap( ruin );
+			destroyObject( ruin );
+		}
+
+		Object *building = TheThingFactory->newObject( pending.m_template, ThePlayerList->getNeutralPlayer()->getDefaultTeam() );
+		building->setOrientation( pending.m_angle );
+		building->setPosition( &pending.m_position );
+		building->setLayer( TheTerrainLogic->getLayerForDestination( &pending.m_position ) );
+		for( BehaviorModule **m = building->getBehaviorModules(); *m; ++m )
+		{
+			CreateModuleInterface *create = (*m)->getCreate();
+			if( create )
+				create->onBuildComplete();
+		}
+		TheAI->pathfinder()->addObjectToPathfindMap( building );
+		DEBUG_LOG(("TECH RESPAWN frame %d %s back at (%.0f, %.0f), %d frames late\n", m_frame,
+			pending.m_template->getName().str(), pending.m_position.x, pending.m_position.y, m_frame - pending.m_dueFrame));
+	}
+}
+
 void GameLogic::update( void )
 {
 	USE_PERF_TIMER(GameLogic_update)
@@ -4304,6 +4449,12 @@ void GameLogic::update( void )
 	#endif
 	}
 
+	/* A start held back by a movie has set the game mode and started the recorder, but the match
+		 does not exist yet: TheGameInfo is still NULL and the CRC below reads it.  A skirmish asked for
+		 over -control while the EA logo was still playing faulted there on its first frame. */
+	if (isIntroMoviePlaying())
+		return;
+
 	// send the current time to the GameClient
 	DEBUG_ASSERTCRASH(TheGameLogic == this, ("hmm, TheGameLogic is not right"));
 	UnsignedInt now = TheGameLogic->getFrame();
@@ -4331,6 +4482,33 @@ void GameLogic::update( void )
 		TheScriptEngine->UPDATE();
 	}
 
+	tScripts = Clock_Ticks();
+
+	/* A camera move that freezes time ends on this machine's wall clock, and the scripts above run
+		 once per frozen pass: in a multiplayer or skirmish session a machine whose camera took longer
+		 counted its script timers down further.  There the camera freezes nothing, as the camera
+		 condition in ScriptConditions already reports every move finished. */
+	Bool freezeTime = !TheGameEngine->isMultiplayerSession()
+										&& TheTacticalView->isTimeFrozen() && !TheTacticalView->isCameraMovementFinished();
+	freezeTime = freezeTime || TheScriptEngine->isTimeFrozenDebug() || TheScriptEngine->isTimeFrozenScript();
+
+	if (freezeTime)
+	{
+		if (TheCommandList->containsMessageOfType(GameMessage::MSG_CLEAR_GAME_DATA))
+		{
+			TheScriptEngine->forceUnfreezeTime();
+		}
+		else
+		{
+			/// @todo - make sure this never happens during a network game.  jba.
+			return;
+		}
+	}
+
+	/* The fork's own ticks come after the freeze return.  A frozen pass does not advance the frame, so
+		 ahead of it they ran once per frozen pass, and how many passes a cinematic takes is camera state
+		 that differs per machine: the repair tick healed again on every one of them. */
+
 	// the lobby's peace time, if the host set one
 	peaceTimeTick();
 
@@ -4340,6 +4518,9 @@ void GameLogic::update( void )
 	// ... and the salvage nobody collects
 	salvageCrateTick();
 
+	// ... and the tech buildings the lobby wants back
+	techRespawnTick();
+
 	/* The scripted measurement harness.  Keyed to the logic frame rather than to the render pass, so the same
 		 scenario file plays out on the same frames however fast the machine draws - which is the whole
 		 point of measuring two builds against it. */
@@ -4348,24 +4529,6 @@ void GameLogic::update( void )
 	/* And whatever arrived down the control socket since the last logic frame.  Reading a socket
 		 happens on a render pass and making an object has to happen in here, so the two are split. */
 	ControlServer_runCommands();
-
-	tScripts = Clock_Ticks();
-
-	Bool freezeTime = TheTacticalView->isTimeFrozen() && !TheTacticalView->isCameraMovementFinished();
-	freezeTime = freezeTime || TheScriptEngine->isTimeFrozenDebug() || TheScriptEngine->isTimeFrozenScript();
-	
-	if (freezeTime) 
-	{
-		if (TheCommandList->containsMessageOfType(GameMessage::MSG_CLEAR_GAME_DATA)) 
-		{
-			TheScriptEngine->forceUnfreezeTime();
-		} 
-		else 
-		{
-			/// @todo - make sure this never happens during a network game.  jba.
-			return;
-		}
-	}
 
 	// Note - TerrainLogic update needs to happen after ScriptEngine update, but before object updates.  jba.
 	// This way changes in bridges are noted in the script engine before being cleared in TerrainLogic->update
@@ -5544,13 +5707,15 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 12: xfer m_peaceTimeEndFrame
 	* 13: xfer m_unitCap
 	* 14: xfer m_proRules
+	* 15: xfer m_incomeSharing
+	* 16: xfer m_techRespawnDelay and m_pendingTechBuildings
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 14;
+	const XferVersion currentVersion = 16;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5923,6 +6088,47 @@ void GameLogic::xfer( Xfer *xfer )
   else if ( xfer->getXferMode() == XFER_LOAD )
   {
     m_proRules = FALSE;
+  }
+
+  if ( version >= 15 )
+  {
+    xfer->xferInt( &m_incomeSharing );
+  }
+  else if ( xfer->getXferMode() == XFER_LOAD )
+  {
+    m_incomeSharing = INCOME_SHARING_OFF;
+  }
+
+  if ( version >= 16 )
+  {
+    xfer->xferUnsignedInt( &m_techRespawnDelay );
+
+    UnsignedInt pendingCount = (UnsignedInt)m_pendingTechBuildings.size();
+    xfer->xferUnsignedInt( &pendingCount );
+    if ( xfer->getXferMode() == XFER_LOAD )
+      m_pendingTechBuildings.resize( pendingCount );
+
+    for ( UnsignedInt i = 0; i < pendingCount; ++i )
+    {
+      PendingTechBuilding &pending = m_pendingTechBuildings[ i ];
+      AsciiString templateName = xfer->getXferMode() == XFER_LOAD ? AsciiString::TheEmptyString : pending.m_template->getName();
+      xfer->xferAsciiString( &templateName );
+      if ( xfer->getXferMode() == XFER_LOAD )
+      {
+        pending.m_template = TheThingFactory->findTemplate( templateName );
+        if ( pending.m_template == NULL )
+          throw SC_INVALID_DATA;
+      }
+      xfer->xferCoord3D( &pending.m_position );
+      xfer->xferReal( &pending.m_angle );
+      xfer->xferObjectID( &pending.m_ruinID );
+      xfer->xferUnsignedInt( &pending.m_dueFrame );
+    }
+  }
+  else if ( xfer->getXferMode() == XFER_LOAD )
+  {
+    m_techRespawnDelay = 0;
+    m_pendingTechBuildings.clear();
   }
 }  // end xfer
 
