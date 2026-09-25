@@ -21,3 +21,4 @@ Libraries/Source/WWVegas/WWLib/wwstring.cpp	*	StringClass's wchar_t conversions 
 Libraries/Source/WWVegas/WWLib/ini.h	*	INIClass::Put_Wide_String/Get_Wide_String take WWLib's wchar_t strings; no engine caller (B1 survey)
 GameEngine/Source/Common/Recorder.cpp	fputwc	the replay header's wide terminator; the stream-orientation rewrite of the replay writer is C1/M2's, recorded in WINDOWS-DEBT.md; on Windows this writes the same two bytes as before
 GameEngine/Source/Common/Recorder.cpp	fgetwc	the replay header's wide reader, the other half of the same C1/M2 item
+Libraries/Include/Platform/MSVCCompat.h	*	_wcsnicmp, whose one caller is EarlyCommandLine.h matching option names against the wchar_t command line (see that entry); takes wchar_t*, so WideChar text cannot reach it without a compile error
