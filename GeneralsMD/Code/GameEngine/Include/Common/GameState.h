@@ -37,6 +37,7 @@
 #include "Common/Snapshot.h"
 #include "Common/SubsystemInterface.h"
 #include "Common/UnicodeString.h"
+#include "Common/WallClock.h"
 #include "GameNetwork/NetworkDefs.h"
 
 #include <functional>
@@ -247,8 +248,8 @@ private:
 extern GameState *TheGameState;	
 
 
-UnicodeString getUnicodeTimeBuffer(SYSTEMTIME timeVal); 
-UnicodeString getUnicodeDateBuffer(SYSTEMTIME timeVal); 
+UnicodeString getUnicodeTimeBuffer(WallClockTime timeVal); 
+UnicodeString getUnicodeDateBuffer(WallClockTime timeVal); 
 
 
 #endif  // end __GAME_STATE_H_

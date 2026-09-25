@@ -28,6 +28,7 @@
 #include <list>
 #include "Common/MessageStream.h"
 #include "GameNetwork/GameInfo.h"
+#include "Common/WallClock.h"
 
 /**
   * The ReplayGameInfo class holds information about the replay game and
@@ -141,7 +142,7 @@ public:
 		AsciiString filename;
 		Bool forPlayback;
 		UnicodeString replayName;
-		SYSTEMTIME timeVal;
+		WallClockTime timeVal;
 		UnicodeString versionString;
 		UnicodeString versionTimeString;
 		UnsignedInt versionNumber;
