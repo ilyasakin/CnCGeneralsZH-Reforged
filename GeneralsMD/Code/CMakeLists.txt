@@ -288,7 +288,7 @@ target_compile_definitions(compression PRIVATE Z_PREFIX)
 # the SDK's typedef is preprocessed and turns it into `typedef unsigned int unsigned int, *PUINT32;`.
 # clang only warns at that and limps on; MSVC is stricter about duplicate declaration specifiers and
 # neither machine here can tell us how much stricter.  Found by agent 21 before it was merged.
-if(NOT ZH_PLATFORM_WINDOWS)
+if(ZH_PLATFORM_POSIX)
   target_compile_definitions(compression PRIVATE UINT32=unsigned\ int UINT16=unsigned\ short)
 endif()
 
@@ -370,7 +370,7 @@ set(WWLIB_SOURCES
 # named only by pointer or reference, or code under a macro nothing defines (Except.cpp's
 # DEMO_TIME_OUT).  What that cannot see: a name built by token pasting, and vendored code, which is
 # not tracked and does not use WWLib.
-if(NOT ZH_PLATFORM_WINDOWS)
+if(ZH_PLATFORM_POSIX)
   list(REMOVE_ITEM WWLIB_SOURCES
     # DirectDraw, the pre-Direct3D 2D surface API.  The renderer never reaches it; DSurface is named
     # nowhere outside WWLib, and draw.cpp, the fourth file of the set, was already out.  ConvertClass
