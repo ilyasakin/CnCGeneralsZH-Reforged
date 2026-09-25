@@ -46,7 +46,11 @@
 #include "wwprofile.h"
 
 #pragma warning(disable:4201) // warning C4201: nonstandard extension used : nameless struct/union
+// Nothing in this file names a Win32 type or call; the clock it reads is systimer.h's, on Lib/Clock.h
+// since B2.  Kept on Windows for any includer that leaned on it, as systimer.h does.
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 #include "systimer.h"
 
 
