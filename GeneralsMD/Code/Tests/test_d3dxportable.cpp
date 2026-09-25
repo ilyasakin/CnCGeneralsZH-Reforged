@@ -26,11 +26,11 @@
 // Links nothing and needs no DLL, so it runs on every build.
 //
 // WHAT THIS DOES NOT PROVE:
-//   - Which DLL body a Windows player gets.  The DLL chooses by CPU vendor.  This matches the
-//     scalar and non-Intel bodies and deliberately NOT the GenuineIntel one; see d3dxportable.h.
-//     A pass here is a statement about those bodies, not about "Windows".
-//   - Anything about MSVC.  The DLL's bytes are fixed, but on Windows the game does not use this
-//     file.  It binds the DLL.
+//   - Which DLL body a Windows machine would have run.  The DLL chooses by CPU vendor.  This
+//     matches the scalar and non-Intel bodies and deliberately NOT the GenuineIntel one; see
+//     d3dxportable.h.  The game no longer calls the DLL for this on any platform, so the question
+//     only matters for replays recorded before that change.  dx9_smoke is how to observe it.
+//   - Anything about MSVC, until this runs on Windows.  It has only ever run under clang.
 //   - Every input.  These are fifteen rows.  The oracle sweeps millions when the DLL is present,
 //     and that is the stronger check.  Without the DLL, this table is all there is.
 //   - The architectures against each other.  That is Tests/arch_diff's d3dx section.
@@ -41,9 +41,7 @@
 #include "d3dxportable.h"
 #include "d3dx_golden.h"
 
-#if !defined(_WIN32)
 #include "d3dx9math.h"
-#endif
 
 #include <cstdio>
 #include <cstring>
@@ -143,10 +141,10 @@ static void dot_sums_left_to_right()
 	expect_bits("Vec4Dot", 0, -1, bits_of(D3DXPortable::Vec4Dot(left, right)), bits_of(1.0f));
 }
 
-#if !defined(_WIN32)
-// What BezierSegment and BezFwdIterator actually call: d3dx9math.h's names, with the basis built
-// through D3DXMATRIX's sixteen-float constructor exactly as s_bezBasisMatrix is.  This is what
-// catches a transposed layout, where m[1][0] would not be _21.
+// What BezierSegment and BezFwdIterator actually call, on every platform: d3dx9math.h's names,
+// with the basis built through D3DXMATRIX's sixteen-float constructor exactly as s_bezBasisMatrix
+// is.  This catches a transposed layout, where m[1][0] would not be _21, and on Windows it catches
+// D3DXVec4Transform resolving to anything other than d3dxportable.h.
 static void d3dx9math_names_reach_the_same_arithmetic()
 {
 	const D3DXMATRIX basis(
@@ -178,7 +176,6 @@ static void d3dx9math_names_reach_the_same_arithmetic()
 	const D3DXVECTOR4 right(1.0f, 1.0f, 1.0f, 1.0f);
 	expect_bits("D3DXVec4Dot", 0, -1, bits_of(D3DXVec4Dot(&left, &right)), bits_of(1.0f));
 }
-#endif
 
 int main()
 {
@@ -186,9 +183,7 @@ int main()
 	the_table_tells_the_two_orders_apart();
 	transform_may_write_over_its_input();
 	dot_sums_left_to_right();
-#if !defined(_WIN32)
 	d3dx9math_names_reach_the_same_arithmetic();
-#endif
 
 	if (failures != 0) {
 		std::printf("d3dxportable: %d failure(s)\n", failures);

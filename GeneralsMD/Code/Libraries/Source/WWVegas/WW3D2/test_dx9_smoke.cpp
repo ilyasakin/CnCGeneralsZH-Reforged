@@ -382,7 +382,7 @@ int main(int argument_count, char ** arguments)
 			 1.0f,  0.0f,  0.0f, 0.0f);
 		const D3DXVECTOR4 unitTime(1.0f, 1.0f, 1.0f, 1.0f);
 		D3DXVECTOR4 transformed(0.0f, 0.0f, 0.0f, 0.0f);
-		D3DXVec4Transform(&transformed, &unitTime, &bezierBasis);
+		D3DXVec4TransformFromDLL(&transformed, &unitTime, &bezierBasis);
 
 		// Each output component is the sum of one column, and the columns of this
 		// matrix sum to 0, 0, 0 and 1.
@@ -405,7 +405,10 @@ int main(int argument_count, char ** arguments)
 	// DLL computes it, and which body that was, so the reading can be checked against a real run.
 	// It fails only if the result matches neither body; a vendor/body mismatch is reported, not
 	// failed, because HKLM\Software\Microsoft\Direct3D DisableD3DXPSGP=1 legitimately causes one.
-	// d3dxportable.h, which the Mac build uses instead, matches the left-to-right body.
+	// The game no longer calls the DLL for this: D3DXVec4Transform is d3dxportable.h on every
+	// platform, and it matches the left-to-right body.  This block calls D3DXVec4TransformFromDLL
+	// on purpose.  Pointed at the game's own function it would compare d3dxportable.h with itself
+	// and could no longer see the dispatch.
 	{
 		int registers[4];
 		__cpuid(registers, 0);
@@ -423,7 +426,7 @@ int main(int argument_count, char ** arguments)
 			D3DXVECTOR4 in;
 			memcpy(&in, D3DX_GOLDEN_ROWS[row].in, sizeof(in));
 			D3DXVECTOR4 out;
-			D3DXVec4Transform(&out, &in, &basis);
+			D3DXVec4TransformFromDLL(&out, &in, &basis);
 			unsigned int bits[4];
 			memcpy(bits, &out, sizeof(bits));
 			printf("d3dx9 capture: row %2u -> %08x %08x %08x %08x\n", row, bits[0], bits[1], bits[2],

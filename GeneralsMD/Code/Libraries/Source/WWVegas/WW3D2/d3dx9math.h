@@ -24,22 +24,31 @@
 // here, laid out exactly as the D3DX ones are, and the eight functions the engine calls
 // that are not inline come out of d3dx9_43.dll beside the texture and shader ones.
 //
-// Binding rather than reimplementing is deliberate.  D3DXVec4Transform and D3DXVec4Dot
-// reach GameLogic through BezierSegment, which DumbProjectileBehavior steers a shell
-// with, so their arithmetic is part of the network and replay CRC.  A hand-written 4x4
-// inverse or transform would be a rounding difference nobody could see until a replay
-// diverged.  D3DXVec4Dot and D3DXMatrixIdentity are the two the DirectX SDK inlined, so
-// those two are written out here, matching d3dx8math.inl term for term.
+// Two names are different: D3DXVec4Transform, one of those eight, and D3DXVec4Dot, which the SDK
+// inlined.  They reach GameLogic through BezierSegment, which DumbProjectileBehavior steers a
+// shell with, so their arithmetic is part of the network and replay CRC.  This file used to bind D3DXVec4Transform out of the
+// DLL on the grounds that "a hand-written 4x4 inverse or transform would be a rounding
+// difference nobody could see until a replay diverged".  That turned out to be true of the
+// DLL itself: d3dx9_43.dll picks its D3DXVec4Transform body by CPU vendor, and its
+// GenuineIntel body sums in a different order from the others, so two Windows machines
+// could already disagree (docs/mac-port/README.md, defect #7).  Both names are now the
+// inline functions at the bottom of this file, on every platform, and both go to
+// d3dxportable.h.  Tests/d3dx_oracle measured that code bit-identical to the DLL's scalar and
+// non-Intel bodies, so on a machine running either of those nothing changed.  If the reading of
+// the dispatch is right, a GenuineIntel machine now computes what everyone else does; if it is
+// wrong, this changed nothing anywhere.  (The Dot expression is d3dx8math.inl's, as it always
+// was.)  The same trade as
+// _set_FMA3_enable(0) in WinMain.cpp: one path for every CPU.
 //
-// That holds on Windows, where there is a DLL to bind.  Elsewhere there is none, so the
-// non-Windows branch at the bottom of this file declares the four names GameEngine reaches and
-// nothing else: D3DXVECTOR4, D3DXMATRIX, D3DXVec4Transform and D3DXVec4Dot.  They go to
-// d3dxportable.h, which copies the DLL's term order from Microsoft's machine code, and which
-// explains why "the DLL's term order" turned out to be two orders chosen by CPU vendor.  That
-// branch includes no d3d9.h, so GameLogic's path through BezierSegment.h stops pulling in the
-// Direct3D header on macOS.  The renderer's names are absent on purpose: nothing outside WW3D2
-// and GameEngineDevice uses them, neither compiles on macOS, and the Metal backend will decide
-// what they become.
+// The DLL's own transform is still bound, as D3DXVec4TransformFromDLL, a name the SDK does
+// not own.  Only dx9_smoke calls it.  It is E1's capture, and the one thing that can observe
+// which body a real Windows machine selects, so it must keep calling Microsoft's code.
+//
+// On other platforms there is no DLL, so the non-Windows branch declares only the types
+// GameEngine reaches, D3DXVECTOR4 and D3DXMATRIX, and includes no d3d9.h, so GameLogic's path
+// through BezierSegment.h does not pull in the Direct3D header there.  The renderer's names are
+// absent on purpose: nothing outside WW3D2 and GameEngineDevice uses them, neither compiles on
+// macOS, and the Metal backend will decide what they become.
 
 #ifndef D3DX9MATH_H
 #define D3DX9MATH_H
@@ -135,8 +144,10 @@ extern D3DXMatrixUnaryFunction		D3DXMatrixTranspose;
 extern D3DXMatrixTripleFunction		D3DXMatrixScaling;
 extern D3DXMatrixTripleFunction		D3DXMatrixTranslation;
 extern D3DXMatrixAngleFunction		D3DXMatrixRotationZ;
-extern D3DXVec4TransformFunction	D3DXVec4Transform;
 extern D3DXVec3TransformFunction	D3DXVec3Transform;
+// d3dx9_43.dll's own D3DXVec4Transform, for dx9_smoke and nothing else.  The simulation's
+// D3DXVec4Transform is the inline function at the bottom of this file; see the top.
+extern D3DXVec4TransformFunction	D3DXVec4TransformFromDLL;
 
 // These eight are bound by Bind_D3DX9_Runtime in d3dx9runtime.h, along with the texture
 // and shader entry points: one place decides whether D3DX9 is present, and one answer
@@ -158,13 +169,8 @@ inline D3DXMATRIX & D3DXMATRIX::operator*=(const D3DXMATRIX & right)
 	return *this;
 }
 
-// The two the DirectX SDK inlined, copied from d3dx8math.inl so the arithmetic that
-// reaches a replay CRC is the arithmetic that always reached it.
-inline FLOAT D3DXVec4Dot(const D3DXVECTOR4 * left, const D3DXVECTOR4 * right)
-{
-	return left->x * right->x + left->y * right->y + left->z * right->z + left->w * right->w;
-}
-
+// The SDK inlined this one, so it is copied from d3dx8math.inl.  D3DXVec4Dot, which the SDK
+// also inlined, is at the bottom of this file with D3DXVec4Transform.
 inline D3DXMATRIX * D3DXMatrixIdentity(D3DXMATRIX * out)
 {
 	out->m[0][1] = out->m[0][2] = out->m[0][3] =
@@ -177,10 +183,6 @@ inline D3DXMATRIX * D3DXMatrixIdentity(D3DXMATRIX * out)
 }
 
 #else // !_WIN32
-
-#include "d3dxportable.h"
-
-#include <string.h>
 
 // Laid out exactly as the D3DX types are, so that a struct holding one of these has the same
 // shape on both platforms.
@@ -236,9 +238,15 @@ public:
 static_assert(sizeof(D3DXVECTOR4) == 16, "D3DXVECTOR4 is four floats");
 static_assert(sizeof(D3DXMATRIX) == 64, "D3DXMATRIX is sixteen floats");
 
-// Plain functions where Windows has function pointers, so call sites read the same.  The values
-// are copied through arrays so that the arithmetic in d3dxportable.h indexes real float[4] and
-// float[16] objects.  Copying a float is exact.
+#endif // _WIN32
+
+// The two D3DX functions the simulation calls, the same on every platform: see the top of this
+// file.  The values are copied through arrays so that the arithmetic in d3dxportable.h indexes real
+// float[4] and float[16] objects.  Copying a float is exact.
+#include "d3dxportable.h"
+
+#include <string.h>
+
 inline D3DXVECTOR4 * D3DXVec4Transform(D3DXVECTOR4 * out, const D3DXVECTOR4 * vector,
 	const D3DXMATRIX * matrix)
 {
@@ -260,7 +268,5 @@ inline float D3DXVec4Dot(const D3DXVECTOR4 * left, const D3DXVECTOR4 * right)
 	const float r[4] = { right->x, right->y, right->z, right->w };
 	return D3DXPortable::Vec4Dot(l, r);
 }
-
-#endif // _WIN32
 
 #endif // D3DX9MATH_H
