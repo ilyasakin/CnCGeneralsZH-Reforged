@@ -694,6 +694,13 @@ by B5 (`sizeof(buffer)/sizeof(buffer[0])`); any message that fits is unchanged.
 stores are commented out, so `GadgetButtonGetData` returns NULL and `playerID` is 0. Dead GameSpy
 service; recorded, not fixed.
 
+**11. A find handle is opened to ask a yes/no question and never closed.**
+`Image.cpp:272` (`ImageCollection::load`) tests `FindFirstFile(...) != INVALID_HANDLE_VALUE` to
+see whether the user has any `INI\MappedImages\*.ini`, and drops the handle without `FindClose`.
+It runs once, from `GameClient.cpp:339`, so it leaks one handle per run, and only for a player who
+has user mapped images. Harmless in practice; recorded, not fixed. Found listing C1's file
+operations (B5's task file).
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and

@@ -401,6 +401,44 @@ audit: Windows-only sources (GameEngineDevice, Main, Tools).
 
 </details>
 
+## File operations are C1's: the worklist, 2026-09-26
+
+Decided (PM, decision 4 of the B5 review): `CopyFile`, `CreateDirectory`, the current directory,
+`FindFirstFile`/`FindNextFile`/`FindClose`, `DeleteFile` and `MoveFile` go behind C1's
+`LocalFileSystem`, which is already the seam (`TheLocalFileSystem`; PopupReplay calls its
+`doesFileExist` two lines before its `CopyFile`). B5 does not wrap them one by one. **These sites
+are left failing on purpose**, and this list is C1's starting worklist.
+
+How it was made: every `GameEngine` file naming one of those functions, then each file's POSIX view
+through `Tools/windows_view_diff.py`'s own `view()` (Windows macros unset, `__APPLE__` set), so a
+site already inside `#ifdef _WIN32` is not listed. 13 files matched and 11 have live sites. Not
+listed: `Compression.cpp:190`'s `CopyFile` (inside a comment), `ControlBarScheme.cpp` (a name
+match only), and `PopupReplay.cpp:290`'s `DeleteFile` (B5 gave it a `remove()` and `strerror` branch off
+Windows). Line numbers are at `d384f2a7`.
+
+| File | Lines | Calls | What for |
+|:--|:--|:--|:--|
+| `Common/System/Directory.cpp` | 75, 78, 86, 112, 119, 122 | Get/SetCurrentDirectory, FindFirst/Next/Close | the directory lister itself: chdir in, list `*`, chdir back |
+| `Common/System/SaveGame/GameState.cpp` | 606 | CreateDirectory | make the save folder |
+| `Common/System/SaveGame/GameState.cpp` | 1348, 1351, 1366, 1396, 1402, 1405 | Get/SetCurrentDirectory, FindFirst/Next/Close | enumerate saves (chdir in and back) |
+| `Common/System/SaveGame/GameStateMap.cpp` | 465, 468, 487, 512, 517, 522, 525 | Get/SetCurrentDirectory, FindFirst/Next/Close, DeleteFile | delete the scratch-pad maps (maps written out of loaded saves) in the save folder |
+| `Common/Recorder.cpp` | 301, 323, 768 | CopyFile | copy the replay into the stats directory; copy the debug file there; archive a replay |
+| `Common/GameEngine.cpp` | 275, 276 | MoveFileExA, DeleteFileA | atomic replace of the model-checksum cache |
+| `Common/GameEngine.cpp` | 879 | DeleteFile | patch 1.01's removal of a stray `Data\INI\INIZH.big` |
+| `Common/GameEngine.cpp` | 937 | GetCurrentDirectory | the "game files are not in <dir>" message |
+| `GameClient/InGameUI.cpp` | 2310, 2317, 2318, 2319 | FindFirst/Next/Close (A), DeleteFileA | forget the replay checkpoints (`*.sav`) |
+| `GameClient/InGameUI.cpp` | 2334, 2335, 2337 | CreateDirectoryA | make the checkpoint folders |
+| `GameClient/System/Image.cpp` | 272 | FindFirstFile | "are there user MappedImages?"; the handle is never closed (defects list, 11) |
+| `GUICallbacks/Menus/PopupReplay.cpp` | 323 | CopyFile | save a replay under a new name |
+| `GUICallbacks/Menus/ReplayMenu.cpp` | 639, 677 | DeleteFile, CopyFile | delete and copy a replay |
+| `GameNetwork/GameSpy/PeerDefs.cpp` | 624, 626, 628 | CreateDirectory | the user-data, GeneralsOnline and Ladders folders |
+| `Include/Common/EarlyOptions.h` | 109 | CreateDirectoryA | the writable-directory probe; this header is a bucket-(c) move of B5's, and its `CreateDirectory` takes C1's call when that exists |
+
+Also C1's: the `'\\'` joins after `getExecutableDirectory()` (`MiniLog.cpp`, `MemoryInit.cpp`'s
+`"\\Data\\INI\\MemoryPools.ini"`, `Debug.cpp`'s log names). The seam returns the directory with the
+platform's separator; what is appended to it is still Windows-spelled. Until C1, a POSIX build does
+not find `MemoryPools.ini`, and every pool keeps its compiled-in size from MemoryInit's table.
+
 ## Do
 
 1. For each site, decide which of three it is:
