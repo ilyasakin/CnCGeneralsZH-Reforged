@@ -32,6 +32,12 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include <fcntl.h>
+#if !defined(_WIN32)
+#include <netdb.h>			// gethostbyname, for the patch server lookup
+#include <sys/stat.h>
+#include <thread>				// the lookup's worker, where Windows uses CreateThread
+#include <unistd.h>
+#endif
 
 //#include "Common/Registry.h"
 #include "Common/UserPreferences.h"
@@ -76,7 +82,9 @@ GameWindow *onlineCancelWindow = NULL;
 static Bool s_asyncDNSThreadDone = TRUE;
 static Bool s_asyncDNSThreadSucceeded = FALSE;
 static Bool s_asyncDNSLookupInProgress = FALSE;
+#if defined(_WIN32)
 static HANDLE s_asyncDNSThreadHandle = NULL;
+#endif
 enum {
 	LOOKUP_INPROGRESS,
 	LOOKUP_FAILED,
@@ -153,13 +161,21 @@ static Bool hasWriteAccess()
 
 	remove(filename);
 
+#if defined(_WIN32)
 	int handle = _open( filename, _O_CREAT | _O_RDWR, _S_IREAD | _S_IWRITE);
+#else
+	int handle = open( filename, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR );
+#endif
 	if (handle == -1)
 	{
 		return false;
 	}
 
+#if defined(_WIN32)
 	_close(handle);
+#else
+	close(handle);
+#endif
 	remove(filename);
 	
 	unsigned int val;
@@ -321,7 +337,7 @@ static GHTTPBool motdCallback( GHTTPRequest request, GHTTPResult result,
 	// the SDK widened its byte count to 64 bits; the body wants the old Int.
 	Int bufferLen = (Int)bufferLen64;
 	(void)bufferLen;	// only read by DEBUG_LOG in some of these, which Release compiles out
-	Int run = (Int)param;
+	Int run = (Int)(intptr_t)param;
 	if (run != timeThroughOnline)
 	{
 		DEBUG_CRASH(("Old callback being called!"));
@@ -364,7 +380,7 @@ static GHTTPBool configCallback( GHTTPRequest request, GHTTPResult result,
 	// the SDK widened its byte count to 64 bits; the body wants the old Int.
 	Int bufferLen = (Int)bufferLen64;
 	(void)bufferLen;	// only read by DEBUG_LOG in some of these, which Release compiles out
-	Int run = (Int)param;
+	Int run = (Int)(intptr_t)param;
 	if (run != timeThroughOnline)
 	{
 		DEBUG_CRASH(("Old callback being called!"));
@@ -432,7 +448,7 @@ static GHTTPBool configHeadCallback( GHTTPRequest request, GHTTPResult result,
 	// the SDK widened its byte count to 64 bits; the body wants the old Int.
 	Int bufferLen = (Int)bufferLen64;
 	(void)bufferLen;	// only read by DEBUG_LOG in some of these, which Release compiles out
-	Int run = (Int)param;
+	Int run = (Int)(intptr_t)param;
 	if (run != timeThroughOnline)
 	{
 		DEBUG_CRASH(("Old callback being called!"));
@@ -522,7 +538,7 @@ static GHTTPBool gamePatchCheckCallback( GHTTPRequest request, GHTTPResult resul
 	// the SDK widened its byte count to 64 bits; the body wants the old Int.
 	Int bufferLen = (Int)bufferLen64;
 	(void)bufferLen;	// only read by DEBUG_LOG in some of these, which Release compiles out
-	Int run = (Int)param;
+	Int run = (Int)(intptr_t)param;
 	if (run != timeThroughOnline)
 	{
 		DEBUG_CRASH(("Old callback being called!"));
@@ -673,6 +689,7 @@ void CheckNumPlayersOnline( void )
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
+#if defined(_WIN32)
 DWORD WINAPI asyncGethostbynameThreadFunc( void * szName )
 {
 	HOSTENT *he = gethostbyname( (const char *)szName );
@@ -689,24 +706,48 @@ DWORD WINAPI asyncGethostbynameThreadFunc( void * szName )
 	s_asyncDNSThreadDone = TRUE;
 	return 0;
 }
+#else
+/* The same lookup, on a std::thread where Windows uses CreateThread: gethostbyname is POSIX too.  The
+	 two flags are shared with the polling below exactly as they are on Windows, unsynchronised; the
+	 host is a dead service's and the answer only decides whether to offer a patch check. */
+static void asyncGethostbynameThreadFunc( const char *szName )
+{
+	struct hostent *he = gethostbyname( szName );
+	s_asyncDNSThreadSucceeded = (he != NULL) ? TRUE : FALSE;
+	s_asyncDNSThreadDone = TRUE;
+}
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
 int asyncGethostbyname(char * szName)
 {
 	static int            stat = 0;
+#if defined(_WIN32)
 	static unsigned long  threadid;
+#endif
 
 	if( stat == 0 )
 	{
 		/* Kick off gethostname thread */
 		s_asyncDNSThreadDone = FALSE;
+#if defined(_WIN32)
 		s_asyncDNSThreadHandle = CreateThread( NULL, 0, asyncGethostbynameThreadFunc, szName, 0, &threadid );
 
 		if( s_asyncDNSThreadHandle == NULL )
 		{
 			return( LOOKUP_FAILED );
 		}
+#else
+		try
+		{
+			std::thread( asyncGethostbynameThreadFunc, (const char *)szName ).detach();
+		}
+		catch( ... )		// a thread that cannot start, as a NULL handle from CreateThread above
+		{
+			return( LOOKUP_FAILED );
+		}
+#endif
 		stat = 1;
 	}
 	if( stat == 1 )
@@ -716,7 +757,9 @@ int asyncGethostbyname(char * szName)
 			/* Thread finished */
 			stat = 0;
 			s_asyncDNSLookupInProgress = FALSE;
+#if defined(_WIN32)
 			s_asyncDNSThreadHandle = NULL;
+#endif
 			return( (s_asyncDNSThreadSucceeded)?LOOKUP_SUCCEEDED:LOOKUP_FAILED );
 		}
 	}
@@ -767,6 +810,7 @@ void HTTPThinkWrapper( void )
 
 void StopAsyncDNSCheck( void )
 {
+#if defined(_WIN32)
 	if (s_asyncDNSThreadHandle)
 	{
 #ifdef DEBUG_CRASHING
@@ -776,6 +820,10 @@ void StopAsyncDNSCheck( void )
 		DEBUG_ASSERTCRASH(res, ("Could not terminate the Async DNS Lookup thread!"));	// Thread still not killed!
 	}
 	s_asyncDNSThreadHandle = NULL;
+#endif
+	// Off Windows the lookup's thread is detached and cannot be killed: it finishes its lookup and
+	// sets flags that nothing is polling for any more.  Its host name is a string literal, so nothing
+	// it reads goes away under it.
 	s_asyncDNSLookupInProgress = FALSE;
 }
 
