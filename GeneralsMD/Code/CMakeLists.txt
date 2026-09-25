@@ -271,10 +271,13 @@ endif()
 add_executable(compression_selfcheck ${COMP}/test_compression.cpp)
 target_link_libraries(compression_selfcheck PRIVATE compression)
 
-# DetRound::To_Long has to round half to even on every architecture, because the simulation's
-# callers were written against an instruction that does.  Lib/DetRound.h is header-only and this
-# links nothing, so it runs before any library in the tree compiles - which is what makes it usable
-# as the first evidence that determinism survives a new architecture.  See Tests/test_detround.cpp.
+# DetRound::To_Long has to round half to even on every architecture, because its callers were written
+# against an instruction that does.  Those callers are WW3D2's animation (hrawanim's floor idiom is
+# arithmetic built on round-to-nearest) and WWMath - not GameLogic, which has none; an earlier
+# version of this comment said "the simulation's callers" and was wrong.  Lib/DetRound.h is
+# header-only and this links nothing, so it runs before any library compiles.  It checks DetRound
+# against a hand-computed tie table on ONE architecture; it is not cross-architecture evidence.
+# E3 (arch_differential) is.  See Tests/test_detround.cpp.
 add_executable(detround_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_detround.cpp)
 target_include_directories(detround_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 

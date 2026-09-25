@@ -241,6 +241,17 @@ two code paths agree.
 Recurse from the root and you silently miss two built libraries. Use `--no-ignore-files`, or drive
 the file list from `git ls-files`.
 
+**Two more, from B17, both about protections that look stronger than they are:**
+
+- **`#pragma clang fp contract(off)` does not hold against `-ffp-contract=fast`** — clang documents
+  that `fast` overrides it. Under clang's default and under `on` it holds (a control expression
+  fused 12 times, the guarded function 0). So the pragma is a second line of defence, not a
+  substitute: **the build flag remains the real protection.**
+- **A differential probe over an input the compiler can see measures the compiler, not the
+  hardware.** E3 hid a NaN-sign difference twice through constant folding — first a `const` input,
+  then a `static` nothing writes. Both let the compiler fold the expression at build time, so both
+  architectures ran identical constants and "agreed". Probe inputs must be opaque to the optimiser.
+
 ### Rule: never define `_UNIX`
 
 It will look free, and it is the most expensive thing in this tree.

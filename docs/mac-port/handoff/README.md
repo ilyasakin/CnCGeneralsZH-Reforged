@@ -35,10 +35,13 @@ Nothing has ever *linked* `wwlib`, and there may be a tail of link errors nobody
 
 ## Start here
 
-1. **B16 — `wwdebug`'s `windows.h`.** Unowned, unstarted, and it blocks **six** tests including
-   `wwmath_selfcheck`, which `CMakeLists.txt` singles out as "the first evidence that determinism
-   survives clang on arm64". Its task file's site table was wrong until today: the two errors you
-   hit first are `FormatMessage` at `:69` and `GetLastError` at `:82`, not the three it listed.
+1. **B16 — `wwdebug`'s `windows.h`. DONE since this index was written** (agent -18): `wwdebug` 3/3,
+   `wwmath` 36/36. *Correction:* this item used to call `wwmath_selfcheck` "the first evidence that
+   determinism survives clang on arm64". **It never was, for two independent reasons.** On failure
+   it printed `FAIL`, called an `assert` that `-DNDEBUG` compiles out, then printed `OK` and returned
+   0 — so it could not fail in Release on either platform — and it is a 1e-4 tolerance check, which
+   cannot see a bit-level difference even in Debug. It now can fail. **E3 is the cross-architecture
+   evidence** (all 96 `DetTrig` rows identical across arm64 and x86_64).
 2. **B5 — the Windows API surface in `wwlib`.** One task from `wwlib` building. **Re-measure
    before scheduling**; two agents got materially different counts on different trees and the
    handoff gives the command rather than the number.
