@@ -38,7 +38,7 @@
 #include "Common/INI.h"
 #include "WWMath/Matrix3D.h"
 
-enum ParticleSystemID;
+enum ParticleSystemID : Int;
 class FXList;
 
 

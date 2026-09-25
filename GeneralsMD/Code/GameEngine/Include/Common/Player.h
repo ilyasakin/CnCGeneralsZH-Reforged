@@ -107,9 +107,9 @@ class SpecialPowerModule;
 
 class BattlePlanBonuses;
 
-enum BattlePlanStatus;
-enum UpgradeStatusType;
-enum CommandSourceType;
+enum BattlePlanStatus : Int;
+enum UpgradeStatusType : Int;
+enum CommandSourceType : Int;
 
 enum ScienceAvailabilityType
 {
@@ -158,7 +158,7 @@ UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers );
 // Pro Rules, PRO-RULES.md: what every skirmish and network match refuses whoever plays it.
 // GameLogic::isProRules() says whether a match is under them; these say what they cover, by name
 // or by type, so a test can ask them without a match.
-enum SpecialPowerType;
+enum SpecialPowerType : Int;
 class Player;
 Bool ProRulesBanThing( const AsciiString &templateName );
 Bool ProRulesExemptSuperweapon( const AsciiString &templateName );

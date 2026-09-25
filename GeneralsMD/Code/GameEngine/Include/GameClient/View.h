@@ -49,6 +49,8 @@ class ViewLocation;
 class Thing;
 class Waypoint;
 class LookAtTranslator;
+enum FilterModes : Int;			// CommandXlat.h; named in the virtuals below before any definition is seen
+enum FilterTypes : Int;
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
