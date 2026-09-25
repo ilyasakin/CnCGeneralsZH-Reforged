@@ -1105,6 +1105,17 @@ add_test(NAME arch_differential
                  ${CMAKE_CURRENT_BINARY_DIR}/arch_diff)
 set_tests_properties(arch_differential PROPERTIES SKIP_RETURN_CODE 77)
 
+# The D3DX oracle: runs Microsoft's own D3DXVec4Transform machine code under Rosetta and compares
+# d3dxportable.h against it.  It needs d3dx9_43.dll, which this repository does not carry, so it
+# reads ZH_D3DX9_X64 at run time (a Steam install's Jun2010_d3dx9_43_x64.cab, or the DLL) and skips
+# without it.  A green run matches two of the DLL's three bodies, not "Windows";
+# Tests/d3dx_oracle/run_d3dx_oracle.sh says why.
+add_test(NAME d3dx_oracle
+         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/d3dx_oracle/run_d3dx_oracle.sh
+                 ${CMAKE_CURRENT_SOURCE_DIR}
+                 ${CMAKE_CURRENT_BINARY_DIR}/d3dx_oracle)
+set_tests_properties(d3dx_oracle PROPERTIES SKIP_RETURN_CODE 77)
+
 if(RELEASE_DEBUG_LOGGING)
   target_compile_definitions(gameengine PRIVATE RELEASE_DEBUG_LOGGING)
   if(ZH_PLATFORM_WINDOWS)
