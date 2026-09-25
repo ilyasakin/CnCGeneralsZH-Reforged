@@ -753,6 +753,16 @@ it takes to be the file. Two shapes of name defeat that rule.
 
 A future caller writing an extensionless name would hit it. `PosixLocalFileSystem` keeps the rule
 but stops when the name runs out. Found by C1; recorded, not fixed on Windows.
+**12. A staging-room stats message sent the address of a string instead of the string - fixed.**
+`WOLGameSetupMenu.cpp:125` passed `formatPlayerKVPairs(...)`'s `std::string` straight into
+`AsciiString::format("%d %s", ...)`'s varargs, where every other caller adds `.c_str()`. On MSVC
+x64 a non-trivial class in varargs is passed as the address of a temporary copy (measured: clang
+targeting `x86_64-pc-windows-msvc` passes `ptr`), so `%s` read the string object's own bytes.
+MSVC's `std::string` keeps up to 15 characters inline at its start and a heap pointer there
+otherwise (documented layout, not measured here), and a stats list is far longer than 15, so the
+"STATS/" UTM carried the profile id and then the pointer's bytes. Other players in the staging room
+never got this player's stats. It is dead-service code (GameSpy), and there was nothing portable to
+preserve, so it is fixed with `.c_str()` (PM decision).
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
