@@ -58,11 +58,15 @@
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include <stdlib.h>
+#if defined(_WIN32)
 #ifndef DIRECTINPUT_VERSION
 #	define DIRECTINPUT_VERSION	0x800
 #endif
 
 #include <dinput.h>
+#else
+#include "GameClient/DIKeyCodes.h"	// the same numbers; the engine calls no DirectInput function
+#endif
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 
