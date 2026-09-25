@@ -267,7 +267,7 @@ GPProfile GameSpyBuddyMessageQueue::getLocalProfileID( void )
 void BuddyThreadClass::Thread_Function()
 {
 	try {
-	_set_se_translator( DumpExceptionInfo ); // Hook that allows stack trace.
+	InstallThreadExceptionTranslator(); // Hook that allows stack trace.
 	GPConnection gpCon;
 	GPConnection *con = &gpCon;
 	// the vendored SDK is newer than the 2003 one and wants namespace/partner ids
