@@ -281,6 +281,20 @@ this paragraph is the reason to check its width.
   `tolower` on a plain `char` is undefined for bytes above 0x7F under `-fsigned-char`. It is dead-service
   code, and changing vendored behaviour is out of scope; only the C++ declaration clash is patched.
 
+**The vendored GameSpy SDK defines `_UNIX`**: `gsplatform.h:38`, on `__linux__` or Apple. Every
+engine file that includes a GameSpy header therefore has the macro the plan forbids from that point
+on, and any `_UNIX` branch in a header read for the first time after that point is taken. Measured
+across all 602 engine files, 2026-09-25: 34 get `_UNIX`. Only two headers are first read after it, and
+only those two evaluate their `_UNIX` branch: `GameNetwork/udp.h` in 25 files, where it adds
+`<errno.h>` and is harmless, and WWLib `thread.h` in 3 (`BuddyThread`, `PeerThread`,
+`PersistentStorageThread`), where it includes `osdep.h` and is fatal. `osdep.h` has never existed in
+this tree, yet 20 WWVegas files include it under `_UNIX`, which makes a leak loud for those. It would
+be silent for any `_UNIX` branch that does something else. `matrix3d.h` and `vector3.h` show up
+after the define in `Recorder.cpp`, but only as guard-skipped re-entries: they carry a `#pragma once`
+before their guard, so clang re-opens them, and their first real entry is earlier. Counting line
+markers instead of first entries says otherwise; that is how this was nearly misreported. The fix
+is a decision, not taken here.
+
 <details><summary>The 62 enums</summary>
 
 | Enum | Definition | Forward declarations |
