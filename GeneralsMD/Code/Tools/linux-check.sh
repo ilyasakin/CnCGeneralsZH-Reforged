@@ -86,14 +86,15 @@ rows=("$@")
 
 # --- one image per architecture, built on first use --------------------------------------------
 # The X11, Wayland, EGL, DRM and Vulkan headers are SDL3's: without them its configure stops with
-# "could not find X11 or Wayland development libraries".  The image tag carries a hash of this text,
+# "could not find X11 or Wayland development libraries".  spirv-tools is for test_shader_sdl, which
+# validates every generated program's SPIR-V with spirv-val and says SKIPPED where there is none.  The image tag carries a hash of this text,
 # so changing the list builds a new image rather than silently reusing an old one.
 DOCKERFILE='FROM ubuntu:24.04
 RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
       cmake ninja-build g++ clang python3 git pkg-config \
       libx11-dev libxext-dev libxcursor-dev libxi-dev libxfixes-dev libxrandr-dev libxss-dev \
       libxtst-dev libwayland-dev libxkbcommon-dev wayland-protocols libegl-dev libdrm-dev \
-      libgbm-dev libvulkan-dev >/dev/null && rm -rf /var/lib/apt/lists/*'
+      libgbm-dev libvulkan-dev spirv-tools >/dev/null && rm -rf /var/lib/apt/lists/*'
 IMAGE_HASH=$(printf '%s' "$DOCKERFILE" | shasum | cut -c1-12)
 
 ensure_image() { # arch
