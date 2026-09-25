@@ -40,6 +40,7 @@
 #define FIXED_H
 
 #include "bool.h"
+#include "wwendian.h"
 //#pragma warning 604 9
 //#pragma warning 595 9
 
@@ -204,7 +205,7 @@ class fixed
 	private:
 		union {
 			struct {
-#ifdef BIG_ENDIAN
+#if WW_BIG_ENDIAN	// not #ifdef BIG_ENDIAN, which POSIX always defines - see wwendian.h
 				unsigned char Whole;
 				unsigned char Fraction;
 #else

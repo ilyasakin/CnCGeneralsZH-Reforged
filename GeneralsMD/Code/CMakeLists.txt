@@ -359,9 +359,17 @@ set(WWLIB_SOURCES
   ${WW}/WWLib/xpipe.cpp      ${WW}/WWLib/xstraw.cpp     ${WW}/WWLib/xsurface.cpp)
 # Win32 subsystem code, left out of wwlib everywhere but Windows.  Each of these is a whole file of
 # one Windows API rather than a type leaking out of one, so there is nothing to port short of
-# reimplementing the API, and none of them has a caller that is not itself Windows code - searched
-# across GeneralsMD/Code on 2026-09-25, B5.  On Windows this list is not read, and wwlib gets the
-# same sources in the same order as before.  Put one back only with a caller that needs it.
+# reimplementing the API.  On Windows this list is not read, and wwlib gets the same sources in the
+# same order as before.  Put one back only with a caller that needs it.
+#
+# How "no caller" was established, because the first way was wrong: B5 searched for includers of
+# each header, and that cannot see a function-local extern - verchk.cpp's, below.  Re-audited
+# 2026-09-25 by symbol: every function, class and global each file defines, searched as a whole word
+# through every tracked source outside Tools/, and each hit read.  Apart from RegistryClass (callers
+# named below) and verchk (fixed), every hit was a comment, a string, a commented-out block, a type
+# named only by pointer or reference, or code under a macro nothing defines (Except.cpp's
+# DEMO_TIME_OUT).  What that cannot see: a name built by token pasting, and vendored code, which is
+# not tracked and does not use WWLib.
 if(NOT ZH_PLATFORM_WINDOWS)
   list(REMOVE_ITEM WWLIB_SOURCES
     # DirectDraw, the pre-Direct3D 2D surface API.  The renderer never reaches it; DSurface is named
@@ -1007,7 +1015,7 @@ endfunction()
 add_lib_test(test_wwmath wwmath wwlib wwsaveload wwdebug)
 target_include_directories(test_wwmath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
 
-add_lib_test(test_wwlib PENDING_MACOS wwlib wwmath wwsaveload wwdebug)
+add_lib_test(test_wwlib wwlib wwmath wwsaveload wwdebug)
 target_include_directories(test_wwlib PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWSaveLoad ${WW}/Wwutil)
 # generals.exe is linked /LARGEADDRESSAWARE, and that flag changes what
 # GlobalMemoryStatus saturates its 32-bit fields to (0xFFFFFFFF, not 0x7FFFFFFF).
