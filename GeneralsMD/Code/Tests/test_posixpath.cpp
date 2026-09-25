@@ -8,11 +8,13 @@
  * (Data/english/.../EA_LOGO.bik against Data/English/.../EA_LOGO.BIK), gensecZH.big.
  *
  * Case matters only on a case-sensitive volume, and the default macOS volume is not one - neither is
- * the exFAT the Steam installs sit on.  So the suite runs twice where it can:
+ * the exFAT the Steam installs sit on.  So the suite runs twice:
  *   - in $TMPDIR, whatever that volume is, and it says which;
- *   - on macOS, on a small case-sensitive APFS image it creates and attaches with hdiutil.  If that
- *     cannot be done it prints SKIPPED with the reason; on Linux the first run is already on a
- *     case-sensitive file system.
+ *   - on macOS, on a small case-sensitive APFS image it creates and attaches with hdiutil.  That run
+ *     is the proof that case is handled (macOS is the platform this project gates on), so it is not
+ *     optional: an image that cannot be created or attached, or one that turns out not to be
+ *     case-sensitive, fails the test.  Off macOS the first run is on the platform's own file system,
+ *     which on Linux is case-sensitive already.
  * Checks that only mean something on a case-sensitive volume (the on-disk spelling of a result, two
  * names differing only in case) run only there, and say so when they do not.
  */
@@ -255,7 +257,9 @@ TEST(engine_paths_resolve_on_a_case_sensitive_volume)
 	const std::string create = "hdiutil create -quiet -size 16m -type SPARSE -fs 'Case-sensitive APFS' -volname ZHCS '" + image_root + "' 2>&1";
 	const std::string attach = "hdiutil attach -quiet -nobrowse -mountpoint '" + mount + "' '" + image + "' 2>&1";
 	if (system(create.c_str()) != 0 || system(attach.c_str()) != 0) {
-		printf("  SKIPPED the case-sensitive run: hdiutil could not create or attach an image in %s\n", mount.c_str());
+		// Not a skip: without this run nothing here has shown that case is handled.
+		printf("  FAILED to create or attach a case-sensitive APFS image at %s; hdiutil is required on macOS\n", mount.c_str());
+		CHECK(false);
 		remove(image.c_str());
 		rmdir(mount.c_str());
 		return;
