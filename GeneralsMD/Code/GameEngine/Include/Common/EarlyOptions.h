@@ -35,8 +35,11 @@
 // around both halves.  A file the engine writes is always in that shape, so the two agree without
 // sharing code.
 
+#if defined(_WIN32)
 #include <windows.h>
 #include <shlobj.h>
+#endif
+#include "Platform/MSVCCompat.h"	// strcasecmp and strncasecmp, taught to MSVC
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,6 +53,7 @@
 	* SHGetKnownFolderPath has no such limit. It is Vista and later, so it is bound at run time and
 	* the old call is still the fallback. The GUID is spelled out here rather than taken from
 	* KnownFolders.h so that nothing has to link another lib for one constant. */
+#if defined(_WIN32)
 inline bool findDocumentsFolderA( char *out, size_t outSize )
 {
 	if (out == NULL || outSize == 0)
@@ -202,6 +206,19 @@ inline bool findUserDataDirectory( char *out, size_t outSize )
 	::strcpy( out, s_chosen );
 	return true;
 }
+#else
+/* Off Windows there is no Documents folder in the shell's sense and no installer registry: where a
+	 user's saves, replays and Options.ini live is C1's to decide (and what Mac and Linux players expect
+	 differs).  Until then there is no user data directory.  GlobalData logs that and leaves
+	 m_userDataDir empty, so those files go to the current directory - its own documented fallback,
+	 not a choice - and Options.ini is not found here, so every early option reads as its default. */
+inline bool findUserDataDirectory( char *out, size_t outSize )
+{
+	if (outSize != 0)
+		out[0] = 0;
+	return false;
+}
+#endif
 
 /** The value stored under this key in an already-open preferences file.
 	*
@@ -222,7 +239,7 @@ inline bool findEarlyOptionValueIn( FILE *fp, const char *key, char *out, size_t
 		while (*at == ' ' || *at == '\t')
 			++at;
 
-		if (::_strnicmp( at, key, keyLen ) != 0)
+		if (::strncasecmp( at, key, keyLen ) != 0)
 			continue;
 
 		const char *after = at + keyLen;
@@ -290,9 +307,9 @@ inline int getEarlyOptionInt( const char *key, int defaultValue, int lo, int hi 
 	* about the same line of the file. */
 inline bool isEarlyOptionYes( const char *value )
 {
-	return ::_stricmp( value, "yes" ) == 0 || ::_stricmp( value, "true" ) == 0
-		|| ::_stricmp( value, "on" ) == 0 || ::_stricmp( value, "y" ) == 0
-		|| ::_stricmp( value, "t" ) == 0 || ::_stricmp( value, "1" ) == 0;
+	return ::strcasecmp( value, "yes" ) == 0 || ::strcasecmp( value, "true" ) == 0
+		|| ::strcasecmp( value, "on" ) == 0 || ::strcasecmp( value, "y" ) == 0
+		|| ::strcasecmp( value, "t" ) == 0 || ::strcasecmp( value, "1" ) == 0;
 }
 
 inline bool getEarlyOptionBool( const char *key, bool defaultValue )
