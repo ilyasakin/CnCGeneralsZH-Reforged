@@ -440,7 +440,10 @@ TEST(matrix3d_get_inverse_general_affine)
 	/* This is the function that was rewritten to drop D3DXMatrixInverse, so it
 	   gets the hardest cases: rotation+translation, and non-uniform scale where
 	   the transpose shortcut is wrong. */
-	Matrix3D rot(Vector3(0.3f, -0.7f, 0.65f), 1.1f);
+	/* Matrix3D's axis-angle form asserts a unit axis; a Debug build aborts on anything else. */
+	Vector3 axis(0.3f, -0.7f, 0.65f);
+	axis.Normalize();
+	Matrix3D rot(axis, 1.1f);
 	rot.Set_Translation(Vector3(12.0f, -4.5f, 3.25f));
 
 	Matrix3D inv, prod;
@@ -472,7 +475,10 @@ TEST(matrix3d_get_inverse_general_affine)
 
 TEST(matrix3d_inverse_transform_point_roundtrip)
 {
-	Matrix3D m(Vector3(0.1f, 0.9f, -0.4f), 0.77f);
+	/* Matrix3D's axis-angle form asserts a unit axis; a Debug build aborts on anything else. */
+	Vector3 axis(0.1f, 0.9f, -0.4f);
+	axis.Normalize();
+	Matrix3D m(axis, 0.77f);
 	m.Set_Translation(Vector3(-3.0f, 11.0f, 0.5f));
 
 	Matrix3D inv;
@@ -556,7 +562,10 @@ TEST(matrix4x4_identity_and_multiply)
 
 TEST(matrix4x4_from_matrix3d_agrees_on_points)
 {
-	Matrix3D m3(Vector3(0.3f, 0.2f, 0.93f), 0.5f);
+	/* Matrix3D's axis-angle form asserts a unit axis; a Debug build aborts on anything else. */
+	Vector3 axis(0.3f, 0.2f, 0.93f);
+	axis.Normalize();
+	Matrix3D m3(axis, 0.5f);
 	m3.Set_Translation(Vector3(2.0f, 3.0f, 4.0f));
 
 	Matrix4x4 m4(m3);
@@ -1045,7 +1054,10 @@ TEST(colmath_box_tri_intersection)
 
 TEST(vp_transform_matches_scalar)
 {
-	Matrix3D m(Vector3(0.3f, 0.6f, 0.74f), 0.9f);
+	/* Matrix3D's axis-angle form asserts a unit axis; a Debug build aborts on anything else. */
+	Vector3 axis(0.3f, 0.6f, 0.74f);
+	axis.Normalize();
+	Matrix3D m(axis, 0.9f);
 	m.Set_Translation(Vector3(5.0f, -2.0f, 1.0f));
 
 	/* Deliberately not a multiple of 4: the asm paths process blocks and hand
