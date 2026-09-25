@@ -53,6 +53,7 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"
+#include "Platform/IsWindows9x.h"
 
 #include "Common/INI.h"
 #include "Common/FileSystem.h"
@@ -144,17 +145,13 @@ void HeaderTemplateManager::init( void )
 	INI ini;
 	AsciiString fname;
 	fname.format("Data\\%s\\HeaderTemplate.ini", GetRegistryLanguage().str());
-	OSVERSIONINFO	osvi;
-	osvi.dwOSVersionInfoSize=sizeof(OSVERSIONINFO);
-	if (GetVersionEx(&osvi))
+	if (isWindows9x())
 	{	//check if we're running Win9x variant since they may need different fonts
-		if (osvi.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS)
-		{	AsciiString tempName;
+		AsciiString tempName;
 
-			tempName.format("Data\\%s\\HeaderTemplate9x.ini", GetRegistryLanguage().str());
-			if (TheFileSystem->doesFileExist(tempName.str()))
-				fname = tempName;
-		}
+		tempName.format("Data\\%s\\HeaderTemplate9x.ini", GetRegistryLanguage().str());
+		if (TheFileSystem->doesFileExist(tempName.str()))
+			fname = tempName;
 	}
 	ini.load( fname, INI_LOAD_OVERWRITE, NULL );
 	populateGameFonts();

@@ -51,6 +51,7 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Platform/SleepMilliseconds.h"
 
 #include "Common/AudioAffect.h"
 #include "Common/AudioEventRTS.h"
@@ -716,7 +717,7 @@ void PlayMovieAndBlock(AsciiString movieTitle)
 
 		if(!videoStream->isFrameReady())
 		{
-			Sleep(1);
+			sleepMilliseconds( 1 );
 			continue;
 		}
 

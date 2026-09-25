@@ -76,8 +76,8 @@
 //#pragma optimize("", off)
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
 #endif
-void refreshGameList( Bool forceRefresh = FALSE );
-void refreshPlayerList( Bool forceRefresh = FALSE );
+static void refreshGameList( Bool forceRefresh = FALSE );
+static void refreshPlayerList( Bool forceRefresh = FALSE );
 
 #ifdef DEBUG_LOGGING
 #define PERF_TEST

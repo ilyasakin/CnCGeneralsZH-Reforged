@@ -525,14 +525,14 @@ void FirewallHelperClass::writeFirewallBehavior(void)
 
 	char num[16];
 	num[0] = 0;
-	itoa(TheGlobalData->m_firewallBehavior, num, 10);
+	snprintf(num, sizeof(num), "%d", (Int)TheGlobalData->m_firewallBehavior);
 	AsciiString numstr;
 	numstr = num;
 	(pref)["FirewallBehavior"] = numstr;
 
 	TheWritableGlobalData->m_firewallPortAllocationDelta = TheFirewallHelper->getSourcePortAllocationDelta();
 	num[0] = 0;
-	itoa(TheGlobalData->m_firewallPortAllocationDelta, num, 10);
+	snprintf(num, sizeof(num), "%d", (Int)TheGlobalData->m_firewallPortAllocationDelta);
 	numstr = num;
 	(pref)["FirewallPortAllocationDelta"] = numstr;
 
@@ -695,7 +695,11 @@ Bool FirewallHelperClass::detectionBeginUpdate() {
 		struct hostent *host_info = gethostbyname(temp_name);
 
 		if (!host_info) {
+#if defined(_WIN32)
 			DEBUG_LOG(("gethostbyname failed! Error code %d\n", WSAGetLastError()));
+#else
+			DEBUG_LOG(("gethostbyname failed! Error code %d\n", h_errno));	// gethostbyname's own error, off Windows
+#endif
 			break;
 		}
 

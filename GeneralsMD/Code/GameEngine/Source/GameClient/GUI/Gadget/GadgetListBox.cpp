@@ -48,6 +48,7 @@
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Platform/DoubleClickTime.h"
 #include "Lib/Clock.h"
 
 #include "Common/AudioEventRTS.h"
@@ -73,7 +74,7 @@
 // DEFINES ////////////////////////////////////////////////////////////////////
 // Sets up the user's OS set doubleclick time so if they don't like it... they can
 // change it in their OS.
-static UnsignedInt doubleClickTime = GetDoubleClickTime();
+static UnsignedInt doubleClickTime = systemDoubleClickTimeMS();
 
 // PRIVATE TYPES //////////////////////////////////////////////////////////////
 typedef struct _AddMessageStruct
