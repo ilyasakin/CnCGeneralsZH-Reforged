@@ -170,7 +170,7 @@ you start. That commit is the lock.
 | A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | done: configure on arm64; the four libraries its first acceptance named now build (was -95) | |
 | A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | done: merged, including the zlib reopen (was -21) | |
 | A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | done: merged with A2 (`build.sh`) (was -21) | |
-| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | flip committed on `feature/mac-port-B1-flip`, awaiting merge; `.csf` round trip still open | -47 |
+| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | done on macOS: flip merged, `.csf` test (`gametext_csf`) on `feature/mac-port-B1-csf`; Windows half is debt | -47 |
 | B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | done: merged; not verified on Windows (was -8d) | |
 | B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | done: merged; later CRT spellings land in `MSVCCompat.h` as found (was -95) | |
 | B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
