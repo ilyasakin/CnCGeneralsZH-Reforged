@@ -22,11 +22,12 @@
 	 The destructor is declared in the class and defined inline OUTSIDE it, so under the Itanium ABI it
 	 is still the class's key function, and GCC emits the vtable - and with it the deleting destructor,
 	 operator delete and getClassMemoryPool - in every translation unit that sees that definition:
-	 every TU that includes PreRTS.h.  Clang demotes a key function that is later defined inline and
-	 emits nothing.  So on macOS and under clang on Linux these symbols are never referenced, and under
+	 every TU that includes PreRTS.h.  Clang demotes a key function that is later defined inline, and
+	 when optimizing emits none of it - but not always at -O0: Ubuntu 24.04's clang 18 at -O0 emitted
+	 six such vtables and 22 undefined references from one engine TU, at -O2 none (measured).  Under
 	 GCC one engine TU linked on its own needs the memory pool, the string buffers and AudioEventRTS.
-	 Measured on Ubuntu 24.04's GCC 13: FPUControl.cpp.o alone carries the vtables of Bucket,
-	 Overridable, ScienceInfo and DynamicAudioEventRTS.  -Wl,--gc-sections does not help, because GNU ld
+	 Measured on Ubuntu 24.04's GCC 13, Release: FPUControl.cpp.o alone carries the vtables of
+	 Bucket, Overridable, ScienceInfo and DynamicAudioEventRTS.  -Wl,--gc-sections does not help, because GNU ld
 	 reports undefined references before it collects sections.
 
 	 WHO LINKS THIS.  The self-checks that build a few real engine TUs without gameengine:
