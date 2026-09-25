@@ -172,7 +172,13 @@ int LCW_Uncomp(void const * source, void * dest, unsigned long )
 }
 
 
-#if defined(_MSC_VER)
+/*
+**	LCW_Comp used to sit inside #if defined(_MSC_VER), from when it was 32-bit inline assembly and
+**	other compilers linked an assembler version through LCW.H's extern "C" declaration.  The x64 port
+**	replaced the body with the portable C below and left the guard, so off MSVC the encoder was
+**	compiled out and LCW.H promised a C-linkage symbol nothing defined - found when test_wwlib first
+**	linked on macOS.  MSVC compiles exactly what it did.
+*/
 
 
 /*********************************************************************************************** 
@@ -270,6 +276,5 @@ int LCW_Comp(void const * source, void * dest, int datasize)
 	}
 	return(retval);
 }
-#endif
 
 
