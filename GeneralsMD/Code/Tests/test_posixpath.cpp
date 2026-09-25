@@ -29,6 +29,7 @@
 #include <unistd.h>
 
 #include <string>
+#include <vector>
 
 #include "posixpath.h"
 #include "zhio.h"
@@ -112,6 +113,65 @@ std::string resolved(const std::string & engine_path, PosixPathIntent intent)
 	std::string real;
 	if (!PosixPath_Resolve(engine_path.c_str(), intent, real)) return "(unresolved)";
 	return real;
+}
+
+// The listing, joined with '|', in the order it was found.
+std::string listed(const char * current, const char * original, const char * search, bool subdirectories)
+{
+	std::vector<std::string> found;
+	PosixPath_List_Like_Win32(current, original, search, subdirectories, found);
+	std::string joined;
+	for (size_t i = 0; i < found.size(); ++i) joined += (i ? "|" : "") + found[i];
+	return joined;
+}
+
+// Win32LocalFileSystem::getFileListInDirectory's contract, relative to the install root.  Returns the
+// number of checks that ran only because the volume is case-sensitive.
+unsigned listing_checks(const std::string & root, bool sensitive)
+{
+	unsigned sensitive_only = 0;
+	make_directory(root + "/List");
+	make_directory(root + "/List/Sub");
+	make_directory(root + "/List/Sub/Deep");
+	make_directory(root + "/List/Dotted.dir");		// has a dot: "*." passes it over, so no recursion
+	make_directory(root + "/List/zdir.ini");		// a directory, however it is named, is not a file
+	write_file(root + "/List/a.ini", "");
+	write_file(root + "/List/B.INI", "");
+	write_file(root + "/List/c.ini.bak", "");
+	write_file(root + "/List/noext", "");
+	write_file(root + "/List/Patch2.big", "");
+	write_file(root + "/List/patch1.BIG", "");
+	write_file(root + "/List/x.big", "");
+	write_file(root + "/List/Sub/d.ini", "");
+	write_file(root + "/List/Sub/Deep/e.ini", "");
+	write_file(root + "/List/Dotted.dir/f.ini", "");
+	write_file(root + "/List/zdir.ini/g.ini", "");
+
+	// INI::loadDirectory's call: the files in byte order, then each subdirectory's, joined with '\'
+	// after the engine's own spelling of the directory.
+	CHECK_STR(listed("", "List\\", "*.ini", true).c_str(), "List\\B.INI|List\\a.ini|List\\Sub\\d.ini|List\\Sub\\Deep\\e.ini");
+	// The engine's spelling of the directory is kept; what was found carries the disk's.
+	CHECK_STR(listed("", "list\\", "*.INI", true).c_str(), "list\\B.INI|list\\a.ini|list\\Sub\\d.ini|list\\Sub\\Deep\\e.ini");
+	CHECK_STR(listed("", "List\\", "*.ini", false).c_str(), "List\\B.INI|List\\a.ini");
+	CHECK_STR(listed("Sub\\", "List\\", "*.ini", false).c_str(), "List\\Sub\\d.ini");
+	CHECK_STR(listed("", "List\\", "Patch*.big", false).c_str(), "List\\Patch2.big|List\\patch1.BIG");
+	CHECK_STR(listed("", "List\\", "*", false).c_str(),
+		"List\\B.INI|List\\Patch2.big|List\\a.ini|List\\c.ini.bak|List\\noext|List\\patch1.BIG|List\\x.big");
+	CHECK_STR(listed("", "List\\", "*.*", false).c_str(), listed("", "List\\", "*", false).c_str());
+	CHECK_STR(listed("", "List\\", "*.", false).c_str(), "List\\noext");
+	CHECK_STR(listed("", "List\\", "", true).c_str(), "");		// FindFirstFile("dir\\") finds nothing
+	CHECK_STR(listed("", "Nowhere\\", "*.ini", true).c_str(), "");
+	CHECK_STR(listed("", "", "*.big", false).c_str(), "gensecZH.big");	// the install root itself
+	CHECK_STR(listed("", (root + "/List/Sub/").c_str(), "*.ini", false).c_str(), (root + "/List/Sub/d.ini").c_str());
+
+	// Two names differing only in case: both are listed, byte order first, so the engine's
+	// case-insensitive set keeps the same one every time.
+	if (sensitive) {
+		write_file(root + "/List/Sub/D.ini", "");
+		CHECK_STR(listed("Sub\\", "List\\", "*.ini", false).c_str(), "List\\Sub\\D.ini|List\\Sub\\d.ini");
+		++sensitive_only;
+	}
+	return sensitive_only;
 }
 
 unsigned run_suite(const std::string & root, const char * where)
@@ -214,9 +274,11 @@ unsigned run_suite(const std::string & root, const char * where)
 	}
 	CHECK_STR(read_file(root + "/Save/Replays/Last.rep").c_str(), "rep");
 
+	sensitive_only += listing_checks(root, sensitive);
+
 	if (chdir(previous) != 0) CHECK(false);
 	if (!sensitive) {
-		printf("  %s: the %u checks that need a case-sensitive volume did not run here\n", where, 8u);
+		printf("  %s: the %u checks that need a case-sensitive volume did not run here\n", where, 9u);
 	}
 	return sensitive_only;
 }
@@ -238,6 +300,72 @@ void remove_tree(const std::string & root)
 }
 
 } // namespace
+
+// The patterns the engine passes, as FindFirstFile reads them (without 8.3 short names).
+TEST(windows_patterns_match_as_findfirstfile_does)
+{
+	CHECK(PosixPath_Matches_Pattern("*.ini", "GameData.ini"));
+	CHECK(PosixPath_Matches_Pattern("*.ini", "WEAPON.INI"));
+	CHECK(PosixPath_Matches_Pattern("*.ini", ".ini"));
+	CHECK(!PosixPath_Matches_Pattern("*.ini", "GameData.ini.bak"));
+	CHECK(!PosixPath_Matches_Pattern("*.ini", "GameDataini"));
+	CHECK(PosixPath_Matches_Pattern("*.big", "INIZH.big"));
+	CHECK(PosixPath_Matches_Pattern("Patch*.big", "Patch.big"));
+	CHECK(PosixPath_Matches_Pattern("Patch*.big", "patch104.BIG"));
+	CHECK(!PosixPath_Matches_Pattern("Patch*.big", "MyPatch.big"));
+	CHECK(PosixPath_Matches_Pattern("*.w3d", "AVTank.W3D"));
+	CHECK(PosixPath_Matches_Pattern("*.tga", "SCCPointer.tga"));
+	CHECK(PosixPath_Matches_Pattern("*.big.*", "a.big.x.big.y"));	// backtracking past an earlier match
+	CHECK(PosixPath_Matches_Pattern("?.big", "a.big"));
+	CHECK(!PosixPath_Matches_Pattern("?.big", "ab.big"));
+	CHECK(PosixPath_Matches_Pattern("*", "anything.at.all"));
+	CHECK(PosixPath_Matches_Pattern("*.*", "noext"));
+	CHECK(PosixPath_Matches_Pattern("*.*", "a.b"));
+	CHECK(PosixPath_Matches_Pattern("*.", "Sub"));
+	CHECK(!PosixPath_Matches_Pattern("*.", "Dotted.dir"));
+	CHECK(!PosixPath_Matches_Pattern("", "a.ini"));
+	CHECK(!PosixPath_Matches_Pattern(NULL, "a.ini"));
+}
+
+// D6: a TEXT LocalFile reads as Windows' _read reads _O_TEXT, however the reads are sized.
+TEST(text_reads_as_windows_text_mode)
+{
+	const std::string path = temp_root("test_posixpath_text");
+	// CRLF lines, a lone CR, a CR before a CR, blank CRLF lines, and a final CR with nothing after it.
+	const std::string raw = "[Section]\r\nKey = 1\r\nlone\rcr\r\r\n\r\n\r\nend\r";
+	const std::string windows = "[Section]\nKey = 1\nlone\rcr\r\n\n\nend\r";
+	write_file(path, raw);
+	unsigned mismatched = 0;
+	for (unsigned chunk = 1; chunk <= raw.size() + 1; ++chunk) {
+		const int handle = open(path.c_str(), O_RDONLY);
+		std::string text;
+		char buffer[64];
+		int got;
+		while ((got = zh_read_text(handle, buffer, chunk)) > 0) text.append(buffer, got);
+		const off_t end = lseek(handle, 0, SEEK_CUR);
+		close(handle);
+		if (text != windows || end != (off_t)raw.size()) {
+			printf("  chunks of %u read \"%s\", ending at %lld\n", chunk, text.c_str(), (long long)end);
+			++mismatched;
+		}
+	}
+	CHECK_EQ(mismatched, 0u);
+
+	// LocalFile::scanString and its siblings read a byte at a time and put the last one back by
+	// seeking back one byte: after a "\r\n" read as '\n', that lands on the '\n', as on Windows.
+	const int handle = open(path.c_str(), O_RDONLY);
+	char c = 0;
+	for (int i = 0; i < 10; ++i) zh_read_text(handle, &c, 1);	// "[Section]" and the "\r\n"
+	CHECK_EQ((int)c, (int)'\n');
+	CHECK_EQ((long long)lseek(handle, 0, SEEK_CUR), 11LL);
+	lseek(handle, -1, SEEK_CUR);
+	CHECK_EQ(zh_read_text(handle, &c, 1), 1);
+	CHECK_EQ((int)c, (int)'\n');
+	CHECK_EQ(zh_read_text(handle, &c, 1), 1);
+	CHECK_EQ((int)c, (int)'K');
+	close(handle);
+	remove(path.c_str());
+}
 
 TEST(engine_paths_resolve_on_this_volume)
 {

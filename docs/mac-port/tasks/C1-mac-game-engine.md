@@ -109,9 +109,7 @@ header says so. `RawFileClass`'s POSIX open goes through the resolver too, which
     revisit this.
 
 **D6, text mode.** The Windows CRT's text mode turns CRLF into LF on read, so POSIX reads opened
-`TEXT` strip a `'
-'` before a `'
-'`. Writes stay LF. Windows-written files are CRLF, and both
+`TEXT` strip a `'\r'` before a `'\n'`. Writes stay LF. Windows-written files are CRLF, and both
 platforms read either.
 
 The CRT's text mode also treats Ctrl-Z (0x1A) as end of file. That is **not** emulated, because no
@@ -122,8 +120,7 @@ game text contains one. Measured on both installs:
 
 The only 0x1A bytes on the installs are in `Game.dat`, `Generals.dat`, `langdata.dat` and
 `patchget.dat`, which are binary and never opened in text mode. INI files are opened binary on
-Windows too (`File::open` defaults to `BINARY`), so their parser already copes with `'
-'`.
+Windows too (`File::open` defaults to `BINARY`), so their parser already copes with `'\r'`.
 
 **Staging**, each piece a PR for a second read:
 
@@ -147,6 +144,86 @@ and attach with `hdiutil`. That run is mandatory: an image that cannot be create
 that turns out not to be case-sensitive, fails the test. The Wine listing oracle stays alongside it,
 because Windows equivalence is a different question from case.
 
+## PR (b): LocalFile, PosixLocalFileSystem and the listing (2026-09-26)
+
+**What is in it.**
+
+- **WWLib's listing.** `PosixPath_Matches_Pattern` is FindFirstFile's matching for the engine's
+  patterns (`*.ini`, `*.big`, `Patch*.big`, `*`, `*.w3d`, `*.tga`, the empty pattern, and `*.` for
+  directories), case-insensitive. `PosixPath_List_Like_Win32` is `getFileListInDirectory`: names come
+  out as `originalDirectory + currentDirectory + on-disk name`, recursion joins with `'\'`, and
+  entries are visited in byte order. So when a case-sensitive volume holds two names differing only
+  in case, the engine's case-insensitive set keeps the same one every time (D2's rule).
+- **`zh_read_text`** (WWLib, `zhio.h`) is D6: `_read` on an `_O_TEXT` file. A `'\r'` at the end of
+  a read is settled by one more byte, put back unless it is the `'\n'`, so the position counts file
+  bytes and `LocalFile`'s one-byte-then-seek-back scanners behave as on Windows.
+- **`LocalFile.cpp`** calls named helpers (`openFile`, `readFile`, `writeFile`, `seekFile`,
+  `closeFile`) and `OPEN_*` flags. On Windows each is the CRT call it replaced; off Windows they
+  are `zh_open` and `zh_read_text`. `RAMFile.cpp` and `StreamingArchiveFile.cpp` included `<io.h>`
+  without using it; it is now Windows-only.
+- **`PosixLocalFileSystem`, `PosixLocalFile`**, in `GameEngineDevice/{Include,Source}/PosixDevice/`,
+  built as `posixdevice`. It stays out of the default macOS build for as long as `gameengine` does.
+  - `openFile` walks the directories as Win32 does, but puts back the leading `'/'` that
+    `nextToken` drops, and stops when the name runs out. On Windows a name with no `'.'` made that
+    walk loop for ever.
+  - `getFileInfo` gives FILETIME units (100 ns since 1601) and size 0 for a directory, as
+    FindFirstFile does.
+  - `createDirectory` makes one level and does not impose `_MAX_DIR`.
+  - The pool is `PosixLocalFile`, with a POSIX-only row in `MemoryInit.cpp` sized like
+    `Win32LocalFile`'s. No MemoryPools.ini names either.
+- **Why `PosixDevice/` and not `MacDevice/`, as the scope below first said:** these classes are
+  POSIX. Linux uses them unchanged, and a `MacDevice/` path would be wrong on Linux. `MacDevice/` is
+  kept for what only macOS has: `MacGameEngine`, and C3's input.
+
+**Tests.**
+
+- `test_posixpath`: 4 tests, 128 checks, on `$TMPDIR` and on the mandatory case-sensitive APFS
+  image. It covers the listing contract on a fixture (dotted directories, a directory named
+  `zdir.ini`, wrong-case directory spellings, two names differing only in case), every pattern
+  shape, and text reads at every chunk size from 1 to past the end, plus the seek-back.
+- Three listing mutations were each caught: case-sensitive matching (11 checks red), no byte-order
+  sort (7), and recursing into dotted directories (7).
+- **Wine oracle** (`Tests/fs_oracle.cpp`). The mingw-w64 build runs a verbatim copy of the Win32
+  listing (std::string for AsciiString) and `_read` on `_O_TEXT` files; the native build runs the
+  WWLib functions. Both print the resulting `FilenameList` in its own order and, for `text`, how
+  every file reads at chunk sizes 1-8 and 4096 (length, FNV-1a, final position).
+  - Run in bottle `zh-e4` on a case-sensitive APFS image holding all 512 text entries (`.ini`,
+    `.wnd`, `.str`, `.txt`, `.csf`) from both installs' archives, and a 35-file quirk fixture
+    (awkward CR placements, `_` names that sort between the cases, dotted and extension-named
+    directories, `Patch*.big` variants).
+  - **32 cases, all byte-identical.** They cover every engine pattern, wrong-case directories, an
+    empty `originalDirectory`, a missing directory, INI::loadDirectory's call on both installs'
+    `Data\INI` (135 and 92 files), and text reads of all 509 `.ini`/`.wnd`/`.str`/`.txt` entries.
+  - A POSIX build mutated to recurse into dotted directories and skip CR stripping differed in 14
+    of the 32 cases. The oracle can fail.
+  - **What it compares against:** the bottle's `kernel32` and `msvcrt` are Wine's builtins, not
+    Microsoft's. No genuine CRT is on this machine. The oracle is Wine's reimplementation of
+    Windows' behaviour.
+  - **Found:** the `.csf` string tables contain 0x1A, and Wine's text-mode reads stop there. That is
+    harmless: GameText opens `.csf` `BINARY` (`GameText.cpp:958`, `:1002`), so D6's premise holds.
+    Nothing the engine reads in `TEXT` mode contains a Ctrl-Z.
+
+**Not emulated: 8.3 short names.** Windows also matches a pattern against each file's short name,
+so `*.ini` can find `x.inix` through `X~1.INI`. Nothing the game ships depends on it, short names
+are often disabled on NTFS, and Wine does not generate them either, so the oracle cannot see it.
+`posixpath.h` says so beside the matcher.
+
+**Found for (f): AppleDouble files.** macOS writes `._name` companions on exFAT. The installs hold 20
+`._*.big` beside Zero Hour's 20 archives and 18 beside Generals' 18 (535 and 356 `._` files in
+all). They are real files: `*.big` matches them on POSIX, and FindFirstFile would too on that
+volume. They are 4 KB, start `00 05 16 07`, and are not BIG archives. (f) decides whether the
+archive mount skips `._*` or refuses non-`BIGF` files quietly. The listing reports them, as Windows
+would.
+
+**Open.** The linked `PosixLocalFileSystem` test waits on -18's GameMemory seam, which is not on
+`feature/mac-port` as of `b691ae98`. `gameengine` on macOS is down from 100 failing objects to 97:
+`LocalFile`, `RAMFile` and `StreamingArchiveFile` compile, and `GameMemory` and `MemoryInit` are
+next (seam, and PR (d)).
+
+**Tooling.** `windows_view_diff.py` now turns quotes in `#error`/`#warning` text into backquotes on
+both sides, because unifdef read the apostrophe in `posixpath.h`'s `#error` as an unterminated
+character literal and refused the file.
+
 ## Why
 
 `GameEngine` is an abstract class with a pure-virtual factory for every subsystem
@@ -157,8 +234,8 @@ this task walks through it rather than cutting a new one.
 
 ## Scope
 
-New: `GameEngineDevice/Source/MacDevice/` and `GameEngineDevice/Include/MacDevice/`, laid out to
-mirror `Win32Device/`. What is there now:
+New: `GameEngineDevice/{Source,Include}/PosixDevice/` for the POSIX classes, and `MacDevice/` for
+what only macOS has, laid out to mirror `Win32Device/` (PR (b) above says why). What is there now:
 
 | File | Lines | Mac equivalent |
 |:--|:--|:--|

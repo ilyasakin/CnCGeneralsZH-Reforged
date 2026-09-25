@@ -69,6 +69,14 @@ int zh_rename(const char * from, const char * to);
 // One directory, with permissions 0777 less the process's umask, as Windows' _mkdir takes none.
 int zh_mkdir(const char * path);
 
+// read(), as Windows' _read reads a file opened _O_TEXT (decision D6): each "\r\n" becomes "\n", a
+// lone '\r' stays, and the file position still counts the file's bytes, so a seek back by one after a
+// '\n' lands on that '\n'.  A '\r' at the end of what was read is settled by reading one byte more,
+// and putting it back when it is not the '\n'.  Ctrl-Z does not end the file: nothing the game ships
+// holds one in a text file.  Returns the bytes stored, which can be fewer than read, or read()'s
+// 0 or -1.
+int zh_read_text(int handle, void * buffer, unsigned bytes);
+
 #endif
 
 #endif
