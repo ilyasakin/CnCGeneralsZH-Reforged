@@ -1882,12 +1882,14 @@ static void chromaFillCells( Int *cells, Bool inMatch )
 			lastGridFrame = frame;
 			for( Int row = 0; row < KEYBOARD_ROWS; ++row )
 			{
+				// At most 18 + 22 * 7 + 1 characters, so it never truncates, where snprintf and MSVC's
+				// _snprintf, which it replaced, would differ.
 				char line[ 256 ];
-				Int used = _snprintf( line, sizeof( line ), "CHROMADRILL: row %d", row );
+				Int used = snprintf( line, sizeof( line ), "CHROMADRILL: row %d", row );
 				for( Int column = 0; column < KEYBOARD_COLUMNS; ++column )
-					used += _snprintf( line + used, sizeof( line ) - used, " %06X",
+					used += snprintf( line + used, sizeof( line ) - used, " %06X",
 														 cells[ chromaKeyboardCell( row, column ) ] );
-				_snprintf( line + used, sizeof( line ) - used, "\n" );
+				snprintf( line + used, sizeof( line ) - used, "\n" );
 				line[ sizeof( line ) - 1 ] = 0;
 				DEBUG_LOG(( "%s", line ));
 			}
