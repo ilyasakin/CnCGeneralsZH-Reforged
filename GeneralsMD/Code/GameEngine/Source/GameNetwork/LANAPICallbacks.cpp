@@ -132,7 +132,7 @@ void LANAPI::OnAccept( UnsignedInt playerIP, Bool status )
 		{
 			UnicodeString text;
 			text = TheGameText->fetch("GUI:HostWantsToStart");
-			OnChat(UnicodeString(L"SYSTEM"), m_localIP, text, LANCHAT_SYSTEM);				
+			OnChat(UnicodeString(u"SYSTEM"), m_localIP, text, LANCHAT_SYSTEM);				
 		}
 	}
 }// void LANAPI::OnAccept( UnicodeString player, Bool status ) 
@@ -159,13 +159,13 @@ void LANAPI::OnHasMap( UnsignedInt playerIP, Bool status )
 			Bool willTransfer = TRUE;
 			if (mapData)
 			{
-				mapDisplayName.format(L"%ls", mapData->m_displayName.str());
+				mapDisplayName.format(u"%ls", mapData->m_displayName.str());
 				if (mapData->m_isOfficial)
 					willTransfer = FALSE;
 			}
 			else
 			{
-				mapDisplayName.format(L"%hs", m_currentGame->getMap().str());
+				mapDisplayName.format(u"%hs", m_currentGame->getMap().str());
 				willTransfer = WouldMapTransfer(m_currentGame->getMap());
 			}
 			if (!status)
@@ -175,7 +175,7 @@ void LANAPI::OnHasMap( UnsignedInt playerIP, Bool status )
 					text.format(TheGameText->fetch("GUI:PlayerNoMapWillTransfer"), m_currentGame->getLANSlot(i)->getName().str(), mapDisplayName.str());
 				else
 					text.format(TheGameText->fetch("GUI:PlayerNoMap"), m_currentGame->getLANSlot(i)->getName().str(), mapDisplayName.str());
-				OnChat(UnicodeString(L"SYSTEM"), m_localIP, text, LANCHAT_SYSTEM);
+				OnChat(UnicodeString(u"SYSTEM"), m_localIP, text, LANCHAT_SYSTEM);
 			}
 			lanUpdateSlotList();
 		}
@@ -220,7 +220,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 	game->setSeed( seed );
 
 	UnicodeString gameName;
-	gameName.format( L"%8.8X", slotIPs[0] );
+	gameName.format( u"%8.8X", slotIPs[0] );
 	game->setName( gameName );
 
 	/* -teams splits the slot list into allied blocks the same way it splits an -autoskirmish lobby:
@@ -238,7 +238,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 		/* The names have to differ: GameInfo looks players up by name, and the player list ends up
 			 with one side per slot named after it. */
 		UnicodeString playerName;
-		playerName.format( L"Player%d", i + 1 );
+		playerName.format( u"Player%d", i + 1 );
 
 		Int teamNumber = -1;
 		if (slotsPerTeam > 0)
@@ -330,7 +330,7 @@ void LANAPI::OnGameStartTimer( Int seconds )
 		text.format(TheGameText->fetch("LAN:GameStartTimerSingular"), seconds);
 	else
 		text.format(TheGameText->fetch("LAN:GameStartTimerPlural"), seconds);
-	OnChat(UnicodeString(L"SYSTEM"), m_localIP, text, LANCHAT_SYSTEM);
+	OnChat(UnicodeString(u"SYSTEM"), m_localIP, text, LANCHAT_SYSTEM);
 }
 
 void LANAPI::OnGameStart( void )
@@ -845,14 +845,14 @@ void LANAPI::OnChat( UnicodeString player, UnsignedInt ip, UnicodeString message
 	switch (format)
 	{
 		case LANAPIInterface::LANCHAT_SYSTEM:
-			unicodeChat = L"";
+			unicodeChat = u"";
 			unicodeChat.concat(message);
-			unicodeChat.concat(L"");
+			unicodeChat.concat(u"");
 			index =GadgetListBoxAddEntryText(chatWindow, unicodeChat, chatSystemColor, -1, -1);
 			break;
 		case LANAPIInterface::LANCHAT_EMOTE:
 			unicodeChat = player;
-			unicodeChat.concat(L' ');
+			unicodeChat.concat(u' ');
 			unicodeChat.concat(message);
 			if (ip == m_localIP)
 				index =GadgetListBoxAddEntryText(chatWindow, unicodeChat, chatLocalActionColor, -1, -1);
@@ -881,9 +881,9 @@ void LANAPI::OnChat( UnicodeString player, UnsignedInt ip, UnicodeString message
 				}
 			}
 			
-			unicodeChat = L"[";
+			unicodeChat = u"[";
 			unicodeChat.concat(player);
-			unicodeChat.concat(L"] ");
+			unicodeChat.concat(u"] ");
 			unicodeChat.concat(message);
 			if (ip == m_localIP)
 				index =GadgetListBoxAddEntryText(chatWindow, unicodeChat, chatColor, -1, -1);

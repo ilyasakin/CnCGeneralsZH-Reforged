@@ -86,7 +86,7 @@ void W3DDisplayStringManager::postProcessLoad( void )
 
 #ifdef KRIS_BRUTAL_HACK_FOR_AIRCRAFT_CARRIER_DEBUGGING
 		UnicodeString displayNumber;
-		displayNumber.format( L"%d", i);
+		displayNumber.format( u"%d", i);
 		m_groupNumeralStrings[i]->setText( displayNumber );
 #else
  		AsciiString displayNumber;

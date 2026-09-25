@@ -867,7 +867,7 @@ void WOLQuickMatchMenuInit( WindowLayout *layout, void *userData )
 	GadgetComboBoxAddEntry( comboBoxMaxDisconnects, TheGameText->fetch("GUI:Any"), c);
 	for( i = 1; i < MAX_DISCONNECTS_COUNT; ++i )
 	{
-		s.format(L"%d", MAX_DISCONNECTS[i]);
+		s.format(u"%d", MAX_DISCONNECTS[i]);
 		GadgetComboBoxAddEntry( comboBoxMaxDisconnects, s, c );
 	}
 	Int maxDisconIndex = max(0, pref.getMaxDisconnects());
@@ -1253,13 +1253,13 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 					{
 						// Woohoo!  On to our next screen!
 						UnicodeString str;
-						str.format(L"Created staging room");
+						str.format(u"Created staging room");
 						TheGameSpyInfo->addText(str, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
 					}
 					else
 					{
 						UnicodeString s;
-						s.format(L"createStagingRoom result: %d", resp.createStagingRoom.result);
+						s.format(u"createStagingRoom result: %d", resp.createStagingRoom.result);
 						TheGameSpyInfo->addText( s, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow );
 					}
 				}
@@ -1270,13 +1270,13 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 					{
 						// Woohoo!  On to our next screen!
 						UnicodeString s;
-						s.format(L"joinStagingRoom result: %d", resp.joinStagingRoom.ok);
+						s.format(u"joinStagingRoom result: %d", resp.joinStagingRoom.ok);
 						TheGameSpyInfo->addText( s, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow );
 					}
 					else
 					{
 						UnicodeString s;
-						s.format(L"joinStagingRoom result: %d", resp.joinStagingRoom.ok);
+						s.format(u"joinStagingRoom result: %d", resp.joinStagingRoom.ok);
 						TheGameSpyInfo->addText( s, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow );
 					}
 				}
@@ -1284,7 +1284,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 			case PeerResponse::PEERRESPONSE_STAGINGROOM:
 				{
 					UnicodeString str;
-					str.format(L"Staging room list callback", resp.nick.c_str());
+					str.format(u"Staging room list callback", resp.nick.c_str());
 					TheGameSpyInfo->addText(str, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
 				}
 				break;
@@ -1455,7 +1455,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 		if (frameTime > 100 || responses.size() > 20)
 		{
 			UnicodeString munkee;
-			munkee.format(L"inQM:%d %d ms, %d messages", s_inQM, frameTime, responses.size());
+			munkee.format(u"inQM:%d %d ms, %d messages", s_inQM, frameTime, responses.size());
 			TheGameSpyInfo->addText(munkee, GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
 			PERF_LOG(("%s\n", WideCharAsUtf8( munkee.str() ).str()));
 

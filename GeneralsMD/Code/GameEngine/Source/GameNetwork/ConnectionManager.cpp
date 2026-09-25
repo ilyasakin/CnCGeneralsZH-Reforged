@@ -676,7 +676,7 @@ void ConnectionManager::processDisconnectChat(NetDisconnectChatCommandMsg *msg)
 	} else if (isPlayerConnected(playerID)) {
 		name = m_connections[playerID]->getUser()->GetName();
 	}
-	unitext.format(L"[%ls] %ls", name.str(), msg->getText().str());
+	unitext.format(u"[%ls] %ls", name.str(), msg->getText().str());
 //	DEBUG_LOG(("ConnectionManager::processDisconnectChat - got message from player %d, message is %ls\n", playerID, unitext.str()));
 	TheDisconnectMenu->showChat(unitext); // <-- need to implement this
 }
@@ -698,7 +698,7 @@ void ConnectionManager::processChat(NetChatCommandMsg *msg)
 		name = m_connections[playerID]->getUser()->GetName();
 		//DEBUG_LOG(("connection is non-NULL, using %ls\n", name.str()));
 	}
-	unitext.format(L"[%ls] %ls", name.str(), msg->getText().str());
+	unitext.format(u"[%ls] %ls", name.str(), msg->getText().str());
 //	DEBUG_LOG(("ConnectionManager::processChat - got message from player %d (mask %8.8X), message is %ls\n", playerID, msg->getPlayerMask(), unitext.str()));
 	
 	AsciiString playerName;
@@ -706,7 +706,7 @@ void ConnectionManager::processChat(NetChatCommandMsg *msg)
 	Player *player = ThePlayerList->findPlayerWithNameKey( TheNameKeyGenerator->nameToKey( playerName ) );
 	if (!player)
 	{
-		TheInGameUI->message(UnicodeString(L"%ls"), unitext.str());
+		TheInGameUI->message(UnicodeString(u"%ls"), unitext.str());
 		return;
 	}
 	
@@ -728,7 +728,7 @@ void ConnectionManager::processFile(NetFileCommandMsg *msg)
 {
 #ifdef _INTERNAL
 	UnicodeString log;
-	log.format(L"Saw file transfer: '%hs' of %d bytes from %d", msg->getPortableFilename().str(), msg->getFileLength(), msg->getPlayerID());
+	log.format(u"Saw file transfer: '%hs' of %d bytes from %d", msg->getPortableFilename().str(), msg->getFileLength(), msg->getPlayerID());
 	DEBUG_LOG(("%s\n", WideCharAsUtf8( log.str() ).str()));
 #endif
 
@@ -1863,7 +1863,7 @@ PlayerLeaveCode ConnectionManager::disconnectPlayer(Int slot) {
 		if( player )
 			TheInGameUI->playerMessage( player, left );
 		else
-			TheInGameUI->message( UnicodeString( L"%ls" ), left.str() );
+			TheInGameUI->message( UnicodeString( u"%ls" ), left.str() );
 
 		// People are boneheads. Also play a sound
 		static AudioEventRTS leftGameSound("GUIMessageReceived");
@@ -2301,10 +2301,10 @@ UnsignedShort ConnectionManager::sendFileAnnounce(AsciiString path, UnsignedByte
 	if (!theFile || !theFile->size())
 	{
 		UnicodeString log;
-		log.format(L"Not sending file '%hs' to %X\n", path.str(), playerMask);
+		log.format(u"Not sending file '%hs' to %X\n", path.str(), playerMask);
 		DEBUG_LOG(("%s\n", WideCharAsUtf8( log.str() ).str()));
 		if (TheLAN)
-			TheLAN->OnChat(UnicodeString(L"sendFile"), 0, log, LANAPI::LANCHAT_SYSTEM);
+			TheLAN->OnChat(UnicodeString(u"sendFile"), 0, log, LANAPI::LANCHAT_SYSTEM);
 		return 0;
 	}
 
@@ -2339,10 +2339,10 @@ void ConnectionManager::sendFile(AsciiString path, UnsignedByte playerMask, Unsi
 	if (!theFile || !theFile->size())
 	{
 		UnicodeString log;
-		log.format(L"Not sending file '%hs' to %X\n", path.str(), playerMask);
+		log.format(u"Not sending file '%hs' to %X\n", path.str(), playerMask);
 		DEBUG_LOG(("%s\n", WideCharAsUtf8( log.str() ).str()));
 		if (TheLAN)
-			TheLAN->OnChat(UnicodeString(L"sendFile"), 0, log, LANAPI::LANCHAT_SYSTEM);
+			TheLAN->OnChat(UnicodeString(u"sendFile"), 0, log, LANAPI::LANCHAT_SYSTEM);
 		return;
 	}
 

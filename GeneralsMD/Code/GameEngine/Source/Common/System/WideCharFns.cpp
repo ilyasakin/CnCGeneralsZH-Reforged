@@ -25,6 +25,9 @@
 
 #include "Lib/WideCharFns.h"
 
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
@@ -390,6 +393,206 @@ static size_t narrowToWideChar( const wchar_t *in, WideChar *out, size_t outCoun
 	return i;
 }
 
+/* The funnel's pieces.  See WideCharFormatV for why the POSIX side formats rather than forwards. */
+
+/** Collects the output under the header's contract: at most outCount units, the terminator counted
+	  among them; on overflow, as much as fits, terminated, and a negative return. */
+class WideCharFormatSink
+{
+public:
+	WideCharFormatSink( WideChar *out, size_t outCount ) : m_out( out ), m_count( outCount ), m_length( 0 ) {}
+	void put( WideChar c )
+	{
+		if (m_length + 1 < m_count)
+			m_out[ m_length ] = c;
+		++m_length;
+	}
+	Int finish( void )
+	{
+		if (m_length + 1 > m_count)
+		{
+			m_out[ m_count - 1 ] = 0;		// truncated: everything that fitted, terminated
+			return -1;
+		}
+		m_out[ m_length ] = 0;
+		return (Int)m_length;
+	}
+private:
+	WideChar *m_out;
+	size_t m_count;
+	size_t m_length;
+};
+
+enum FormatLength
+{
+	LENGTH_NONE, LENGTH_HH, LENGTH_H, LENGTH_L, LENGTH_LL, LENGTH_BIG_L, LENGTH_J, LENGTH_Z, LENGTH_T, LENGTH_W
+};
+
+struct FormatSpec
+{
+	FormatSpec() : left( false ), zero( false ), width( -1 ), precision( -1 ), length( LENGTH_NONE ), flagCount( 0 )
+	{
+		flags[0] = 0;
+	}
+	bool left;
+	bool zero;
+	int width;
+	int precision;
+	FormatLength length;
+	size_t flagCount;
+	char flags[ 8 ];
+};
+
+/** units, padded to the width - on the right for '-', otherwise on the left, with spaces.  (A '0'
+	  flag on a string or character is undefined in C; MSVC pads such a field with zeros, and so does
+	  this, since that is the output the Windows build gives.) */
+static void formatUnits( WideCharFormatSink &sink, const FormatSpec &spec, const WideChar *units, size_t count )
+{
+	const size_t width = spec.width < 0 ? 0 : (size_t)spec.width;
+	const size_t pad = width > count ? width - count : 0;
+	const WideChar padUnit = (spec.zero && !spec.left) ? (WideChar)'0' : (WideChar)' ';
+	if (!spec.left)
+		for (size_t i = 0; i < pad; ++i) sink.put( padUnit );
+	for (size_t i = 0; i < count; ++i)
+		sink.put( units[i] );
+	if (spec.left)
+		for (size_t i = 0; i < pad; ++i) sink.put( (WideChar)' ' );
+}
+
+static const char NULL_STRING_TEXT[] = "(null)";		// what MSVC prints for a null %s or %S
+
+static void formatWideString( WideCharFormatSink &sink, const FormatSpec &spec, const WideChar *s )
+{
+	if (s == NULL)
+	{
+		const FormatSpec copy = spec;
+		WideChar text[ sizeof( NULL_STRING_TEXT ) ];
+		size_t n = 0;
+		for (; NULL_STRING_TEXT[n] != 0; ++n) text[n] = (WideChar)NULL_STRING_TEXT[n];
+		formatUnits( sink, copy, text, spec.precision >= 0 && (size_t)spec.precision < n ? (size_t)spec.precision : n );
+		return;
+	}
+	size_t count = 0;
+	while (s[count] != 0 && (spec.precision < 0 || count < (size_t)spec.precision))
+		++count;
+	formatUnits( sink, spec, s, count );
+}
+
+static void formatNarrowString( WideCharFormatSink &sink, const FormatSpec &spec, const char *s )
+{
+	if (s == NULL)
+		s = NULL_STRING_TEXT;
+	size_t count = 0;
+	while (s[count] != 0 && (spec.precision < 0 || count < (size_t)spec.precision))
+		++count;
+	// Each byte becomes the code unit of the same value, as MSVC's "C" locale converts it.
+	WideChar stackUnits[ 256 ];
+	WideChar *units = count <= 256 ? stackUnits : (WideChar *)malloc( count * sizeof( WideChar ) );
+	if (units == NULL)
+		return;
+	for (size_t i = 0; i < count; ++i)
+		units[i] = (WideChar)(unsigned char)s[i];
+	formatUnits( sink, spec, units, count );
+	if (units != stackUnits)
+		free( units );
+}
+
+/** MSVC prints a pointer as sizeof(void*)*2 upper-case hex digits and no "0x"; the C library's %p
+	  would say "0x..." instead. */
+static void formatPointer( WideCharFormatSink &sink, const FormatSpec &spec, void *pointer )
+{
+	unsigned long long value = (unsigned long long)(uintptr_t)pointer;
+	WideChar digits[ sizeof( void * ) * 2 ];
+	for (size_t i = sizeof( digits ) / sizeof( digits[0] ); i-- > 0; value >>= 4)
+		digits[i] = (WideChar)"0123456789ABCDEF"[ value & 0xF ];
+	formatUnits( sink, spec, digits, sizeof( digits ) / sizeof( digits[0] ) );
+}
+
+/** One numeric conversion through the C library, then narrowed into the sink.  The sub-format is
+	  rebuilt in C99's spelling (MSVC's I64 becomes ll), with any '*' width and precision already
+	  taken from the arguments and written in as digits. */
+static bool formatDelegated( WideCharFormatSink &sink, const FormatSpec &spec, WideChar conversion, va_list &args )
+{
+	wchar_t sub[ 48 ];
+	size_t n = 0;
+	sub[n++] = L'%';
+	for (size_t i = 0; i < spec.flagCount; ++i)
+		sub[n++] = (wchar_t)spec.flags[i];
+	char number[ 16 ];
+	if (spec.width >= 0)
+	{
+		snprintf( number, sizeof( number ), "%d", spec.width );
+		for (size_t i = 0; number[i] != 0; ++i) sub[n++] = (wchar_t)number[i];
+	}
+	if (spec.precision >= 0)
+	{
+		sub[n++] = L'.';
+		snprintf( number, sizeof( number ), "%d", spec.precision );
+		for (size_t i = 0; number[i] != 0; ++i) sub[n++] = (wchar_t)number[i];
+	}
+	const bool isFloat = conversion == 'e' || conversion == 'E' || conversion == 'f' || conversion == 'F'
+		|| conversion == 'g' || conversion == 'G' || conversion == 'a' || conversion == 'A';
+	const bool isSigned = conversion == 'd' || conversion == 'i';
+	switch (isFloat ? LENGTH_NONE : spec.length)
+	{
+		case LENGTH_HH: sub[n++] = L'h'; sub[n++] = L'h'; break;
+		case LENGTH_H:  sub[n++] = L'h'; break;
+		case LENGTH_L:  sub[n++] = L'l'; break;
+		case LENGTH_LL: sub[n++] = L'l'; sub[n++] = L'l'; break;
+		case LENGTH_J:  sub[n++] = L'j'; break;
+		case LENGTH_Z:  sub[n++] = L'z'; break;
+		case LENGTH_T:  sub[n++] = L't'; break;
+		default: break;
+	}
+	if (isFloat && spec.length == LENGTH_BIG_L)
+		sub[n++] = L'L';
+	sub[n++] = (wchar_t)conversion;
+	sub[n] = 0;
+
+	wchar_t text[ 512 ];
+	int written;
+	if (isFloat)
+	{
+		if (spec.length == LENGTH_BIG_L)
+			written = swprintf( text, 512, sub, va_arg( args, long double ) );
+		else
+			written = swprintf( text, 512, sub, va_arg( args, double ) );
+	}
+	else
+	{
+		switch (spec.length)
+		{
+			case LENGTH_L:
+				written = isSigned ? swprintf( text, 512, sub, va_arg( args, long ) )
+					: swprintf( text, 512, sub, va_arg( args, unsigned long ) );
+				break;
+			case LENGTH_LL:
+				written = isSigned ? swprintf( text, 512, sub, va_arg( args, long long ) )
+					: swprintf( text, 512, sub, va_arg( args, unsigned long long ) );
+				break;
+			case LENGTH_J:
+				written = isSigned ? swprintf( text, 512, sub, va_arg( args, intmax_t ) )
+					: swprintf( text, 512, sub, va_arg( args, uintmax_t ) );
+				break;
+			case LENGTH_Z:
+			case LENGTH_T:
+				written = isSigned ? swprintf( text, 512, sub, va_arg( args, ptrdiff_t ) )
+					: swprintf( text, 512, sub, va_arg( args, size_t ) );
+				break;
+			default:		// hh, h and none all arrive promoted to int
+				written = isSigned ? swprintf( text, 512, sub, va_arg( args, int ) )
+					: swprintf( text, 512, sub, va_arg( args, unsigned int ) );
+				break;
+		}
+	}
+	if (written < 0)
+		return false;
+	// Narrowed explicitly.  Digits only, so every unit is ASCII - see WideCharFormatV.
+	for (int i = 0; i < written; ++i)
+		sink.put( (WideChar)text[i] );
+	return true;
+}
+
 #endif // !_WIN32
 
 Int WideCharFormatV( WideChar *out, size_t outCount, const WideChar *format, va_list args )
@@ -404,43 +607,149 @@ Int WideCharFormatV( WideChar *out, size_t outCount, const WideChar *format, va_
 
 #else
 
-	const ScopedUtf8Ctype utf8;		// see above - without this, any non-ASCII fails with EILSEQ
+	/* Off Windows this is a formatter, not a forwarder.
 
-	wchar_t wideFormat[ WIDE_SCRATCH ];
-	widenToWchar( format, wideFormat, WIDE_SCRATCH );
+		 Every wide format in this tree was written against MSVC's LEGACY wide-format meanings - there
+		 is no _CRT_STDIO_ISO_WIDE_SPECIFIERS anywhere - and C99's vswprintf reads half of them the
+		 other way round:
 
-	/* outCount, not outCount+1.  Both functions count the terminator against the buffer, so this
-		 is the same capacity MSVC is given - and it puts the truncation threshold one character
-		 earlier than MSVC's, which is the deliberate difference the header describes. */
-	wchar_t stackBuf[ WIDE_SCRATCH ];
-	wchar_t *wideBuf = stackBuf;
-	wchar_t *heapBuf = NULL;
-	if (outCount > WIDE_SCRATCH)
+		                     MSVC wide format            C99 vswprintf
+		     %s  %ls %ws     a wide string               %s: a NARROW char*
+		     %S  %hs         a narrow string             %S: a WIDE wchar_t*
+		     %c  %lc         a wide character            %c: a narrow char
+		     %C  %hc         a narrow character          %C: a wide character
+
+		 So `message(UnicodeString(L"Now playing: %s"), name.str())` - thirty-nine formats written
+		 like that - printed garbage here, width or no width.  And once WideChar is char16_t no C
+		 library function can take the argument at all.  So this does the strings and characters
+		 itself, with MSVC's meanings, and hands the C library only the conversions whose output is
+		 digits: d i o u x X e E f F g G a A.  Those are delegated one at a time and narrowed back
+		 explicitly.  In the "C" LC_NUMERIC the game keeps (it sets LC_TIME and nothing else), their
+		 output is ASCII by construction - digits, sign, radix point, hex letters, "inf", "nan" - so
+		 **every non-ASCII code unit in the result comes from the format's own text or from %s, %S,
+		 %c or %C, all of which are copied here unit by unit.**  Nothing is converted through the C
+		 library's multibyte machinery, so there is no locale behaviour left to get wrong.
+
+		 A narrow string or character becomes wide the way MSVC's "C" locale does it: each byte is the
+		 code unit of the same value.  %p prints MSVC's form, not the C library's.  %n is refused: a
+		 format that writes through a pointer has no business in a UI string, and UCRT refuses it too.
+		 The contract - truncation, the terminator, the return value - is the header's. */
+	WideCharFormatSink sink( out, outCount );
+	const WideChar *p = format;
+	while (*p != 0)
 	{
-		heapBuf = (wchar_t *)malloc( outCount * sizeof( wchar_t ) );
-		if (heapBuf == NULL)
-			return -1;
-		wideBuf = heapBuf;
-	}
+		if (*p != (WideChar)'%')
+		{
+			sink.put( *p++ );
+			continue;
+		}
+		++p;
+		if (*p == (WideChar)'%')
+		{
+			sink.put( (WideChar)'%' );
+			++p;
+			continue;
+		}
 
-	const int written = ::vswprintf( wideBuf, outCount, wideFormat, args );
+		// flags
+		FormatSpec spec;
+		for (;;)
+		{
+			const WideChar f = *p;
+			if (f == '-') spec.left = true;
+			else if (f == '0') spec.zero = true;
+			else if (f != '+' && f != ' ' && f != '#') break;
+			if (spec.flagCount < sizeof( spec.flags ) - 1)
+				spec.flags[ spec.flagCount++ ] = (char)f;
+			++p;
+		}
+		// width
+		if (*p == '*')
+		{
+			spec.width = va_arg( args, int );
+			if (spec.width < 0) { spec.left = true; spec.width = -spec.width; }
+			++p;
+		}
+		else
+		{
+			while (*p >= '0' && *p <= '9')
+				spec.width = (spec.width < 0 ? 0 : spec.width) * 10 + (int)(*p++ - '0');
+		}
+		// precision
+		if (*p == '.')
+		{
+			++p;
+			spec.precision = 0;
+			if (*p == '*')
+			{
+				spec.precision = va_arg( args, int );
+				if (spec.precision < 0) spec.precision = -1;
+				++p;
+			}
+			else
+			{
+				while (*p >= '0' && *p <= '9')
+					spec.precision = spec.precision * 10 + (int)(*p++ - '0');
+			}
+		}
+		// length, MSVC's extensions included
+		if (p[0] == 'h' && p[1] == 'h')      { spec.length = LENGTH_HH; p += 2; }
+		else if (p[0] == 'h')                { spec.length = LENGTH_H; p += 1; }
+		else if (p[0] == 'l' && p[1] == 'l') { spec.length = LENGTH_LL; p += 2; }
+		else if (p[0] == 'l')                { spec.length = LENGTH_L; p += 1; }
+		else if (p[0] == 'L')                { spec.length = LENGTH_BIG_L; p += 1; }
+		else if (p[0] == 'j')                { spec.length = LENGTH_J; p += 1; }
+		else if (p[0] == 'z')                { spec.length = LENGTH_Z; p += 1; }
+		else if (p[0] == 't')                { spec.length = LENGTH_T; p += 1; }
+		else if (p[0] == 'w')                { spec.length = LENGTH_W; p += 1; }
+		else if (p[0] == 'I' && p[1] == '6' && p[2] == '4') { spec.length = LENGTH_LL; p += 3; }
+		else if (p[0] == 'I' && p[1] == '3' && p[2] == '2') { spec.length = LENGTH_NONE; p += 3; }
+		else if (p[0] == 'I')                { spec.length = LENGTH_Z; p += 1; }
 
-	Int result;
-	if (written < 0)
-	{
-		// C99 returns negative for truncation as well as for an encoding error, which is the sign
-		// MSVC gives for truncation.  Both callers' branches want exactly that, so pass it through.
-		result = -1;
-	}
-	else
-	{
-		narrowToWideChar( wideBuf, out, outCount );
-		result = (Int)written;
-	}
+		const WideChar conversion = *p;
+		if (conversion == 0)
+			return -1;						// a format that ends inside a conversion
+		++p;
 
-	if (heapBuf != NULL)
-		free( heapBuf );
-	return result;
+		switch (conversion)
+		{
+			case 's':
+			case 'S':
+			{
+				// %s is wide unless h; %S is narrow unless l or w.
+				const bool wide = conversion == 's' ? spec.length != LENGTH_H
+					: (spec.length == LENGTH_L || spec.length == LENGTH_W);
+				if (wide)
+					formatWideString( sink, spec, va_arg( args, const WideChar * ) );
+				else
+					formatNarrowString( sink, spec, va_arg( args, const char * ) );
+				break;
+			}
+			case 'c':
+			case 'C':
+			{
+				const bool wide = conversion == 'c' ? spec.length != LENGTH_H
+					: (spec.length == LENGTH_L || spec.length == LENGTH_W);
+				const int value = va_arg( args, int );
+				const WideChar unit = wide ? (WideChar)value : (WideChar)(unsigned char)value;
+				formatUnits( sink, spec, &unit, 1 );
+				break;
+			}
+			case 'n':
+				return -1;
+			case 'p':
+				formatPointer( sink, spec, va_arg( args, void * ) );
+				break;
+			case 'd': case 'i': case 'o': case 'u': case 'x': case 'X':
+			case 'e': case 'E': case 'f': case 'F': case 'g': case 'G': case 'a': case 'A':
+				if (!formatDelegated( sink, spec, conversion, args ))
+					return -1;
+				break;
+			default:
+				return -1;						// not a conversion MSVC knows either
+		}
+	}
+	return sink.finish();
 
 #endif
 }

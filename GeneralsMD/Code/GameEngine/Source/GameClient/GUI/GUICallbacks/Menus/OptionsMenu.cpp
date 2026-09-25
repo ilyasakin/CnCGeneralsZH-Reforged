@@ -76,7 +76,7 @@
 #include "GameClient/MessageBox.h"
 
 // This is for non-RC builds only!!!
-#define VERBOSE_VERSION L"Release"
+#define VERBOSE_VERSION u"Release"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1133,7 +1133,7 @@ static void fillResolutionList( const MonitorEntry &monitor, Int wantedWidth, In
 	{
 		const DisplayModeEntry &mode = menuModes[ index ];
 		UnicodeString text;
-		text.format( L"%d x %d", mode.width, mode.height );
+		text.format( u"%d x %d", mode.width, mode.height );
 		GadgetComboBoxAddEntry( comboBoxResolution, text, MENU_ENTRY_COLOR );
 
 		if( mode.width == wantedWidth && mode.height == wantedHeight )
@@ -1161,9 +1161,9 @@ static void fillMonitorList( void )
 		const MonitorEntry &monitor = menuMonitors[ index ];
 		UnicodeString text;
 		if( monitor.name[ 0 ] )
-			text.format( L"%d: %hs", monitor.number, monitor.name );
+			text.format( u"%d: %hs", monitor.number, monitor.name );
 		else
-			text.format( L"%d", monitor.number );
+			text.format( u"%d", monitor.number );
 		GadgetComboBoxAddEntry( comboBoxMonitor, text, MENU_ENTRY_COLOR );
 
 		if( ::strcasecmp( monitor.device, current.device ) == 0 )
@@ -2061,7 +2061,7 @@ static void updateSliderReadouts( void )
 		switch( readout.kind )
 		{
 			case READOUT_PERCENT:
-				text.format( L"%d%%", position );
+				text.format( u"%d%%", position );
 				break;
 
 			case READOUT_TEXTURE:
@@ -2072,11 +2072,11 @@ static void updateSliderReadouts( void )
 				if( position == 0 )
 					text = TheGameText->fetch( "GUI:AnisotropyCardMaximum" );
 				else
-					text.format( L"%dx", position );
+					text.format( u"%dx", position );
 				break;
 
 			default:
-				text.format( L"%d", position );
+				text.format( u"%d", position );
 				break;
 		}
 		GadgetStaticTextSetText( value, text );
@@ -2268,7 +2268,7 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 		if (TheVersion)
 		{
 			UnicodeString version;
-			version.format(L"(%s) %s -- %s", versionString.str(), TheVersion->getFullUnicodeVersion().str(), TheVersion->getUnicodeBuildTime().str());
+			version.format(u"(%s) %s -- %s", versionString.str(), TheVersion->getFullUnicodeVersion().str(), TheVersion->getUnicodeBuildTime().str());
 			GadgetStaticTextSetText( labelVersion, version );
 		}
 		else

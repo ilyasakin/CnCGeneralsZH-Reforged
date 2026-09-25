@@ -1560,7 +1560,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		Dict d;
 		d.setAsciiString(TheKey_playerName, "ReplayObserver");
 		d.setBool(TheKey_playerIsHuman, TRUE);
-		d.setUnicodeString(TheKey_playerDisplayName, UnicodeString(L"Observer"));
+		d.setUnicodeString(TheKey_playerDisplayName, UnicodeString(u"Observer"));
 		const PlayerTemplate* pt;
 		pt = ThePlayerTemplateStore->findPlayerTemplate( TheNameKeyGenerator->nameToKey("FactionObserver") );
 		if (pt)
@@ -2754,7 +2754,7 @@ void GameLogic::processCommandList( CommandList *list )
 			{
 				Player *player = ThePlayerList->getNthPlayer(crcIt->first);
 				DEBUG_LOG(("CRC from player %d (%s) = %X\n", crcIt->first,
-					WideCharAsUtf8( player?player->getPlayerDisplayName().str():L"<NONE>" ).str(), crcIt->second));
+					WideCharAsUtf8( player?player->getPlayerDisplayName().str():u"<NONE>" ).str(), crcIt->second));
 			}
 #endif DEBUG_LOGGING
 			TheNetwork->setSawCRCMismatch();

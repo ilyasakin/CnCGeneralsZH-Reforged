@@ -47,7 +47,6 @@
 #include "Lib/WideCharFns.h"
 #include "Common/CriticalSection.h"
 
-#include <wctype.h>	// iswspace; Apple's headers happen to supply it, glibc's do not
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -66,7 +65,7 @@ void UnicodeString::validate() const
 	if (!m_data) return;
 	DEBUG_ASSERTCRASH(m_data->m_refCount > 0, ("m_refCount is zero"));
 	DEBUG_ASSERTCRASH(m_data->m_numCharsAllocated > 0, ("m_numCharsAllocated is zero"));
-	DEBUG_ASSERTCRASH(wcslen(m_data->peek())+1 <= m_data->m_numCharsAllocated,("str is too long for storage"));
+	DEBUG_ASSERTCRASH(WideCharLen(m_data->peek())+1 <= m_data->m_numCharsAllocated,("str is too long for storage"));
 }
 #endif
 
@@ -90,9 +89,9 @@ void UnicodeString::ensureUniqueBufferOfSize(int numCharsNeeded, Bool preserveDa
 	{
 		// no buffer manhandling is needed (it's already large enough, and unique to us)
 		if (strToCopy)
-			wcscpy(m_data->peek(), strToCopy);
+			WideCharCpy(m_data->peek(), strToCopy);
 		if (strToCat)
-			wcscat(m_data->peek(), strToCat);
+			WideCharCat(m_data->peek(), strToCat);
 		return;
 	}
 
@@ -109,16 +108,16 @@ void UnicodeString::ensureUniqueBufferOfSize(int numCharsNeeded, Bool preserveDa
 #endif
 
 	if (m_data && preserveData)
-		wcscpy(newData->peek(), m_data->peek());
+		WideCharCpy(newData->peek(), m_data->peek());
 	else
 		newData->peek()[0] = 0;
 
 	// do these BEFORE releasing the old buffer, so that self-copies
 	// or self-cats will work correctly.
 	if (strToCopy)
-		wcscpy(newData->peek(), strToCopy);
+		WideCharCpy(newData->peek(), strToCopy);
 	if (strToCat)
-		wcscat(newData->peek(), strToCat);
+		WideCharCat(newData->peek(), strToCat);
 
 	releaseBuffer();
 	m_data = newData;
@@ -146,7 +145,7 @@ void UnicodeString::releaseBuffer()
 // -----------------------------------------------------
 UnicodeString::UnicodeString(const WideChar* s) : m_data(0)
 {
-	int len = wcslen(s);
+	int len = WideCharLen(s);
 	if (len)
 	{
 		ensureUniqueBufferOfSize(len + 1, false, s, NULL);
@@ -176,7 +175,7 @@ void UnicodeString::set(const WideChar* s)
 	validate();
 	if (!m_data || s != peek())
 	{
-		int len = s ? wcslen(s) : 0;
+		int len = s ? WideCharLen(s) : 0;
 		if (len)
 		{
 			ensureUniqueBufferOfSize(len + 1, false, s, NULL);
@@ -215,7 +214,7 @@ void UnicodeString::translate(const AsciiString& stringSrc)
 void UnicodeString::concat(const WideChar* s)
 {
 	validate();
-	int addlen = wcslen(s);
+	int addlen = WideCharLen(s);
 	if (addlen == 0)
 		return;	// my, that was easy
 
@@ -240,7 +239,7 @@ void UnicodeString::trim()
 		const WideChar *c = peek();
 
 		//	Strip leading white space from the string.
-		while (c && iswspace(*c))
+		while (c && WideCharIsSpace(*c))
 		{
 			c++;
 		}
@@ -252,10 +251,10 @@ void UnicodeString::trim()
 		if (m_data) // another check, because the previous set() could erase m_data
 		{
 			//	Clip trailing white space from the string.
-			int len = wcslen(peek());
+			int len = WideCharLen(peek());
 			for (int index = len-1; index >= 0; index--)
 			{
-				if (iswspace(getCharAt(index)))
+				if (WideCharIsSpace(getCharAt(index)))
 				{
 					removeLastChar();
 				}
@@ -275,7 +274,7 @@ void UnicodeString::removeLastChar()
 	validate();
 	if (m_data)
 	{
-		int len = wcslen(peek());
+		int len = WideCharLen(peek());
 		if (len > 0)
 		{
 			ensureUniqueBufferOfSize(len+1, true, NULL, NULL);
@@ -339,21 +338,21 @@ Bool UnicodeString::nextToken(UnicodeString* tok, UnicodeString delimiters)
 		return false;
 
 	if (delimiters.isEmpty())
-		delimiters = UnicodeString(L" \t\n\r");
+		delimiters = UnicodeString(u" \t\n\r");
 
 	Int offset;
 
-	offset = wcsspn(peek(), delimiters.str());
+	offset = WideCharSpn(peek(), delimiters.str());
 	WideChar* start = peek() + offset;
 
-	offset = wcscspn(start, delimiters.str());
+	offset = WideCharCSpn(start, delimiters.str());
 	WideChar* end = start + offset;
 
 	if (end > start)
 	{
 		Int len = end - start;
 		WideChar* tmp = tok->getBufferForRead(len + 1);
-		memcpy(tmp, start, len*2);
+		memcpy(tmp, start, len*sizeof(WideChar));	// was len*2: the same bytes while WideChar is two
 		tmp[len] = 0;
 
 		this->set(end);

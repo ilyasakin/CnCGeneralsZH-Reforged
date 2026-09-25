@@ -170,7 +170,7 @@ you start. That commit is the lock.
 | A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | done: configure on arm64; the four libraries its first acceptance named now build (was -95) | |
 | A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | done: merged, including the zlib reopen (was -21) | |
 | A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | done: merged with A2 (`build.sh`) (was -21) | |
-| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | in progress: steps 1-3 merged; the typedef flip waits on `gameengine` compiling (was -3a) | |
+| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | flip committed on `feature/mac-port-B1-flip`, awaiting merge; `.csf` round trip still open | -47 |
 | B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | done: merged; not verified on Windows (was -8d) | |
 | B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | done: merged; later CRT spellings land in `MSVCCompat.h` as found (was -95) | |
 | B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
@@ -183,7 +183,7 @@ you start. That commit is the lock.
 | B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | done: merged (was -83) | |
 | B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | done: merged (was -83) | |
 | B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | done: merged; not verified on Windows (was -8d) | |
-| B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress: write-up and first removals merged; live `%ls` sites remain (was -3a) | |
+| B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | superseded for correctness by B1's funnel (2026-09-26); remaining removals optional | |
 | B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | **done** — wwdebug 3/3, wwmath 36/36; not verified on Windows | -18 |
 | B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) — **see defect #7** | M1 | A1 | done: macOS half and the Windows flip (decision 1) merged; not verified on Windows | -47 |
 | B19 | [CPU detection and the tick clock on arm64](tasks/B19-cpu-detection-arm64.md) | M1 | B5 | done: merged; tier decided (option (c), decision 2); verifiable once `gameengine` compiles | -a9 |
@@ -446,8 +446,16 @@ process's locale is whatever the entry point asks for, so this is written down b
   comma-decimal locale the INI parser (`INI.cpp:1628`, `:1637`: `sscanf(token, "%f", ...)`) would read
   `1.5` as `1`, report success and carry on, which is a determinism
   bug keyed on the user's region settings. It would not be a crash.
-- **`LC_CTYPE` is what `_strlwr`, `_strupr` and `_wcsicmp` in `MSVCCompat.h` assume is "C"**. They
-  build hash keys and sort orders that have to match across machines.
+- **`LC_CTYPE` is what `_strlwr` and `_strupr` in `MSVCCompat.h` assume is "C"**. They
+  build hash keys and sort orders that have to match across machines. (`_wcsicmp` was here too;
+  since B1 `UnicodeString::compareNoCase` is `WideCharICmp`, which folds ASCII whatever the locale.)
+- **`WideCharIsSpace` and its neighbours in `WideCharFns.cpp` are the C library's `isw*`, and
+  already differ between Windows and POSIX in the "C" locale.** Measured on macOS: `iswspace` is
+  true for tab, newline and space and false for U+00A0, U+2000-U+200A, U+2028 and U+3000. MSVC's
+  classifies characters above U+00FF from Windows' own Unicode tables rather than the locale, so it
+  is expected to call most of those spaces - expected, not measured: there is no Windows here. `GameText.cpp` trims `.str` text with it, so a
+  string file with a non-breaking or ideographic space at an edge loads differently. Not
+  measured on glibc. Pre-existing, not B1's; recorded so nobody widens `LC_CTYPE` to "fix" it.
 - **Text that comes back from an `LC_TIME` call is decoded as UTF-8 explicitly**
   (`WideCharFromUtf8`), never with `mbstowcs`, which decodes by `LC_CTYPE`.
 
@@ -816,6 +824,15 @@ These are not style preferences. Breaking one of them costs somebody else a day.
 
 7. **Do not touch `CHANGELOG.md`** for port work. It is written for players, and none of this is
    visible to one until M4. The milestone that ships gets one entry.
+
+8. **Non-ASCII in a literal is written as a `\u` escape, never as raw bytes.** MSVC reads source in
+   the ANSI code page (this tree does not pass `/utf-8`) and clang reads UTF-8, so the same bytes are
+   different characters on the two compilers - and inside a `UnicodeString`, different CRC bytes.
+   Write `u'\u20AC'`, not the euro sign. `widechar_check` fails on any byte above 0x7F inside any
+   string or character literal in `GameEngine`, `GameEngineDevice`, `WWVegas`, `Libraries/Include`,
+   `Main` and `Tests`, in every branch; an exception goes in `Tools/widechar_check_allow.txt` with its
+   reason. Comments are not checked. Found by B1: `Keyboard.cpp`'s UK euro key had held three raw
+   bytes for years, and MSVC read them as one wrong character.
 
 ## Open questions that need an answer before the milestone that depends on them
 

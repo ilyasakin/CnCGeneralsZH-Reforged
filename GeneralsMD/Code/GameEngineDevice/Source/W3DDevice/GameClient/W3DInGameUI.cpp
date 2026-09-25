@@ -345,7 +345,7 @@ static void loadText( char *filename, GameWindow *listboxText )
 		line.translate(buffer);
 		line.trim();
 		if (line.isEmpty())
-			line = UnicodeString(L" ");
+			line = UnicodeString(u" ");
 		GadgetListBoxAddEntryText(listboxText, line, color, -1, -1);
 	}  // end while
 
@@ -1161,7 +1161,7 @@ void W3DInGameUI::drawOrderStep( const OrderHint& hint, const ICoord2D& tip, Uns
 			number->setFont( TheWindowManager->winFindFont( AsciiString( "Arial" ),
 																TheGlobalLanguageData->adjustFontSize( ORDER_STEP_POINT_SIZE ), TRUE ) );
 			UnicodeString text;
-			text.format( L"%d", hint.step );
+			text.format( u"%d", hint.step );
 			number->setText( text );
 		}
 

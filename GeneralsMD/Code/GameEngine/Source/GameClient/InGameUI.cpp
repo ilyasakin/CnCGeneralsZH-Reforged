@@ -200,7 +200,7 @@ static void formatStripSeconds( UnicodeString *text, Int seconds )
 	if( seconds < 0 )
 		seconds = 0;
 
-	text->format( L"%ds", seconds );
+	text->format( u"%ds", seconds );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2041,7 +2041,7 @@ static void fillSpectatorPlayers( const std::vector< SpectatorStats > &players, 
 		const Image *portrait = side ? side->getEnabledImage() : NULL;
 		const Int value = stats.*stat.value;
 
-		std::wstring name( stats.player->getPlayerDisplayName().str() );
+		WideCharString name( stats.player->getPlayerDisplayName().str() );
 		if( name.size() > PLAYER_NAME_CHARS )
 			name.resize( PLAYER_NAME_CHARS );
 
@@ -2126,7 +2126,7 @@ static std::string spectatorSide( void )
 /** A player's name as the page writes it, cut where there is no clipping to hide the rest. */
 static std::string spectatorName( Player *player )
 {
-	std::wstring name( player->getPlayerDisplayName().str() );
+	WideCharString name( player->getPlayerDisplayName().str() );
 	if( name.size() > PLAYER_NAME_CHARS )
 		name.resize( PLAYER_NAME_CHARS );
 	return WideCharStringToMultiByte( name.c_str() );
@@ -3757,7 +3757,7 @@ void InGameUI::update( void )
 				// first grab the letter we want to add
 				WideChar tempWChar = m_militarySubtitle->subtitle.getCharAt(m_militarySubtitle->index);
 				// if that letter is a return, add a new line
-				if(tempWChar == L'\n')
+				if(tempWChar == u'\n')
 				{
 					// increment the Block position's Y value to draw it on the next line
 					Int height;
@@ -5961,21 +5961,21 @@ void InGameUI::createMouseoverHint( const GameMessage *msg )
 				{
 					if (!teamName.isEmpty())
 					{
-						str.format(L"%hs(%hs): %s", teamName.str(), objName.str(), str.str());
+						str.format(u"%hs(%hs): %s", teamName.str(), objName.str(), str.str());
 					}
 					else
 					{
-						str.format(L"%hs: %s", objName.str(), str.str());
+						str.format(u"%hs: %s", objName.str(), str.str());
 					}
 				}
 				else
 				{
 					if (!teamName.isEmpty())
 					{
-						str.format(L"%hs: %s", teamName.str(), str.str());
+						str.format(u"%hs: %s", teamName.str(), str.str());
 					}
 				}
-				str.format(L"%s - %hs", str.str(), stateName.str());
+				str.format(u"%s - %hs", str.str(), stateName.str());
 
 			}
 #endif
@@ -5996,7 +5996,7 @@ void InGameUI::createMouseoverHint( const GameMessage *msg )
 				UnicodeString tooltip;
 				//if (TheRecorder->isMultiplayer() && player->getPlayerType() == PLAYER_HUMAN)
 				if (TheRecorder->isMultiplayer() && player->isPlayableSide())
-					tooltip.format(L"%s\n%s", str.str(), ((Player *)player)->getPlayerDisplayName().str());
+					tooltip.format(u"%s\n%s", str.str(), ((Player *)player)->getPlayerDisplayName().str());
 				else
 					tooltip = str;
 
@@ -7661,13 +7661,13 @@ void InGameUI::postDraw( void )
 					Int sec = readySecs - min*60;
 					
 					if (!info->isCountdown)
-						line.format(L"%s %d", info->timerText.str(), framesLeft);
+						line.format(u"%s %d", info->timerText.str(), framesLeft);
 					else
 					{
 						if (sec >= 10)
-							line.format(L"%s %d:%d", info->timerText.str(), min, sec);
+							line.format(u"%s %d:%d", info->timerText.str(), min, sec);
 						else
-							line.format(L"%s %d:0%d", info->timerText.str(), min, sec);
+							line.format(u"%s %d:0%d", info->timerText.str(), min, sec);
 					}
 					info->displayString->setText(line);
 				}
@@ -9219,7 +9219,7 @@ void InGameUI::drawPeaceCountdown( UnsignedInt framesLeft )
 									TRUE ) );
 
 	UnicodeString text;
-	text.format( L"%d", (Int)secondsLeft );
+	text.format( u"%d", (Int)secondsLeft );
 	m_peaceCountdownDisplayString->setText( text );
 
 	// the same string the plate at the top uses, in its own size: the two are never up together
@@ -9321,7 +9321,7 @@ void InGameUI::drawHudOverlay( void )
 	getLocalWallClock( &wallClock );
 
 	UnicodeString text;
-	text.format( L"%02d:%02d   %02d:%02d:%02d(%02d:%02d:%02d)   %dhz(%dfps) %s",
+	text.format( u"%02d:%02d   %02d:%02d:%02d(%02d:%02d:%02d)   %dhz(%dfps) %s",
 							 wallClock.wHour, wallClock.wMinute,
 							 gameSecs / 3600, (gameSecs / 60) % 60, gameSecs % 60,
 							 realSecs / 3600, (realSecs / 60) % 60, realSecs % 60,
@@ -9329,7 +9329,7 @@ void InGameUI::drawHudOverlay( void )
 							 TheDisplay->getRendererName() );
 
 	UnicodeString frameText;
-	frameText.format( L"   frame %d", (Int)logicFrame );
+	frameText.format( u"   frame %d", (Int)logicFrame );
 	text.concat( frameText );
 
 	// in a network game, how far ahead the room can play without waiting on anybody, out of the
@@ -9338,7 +9338,7 @@ void InGameUI::drawHudOverlay( void )
 	if( TheNetwork != NULL )
 	{
 		UnicodeString netText;
-		netText.format( L"   ready %d/%d   room %dfps", (Int)TheNetwork->getFramesReady(),
+		netText.format( u"   ready %d/%d   room %dfps", (Int)TheNetwork->getFramesReady(),
 										(Int)TheNetwork->getRunAhead(), (Int)TheNetwork->getFrameRate() );
 		text.concat( netText );
 	}
@@ -9350,7 +9350,7 @@ void InGameUI::drawHudOverlay( void )
 	if( unitCap > 0 && localPlayer && !localPlayer->isPlayerObserver() )
 	{
 		UnicodeString units;
-		units.format( L"   %d/%d units", localPlayer->countUnitsTowardCap(), unitCap );
+		units.format( u"   %d/%d units", localPlayer->countUnitsTowardCap(), unitCap );
 		text.concat( units );
 	}
 
@@ -9877,7 +9877,7 @@ void InGameUI::drawStripQuantity( Int which, Int x, Int y, Int w, Int quantity )
 	}
 
 	UnicodeString text;
-	text.format( L"x%d", quantity );
+	text.format( u"x%d", quantity );
 	quantityString->setText( text );
 
 	Int textWidth = 0, textHeight = 0;
@@ -10104,7 +10104,7 @@ void InGameUI::drawSuperweaponStrip( void )
 			}
 
 			UnicodeString text;
-			text.format( L"+%d", hidden );
+			text.format( u"+%d", hidden );
 			overflow->setText( text );
 
 			Int textWidth = 0, textHeight = 0;
@@ -10639,7 +10639,7 @@ std::string InGameUI::scoreboardHtml( void )
 			// a free for all is one section of players with no team between them
 			UnicodeString label = TheGameText->fetch( "GUI:ScoreboardPlayer" );
 			if( seats[ first ].section >= 0 )
-				label.format( L"%s %s", TheGameText->fetch( "GUI:ScoreboardTeam" ).str(), scoreboardTeamLabel( seats[ first ].slot ).str() );
+				label.format( u"%s %s", TheGameText->fetch( "GUI:ScoreboardTeam" ).str(), scoreboardTeamLabel( seats[ first ].slot ).str() );
 			band[ "side" ] = "team";
 			band[ "label" ] = WideCharStringToMultiByte( label.str() );
 		}
@@ -12453,7 +12453,7 @@ void InGameUI::drawProductionStripColumn( Int left, Int bottomY )
 		}
 
 		UnicodeString text;
-		text.format( L"+%d", hidden );
+		text.format( u"+%d", hidden );
 		overflow->setText( text );
 
 		Int textWidth = 0, textHeight = 0;
@@ -13384,19 +13384,19 @@ enum
 //-------------------------------------------------------------------------------------------------
 static void putTooltipLines( const UnicodeString &text, std::vector< HtmlValues > &lines )
 {
-	const std::wstring whitespace = L" \t\r";
-	const std::wstring whole = text.str();
+	const WideCharString whitespace = u" \t\r";
+	const WideCharString whole = text.str();
 	Bool gapOwed = FALSE;
 	for( size_t start = 0; start <= whole.size(); )
 	{
-		size_t end = whole.find( L'\n', start );
-		if( end == std::wstring::npos )
+		size_t end = whole.find( u'\n', start );
+		if( end == WideCharString::npos )
 			end = whole.size();
-		std::wstring line = whole.substr( start, end - start );
+		WideCharString line = whole.substr( start, end - start );
 		start = end + 1;
 
 		const size_t first = line.find_first_not_of( whitespace );
-		if( first == std::wstring::npos )
+		if( first == WideCharString::npos )
 		{
 			gapOwed = !lines.empty();
 			continue;
@@ -13412,9 +13412,9 @@ static void putTooltipLines( const UnicodeString &text, std::vector< HtmlValues 
 		}
 
 		HtmlValues entry;
-		const size_t colon = line.find( L':' );
-		const size_t valueStart = colon == std::wstring::npos ? colon : line.find_first_not_of( whitespace, colon + 1 );
-		if( colon != std::wstring::npos && colon <= TOOLTIP_LABEL_LIMIT && valueStart != std::wstring::npos )
+		const size_t colon = line.find( u':' );
+		const size_t valueStart = colon == WideCharString::npos ? colon : line.find_first_not_of( whitespace, colon + 1 );
+		if( colon != WideCharString::npos && colon <= TOOLTIP_LABEL_LIMIT && valueStart != WideCharString::npos )
 		{
 			entry[ "kind" ] = "row";
 			entry[ "label" ] = WideCharStringToMultiByte( line.substr( 0, colon ).c_str() );
@@ -13434,9 +13434,9 @@ static void putTooltipLines( const UnicodeString &text, std::vector< HtmlValues 
 //-------------------------------------------------------------------------------------------------
 static std::string tooltipName( const UnicodeString &label )
 {
-	std::wstring name = label.str();
-	const size_t marker = name.find( L'&' );
-	if( marker != std::wstring::npos )
+	WideCharString name = label.str();
+	const size_t marker = name.find( u'&' );
+	if( marker != WideCharString::npos )
 		name.erase( marker, 1 );
 	return WideCharStringToMultiByte( name.c_str() );
 }

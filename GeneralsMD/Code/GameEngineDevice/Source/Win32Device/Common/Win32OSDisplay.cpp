@@ -107,7 +107,8 @@ OSDisplayButtonType OSDisplayWarningBox(AsciiString p, AsciiString m, UnsignedIn
 	Int returnResult = 0;
 	if (TheSystemIsUnicode) 
 	{
-		returnResult = ::MessageBoxW(NULL, mesgStr.str(), promptStr.str(), windowsOptionsFlags);
+		// Win32's W API: WideChar and WCHAR are the same two bytes on Windows, which makes the cast honest.
+		returnResult = ::MessageBoxW(NULL, reinterpret_cast<LPCWSTR>(mesgStr.str()), reinterpret_cast<LPCWSTR>(promptStr.str()), windowsOptionsFlags);
 	} 
 	else 
 	{

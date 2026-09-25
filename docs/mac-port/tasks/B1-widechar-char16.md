@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** in progress: steps 1-3 merged; the typedef flip waits on `gameengine` compiling (was -3a)
+- **Status:** flip committed on `feature/mac-port-B1-flip`, awaiting merge (-47). Open: the `.csf` round trip under "Done when"; Windows verification (`WINDOWS-DEBT.md`, B1 rows)
 - **Size:** 48 files mention `WideChar`, 724 `L"` literals in engine + device + Main, ~20 distinct
   `wcs*` calls
 
@@ -208,6 +208,53 @@ are easy to conflate and only one of them is on the lockstep path.
 `render2dsentence.cpp` has 2, so D1's later PRs will touch these files. B1 goes first — D1's PRs
 2–8 need a Windows machine for their pixel comparison and are stalled after PR1, so there is no
 live race. Whoever resumes D1 rebases onto the retype.
+
+## The flip, 2026-09-26
+
+One commit: `typedef char16_t WideChar` in `Lib/WideChar.h` (which `BaseType.h` includes, so the
+`static_assert` lives there rather than in `BaseType.h` itself - WW3D2 needs the type without the
+engine's preamble), every engine-text `L"..."`/`L'x'` to `u`, the remaining `wcs*`/`isw*`/`tow*`
+calls onto `Lib/WideCharFns.h`, `std::wstring` to `WideCharString` (a `std::basic_string<WideChar>`
+in the GameSpy threads only - `UnicodeString` is untouched, per "Do not"), WW3D2's text renderer
+retyped from `WCHAR`, and a commented `reinterpret_cast` at each Win32 `W` call.
+
+**What proves it, and what each proof cannot see:**
+
+- `widechar_crc_gate`: 11 `UnicodeString`s through the real `Xfer::xferUnicodeString` and `XferCRC`,
+  against a table computed independently in Python. (A) the pre-flip tree built as MSVC's model
+  (`-fshort-wchar` and a two-byte CRT shim), (B) the post-flip tree, native: all 11 lines identical.
+  (C) the pre-flip tree at native four-byte `wchar_t`: matches the four-byte column and differs from
+  (A) in 9 of 11 rows, so the gate can tell the widths apart. It cannot see text that reaches the CRC
+  by any other route than `xferUnicodeString`, or a Windows-only code path.
+- `widechar_format_selfcheck`: the POSIX formatter against MSVC's documented legacy wide `printf`.
+  On Windows it would check the documentation against `_vsnwprintf`; that half has not run.
+- `widechar_check` (ctest, POSIX): no `wchar_t` text in the POSIX view of 1,553 files, and no raw
+  non-ASCII byte in any literal in the engine, in any branch. Reads text, not preprocessor output.
+- clang `-fsyntax-only`, every `gameengine` TU, all errors: 503 of 602 compile clean before, 518
+  after. Three new messages, all in files that already fail on POSIX: the Win32 type name in a new
+  cast, on a line whose Win32 call already failed there.
+- mingw-as-MSVC (`x86_64-w64-mingw32-g++ -D_MSC_VER=1930`, two-byte `wchar_t`, nothing suppressed),
+  all 848 `.cpp` in `GameEngine/Source`, `GameEngineDevice/Source`, `Main`, `WW3D2`: first pass found
+  14 new errors, every one a `WideChar *` handed to a `wchar_t` parameter; after the casts, 641 clean
+  before and after and the error set identical. GCC is not MSVC; 207 files fail for unrelated
+  reasons and are seen only as far as GCC's recovery goes; `Tools/` is not in the CMake build and was
+  not compiled at all. **The first run of this sweep used `-fpermissive -w` and reported nothing -
+  those flags turn exactly this class of error into silence. Never run it with them.**
+- `windows_view_diff.py`: 98 of 99 touched C/C++ files differ as MSVC sees them, which is the flip
+  itself; each class has a `WINDOWS-DEBT.md` row.
+
+**Found on the way:**
+
+- `Keyboard.cpp:468`, the UK layout's AltGr+4, held EF BF BD - a euro sign lost to some earlier
+  re-encoding. It is `u'\u20AC'` now; `CHANGELOG.md` says so, being player-visible. Rule 8 of the
+  plan and `widechar_check`'s second half exist because of it.
+- `GameState.cpp` passed `sizeof(buffer)` - bytes - to `GetDateFormatW`/`GetTimeFormatW`, which take
+  characters. Fixed with the retype.
+- `EarlyCommandLine.h` reads `GetCommandLineW` before the parser exists and stays `wchar_t`, and so do
+  the literals passed to it (`Debug.cpp`, `JobSystem.cpp`, one test). A script flipped those too and
+  they were put back by hand: "do not let a script land unreviewed" earned its place.
+- `iswspace` in the "C" locale is ASCII-only on macOS; MSVC's is not. Pre-existing, recorded under
+  the plan's locale rule.
 
 ## Do
 

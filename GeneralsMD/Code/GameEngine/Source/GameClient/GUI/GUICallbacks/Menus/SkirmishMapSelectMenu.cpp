@@ -103,9 +103,9 @@ static void addRandomMapRows( GameWindow *listbox )
 	// archives, and a missing label would read "MISSING: GUI:RandomMap" on screen.
 	static const WideChar *theRandomMapRowLabels[RANDOM_MAP_SIZE_COUNT] =
 	{
-		L"Random map, small - new seed every time (8)",
-		L"Random map - new seed every time (8)",
-		L"Random map, large - new seed every time (8)"
+		u"Random map, small - new seed every time (8)",
+		u"Random map - new seed every time (8)",
+		u"Random map, large - new seed every time (8)"
 	};
 
 	Color color = GameMakeColor( 255, 255, 255, 255 );

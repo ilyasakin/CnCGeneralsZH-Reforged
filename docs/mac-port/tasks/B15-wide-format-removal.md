@@ -3,10 +3,32 @@
 - **Milestone:** M1
 - **Depends on:** nothing (no typedef flip needed)
 - **Blocks:** nothing, but it clears B1's last loose end
-- **Status:** in progress: write-up and first removals merged; live `%ls` sites remain (was -3a)
+- **Status:** **superseded for correctness; the remaining removals are optional cleanup.** See the 2026-09-26 section below.
 - **Size:** 32 specifiers in 24 formats. Sized as a morning.
 
-## Why
+## Decided 2026-09-26: the funnel does it, so this task is cleanup
+
+The answer below was "no, remove the sites instead". B1 reversed it, for a reason this task's
+analysis could not see: it counted `%ls`, `%ws` and `%S`, and missed **39 wide formats that pass a
+`WideChar*` through a plain `%s`**, e.g. `message(UnicodeString(L"Now playing: %s"), name)`. MSVC
+reads a wide format with its LEGACY meanings, where `%s` is wide and `%S` is narrow (there is no
+`_CRT_STDIO_ISO_WIDE_SPECIFIERS` in this tree). C99's `vswprintf`, which the POSIX funnel used to
+call, reads them the other way round, so those 39 printed garbage on POSIX with or without B1's
+flip. Measured: the old funnel printed `[%s]` of a Turkish name as `[O]`.
+
+So `WideCharFormatV` now implements MSVC's legacy meanings on POSIX: strings and characters are
+formatted by hand, and only numeric conversions are delegated. That makes every site in this task
+correct as written, along with the 39 and any written later. `Tests/test_widechar_format.cpp` is
+the check; on Windows it checks the same expectations against the real `_vsnwprintf`.
+
+**What is left here is optional.** The removals below still read better: `format(L"%ls", x)` is an
+assignment written as a printf. But no site is wrong any more, and none needs doing before B1's
+flip. `ConnectionManager.cpp:706`/`:718` must still be left alone.
+
+This task's analysis also said `%S` on POSIX "runs through `mbrtowc`". It does not: in C99 `%S` is a
+wide string. Corrected in `B1-wide-format-sites.md`.
+
+## Why (the original analysis, kept)
 
 The answer to "should the funnel parse the format and consume the `va_list`?" is **no — remove the
 sites instead.** Analysis at `docs/mac-port/B1-wide-format-sites.md`.

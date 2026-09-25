@@ -168,7 +168,7 @@ static void populateSkirmishBattleHonors( void );
 // x0.75 is 22.5, which a whole frame rate cannot hold, so it runs at 23.  The preference keeps the
 // frame rate, so one saved by the old 15 to 60 slider lands on the nearest entry.
 static const Int SKIRMISH_GAME_SPEEDS[] = { 15, 23, 30, 45, 60 };
-static const WideChar *SKIRMISH_GAME_SPEED_CAPTIONS[] = { L"x0.5", L"x0.75", L"x1", L"x1.5", L"x2" };
+static const WideChar *SKIRMISH_GAME_SPEED_CAPTIONS[] = { u"x0.5", u"x0.75", u"x1", u"x1.5", u"x2" };
 static const Int SKIRMISH_GAME_SPEED_COUNT = sizeof( SKIRMISH_GAME_SPEEDS ) / sizeof( SKIRMISH_GAME_SPEEDS[ 0 ] );
 
 static Int nearestGameSpeedIndex( Int framesPerSecond )
@@ -1852,25 +1852,25 @@ void populateSkirmishBattleHonors(void)
 	GameWindow *streakWindow = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY("SkirmishGameOptionsMenu.wnd:StaticTextStreakValue") );
 	if (streakWindow)
 	{
-		uStr.format(L"%d", stats.getWinStreak());
+		uStr.format(u"%d", stats.getWinStreak());
 		GadgetStaticTextSetText(streakWindow, uStr);
 	}
 	GameWindow *bestStreakWindow = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY("SkirmishGameOptionsMenu.wnd:StaticTextBestStreakValue") );
 	if (bestStreakWindow)
 	{
-		uStr.format(L"%d", stats.getBestWinStreak());
+		uStr.format(u"%d", stats.getBestWinStreak());
 		GadgetStaticTextSetText(bestStreakWindow, uStr);
 	}
 	GameWindow *winsWindow = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY("SkirmishGameOptionsMenu.wnd:StaticTextWinsValue") );
 	if (winsWindow)
 	{
-		uStr.format(L"%d", stats.getWins());
+		uStr.format(u"%d", stats.getWins());
 		GadgetStaticTextSetText(winsWindow, uStr);
 	}
 	GameWindow *lossesWindow = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY("SkirmishGameOptionsMenu.wnd:StaticTextLossesValue") );
 	if (lossesWindow)
 	{
-		uStr.format(L"%d", stats.getLosses());
+		uStr.format(u"%d", stats.getLosses());
 		GadgetStaticTextSetText(lossesWindow, uStr);
 	}
 
@@ -2068,7 +2068,7 @@ void populateSkirmishBattleHonors(void)
 
 	// TEST FOR STREAK HONOR
 	Int streak = stats.getBestWinStreak();
-	uStr.format(L"%10d", streak);
+	uStr.format(u"%10d", streak);
 	if (streak >= 1000)
 	{
 		InsertBattleHonor(list, TheMappedImageCollection->findImageByName("HonorStreak_1000"), TRUE,
@@ -2107,7 +2107,7 @@ void populateSkirmishBattleHonors(void)
 
 	// TEST FOR DOMINATION HONOR
 	Int totalWins = stats.getWins();
-	uStr.format(L"%10d", totalWins);
+	uStr.format(u"%10d", totalWins);
 	if (totalWins >= 10000)
 	{
 		InsertBattleHonor(list, TheMappedImageCollection->findImageByName("Domination_10000"), TRUE,

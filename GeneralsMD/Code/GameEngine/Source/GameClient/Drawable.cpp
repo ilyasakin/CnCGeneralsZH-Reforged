@@ -3957,7 +3957,7 @@ void Drawable::drawConstructPercent( const IRegion2D *healthBarRegion )
 	if( m_lastConstructDisplayed != INT_TO_REAL( secondsLeft ) )
 	{
 		UnicodeString buffer;
-		buffer.format( L"%ds", secondsLeft );
+		buffer.format( u"%ds", secondsLeft );
 		m_constructDisplayString->setText( buffer );
 
 		// record this value as our last displayed so we don't un-necessarily rebuild the string
@@ -4023,7 +4023,7 @@ void Drawable::drawSupplyCash( const IRegion2D *healthBarRegion )
 	if( m_lastSupplyCashDisplayed != cash )
 	{
 		UnicodeString buffer;
-		buffer.format( L"$%d", cash );
+		buffer.format( u"$%d", cash );
 		m_supplyCashDisplayString->setText( buffer );
 		m_lastSupplyCashDisplayed = cash;
 	}
@@ -4440,7 +4440,7 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 																FALSE ) );
 			}
 			UnicodeString text;
-			text.format( L"%ds", secondsLeft );
+			text.format( u"%ds", secondsLeft );
 			if( prodTimeString->getText().compare( text ) != 0 )
 				prodTimeString->setText( text );
 			Int textW, textH;
@@ -4601,7 +4601,7 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 					}
 
 					UnicodeString text;
-					text.format( L"%ds", ControlBar_secondsFromFrames( INT_TO_REAL( chargeFramesLeft ) ) );
+					text.format( u"%ds", ControlBar_secondsFromFrames( INT_TO_REAL( chargeFramesLeft ) ) );
 					if( chargeTimeString->getText().compare( text ) != 0 )
 						chargeTimeString->setText( text );
 
