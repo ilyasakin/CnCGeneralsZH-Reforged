@@ -229,6 +229,148 @@ void PosixPath_Forget_All()
 	g_reported.clear();
 }
 
+// ---- listing, as Win32LocalFileSystem lists ------------------------------------------------------
+
+namespace {
+
+char fold_char(char c)
+{
+	return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+}
+
+// '*' and '?' over the whole name, ASCII case folded.  Iterative, with one backtrack point for the
+// last '*', which is exact for patterns with only '*' and '?'.
+bool glob_matches(const char * pattern, const char * name)
+{
+	const char * star = NULL;
+	const char * resume = NULL;
+	while (*name != '\0') {
+		if (*pattern == '*') {
+			star = pattern++;
+			resume = name;
+		}
+		else if (*pattern == '?' || (*pattern != '\0' && fold_char(*pattern) == fold_char(*name))) {
+			++pattern;
+			++name;
+		}
+		else if (star != NULL) {
+			pattern = star + 1;
+			name = ++resume;
+		}
+		else {
+			return false;
+		}
+	}
+	while (*pattern == '*') ++pattern;
+	return *pattern == '\0';
+}
+
+struct Entry
+{
+	std::string name;
+	bool directory;
+};
+
+// A directory's entries, less "." and "..", in byte order.  Empty when it cannot be read.
+std::vector<Entry> entries_of(const std::string & real_directory)
+{
+	std::vector<Entry> entries;
+	DIR * handle = opendir(real_directory.empty() ? "." : real_directory.c_str());
+	if (handle == NULL) {
+		return entries;
+	}
+	while (struct dirent * found = readdir(handle)) {
+		Entry entry;
+		entry.name = found->d_name;
+		if (entry.name == "." || entry.name == "..") continue;
+		struct stat status;
+		const std::string path = join(real_directory, entry.name);
+		entry.directory = stat(path.c_str(), &status) == 0 && S_ISDIR(status.st_mode);
+		entries.push_back(entry);
+	}
+	closedir(handle);
+	std::sort(entries.begin(), entries.end(), [](const Entry & a, const Entry & b) { return a.name < b.name; });
+	return entries;
+}
+
+// "a\b\*.ini" -> directory "a\b", pattern "*.ini".  With no separator, the directory is empty.
+void split_search(const std::string & search, std::string & directory, std::string & pattern)
+{
+	size_t last = std::string::npos;
+	for (size_t i = 0; i < search.size(); ++i) {
+		if (is_separator(search[i])) last = i;
+	}
+	if (last == std::string::npos) {
+		directory.clear();
+		pattern = search;
+	}
+	else {
+		directory = search.substr(0, last + 1);
+		pattern = search.substr(last + 1);
+	}
+}
+
+// The real directory an engine directory names; "" (the current directory) for an empty one.  False
+// when it does not exist, which for a listing means nothing is found, as FindFirstFile finds nothing.
+bool real_directory_of(const std::string & engine_directory, std::string & real)
+{
+	if (engine_directory.empty()) {
+		real.clear();
+		return true;
+	}
+	if (!PosixPath_Resolve(engine_directory.c_str(), POSIX_PATH_EXISTING, real)) {
+		return false;
+	}
+	if (real == ".") real.clear();
+	return true;
+}
+
+} // namespace
+
+bool PosixPath_Matches_Pattern(const char * pattern, const char * name)
+{
+	if (pattern == NULL || name == NULL || pattern[0] == '\0') {
+		return false;
+	}
+	if (strcmp(pattern, "*.*") == 0) {
+		return true;
+	}
+	if (strcmp(pattern, "*.") == 0) {
+		return strchr(name, '.') == NULL;
+	}
+	return glob_matches(pattern, name);
+}
+
+void PosixPath_List_Like_Win32(const std::string & current_directory, const std::string & original_directory,
+	const std::string & search_name, bool search_subdirectories, std::vector<std::string> & found)
+{
+	std::string directory, pattern, real;
+	split_search(original_directory + current_directory + search_name, directory, pattern);
+	if (real_directory_of(directory, real)) {
+		const std::vector<Entry> entries = entries_of(real);
+		for (size_t i = 0; i < entries.size(); ++i) {
+			if (!entries[i].directory && PosixPath_Matches_Pattern(pattern.c_str(), entries[i].name.c_str())) {
+				found.push_back(original_directory + current_directory + entries[i].name);
+			}
+		}
+	}
+
+	if (!search_subdirectories) {
+		return;
+	}
+	split_search(original_directory + current_directory + "*.", directory, pattern);
+	if (!real_directory_of(directory, real)) {
+		return;
+	}
+	const std::vector<Entry> entries = entries_of(real);
+	for (size_t i = 0; i < entries.size(); ++i) {
+		if (entries[i].directory && PosixPath_Matches_Pattern(pattern.c_str(), entries[i].name.c_str())) {
+			PosixPath_List_Like_Win32(current_directory + entries[i].name + '\\', original_directory, search_name,
+				search_subdirectories, found);
+		}
+	}
+}
+
 // ---- the zh_* forwarders (zhio.h) ------------------------------------------------------------------
 
 namespace {

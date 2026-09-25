@@ -56,6 +56,7 @@
 #endif
 
 #include <string>
+#include <vector>
 
 enum PosixPathIntent
 {
@@ -79,5 +80,31 @@ void PosixPath_Forget_Directory(const char * real_directory);
 
 // Drops every cached listing.  For tests, and for anything that changes many directories at once.
 void PosixPath_Forget_All();
+
+// Windows' FindFirstFile matching, for the patterns the engine passes: "*.ini", "*.big",
+// "Patch*.big", "*", "*.w3d", "*.tga", an empty pattern, and "*." for directories.
+// - '*' matches any run and '?' one character; anything else matches itself, without regard to
+//   ASCII case.
+// - "*.*" means "*", and "*." means a name with no '.', as Windows reads them.
+// - An empty pattern matches nothing: FindFirstFile on a path ending in a separator finds nothing.
+// Windows also tries a pattern against a file's 8.3 short name, so "*.ini" can find "x.inix" through
+// "X~1.INI" there.  That is not emulated; nothing the game ships depends on it, and short names are
+// commonly switched off on NTFS volumes anyway.
+bool PosixPath_Matches_Pattern(const char * pattern, const char * name);
+
+// Win32LocalFileSystem::getFileListInDirectory, reproduced for a POSIX file system, so that the list
+// the engine builds - and the INI load order and CRC that follow from it - are what Windows builds for
+// the same files (C1's design, "why this needed a design").
+// - The files: those matching the last component of original_directory + current_directory +
+//   search_name, in the directory before it (resolved, so case need not match the disk).  Each is
+//   appended to found as original_directory + current_directory + its on-disk name, exactly as the
+//   Win32 code joins it.
+// - With search_subdirectories: every subdirectory matching "*." (no dot in the name) is listed the
+//   same way, with current_directory + its name + '\'.
+// Entries are visited in byte order.  The caller's set compares without case and keeps the first of
+// two names that differ only in case - which a case-sensitive volume can hold and Windows cannot - so
+// byte order makes that first one the same every time, as decision D2 does for lookups.
+void PosixPath_List_Like_Win32(const std::string & current_directory, const std::string & original_directory,
+	const std::string & search_name, bool search_subdirectories, std::vector<std::string> & found);
 
 #endif
