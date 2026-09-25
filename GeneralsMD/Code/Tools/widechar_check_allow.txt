@@ -4,7 +4,7 @@
 # the check.  Adding a line here is a claim that no WideChar text passes through the named code;
 # write down why that is true, not merely that the check complained.
 
-GameEngine/Source/Common/System/WideCharFns.cpp	*	the POSIX format funnel's own internals: it builds one-conversion wchar_t sub-formats for swprintf and uses vswscanf/fwprintf, converting explicitly to and from WideChar at its edges (B1)
+GameEngine/Source/Common/System/WideCharFns.cpp	*	the POSIX format funnel's own internals: it builds one-conversion wchar_t sub-formats for swprintf and uses vswscanf, converting explicitly to and from WideChar at its edges (B1)
 Tests/widechar_gate_msvc_crt.cpp	*	emulates MSVC's two-byte CRT for the -fshort-wchar gate; wchar_t IS the subject
 GameEngine/Include/Common/EarlyCommandLine.h	*	reads GetCommandLineW's wchar_t command line before the parser exists - Windows' only intact copy of it; must not be retyped (B1 survey 1.2); the POSIX entry point is C2's
 GameEngine/Source/Common/System/Debug.cpp	L"	-headless and -logPrefix, passed to EarlyCommandLine.h's wchar_t reader
@@ -19,6 +19,6 @@ Libraries/Source/WWVegas/WWLib/readline.h	*	declares WWLib's wchar_t line reader
 Libraries/Source/WWVegas/WWLib/stringex.h	*	WWLib's generic wcslcpy/wcslcat over wchar_t, beside strlcpy; a WideChar* would not compile
 Libraries/Source/WWVegas/WWLib/wwstring.cpp	*	StringClass's wchar_t conversions for WWLib's own wide strings; not WideChar
 Libraries/Source/WWVegas/WWLib/ini.h	*	INIClass::Put_Wide_String/Get_Wide_String take WWLib's wchar_t strings; no engine caller (B1 survey)
-GameEngine/Source/Common/Recorder.cpp	fputwc	the replay header's wide terminator; the stream-orientation rewrite of the replay writer is C1/M2's, recorded in WINDOWS-DEBT.md; on Windows this writes the same two bytes as before
-GameEngine/Source/Common/Recorder.cpp	fgetwc	the replay header's wide reader, the other half of the same C1/M2 item
 Libraries/Include/Platform/MSVCCompat.h	*	_wcsnicmp, whose one caller is EarlyCommandLine.h matching option names against the wchar_t command line (see that entry); takes wchar_t*, so WideChar text cannot reach it without a compile error
+Tests/test_widechar_file.cpp	L'	the control test writes one wchar_t with fputwc on a byte-oriented stream, to show the replay defect C1 (g) removed; no WideChar text is involved
+Tests/test_widechar_file.cpp	fputwc	the same control test (see the L' entry)
