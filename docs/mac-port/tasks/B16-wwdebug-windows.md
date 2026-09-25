@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** nothing
 - **Blocks:** six tests, including the determinism evidence
-- **Status:** not started
+- **Status:** in progress (zhr2-B16)
 - **Size:** one file, `Libraries/Source/WWVegas/WWDebug/wwdebug.cpp`
 
 ## Why
