@@ -274,6 +274,13 @@ target_link_libraries(compression_selfcheck PRIVATE compression)
 add_executable(detround_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_detround.cpp)
 target_include_directories(detround_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 
+# d3dxportable.h reproduces d3dx9_43.dll's D3DXVec4Transform bit for bit, because DumbProjectile-
+# Behavior flies a shell along it and the flight is in the CRC.  Its expected values are outputs of
+# Microsoft's own machine code (Tests/d3dx_golden.h), so this is not a self-consistency check.
+# Header-only and links nothing, like detround_selfcheck.  See Tests/test_d3dxportable.cpp.
+add_executable(d3dxportable_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_d3dxportable.cpp)
+target_include_directories(d3dxportable_selfcheck PRIVATE ${WW}/WW3D2 ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
+
 # Guards the hand-rolled Matrix3D::Get_Inverse that replaced D3DXMatrixInverse.
 add_executable(wwmath_selfcheck ${WW}/WWMath/test_inverse.cpp)
 target_include_directories(wwmath_selfcheck PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
@@ -1000,6 +1007,7 @@ target_compile_definitions(test_gameengine PRIVATE
 # The three hand-written self-checks predate the harness; run them from ctest
 # too so one command covers everything.
 add_test(NAME detround_selfcheck COMMAND detround_selfcheck)
+add_test(NAME d3dxportable_selfcheck COMMAND d3dxportable_selfcheck)
 add_test(NAME wwmath_selfcheck COMMAND wwmath_selfcheck)
 add_test(NAME compression_selfcheck COMMAND compression_selfcheck)
 # The device and codec smoke tests below belong to targets only a Windows configuration defines.
