@@ -28,12 +28,9 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Platform/SleepMilliseconds.h"
 #include "Lib/Clock.h"
 #include "Lib/WideCharFns.h"
-#if !defined(_WIN32)
-#include <chrono>
-#include <thread>		// the load screen's waits: Sleep() on Windows, sleep_for elsewhere
-#endif
 
 #include "Common/AudioAffect.h"
 #include "Common/AudioHandleSpecialValues.h"
@@ -2317,11 +2314,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		testTimeOut();
 		/* A wall-clock wait between polls, not a simulation step: no logic frame runs in this loop
 			 or the fade below, and how many times either polls is not part of any CRC. */
-#if defined(_WIN32)
-		Sleep(100);
-#else
-		std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-#endif
+		sleepMilliseconds( 100 );
 	}
 
 	// if we're in a load game, don't fade yet
@@ -2335,11 +2328,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			{
 				TheDisplay->draw();
 				setFPMode();
-#if defined(_WIN32)
-				Sleep(33);
-#else
-				std::this_thread::sleep_for( std::chrono::milliseconds( 33 ) );
-#endif
+				sleepMilliseconds( 33 );
 			}
 			
 		}

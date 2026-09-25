@@ -29,6 +29,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Platform/SleepMilliseconds.h"
 #include "Lib/Clock.h"
 
 #include "GameClient/LoadScreen.h"
@@ -60,7 +61,7 @@ static Bool doFileTransfer( AsciiString filename, MapTransferLoadScreen *ls, Int
 		Bool sentFile = FALSE;
 		if (TheGameInfo->amIHost())
 		{
-			Sleep(500);
+			sleepMilliseconds( 500 );
 			fileCommandID = TheNetwork->sendFileAnnounce(filename, mask);
 		}
 		else
