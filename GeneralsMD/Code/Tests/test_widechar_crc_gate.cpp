@@ -35,7 +35,7 @@
 // the Turkish row agrees with the constant test_widechar_width.inc derived by hand.
 //
 // This binary is built from the REAL Xfer.cpp, XferCRC.cpp, UnicodeString.cpp, AsciiString.cpp and
-// WideCharFns.cpp.  What it stubs, below, is what those objects name and the hashing path never
+// WideCharFns.cpp.  What it stubs, in widechar_test_stubs.cpp, is what those objects name and the hashing path never
 // runs: the memory manager (a malloc-backed stand-in, which decides where the bytes live, not what
 // they are) and five engine singletons that Xfer's other members reach.
 //
@@ -50,56 +50,13 @@
 
 #include "PreRTS.h"
 
-#include "Common/CriticalSection.h"
-#include "Common/GameMemory.h"
-#include "Common/GameState.h"
-#include "Common/Science.h"
-#include "Common/Upgrade.h"
-#include "Common/KindOf.h"
 #include "Common/UnicodeString.h"
 #include "Common/XferCRC.h"
-#include "Common/AudioEventRTS.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
-// ---------------------------------------------------------------------------------------- stubs
-// The memory manager, malloc-backed.  UnicodeString sizes and frees its buffer through it; it
-// decides where the bytes live, never what they are.
-static unsigned char s_allocatorStorage[ sizeof( DynamicMemoryAllocator ) ];
-DynamicMemoryAllocator *TheDynamicMemoryAllocator = (DynamicMemoryAllocator *)s_allocatorStorage;
-void *DynamicMemoryAllocator::allocateBytesDoNotZeroImplementation( Int numBytes DECLARE_LITERALSTRING_ARG2 )
-{
-	return malloc( numBytes );
-}
-void DynamicMemoryAllocator::freeBytes( void *pMem ) { free( pMem ); }
-Int DynamicMemoryAllocator::getActualAllocationSize( Int numBytes ) { return numBytes; }
-
-CriticalSection *TheUnicodeStringCriticalSection = NULL;	// ScopedCriticalSection skips a null one
-
-// Named by Xfer's members for sciences, upgrades, map paths and kind-of masks.  The hashing path
-// calls none of them; if one ever runs, the gate says so and stops rather than hashing garbage.
-static void notOnThisPath( const char *what )
-{
-	printf( "FAIL: the gate reached %s, which it stubs on the understanding that it never runs\n", what );
-	exit( 2 );
-}
-GameState *TheGameState = NULL;
-ScienceStore *TheScienceStore = NULL;
-UpgradeCenter *TheUpgradeCenter = NULL;
-AsciiString GameState::portableMapPathToRealMapPath( const AsciiString & ) const { notOnThisPath( "GameState" ); return AsciiString(); }
-AsciiString GameState::realMapPathToPortableMapPath( const AsciiString & ) const { notOnThisPath( "GameState" ); return AsciiString(); }
-AsciiString ScienceStore::getInternalNameForScience( ScienceType ) const { notOnThisPath( "ScienceStore" ); return AsciiString(); }
-ScienceType ScienceStore::getScienceFromInternalName( const AsciiString & ) const { notOnThisPath( "ScienceStore" ); return SCIENCE_INVALID; }
-const UpgradeTemplate *UpgradeCenter::findUpgrade( const AsciiString & ) const { notOnThisPath( "UpgradeCenter" ); return NULL; }
-UpgradeTemplate *UpgradeCenter::firstUpgradeTemplate( void ) { notOnThisPath( "UpgradeCenter" ); return NULL; }
-template<> const char *KindOfMaskType::s_bitNameList[] = { NULL };
-// GCC emits inline destructors that clang does not - MessageStream.h's GameMessageArgument, which
-// names the pool allocator, and one that names AudioEventRTS's.  Never on the hashing path either.
-MemoryPoolFactory *TheMemoryPoolFactory = NULL;
-void MemoryPool::freeBlock( void * ) { notOnThisPath( "MemoryPool::freeBlock" ); }
-MemoryPool *MemoryPoolFactory::createMemoryPool( const char *, Int, Int, Int ) { notOnThisPath( "MemoryPoolFactory" ); return NULL; }
-AudioEventRTS::~AudioEventRTS() { notOnThisPath( "AudioEventRTS" ); }
+// The stubs this program links with are in widechar_test_stubs.cpp.
 
 // ---------------------------------------------------------------------------------------- table
 // Code units, then XferCRC over Xfer::xferUnicodeString at two bytes a unit and at four.
