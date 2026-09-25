@@ -30,8 +30,16 @@
 
 #include "rawfile.h"
 #include "wwdebug.h"
+// Off Windows the four file calls below are POSIX, and a file's PE timestamp is not read: see
+// Get_File_Id_String.  The Windows branches are unchanged.
+#ifdef _WIN32
 #include "win.h"
 #include "mmsys.h"
+#else
+#include <ctype.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#endif
 #include "ffactory.h"
 
 //
@@ -119,8 +127,15 @@ bool cMiscUtil::File_Is_Read_Only(LPCSTR filename)
 {
    WWASSERT(filename != NULL);
 
+#ifdef _WIN32
 	DWORD attributes = ::GetFileAttributes(filename);
 	return ((attributes != 0xFFFFFFFF) && (attributes & FILE_ATTRIBUTE_READONLY));
+#else
+	// The nearest thing to FILE_ATTRIBUTE_READONLY is the owner's write bit.  Like the Windows
+	// branch, a file that is not there is not read only.
+	struct stat info;
+	return ((::stat(filename, &info) == 0) && !(info.st_mode & S_IWUSR));
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -182,6 +197,7 @@ void cMiscUtil::Get_File_Id_String(LPCSTR filename, StringClass & str)
 	//
 	// Note... this timedatestamp is not present for all file types...
 	//
+#ifdef _WIN32
 	IMAGE_FILE_HEADER header = {0};
 	extern bool Get_Image_File_Header(LPCSTR filename, IMAGE_FILE_HEADER *file_header);
 	/*
@@ -191,17 +207,36 @@ void cMiscUtil::Get_File_Id_String(LPCSTR filename, StringClass & str)
 	*/
 	Get_Image_File_Header(filename, &header);
 	int time_date_stamp = header.TimeDateStamp;
+#else
+	// Get_Image_File_Header is verchk.cpp's, which is not built off Windows.  It reads a PE
+	// executable's link timestamp - and, because it never checks for the MZ signature, whatever four
+	// bytes sit at the matching offset of any other file big enough to have them.  Only a file under
+	// 64 bytes gives 0 there.  So this id string matches Windows for short files and differs for
+	// longer ones.  Nothing in the game calls this; test_wwutil does, with short files.
+	int time_date_stamp = 0;
+#endif
 
 	char working_filename[500];
 	strcpy(working_filename, filename);
+#ifdef _WIN32
 	::strupr(working_filename);
+#else
+	for (char * c = working_filename; *c != 0; ++c) {
+		*c = (char)::toupper((unsigned char)*c);
+	}
+#endif
 
    //
    // Strip path off filename
    //
    char * p_start = &working_filename[strlen(working_filename)];
    int num_chars = 1;
+#ifdef _WIN32
    while (p_start > working_filename && *(p_start - 1) != '\\') {
+#else
+   // The POSIX separator: a backslash is an ordinary filename character here.
+   while (p_start > working_filename && *(p_start - 1) != '/') {
+#endif
       p_start--;
       num_chars++;
    }
@@ -220,7 +255,11 @@ void cMiscUtil::Remove_File(LPCSTR filename)
 {
    WWASSERT(filename != NULL);
 
+#ifdef _WIN32
 	::DeleteFile(filename);
+#else
+	::remove(filename);	// like DeleteFile, a missing file is a quiet failure
+#endif
 }
 
 
