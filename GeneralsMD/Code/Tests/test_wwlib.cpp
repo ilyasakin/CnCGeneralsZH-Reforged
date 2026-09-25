@@ -43,11 +43,16 @@
 #include "ramfile.h"
 #include "chunkio.h"
 #include "wwfile.h"
+#include "rawfile.h"
 #include "thread.h"
 #include "mutex.h"
 
 #include <stdlib.h>
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <sys/time.h>	/* utimes, for the RawFileClass date test */
+#endif
 
 //////////////////////////////////////////////////////////////////////////////
 // Helpers
@@ -1132,6 +1137,126 @@ TEST(ramfile_read_write_seek)
 	CHECK_EQ(file.Seek(0, SEEK_END), len);
 	CHECK_EQ(file.Read(back, 32), 0);
 	file.Close();
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// RawFileClass, against the disk
+//
+// These go through the real file system, on purpose: RawFileClass's platform
+// arms are the thing under test.  They were written for B5's POSIX port, whose
+// predecessor - an _UNIX arm on stdio - truncated a file opened READ|WRITE,
+// answered 0 from every seek and returned Unix time where callers keep DOS
+// time.  What they do NOT establish: share modes (POSIX has none), behaviour
+// past 2GB, or anything about a path with a backslash in it (C1's).
+//////////////////////////////////////////////////////////////////////////////
+
+static const char *RAWFILE_TEST_NAME = "test_wwlib_rawfile.tmp";
+
+static void rawfile_write_fresh(const char *text)
+{
+	RawFileClass file(RAWFILE_TEST_NAME);
+	CHECK(file.Open(FileClass::WRITE) != 0);
+	CHECK_EQ(file.Write(text, (int)strlen(text)), (int)strlen(text));
+	file.Close();
+}
+
+/* The file's last-write time, set through the OS rather than through the class
+   under test, so the check below has an answer that does not come from
+   RawFileClass. */
+static bool rawfile_set_mtime_utc(const char *path, long long unix_seconds)
+{
+#if defined(_WIN32)
+	HANDLE h = CreateFileA(path, FILE_WRITE_ATTRIBUTES, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (h == INVALID_HANDLE_VALUE) return false;
+	/* 100ns ticks since 1601-01-01, which is 11644473600 seconds before 1970. */
+	unsigned long long ticks = ((unsigned long long)unix_seconds + 11644473600ULL) * 10000000ULL;
+	FILETIME ft;
+	ft.dwLowDateTime = (DWORD)ticks;
+	ft.dwHighDateTime = (DWORD)(ticks >> 32);
+	BOOL ok = SetFileTime(h, NULL, &ft, &ft);
+	CloseHandle(h);
+	return ok != 0;
+#else
+	struct timeval tv[2];
+	tv[0].tv_sec = tv[1].tv_sec = (time_t)unix_seconds;
+	tv[0].tv_usec = tv[1].tv_usec = 0;
+	return utimes(path, tv) == 0;
+#endif
+}
+
+TEST(rawfile_read_write_open_keeps_what_is_there)
+{
+	rawfile_write_fresh("hello world");
+
+	/* SKB's OPEN_ALWAYS: opening READ|WRITE must not destroy the contents. */
+	RawFileClass file(RAWFILE_TEST_NAME);
+	CHECK(file.Open(FileClass::READ | FileClass::WRITE) != 0);
+	file.Close();
+	CHECK_EQ(file.Size(), 11);
+
+	char back[32];
+	memset(back, 0, sizeof(back));
+	CHECK(file.Open(FileClass::READ) != 0);
+	CHECK_EQ(file.Read(back, sizeof(back)), 11);	/* a short count at end of file */
+	CHECK_STR(back, "hello world");
+	file.Close();
+
+	/* WRITE is CREATE_ALWAYS, and does truncate.  A fresh object to ask: Size()
+	   leaves its answer in BiasLength, so the one above would say 11 forever -
+	   on every platform, since that part is shared code. */
+	rawfile_write_fresh("bye");
+	RawFileClass again(RAWFILE_TEST_NAME);
+	CHECK_EQ(again.Size(), 3);
+	CHECK(again.Delete() != 0);
+	CHECK(!again.Is_Available());
+}
+
+TEST(rawfile_seek_answers_the_new_position)
+{
+	rawfile_write_fresh("0123456789");
+
+	RawFileClass file(RAWFILE_TEST_NAME);
+	CHECK(file.Open(FileClass::READ) != 0);
+	CHECK_EQ(file.Seek(4, SEEK_SET), 4);
+	CHECK_EQ(file.Seek(2, SEEK_CUR), 6);
+	char c = 0;
+	CHECK_EQ(file.Read(&c, 1), 1);
+	CHECK_EQ(c, '6');
+	CHECK_EQ(file.Seek(-1, SEEK_END), 9);
+	CHECK_EQ(file.Seek(0, SEEK_END), 10);
+	file.Close();
+	file.Delete();
+}
+
+TEST(rawfile_date_time_is_dos_packed_utc)
+{
+	rawfile_write_fresh("x");
+
+	/* 1000000000 is 2001-09-09 01:46:40 UTC.  DOS date: (2001-1980)<<9 | 9<<5 | 9
+	   = 0x2B29; DOS time: 1<<11 | 46<<5 | 40/2 = 0x0DD4.  Worked by hand and by
+	   Python's datetime, not by the code under test.  On Windows this is also
+	   the check that FileTimeToDosDateTime does not move a UTC FILETIME into
+	   local time, which RawFileClass's POSIX arm assumes. */
+	CHECK(rawfile_set_mtime_utc(RAWFILE_TEST_NAME, 1000000000LL));
+
+	RawFileClass file(RAWFILE_TEST_NAME);
+	CHECK_EQ(file.Get_Date_Time(), 0x2B290DD4UL);	/* closed: opens, reads, closes */
+	CHECK(file.Open(FileClass::READ) != 0);
+	CHECK_EQ(file.Get_Date_Time(), 0x2B290DD4UL);	/* open */
+	file.Close();
+
+	/* And back the other way.  DOS time has two-second resolution, so the value
+	   written here is one it can hold exactly. */
+	CHECK(file.Open(FileClass::READ | FileClass::WRITE) != 0);
+	CHECK(file.Set_Date_Time(0x3A5C8B2EUL));	/* 2009-02-28 17:25:28 */
+	file.Close();
+	CHECK_EQ(file.Get_Date_Time(), 0x3A5C8B2EUL);
+
+	/* A month of 13 is not a date. */
+	CHECK(file.Open(FileClass::READ | FileClass::WRITE) != 0);
+	CHECK(!file.Set_Date_Time(((0x3A5CUL & ~(0xFUL << 5)) | (13UL << 5)) << 16));
+	file.Close();
+	file.Delete();
 }
 
 TEST(chunkio_nested_chunks_round_trip)

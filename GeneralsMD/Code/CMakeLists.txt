@@ -278,21 +278,22 @@ target_link_libraries(compression_selfcheck PRIVATE compression)
 add_executable(detround_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_detround.cpp)
 target_include_directories(detround_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 
-# Guards the hand-rolled Matrix3D::Get_Inverse that replaced D3DXMatrixInverse.
+# Guards the hand-rolled Matrix3D::Get_Inverse that replaced D3DXMatrixInverse.  It checks that the
+# inverse is right, including one exact answer; it is NOT determinism evidence, and its header says
+# why.  E3 is the cross-architecture evidence for DetTrig.
+#
+# wwlib and wwsaveload on every platform.  test_inverse.cpp needs only Matrix3D, but the link does
+# not stop there: quat.cpp needs _FastAcosTable, which pulls in wwmath.cpp, and wwmath.cpp's
+# WWMath::Init and Do_Force_Links reach LookupTableMgrClass (wwlib's file factory, strings, chunk
+# I/O) and every spline's persist factory (wwsaveload).  ld -why_load shows the chain.  A macOS line
+# with wwdebug alone was here once, on the belief that wwmath resolved against it; it had never been
+# linked, and it does not.  So on macOS this waits for wwlib and wwsaveload to build.
 add_executable(wwmath_selfcheck ${WW}/WWMath/test_inverse.cpp)
 target_include_directories(wwmath_selfcheck PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
-if(ZH_PLATFORM_WINDOWS)
-  target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwsaveload wwlib wwdebug)
-else()
-  # test_inverse.cpp includes matrix3d.h and nothing else, and wwmath's own objects resolve against
-  # wwdebug alone.  wwsaveload and wwlib are on the Windows line because they were free there;
-  # neither compiles under clang yet, and this self-check is the first evidence that determinism
-  # survives clang on arm64, so it is not allowed to wait for them.  Put them back with wwlib.
-  target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwdebug)
-endif()
+target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwsaveload wwlib wwdebug)
 
 # ---- wwlib ----------------------------------------------------------------
-add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE}
+set(WWLIB_SOURCES
   ${WW}/WWLib/_convert.cpp   ${WW}/WWLib/_mono.cpp      ${WW}/WWLib/argv.cpp
   ${WW}/WWLib/b64pipe.cpp    ${WW}/WWLib/b64straw.cpp   ${WW}/WWLib/base64.cpp
   ${WW}/WWLib/blit.cpp       ${WW}/WWLib/blowfish.cpp   ${WW}/WWLib/buff.cpp
@@ -321,6 +322,37 @@ add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE}
   ${WW}/WWLib/widestring.cpp ${WW}/WWLib/win.cpp        ${WW}/WWLib/WWCOMUtil.cpp
   ${WW}/WWLib/wwfile.cpp     ${WW}/WWLib/wwfont.cpp     ${WW}/WWLib/wwstring.cpp
   ${WW}/WWLib/xpipe.cpp      ${WW}/WWLib/xstraw.cpp     ${WW}/WWLib/xsurface.cpp)
+# Win32 subsystem code, left out of wwlib everywhere but Windows.  Each of these is a whole file of
+# one Windows API rather than a type leaking out of one, so there is nothing to port short of
+# reimplementing the API, and none of them has a caller that is not itself Windows code - searched
+# across GeneralsMD/Code on 2026-09-25, B5.  On Windows this list is not read, and wwlib gets the
+# same sources in the same order as before.  Put one back only with a caller that needs it.
+if(NOT ZH_PLATFORM_WINDOWS)
+  list(REMOVE_ITEM WWLIB_SOURCES
+    # DirectDraw, the pre-Direct3D 2D surface API.  The renderer never reaches it; DSurface is named
+    # nowhere outside WWLib, and draw.cpp, the fourth file of the set, was already out.  ConvertClass
+    # survives as a type: wwfont.cpp uses only its inline Convert_Pixel, WW3D2's txt*.cpp only
+    # references to it.
+    ${WW}/WWLib/convert.cpp    ${WW}/WWLib/ddraw.cpp      ${WW}/WWLib/dsurface.cpp
+    # The \\.\MONO device driver for a second, monochrome debug monitor.  WW3D2's rendobj.cpp
+    # includes _mono.h and names nothing from it.
+    ${WW}/WWLib/_mono.cpp      ${WW}/WWLib/mono.cpp
+    # Win32 resources, the message pump and its keyboard, ShellExecute, COM IDispatch and version
+    # resources.  No callers at all.
+    ${WW}/WWLib/data.cpp       ${WW}/WWLib/rcfile.cpp     ${WW}/WWLib/msgloop.cpp
+    ${WW}/WWLib/keyboard.cpp   ${WW}/WWLib/LaunchWeb.cpp  ${WW}/WWLib/WWCOMUtil.cpp
+    ${WW}/WWLib/verchk.cpp
+    # The HINSTANCE/HWND globals, which win.h declares only under _WINDOWS.
+    ${WW}/WWLib/win.cpp
+    # RegistryClass is HKEY throughout.  Its callers are dx8wrapper.cpp, W3DDisplay.cpp and
+    # WWAudio.cpp, which persist device and audio settings; where those live on macOS is theirs
+    # to decide, and registry.h says so to anyone who includes it.
+    ${WW}/WWLib/registry.cpp
+    # SecureRandomClass has no caller, and its only non-Windows seed is the _UNIX arm, which the
+    # plan forbids switching on.
+    ${WW}/WWLib/srandom.cpp)
+endif()
+add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE} ${WWLIB_SOURCES})
 target_include_directories(wwlib PUBLIC ${WW}/WWLib
   PRIVATE ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwlib PRIVATE wwdebug)
@@ -711,10 +743,21 @@ target_compile_definitions(gameengine PUBLIC
 # C++17 for the std::hash_map -> unordered_map alias and string_view hashing in
 # STLTypedefs.h.
 set_target_properties(gameengine PROPERTIES CXX_STANDARD 17)
+# Two names on this line are Windows-only, and expand to nothing elsewhere - in the same positions,
+# so the Windows list is the same items in the same order it always was.  B6's first two drops:
+#  - debuglib: no live GameEngine code calls it (every Debug::/DLOG/DASSERT hit is commented out).
+#    It still reaches Windows through profile, which does call it.
+#  - dinput8: GameEngine uses the 107 DIK_ key-code constants from <dinput.h> and no DirectInput
+#    function.  It is load-bearing on Windows all the same: Win32DIKeyboard.cpp and Win32DIMouse.cpp
+#    in gameenginedevice call DirectInput8Create and get dinput8 only through this PUBLIC line.
+if(ZH_PLATFORM_WINDOWS)
+  set(ZH_GAMEENGINE_DEBUGLIB debuglib)
+  set(ZH_GAMEENGINE_DINPUT8 dinput8)
+endif()
 target_link_libraries(gameengine PUBLIC
-  ww3d2 wwlib wwmath wwsaveload wwdebug wwutil compression debuglib wwdownload
+  ww3d2 wwlib wwmath wwsaveload wwdebug wwutil compression ${ZH_GAMEENGINE_DEBUGLIB} wwdownload
   benchmark eabrowserdispatch profile gamespy litehtml
-  dinput8 wininet imagehlp imm32)
+  ${ZH_GAMEENGINE_DINPUT8} wininet imagehlp imm32)
 
 # ===========================================================================
 # Phase 4 - GameEngineDevice + Main -> generals.exe
