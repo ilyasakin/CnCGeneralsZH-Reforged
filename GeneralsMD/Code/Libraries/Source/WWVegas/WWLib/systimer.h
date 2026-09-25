@@ -39,8 +39,10 @@
 
 #include "always.h"
 #include "Lib/Clock.h"
+#ifdef _WIN32
 #include <windows.h>
 #include "mmsys.h"
+#endif
 
 #define TIMEGETTIME SystemTime.Get
 #define MS_TIMER_SECOND 1000
