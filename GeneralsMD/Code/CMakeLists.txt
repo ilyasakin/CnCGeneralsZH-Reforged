@@ -900,6 +900,33 @@ target_link_libraries(gameengine PUBLIC
   benchmark eabrowserdispatch profile gamespy litehtml
   ${ZH_GAMEENGINE_DINPUT8} wininet imagehlp imm32)
 
+# B1's gate: the bytes a UnicodeString puts into the replay and network CRC, before and after
+# WideChar becomes char16_t.  Built from the REAL Xfer, XferCRC, UnicodeString, AsciiString and
+# WideCharFns sources with gameengine's own include paths and definitions, and nothing else of
+# gameengine, so it runs on every platform today rather than when gameengine links.  The
+# -fshort-wchar twin gives wchar_t MSVC's two unsigned bytes, which is the Windows model on a
+# Mac or Linux box; see Tests/test_widechar_crc_gate.cpp for what the pair proves and does not.
+set(ZH_WIDECHAR_GATE_SOURCES
+  ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_crc_gate.cpp
+  ${GE}/Source/Common/System/Xfer.cpp ${GE}/Source/Common/System/XferCRC.cpp
+  ${GE}/Source/Common/System/UnicodeString.cpp ${GE}/Source/Common/System/AsciiString.cpp
+  ${GE}/Source/Common/System/WideCharFns.cpp)
+function(zh_widechar_gate name)
+  add_executable(${name} ${ZH_WIDECHAR_GATE_SOURCES})
+  target_include_directories(${name} PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(${name} PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+  set_target_properties(${name} PROPERTIES CXX_STANDARD 17)
+  add_test(NAME ${name} COMMAND ${name})
+endfunction()
+zh_widechar_gate(widechar_crc_gate)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  zh_widechar_gate(widechar_crc_gate_msvc_model)
+  target_compile_options(widechar_crc_gate_msvc_model PRIVATE -fshort-wchar)
+  # The five wcs* functions UnicodeString.cpp calls, over two-byte units as MSVC's CRT has them:
+  # this C library was built with four-byte wchar_t and would overrun the heap.
+  target_sources(widechar_crc_gate_msvc_model PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests/widechar_gate_msvc_crt.cpp)
+endif()
+
 # ===========================================================================
 # Phase 4 - GameEngineDevice + Main -> generals.exe
 # ===========================================================================
