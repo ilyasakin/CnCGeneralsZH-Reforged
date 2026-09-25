@@ -33,16 +33,34 @@
 // Monitor and what ChangeDisplaySettingsEx takes.  A name that is empty, or that no monitor answers
 // to any more because it was unplugged, means the primary.
 
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
+/* Where a monitor sits, and how long its device name can be: Windows' own RECT and CCHDEVICENAME
+	 there, so WinMain can keep taking a RECT; the same shape and the same 32 elsewhere. */
+#if defined(_WIN32)
+typedef RECT MonitorRect;
+enum { MONITOR_DEVICE_NAME_LENGTH = CCHDEVICENAME };
+#else
+struct MonitorRect
+{
+	long left;
+	long top;
+	long right;
+	long bottom;
+};
+enum { MONITOR_DEVICE_NAME_LENGTH = 32 };
+#endif
+
 struct MonitorEntry
 {
-	char	device[CCHDEVICENAME];	///< "\\.\DISPLAY2"
+	char	device[MONITOR_DEVICE_NAME_LENGTH];	///< "\\.\DISPLAY2"
 	char	name[128];							///< what the monitor calls itself, "Lenovo Y27-30"; can be empty
 	int		number;									///< the 2 in DISPLAY2, and what the options menu shows first
-	RECT	rect;										///< where it sits on the desktop, in pixels
+	MonitorRect	rect;							///< where it sits on the desktop, in pixels
 	bool	primary;
 };
 
@@ -66,6 +84,7 @@ enum
 	MIN_DISPLAY_MODE_BITS = 24,
 };
 
+#if defined(_WIN32)
 struct MonitorCollection
 {
 	MonitorEntry	*entries;
@@ -182,3 +201,42 @@ inline int listDisplayModes( const char *device, DisplayModeEntry *entries, int 
 	}
 	return count;
 }
+#else
+/* Off Windows the displays are C2's: SDL3 enumerates them, and nothing does until C2.  Until then
+	 there is one monitor, the primary, the size of the game's floor (800x600), offering that one mode.
+	 That is Windows' own answer above when it has no desktop to enumerate, with the floor for a size:
+	 an empty rect would give borderless mode a 0x0 resolution, and empty lists would give the
+	 options menu nothing to select. */
+inline MonitorEntry fallbackMonitorEntry( void )
+{
+	MonitorEntry screen;
+	::memset( &screen, 0, sizeof( screen ) );
+	screen.number = 1;
+	screen.rect.right = MIN_DISPLAY_MODE_WIDTH;
+	screen.rect.bottom = MIN_DISPLAY_MODE_HEIGHT;
+	screen.primary = true;
+	return screen;
+}
+
+inline int listMonitors( MonitorEntry *entries, int capacity )
+{
+	if (capacity < 1)
+		return 0;
+	entries[0] = fallbackMonitorEntry();
+	return 1;
+}
+
+inline MonitorEntry findMonitor( const char * )
+{
+	return fallbackMonitorEntry();
+}
+
+inline int listDisplayModes( const char *, DisplayModeEntry *entries, int capacity )
+{
+	if (capacity < 1)
+		return 0;
+	entries[0].width = MIN_DISPLAY_MODE_WIDTH;
+	entries[0].height = MIN_DISPLAY_MODE_HEIGHT;
+	return 1;
+}
+#endif
