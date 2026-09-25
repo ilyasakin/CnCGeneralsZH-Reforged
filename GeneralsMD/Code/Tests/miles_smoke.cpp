@@ -14,7 +14,29 @@
  * the same way bink_smoke does without game data.
  */
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+/* The same test against Miles6/miniaudio (C4).  These are the five Windows calls it makes, local to
+   this file and only off Windows, so the Windows build compiles exactly what it always did. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+typedef long LONG;
+#define MAX_PATH 1024
+static LONG InterlockedExchange(volatile LONG *target, LONG value) { return __atomic_exchange_n(target, value, __ATOMIC_SEQ_CST); }
+static LONG InterlockedCompareExchange(volatile LONG *target, LONG exchange, LONG comparand)
+{
+	__atomic_compare_exchange_n(target, &comparand, exchange, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+	return comparand;
+}
+static void Sleep(unsigned milliseconds) { usleep(milliseconds * 1000); }
+static unsigned GetTempPathA(unsigned size, char *buffer)
+{
+	const char *temp = getenv("TMPDIR");
+	return (unsigned)snprintf(buffer, size, "%s/", temp != NULL ? temp : "/tmp");
+}
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
