@@ -987,7 +987,7 @@ function(add_lib_test name)
   endif()
 endfunction()
 
-add_lib_test(test_wwmath PENDING_MACOS wwmath wwlib wwsaveload wwdebug)
+add_lib_test(test_wwmath wwmath wwlib wwsaveload wwdebug)
 target_include_directories(test_wwmath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
 
 add_lib_test(test_wwlib PENDING_MACOS wwlib wwmath wwsaveload wwdebug)
@@ -1001,7 +1001,7 @@ if(MSVC)
   target_link_options(test_wwlib PRIVATE /LARGEADDRESSAWARE)
 endif()
 
-add_lib_test(test_wwsaveload PENDING_MACOS wwsaveload wwlib wwmath wwdebug)
+add_lib_test(test_wwsaveload wwsaveload wwlib wwmath wwdebug)
 target_include_directories(test_wwsaveload PRIVATE ${WW}/WWSaveLoad ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/Wwutil)
 
 add_lib_test(test_wwutil wwutil wwmath wwlib wwdebug)
