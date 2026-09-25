@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** nothing (no typedef flip needed)
 - **Blocks:** nothing, but it clears B1's last loose end
-- **Status:** not started
+- **Status:** in progress: write-up and first removals merged; live `%ls` sites remain (was -3a)
 - **Size:** 32 specifiers in 24 formats. Sized as a morning.
 
 ## Why

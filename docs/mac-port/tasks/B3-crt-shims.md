@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** in review — mac-port-B3
+- **Status:** done: merged; later CRT spellings land in `MSVCCompat.h` as found (was -95)
 - **Size:** `stricmp` 71 files, `_snprintf` 12, `_vsnprintf` 8, `_stricmp` 5, `_access` 4,
   `_mkdir` 1, `__int64` 22
 

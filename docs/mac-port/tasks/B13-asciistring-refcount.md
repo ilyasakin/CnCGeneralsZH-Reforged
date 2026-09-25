@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** in review
+- **Status:** done: merged (was -83)
 - **Size:** four calls in one header — and that header is `AsciiString.h`
 
 ## Why

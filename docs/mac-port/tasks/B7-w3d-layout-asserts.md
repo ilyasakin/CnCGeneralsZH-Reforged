@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** nothing (but C1 and D4 both rely on the guarantee)
-- **Status:** in review — see [B7-w3d-layout.md](../B7-w3d-layout.md)
+- **Status:** done: merged with B10 (was -14)
 - **Size:** `w3d_file.h`; the structs are read by bulk binary reads across the asset loaders
 
 ## Why

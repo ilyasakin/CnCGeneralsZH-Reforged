@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A2
 - **Blocks:** nothing
-- **Status:** in review
+- **Status:** done: merged with A2 (`build.sh`) (was -21)
 - **Size:** one new script, ~120 lines, mirroring `build.bat`
 
 ## Why
