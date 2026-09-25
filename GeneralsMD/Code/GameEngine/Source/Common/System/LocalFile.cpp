@@ -49,7 +49,12 @@
 
 #include <stdio.h>
 #include <fcntl.h>
+#if defined(_WIN32)
 #include <io.h>
+#else
+#include <unistd.h>
+#include "zhio.h"
+#endif
 #include <string.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -107,6 +112,59 @@ static Int s_totalOpen = 0;
 //         Private Functions                                               
 //----------------------------------------------------------------------------
 
+// The C runtime's unbuffered file calls, as LocalFile uses them.  On Windows each is the call it
+// names.  Off Windows (C1, decisions D4 and D6):
+// - the file name is resolved against the disk (zhio.h), since the engine spells it the Windows way;
+// - a TEXT file reads as Windows' text mode reads it, "\r\n" becoming "\n" (zh_read_text).  Writes
+//   are not translated, so text written here ends lines with "\n" alone, which every reader in the
+//   engine accepts.
+#if defined(_WIN32)
+
+enum
+{
+	OPEN_CREATE = _O_CREAT,
+	OPEN_TRUNCATE = _O_TRUNC,
+	OPEN_APPEND = _O_APPEND,
+	OPEN_TEXT = _O_TEXT,
+	OPEN_BINARY = _O_BINARY,
+	OPEN_READ_WRITE = _O_RDWR,
+	OPEN_WRITE_ONLY = _O_WRONLY,
+	OPEN_READ_ONLY = _O_RDONLY
+};
+
+static inline int openFile(const Char *filename, int flags) { return _open(filename, flags, _S_IREAD | _S_IWRITE); }
+static inline int readFile(int handle, void *buffer, Int bytes, Bool) { return _read(handle, buffer, bytes); }
+static inline int writeFile(int handle, const void *buffer, Int bytes) { return _write(handle, buffer, bytes); }
+static inline long seekFile(int handle, long offset, int origin) { return _lseek(handle, offset, origin); }
+static inline int closeFile(int handle) { return _close(handle); }
+
+#else
+
+enum
+{
+	OPEN_CREATE = O_CREAT,
+	OPEN_TRUNCATE = O_TRUNC,
+	OPEN_APPEND = O_APPEND,
+	OPEN_TEXT = 0,				// the mode is LocalFile's to apply, in readFile
+	OPEN_BINARY = 0,
+	OPEN_READ_WRITE = O_RDWR,
+	OPEN_WRITE_ONLY = O_WRONLY,
+	OPEN_READ_ONLY = O_RDONLY
+};
+
+static int openFile(const Char *filename, int flags) { return zh_open(filename, flags, 0666); }
+
+static int readFile(int handle, void *buffer, Int bytes, Bool text)
+{
+	return text ? zh_read_text(handle, buffer, bytes) : (int)::read(handle, buffer, bytes);
+}
+
+static int writeFile(int handle, const void *buffer, Int bytes) { return (int)::write(handle, buffer, bytes); }
+static long seekFile(int handle, long offset, int origin) { return (long)lseek(handle, offset, origin); }
+static int closeFile(int handle) { return ::close(handle); }
+
+#endif
+
 //=================================================================
 // LocalFile::LocalFile
 //=================================================================
@@ -142,7 +200,7 @@ LocalFile::~LocalFile()
 #else
 	if( m_handle != -1 )
 	{
-		_close( m_handle );
+		closeFile( m_handle );
 		m_handle = -1;
 		--s_totalOpen;
 	}
@@ -234,40 +292,40 @@ Bool LocalFile::open( const Char *filename, Int access )
 
 	if (m_access & CREATE)
 	{
-		flags |= _O_CREAT;
+		flags |= OPEN_CREATE;
 	}
 	if (m_access & TRUNCATE)
 	{
-		flags |= _O_TRUNC;
+		flags |= OPEN_TRUNCATE;
 	}
 	if (m_access & APPEND)
 	{
-		flags |= _O_APPEND;
+		flags |= OPEN_APPEND;
 	}
 	if (m_access & TEXT)
 	{
-		flags |= _O_TEXT;
+		flags |= OPEN_TEXT;
 	}
 	if (m_access & BINARY)
 	{
-		flags |= _O_BINARY;
+		flags |= OPEN_BINARY;
 	}
 
 	if((m_access & READWRITE )== READWRITE )
 	{
-		flags |= _O_RDWR;
+		flags |= OPEN_READ_WRITE;
 	}
 	else if(m_access & WRITE)
 	{
-		flags |= _O_WRONLY;
-		flags |= _O_CREAT;
+		flags |= OPEN_WRITE_ONLY;
+		flags |= OPEN_CREATE;
 	}
 	else
 	{
-		flags |= _O_RDONLY;
+		flags |= OPEN_READ_ONLY;
 	}
 
-	m_handle = _open( filename, flags , _S_IREAD | _S_IWRITE);
+	m_handle = openFile( filename, flags );
 
 	if( m_handle == -1 )
 	{
@@ -326,7 +384,7 @@ Int LocalFile::read( void *buffer, Int bytes )
 #ifdef USE_BUFFERED_IO
 		fseek(m_file, bytes, SEEK_CUR);
 #else
-		_lseek(m_handle, bytes, SEEK_CUR);
+		seekFile(m_handle, bytes, SEEK_CUR);
 #endif
 		return bytes;
 	}
@@ -334,7 +392,7 @@ Int LocalFile::read( void *buffer, Int bytes )
 #ifdef USE_BUFFERED_IO
 	Int ret = fread(buffer, 1, bytes, m_file);
 #else
-	Int ret = _read( m_handle, buffer, bytes );
+	Int ret = readFile( m_handle, buffer, bytes, (m_access & TEXT) != 0 );
 #endif
 
 	return ret;
@@ -355,7 +413,7 @@ Int LocalFile::write( const void *buffer, Int bytes )
 #ifdef USE_BUFFERED_IO
 	Int ret = fwrite(buffer, 1, bytes, m_file);
 #else
-	Int ret = _write( m_handle, buffer, bytes );
+	Int ret = writeFile( m_handle, buffer, bytes );
 #endif
 	return ret;
 }
@@ -392,7 +450,7 @@ Int LocalFile::seek( Int pos, seekMode mode)
 	else
 		return -1;
 #else
-	Int ret = _lseek( m_handle, pos, lmode );
+	Int ret = seekFile( m_handle, pos, lmode );
 #endif
 	return ret;
 }
@@ -414,7 +472,7 @@ Bool LocalFile::scanInt(Int &newInt)
 #ifdef USE_BUFFERED_IO
 		val = fread(&c, 1, 1, m_file);
 #else
-		val = _read( m_handle, &c, 1);
+		val = readFile( m_handle, &c, 1, (m_access & TEXT) != 0 );
 #endif
 	} while ((val != 0) && (((c < '0') || (c > '9')) && (c != '-')));
 
@@ -427,7 +485,7 @@ Bool LocalFile::scanInt(Int &newInt)
 #ifdef USE_BUFFERED_IO
 		val = fread(&c, 1, 1, m_file);
 #else
-		val = _read( m_handle, &c, 1);
+		val = readFile( m_handle, &c, 1, (m_access & TEXT) != 0 );
 #endif
 	} while ((val != 0) && ((c >= '0') && (c <= '9')));
 
@@ -436,7 +494,7 @@ Bool LocalFile::scanInt(Int &newInt)
 #ifdef USE_BUFFERED_IO
 		fseek(m_file, -1, SEEK_CUR);
 #else
-		_lseek(m_handle, -1, SEEK_CUR);
+		seekFile(m_handle, -1, SEEK_CUR);
 #endif
 	}
 
@@ -462,7 +520,7 @@ Bool LocalFile::scanReal(Real &newReal)
 #ifdef USE_BUFFERED_IO
 		val = fread(&c, 1, 1, m_file);
 #else
-		val = _read( m_handle, &c, 1);
+		val = readFile( m_handle, &c, 1, (m_access & TEXT) != 0 );
 #endif
 	} while ((val != 0) && (((c < '0') || (c > '9')) && (c != '-') && (c != '.')));
 
@@ -478,7 +536,7 @@ Bool LocalFile::scanReal(Real &newReal)
 #ifdef USE_BUFFERED_IO
 		val = fread(&c, 1, 1, m_file);
 #else
-		val = _read(m_handle, &c, 1);
+		val = readFile(m_handle, &c, 1, (m_access & TEXT) != 0);
 #endif
 	} while ((val != 0) && (((c >= '0') && (c <= '9')) || ((c == '.') && !sawDec)));
 
@@ -486,7 +544,7 @@ Bool LocalFile::scanReal(Real &newReal)
 #ifdef USE_BUFFERED_IO
 		fseek(m_file, -1, SEEK_CUR);
 #else
-		_lseek(m_handle, -1, SEEK_CUR);
+		seekFile(m_handle, -1, SEEK_CUR);
 #endif
 	}
 
@@ -511,7 +569,7 @@ Bool LocalFile::scanString(AsciiString &newString)
 #ifdef USE_BUFFERED_IO
 		val = fread(&c, 1, 1, m_file);
 #else
-		val = _read(m_handle, &c, 1);
+		val = readFile(m_handle, &c, 1, (m_access & TEXT) != 0);
 #endif
 	} while ((val != 0) && (isspace(c)));
 
@@ -524,7 +582,7 @@ Bool LocalFile::scanString(AsciiString &newString)
 #ifdef USE_BUFFERED_IO
 		val = fread(&c, 1, 1, m_file);
 #else
-		val = _read(m_handle, &c, 1);
+		val = readFile(m_handle, &c, 1, (m_access & TEXT) != 0);
 #endif
 	} while ((val != 0) && (!isspace(c)));
 
@@ -532,7 +590,7 @@ Bool LocalFile::scanString(AsciiString &newString)
 #ifdef USE_BUFFERED_IO
 		fseek(m_file, -1, SEEK_CUR);
 #else
-		_lseek(m_handle, -1, SEEK_CUR);
+		seekFile(m_handle, -1, SEEK_CUR);
 #endif
 	}
 
@@ -555,13 +613,13 @@ void LocalFile::nextLine(Char *buf, Int bufSize)
 #ifdef USE_BUFFERED_IO
 			val = fread(&c, 1, 1, m_file);
 #else
-			val = _read(m_handle, &c, 1);
+			val = readFile(m_handle, &c, 1, (m_access & TEXT) != 0);
 #endif
 		} else {
 #ifdef USE_BUFFERED_IO
 			val = fread(buf + i, 1, 1, m_file);
 #else
-			val = _read(m_handle, buf + i, 1);
+			val = readFile(m_handle, buf + i, 1, (m_access & TEXT) != 0);
 #endif
 			c = buf[i];
 		}
