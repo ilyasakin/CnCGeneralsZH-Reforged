@@ -35,7 +35,7 @@
 #ifndef FFSHADER_H
 #define FFSHADER_H
 
-#include <d3d9.h>
+#include "ffstate.h"
 
 #include <string>
 
@@ -48,15 +48,15 @@ const unsigned MAXIMUM_COMBINER_STAGES = 4;
 // D3DTA_ALPHAREPLICATE the way the device does; the generator applies both.
 struct CombinerStage
 {
-	DWORD ColourOperation;
-	DWORD ColourArgument0;
-	DWORD ColourArgument1;
-	DWORD ColourArgument2;
-	DWORD AlphaOperation;
-	DWORD AlphaArgument0;
-	DWORD AlphaArgument1;
-	DWORD AlphaArgument2;
-	DWORD TextureCoordinateIndex;
+	FixedFunctionValue ColourOperation;
+	FixedFunctionValue ColourArgument0;
+	FixedFunctionValue ColourArgument1;
+	FixedFunctionValue ColourArgument2;
+	FixedFunctionValue AlphaOperation;
+	FixedFunctionValue AlphaArgument0;
+	FixedFunctionValue AlphaArgument1;
+	FixedFunctionValue AlphaArgument2;
+	FixedFunctionValue TextureCoordinateIndex;
 	bool  TextureBound;
 };
 
@@ -70,7 +70,7 @@ struct PixelPipelineDescription
 	bool AlphaTestEnabled;
 
 	// D3DCMP_*, the comparison the surviving alpha has to pass.
-	DWORD AlphaFunction;
+	FixedFunctionValue AlphaFunction;
 
 	bool FogEnabled;
 };
