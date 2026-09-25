@@ -36,10 +36,12 @@
 	 architecture so a change is noticed; whether any NaN's bits reach a CRC or a save is a separate
 	 question (docs/mac-port/tasks/B5-win32-types.md). */
 
-/* FPUControl.h alone, not PreRTS.h: the engine headers carry inline virtual destructors, and GCC
-	 emits their vtables in every TU that sees them, which then need the engine's out-of-line pieces
-	 (AudioEventRTS, MemoryPool) that this self-check does not link.  Clang is lazier, which is why
-	 macOS never noticed; Linux/gcc did. */
+/* FPUControl.h alone, not PreRTS.h: the engine headers define key functions inline outside their
+	 classes (GameMemory.h's EMPTY_DTOR), and GCC emits those classes' vtables in every TU that sees
+	 them, which then need the engine's out-of-line pieces (AudioEventRTS, MemoryPool) that this
+	 self-check does not link.  Clang does not, which is why macOS never noticed; Linux/gcc did.
+	 FPUControl.cpp itself must include PreRTS.h, so it names them anyway: they are stubbed, to abort
+	 if ever called, in Tests/gcc_eager_vtable_stubs.cpp. */
 #include "GameLogic/FPUControl.h"
 
 #include <fenv.h>
