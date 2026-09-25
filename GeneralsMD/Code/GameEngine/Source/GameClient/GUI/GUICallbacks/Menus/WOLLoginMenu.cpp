@@ -120,20 +120,20 @@ static AsciiString obfuscate( AsciiString in )
 {
 	char *buf = NEW char[in.getLength() + 1];
 	strcpy(buf, in.str());
-	static const char *xor = "1337Munkee";
+	static const char *xorKey = "1337Munkee";		// not "xor": that is a C++ keyword, the ^ operator's other spelling
 	char *c = buf;
-	const char *c2 = xor;
+	const char *c2 = xorKey;
 	while (*c)
 	{
 		if (!*c2)
-			c2 = xor;
+			c2 = xorKey;
 		if (*c != *c2)
 			*c = *c++ ^ *c2++;
 		else
 			c++, c2++;
 	}
 	AsciiString out = buf;
-	delete buf;
+	delete[] buf;		// NEW char[] above; `delete buf` was a mismatch both CRTs tolerated
 	return out;
 }
 
@@ -953,6 +953,31 @@ static Bool isNickOkay(UnicodeString nick)
 	return TRUE;
 }
 
+/* Today's year, month or day, as a number: "yyyy", "MM" or "dd".  Windows asks GetDateFormat with that
+	 numeric picture, as isAgeOkay always did; elsewhere it is localtime's, which is the same local date
+	 and depends on no locale category. */
+#define DATE_BUFFER_SIZE 256
+static Int todaysDatePart( const char *picture )
+{
+#if defined(_WIN32)
+	char dateBuffer[ DATE_BUFFER_SIZE ];
+	GetDateFormat( LOCALE_SYSTEM_DEFAULT,
+								 0, NULL,
+								 picture,
+								 dateBuffer, DATE_BUFFER_SIZE );
+	return atoi(dateBuffer);
+#else
+	const time_t now = time( NULL );
+	struct tm local;
+	localtime_r( &now, &local );
+	if (strcmp( picture, "yyyy" ) == 0)
+		return local.tm_year + 1900;
+	if (strcmp( picture, "MM" ) == 0)
+		return local.tm_mon + 1;
+	return local.tm_mday;
+#endif
+}
+
 static Bool isAgeOkay(AsciiString &month, AsciiString &day, AsciiString year)
 {
 	if(month.isEmpty() || day.isEmpty() || year.isEmpty() || year.getLength() != 4)
@@ -968,35 +993,21 @@ static Bool isAgeOkay(AsciiString &month, AsciiString &day, AsciiString year)
 	day.format("%02.2d",dayInt);
 
 	// test the year first
-	#define DATE_BUFFER_SIZE 256
-	char dateBuffer[ DATE_BUFFER_SIZE ];
-	GetDateFormat( LOCALE_SYSTEM_DEFAULT,
-								 0, NULL,
-								 "yyyy",
-								 dateBuffer, DATE_BUFFER_SIZE );
-	Int sysVal = atoi(dateBuffer);
+	Int sysVal = todaysDatePart("yyyy");
 	Int userVal = atoi(year.str());
 	if(sysVal - userVal >= 14)
 		return TRUE;
 	else if( sysVal - userVal <= 12)
 		return FALSE;
 
-	GetDateFormat( LOCALE_SYSTEM_DEFAULT,
-								 0, NULL,
-								 "MM",
-								 dateBuffer, DATE_BUFFER_SIZE );
-	sysVal = atoi(dateBuffer);
+	sysVal = todaysDatePart("MM");
 	userVal = atoi(month.str());
 	if(sysVal - userVal >0 )
 		return TRUE;
 	else if( sysVal -userVal < 0 )
 		return FALSE;
 //	month.format("%02.2d",userVal);
-	GetDateFormat( LOCALE_SYSTEM_DEFAULT,
-								 0, NULL,
-								 "dd",
-								 dateBuffer, DATE_BUFFER_SIZE );
-	sysVal = atoi(dateBuffer);
+	sysVal = todaysDatePart("dd");
 	userVal = atoi(day.str());
 	if(sysVal - userVal< 0)
 		return FALSE;

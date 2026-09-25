@@ -140,7 +140,7 @@ static const char *thePFSlotName[ PF_SLOTS ] =
 	"adjust", "goal", "pos", "footprint", "exist", "hier",
 	"zones", "zonemod",
 	"movecheck", "expand", "mc.expand", "mc.line", "mc.linepass", "newbucket", "zone.merge" };
-static __int64 thePFTicks[ PF_SLOTS ];
+static Int64 thePFTicks[ PF_SLOTS ];
 static Int thePFCalls[ PF_SLOTS ];
 static Int thePFDepth = 0;
 static char thePFReport[ 512 ];
@@ -150,7 +150,7 @@ static char thePFReport[ 512 ];
 // what a headless batch needs: two builds are compared on total search size and total time, not
 // on whichever frame got logged. Plus the counts that say a pathing change made things worse
 // rather than merely different.
-static __int64 thePFMatchTicks[ PF_SLOTS ];
+static Int64 thePFMatchTicks[ PF_SLOTS ];
 static Int thePFMatchCalls[ PF_SLOTS ];
 static char thePFMatchReport[ 1024 ];
 static Int thePFOutOfCells = 0;			///< a search ran the shared cell-info pool dry and gave up
@@ -187,7 +187,7 @@ public:
 	{
 		if( m_timed )
 		{
-			__int64 end;
+			Int64 end;
 			end = Clock_Ticks();
 			thePFTicks[ m_slot ] += end - m_start;
 			thePFDepth--;
@@ -196,7 +196,7 @@ public:
 private:
 	Int m_slot;
 	Bool m_timed;
-	__int64 m_start;
+	Int64 m_start;
 };
 
 // Times unconditionally, even when nested inside a PathProfile scope - the enclosing slot's
@@ -212,13 +212,13 @@ public:
 	}
 	~PathProfileInner()
 	{
-		__int64 end;
+		Int64 end;
 		end = Clock_Ticks();
 		thePFTicks[ m_slot ] += end - m_start;
 	}
 private:
 	Int m_slot;
-	__int64 m_start;
+	Int64 m_start;
 };
 
 //-----------------------------------------------------------------------------------
@@ -2908,17 +2908,17 @@ static  Bool  s_stopForceCalling = FALSE;
 void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer layers[], const IRegion2D &globalBounds )
 {
 	PathProfileInner pfProfile( PF_ZONES );
-	__int64 zoneTicksPerSecond = 0, zoneStart = 0, zoneCellsDone = 0, zoneBlocksDone = 0, zoneEnd = 0;
+	Int64 zoneTicksPerSecond = 0, zoneStart = 0, zoneCellsDone = 0, zoneBlocksDone = 0, zoneEnd = 0;
 	zoneTicksPerSecond = Clock_Ticks_Per_Second();
 	zoneStart = Clock_Ticks();
 
 #ifdef DEBUG_QPF
 #if defined(DEBUG_LOGGING) 
-	__int64 startTime64;
+	Int64 startTime64;
 	static double timeToUpdate = 0.0f;
   static double averageTimeToUpdate = 0.0f;
   static Int updateSamples = 0;
-	__int64 endTime64,freq64;
+	Int64 endTime64,freq64;
 	freq64 = Clock_Ticks_Per_Second();
 	startTime64 = Clock_Ticks();
 #endif
@@ -3259,7 +3259,7 @@ void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer laye
 //		//	DEBUG_ASSERTCRASH(map[i][j].getZone() != 0, ("Cleared the zone."));
 //		}
 //	}
-  register UnsignedInt maxZone = m_maxZone;
+  UnsignedInt maxZone = m_maxZone;
 	j=globalBounds.lo.y;
   while( j <= globalBounds.hi.y )	
   {
@@ -3372,7 +3372,7 @@ void PathfindZoneManager::calculateZones( PathfindCell **map, PathfindLayer laye
   //FLATTEN HIERARCHICAL ZONES
   {
 	  i = 1;
-    register Int zone;  
+    Int zone;  
     while ( i < maxZone ) 
     {		// Flatten hierarchical zones.
 		  zone = m_hierarchicalZones[i];
@@ -3477,9 +3477,9 @@ void PathfindZoneManager::updateZonesForModify(PathfindCell **map, PathfindLayer
 
 #ifdef DEBUG_QPF
 #if defined(DEBUG_LOGGING) 
-	__int64 startTime64;
+	Int64 startTime64;
 	double timeToUpdate=0.0f;
-	__int64 endTime64,freq64;
+	Int64 endTime64,freq64;
 	freq64 = Clock_Ticks_Per_Second();
 	startTime64 = Clock_Ticks();
 #endif
@@ -5159,7 +5159,7 @@ void Pathfinder::bumpDither( void )
 
 const char *Pathfinder::getMatchProfileReport( void )
 {
-	__int64 freq = 0;
+	Int64 freq = 0;
 	freq = Clock_Ticks_Per_Second();
 	thePFMatchReport[ 0 ] = 0;
 	Int len = 0;
@@ -5189,7 +5189,7 @@ const char *Pathfinder::getMatchProfileReport( void )
 
 const char *Pathfinder::getProfileReport( void )
 {
-	__int64 freq = 0;
+	Int64 freq = 0;
 	freq = Clock_Ticks_Per_Second();
 	thePFReport[ 0 ] = 0;
 	Int len = 0;
@@ -7531,9 +7531,9 @@ void Pathfinder::processPathfindQueue(void)
 #ifdef DEBUG_QPF
 #if defined _DEBUG || defined _INTERNAL
 	Int startTimeMS = Clock_Milliseconds_Coarse();
-	__int64 startTime64;
+	Int64 startTime64;
 	double timeToUpdate=0.0f;
-	__int64 endTime64,freq64;
+	Int64 endTime64,freq64;
 	freq64 = Clock_Ticks_Per_Second();
 	startTime64 = Clock_Ticks();
 #endif
@@ -8199,7 +8199,7 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 #endif
 	// release-visible timing (DebugLogFile.txt) for searches that cost a visible frame: how
 	// much was the A* itself and how much the path build/optimize after it
-	__int64 fpFreq64 = 0, fpT0 = 0;
+	Int64 fpFreq64 = 0, fpT0 = 0;
 	fpFreq64 = Clock_Ticks_Per_Second();
 	fpT0 = Clock_Ticks();
 	Bool centerInCell = true;
@@ -8246,7 +8246,7 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 	worldToCell( to, &cell );
 
 	if (!checkDestination(obj, cell.x, cell.y, destinationLayer, radius, centerInCell)) {
-		return false;
+		return NULL;
 	}
 	// determine start cell
 	ICoord2D startCellNdx;
@@ -8411,7 +8411,7 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 
 			m_isTunneling = false;
 			// construct and return path
-			__int64 fpT1 = 0, fpT2 = 0;
+			Int64 fpT1 = 0, fpT2 = 0;
 			fpT1 = Clock_Ticks();
 			Path *path =  buildActualPath( obj, locomotorSet.getValidSurfaces(), from, goalCell, centerInCell, false );
 			fpT2 = Clock_Ticks();
@@ -8465,7 +8465,7 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 		Path *partial = buildActualPath( obj, locomotorSet.getValidSurfaces(), from, closestCell, centerInCell, false );
 		if (partial) {
 			if (fpFreq64 > 0) {
-				__int64 fpTCap = 0;
+				Int64 fpTCap = 0;
 				fpTCap = Clock_Ticks();
 				DEBUG_LOG(("Pathfind CAPPED frame %d unit '%s' [%s]: %d cells, %.1f ms, partial to %d cells short of goal, (%.0f,%.0f)->(%.0f,%.0f)\n",
 									 TheGameLogic->getFrame(), obj ? obj->getTemplate()->getName().str() : "?",
@@ -8540,7 +8540,7 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 	// debug builds, and "no path" reports need the cell count to tell a dry pool from a real
 	// dead end
 	{
-		__int64 fpTFail = 0;
+		Int64 fpTFail = 0;
 		fpTFail = Clock_Ticks();
 		const Real failMs = (fpFreq64 > 0) ? 1000.0f * (Real)(fpTFail - fpT0) / (Real)fpFreq64 : 0.0f;
 		DEBUG_LOG(("Pathfind FAILED frame %d unit '%s' [%s] from (%.0f,%.0f) to (%.0f,%.0f), %d cells, %.1f ms\n",
@@ -12167,7 +12167,7 @@ Path *Pathfinder::getMoveAwayFromPath(Object* obj, Object *otherObj,
 {
 	PathProfile pfProfile( PF_MOVEAWAY );
 	beginFlowSearch(NULL);
-	if (m_isMapReady == false) return false; // Should always be ok.
+	if (m_isMapReady == false) return NULL; // Should always be ok.
 #if defined _DEBUG || defined _INTERNAL
 	Int startTimeMS = Clock_Milliseconds_Coarse();
 #endif
@@ -12199,9 +12199,9 @@ Path *Pathfinder::getMoveAwayFromPath(Object* obj, Object *otherObj,
 	worldToCell(&startPos, &startCellNdx);
 	PathfindCell *parentCell = getClippedCell( obj->getLayer(), obj->getPosition() ); 
 	if (parentCell == NULL)
-		return false;
+		return NULL;
 	if (!obj->getAIUpdateInterface()) {
-		return false; // shouldn't happen, but can't move it without an ai.
+		return NULL; // shouldn't happen, but can't move it without an ai.
 	}
 	const LocomotorSet& locomotorSet = obj->getAIUpdateInterface()->getLocomotorSet();
 
@@ -12222,7 +12222,7 @@ Path *Pathfinder::getMoveAwayFromPath(Object* obj, Object *otherObj,
 	}
 
 	if (!parentCell->allocateInfo(startCellNdx)) {
-		return false;
+		return NULL;
 	}
 	parentCell->startPathfind(NULL);
 
@@ -12377,15 +12377,15 @@ Path *Pathfinder::patchPath( const Object *obj, const LocomotorSet& locomotorSet
 	//worldToCell(obj->getPosition(), &startCellNdx);
 	PathfindCell *parentCell = getClippedCell( obj->getLayer(), &currentPosition); 
 	if (parentCell == NULL)
-		return false;
+		return NULL;
 	if (!obj->getAIUpdateInterface()) {
-		return false; // shouldn't happen, but can't move it without an ai.
+		return NULL; // shouldn't happen, but can't move it without an ai.
 	}
 
 	m_isTunneling = false;
 	
 	if (!parentCell->allocateInfo(startCellNdx)) {
-		return false;
+		return NULL;
 	}
 	parentCell->startPathfind( NULL);
 
@@ -12521,7 +12521,7 @@ Path *Pathfinder::patchPath( const Object *obj, const LocomotorSet& locomotorSet
 	cleanOpenAndClosedLists();
 	parentCell->releaseInfo();
 	candidateGoal->releaseInfo();
-	return false;
+	return NULL;
 }
 
 
@@ -12560,7 +12560,7 @@ Path *Pathfinder::findAttackPath( const Object *obj, const LocomotorSet& locomot
 			AS_INT(victimPos->x), AS_INT(victimPos->y), AS_INT(victimPos->z)));
 	}
 	*/
-	if (m_isMapReady == false) return false; // Should always be ok.
+	if (m_isMapReady == false) return NULL; // Should always be ok.
 #if defined _DEBUG || defined _INTERNAL
 //	Int startTimeMS = ::GetTickCount();
 #endif
@@ -12647,14 +12647,14 @@ Path *Pathfinder::findAttackPath( const Object *obj, const LocomotorSet& locomot
 	worldToCell(&objPos, &startCellNdx);
 	PathfindCell *parentCell = getClippedCell( obj->getLayer(), &objPos ); 
 	if (parentCell == NULL)
-		return false;
+		return NULL;
 	if (!obj->getAIUpdateInterface()) {
-		return false; // shouldn't happen, but can't move it without an ai.
+		return NULL; // shouldn't happen, but can't move it without an ai.
 	}
 	const PathfindCell *startCell = parentCell;
 
 	if (!parentCell->allocateInfo(startCellNdx)) {
-		return false;
+		return NULL;
 	}
 	parentCell->startPathfind(NULL);
 
@@ -12669,7 +12669,7 @@ Path *Pathfinder::findAttackPath( const Object *obj, const LocomotorSet& locomot
 
  	if (!goalCell->allocateInfo(victimCellNdx)) {
 		parentCell->releaseInfo();
-		return false;
+		return NULL;
 	}
 
 	// initialize "open" list to contain start cell
@@ -12881,7 +12881,7 @@ Path *Pathfinder::findAttackPath( const Object *obj, const LocomotorSet& locomot
 	cleanOpenAndClosedLists();
 	parentCell->releaseInfo();
 	goalCell->releaseInfo();
-	return false;
+	return NULL;
 }
 
 /** Find a short, valid path to a location that is safe from the repulsors.  */
@@ -12891,7 +12891,7 @@ Path *Pathfinder::findSafePath( const Object *obj, const LocomotorSet& locomotor
 	PathProfile pfProfile( PF_SAFE );
 	beginFlowSearch(NULL);		// running away prices danger, not traffic
 	//CRCDEBUG_LOG(("Pathfinder::findSafePath()\n"));
-	if (m_isMapReady == false) return false; // Should always be ok.
+	if (m_isMapReady == false) return NULL; // Should always be ok.
 #if defined _DEBUG || defined _INTERNAL
 //	Int startTimeMS = ::GetTickCount();
 #endif
@@ -12917,12 +12917,12 @@ Path *Pathfinder::findSafePath( const Object *obj, const LocomotorSet& locomotor
 	worldToCell(obj->getPosition(), &startCellNdx);
 	PathfindCell *parentCell = getClippedCell( obj->getLayer(), obj->getPosition() ); 
 	if (parentCell == NULL)
-		return false;
+		return NULL;
 	if (!obj->getAIUpdateInterface()) {
-		return false; // shouldn't happen, but can't move it without an ai.
+		return NULL; // shouldn't happen, but can't move it without an ai.
 	}
 	if (!parentCell->allocateInfo(startCellNdx)) {
-		return false;
+		return NULL;
 	}
 	parentCell->startPathfind( NULL);
 
@@ -13043,7 +13043,7 @@ Path *Pathfinder::findSafePath( const Object *obj, const LocomotorSet& locomotor
 	m_isTunneling = false;
 	cleanOpenAndClosedLists();
 	parentCell->releaseInfo();
-	return false;
+	return NULL;
 }
 
 //-----------------------------------------------------------------------------

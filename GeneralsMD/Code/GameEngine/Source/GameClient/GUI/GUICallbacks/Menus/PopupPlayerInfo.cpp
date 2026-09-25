@@ -30,6 +30,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Platform/IsWindows9x.h"
 
 #include "Common/PlayerTemplate.h"
 #include "Common/BattleHonors.h"
@@ -1328,17 +1329,12 @@ void GameSpyPlayerInfoOverlayInit( WindowLayout *layout, void *userData )
 	GadgetCheckBoxSetChecked(checkBoxAsianFont,!pref.getDisallowAsianText());
 	GadgetCheckBoxSetChecked(checkBoxNonAsianFont,!pref.getDisallowNonAsianText());
 
-	OSVERSIONINFO	osvi;
-	osvi.dwOSVersionInfoSize=sizeof(OSVERSIONINFO);
-	if (GetVersionEx(&osvi))
+	if (isWindows9x())
 	{	//check if we're running Win9x variant since they may need different fonts
-		if (osvi.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS)
-		{
-			if (checkBoxAsianFont)
-				checkBoxAsianFont->winEnable(FALSE);
-			if (checkBoxNonAsianFont)
-				checkBoxNonAsianFont->winEnable(FALSE);
-		}
+		if (checkBoxAsianFont)
+			checkBoxAsianFont->winEnable(FALSE);
+		if (checkBoxNonAsianFont)
+			checkBoxNonAsianFont->winEnable(FALSE);
 	}
 
 	//TheWindowManager->winSetModal(parent);
@@ -1415,7 +1411,7 @@ WindowMsgHandledType GameSpyPlayerInfoOverlayInput( GameWindow *window, Unsigned
 
 	return MSG_IGNORED;
 }// GameSpyPlayerInfoOverlayInput
-void messageBoxYes( void );
+static void messageBoxYes( void );
 //-------------------------------------------------------------------------------------------------
 /** Overlay window system callback */
 //-------------------------------------------------------------------------------------------------

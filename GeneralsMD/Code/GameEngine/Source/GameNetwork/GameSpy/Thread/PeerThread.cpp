@@ -1172,7 +1172,7 @@ static UnsignedInt localIP = 0;
 void PeerThreadClass::Thread_Function()
 {
 	try {
-	_set_se_translator( DumpExceptionInfo ); // Hook that allows stack trace.
+	InstallThreadExceptionTranslator(); // Hook that allows stack trace.
 
 	PEER peer;
 

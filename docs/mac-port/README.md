@@ -753,6 +753,16 @@ it takes to be the file. Two shapes of name defeat that rule.
 
 A future caller writing an extensionless name would hit it. `PosixLocalFileSystem` keeps the rule
 but stops when the name runs out. Found by C1; recorded, not fixed on Windows.
+**13. A staging-room stats message sent the address of a string instead of the string - fixed.**
+`WOLGameSetupMenu.cpp:125` passed `formatPlayerKVPairs(...)`'s `std::string` straight into
+`AsciiString::format("%d %s", ...)`'s varargs, where every other caller adds `.c_str()`. On MSVC
+x64 a non-trivial class in varargs is passed as the address of a temporary copy (measured: clang
+targeting `x86_64-pc-windows-msvc` passes `ptr`), so `%s` read the string object's own bytes.
+MSVC's `std::string` keeps up to 15 characters inline at its start and a heap pointer there
+otherwise (documented layout, not measured here), and a stats list is far longer than 15, so the
+"STATS/" UTM carried the profile id and then the pointer's bytes. Other players in the staging room
+never got this player's stats. It is dead-service code (GameSpy), and there was nothing portable to
+preserve, so it is fixed with `.c_str()` (PM decision).
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
@@ -781,6 +791,16 @@ hunting a crash or corruption that only one platform shows, look here first.**
   thing to run `GameMemory.cpp` off Windows. Fixed by making the pointer `volatile`, so it escapes.
   Windows builds evidently keep the calls, since the game starts there. The fix is a
   `WINDOWS-DEBT.md` row.
+- **A mismatched `delete` in the saved-login obfuscation - fixed.** `WOLLoginMenu.cpp`'s
+  `obfuscate()` allocated its buffer with `NEW char[...]` and freed it with `delete buf`. Freeing an
+  array with the non-array form is undefined; MSVC's CRT and the macOS one both release a `char`
+  array either way, which is why it never showed. `delete[]` now (PM decision): the same behaviour on
+  both, without the undefined part.
+- **An XOR whose write lands one character late, on every compiler - kept.** In the same function,
+  `*c = *c++ ^ *c2++;`. Since C++17 the right-hand side of `=` is sequenced before the left, so `c` has
+  already moved on when `*c` is written: each byte is stored one position further than the loop reads
+  as meaning. MSVC in C++17 mode and clang apply the same order, so both platforms produce the same
+  bytes. Changing it would make every saved GameSpy login unreadable, so it stays (PM decision).
 
 ### "ctest is green" was not what it looked like
 

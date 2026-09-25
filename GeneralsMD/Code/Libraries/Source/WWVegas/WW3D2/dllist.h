@@ -76,7 +76,7 @@ class DLDestroyListClass : public DLListClass<T>
 public:
 	virtual ~DLDestroyListClass()
 	{
-		while (T* t=Head()) {		
+		while (T* t=this->Head()) {		// Head is the dependent base's: standard two-phase lookup needs this->		
 			delete t;
 		}
 	}

@@ -396,6 +396,14 @@ and C1 replaces it:
   `Data\INI\MemoryPools.ini` (until then every pool keeps its compiled-in size) and Debug.cpp's
   log names.
 
+- **Registry.ini.** Off Windows, `registry.cpp` reads `Registry.ini` from the user data directory in
+  Options.ini's "key = value" form: `Language`, `Version`, `ergc\<name>`, `Generals\<name>`.
+  Nothing in the engine writes it; the future launcher or installer does, as the Windows installer
+  writes the registry. Until C1 places the user data directory, none is read and every value keeps its
+  compiled-in default. That default language is "english", so a non-English Mac install needs the file
+  until the launcher detects the language from the installed `Data\<lang>\` folders (C2's or the
+  launcher's call).
+
 ## Do not
 
 - Do not change `GameEngine`'s factory interface. If a factory does not fit macOS, that is worth
