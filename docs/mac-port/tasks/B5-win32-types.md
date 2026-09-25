@@ -255,6 +255,28 @@ Census after the pass: **1,868 → 467 distinct sites**, with no enum or narrowi
 first-error sweep still reads 0/602, because every file now stops first at `UnicodeString.h:407`
 (`_wcsicmp`).
 
+**Enum bitfields: checked, and none exist.** A fixed-`int` enum bitfield is signed, and clang made a
+bitfield of an unfixed enum with non-negative values unsigned. MSVC has always made enum bitfields
+signed. So this pass moves clang to MSVC's behaviour, and an enum bitfield that uses its field's top
+bit would now read negative on clang, as it always has on Windows. A scan of all 3,252 tracked
+sources for member declarations with a bit width found **no bitfield of any of the 62 enums**. The
+same scan found 127 bitfield lines of other types (`int` 60, `unsigned` 18, `char` 18, `Bool` 17, and a
+typedef'd `zoneStorageType`), which shows it would have seen one. If an enum bitfield is ever added,
+this paragraph is the reason to check its width.
+
+**After the enum pass, 2026-09-25:**
+
+- `_wcsicmp` is bridged in `MSVCCompat.h` off MSVC, with MSVC's "C"-locale meaning: fold `A`-`Z`
+  only, and return the difference. It is not `wcscasecmp`: measured, in a UTF-8 locale that calls
+  E-acute and e-acute equal, and MSVC's "C" locale does not. Call sites are unchanged. B1's
+  char16_t move retypes `compareNoCase` onto `WideCharICmp`, which gives the same answer.
+- Three missing `typename`s (`SparseMatchFinder.h` x2, `ScriptConditions.cpp`) and eight extra
+  qualifications (`Object.h` x3, `ThingTemplate.h`, `PartitionManager.h`, `CommandXlat.h`,
+  `ChinookAIUpdate.h`, `FlightDeckBehavior.h`). Each diff is exactly the added or removed token, and
+  MSVC accepts the standard form.
+- `GameMemory.h`'s global `operator new`/`delete` are **-47's** (`feature/mac-port-linux`), not
+  this task's.
+
 <details><summary>The 62 enums</summary>
 
 | Enum | Definition | Forward declarations |

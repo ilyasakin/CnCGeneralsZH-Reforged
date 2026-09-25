@@ -147,6 +147,24 @@ inline char* _strupr(char* s) { for (char* p = s; *p; ++p) *p = (char)toupper((u
 inline char* strlwr(char* s) { return _strlwr(s); }
 inline char* strupr(char* s) { return _strupr(s); }
 
+// _wcsicmp: the same argument as _strlwr above, for wide strings.  Its one caller is
+// UnicodeString::compareNoCase, which sorts the lobby's game list and matches UI labels.  MSVC's
+// is locale-dependent, and this tree never leaves the "C" locale, where MSVC folds 'A'-'Z' only,
+// compares the folded code units and returns their difference.  That is what this does.
+// Deliberately not wcscasecmp: that folds with towlower in the current locale, and whether
+// glibc's and Darwin's "C" locales fold anything beyond ASCII is exactly the sort of fact that
+// differs between them.  Lib/WideCharFns.h's WideCharICmp makes the same comparison; B1's move of
+// WideChar to char16_t retypes compareNoCase onto it, and this bridge goes then.
+inline int _wcsicmp(const wchar_t* a, const wchar_t* b)
+{
+	for (;;) {
+		wchar_t ca = *a++, cb = *b++;
+		if (ca >= L'A' && ca <= L'Z') ca += L'a' - L'A';
+		if (cb >= L'A' && cb <= L'Z') cb += L'a' - L'A';
+		if (ca != cb || ca == 0) return (int)(ca - cb);
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TCHAR.
 //
