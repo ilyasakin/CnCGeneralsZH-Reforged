@@ -90,7 +90,7 @@ inline ShaderCase combiner(const std::string &name, bool reference)
 	memset(&c.Combiner.PixelPipeline, 0, sizeof(c.Combiner.PixelPipeline));
 	c.Combiner.NormalMapped = false;
 	c.Combiner.ShadowReceiving = false;
-	memset(&c.Vertex, 0, sizeof(c.Vertex));
+	c.Vertex = VertexPipelineDescription();
 	c.Engine = ENGINE_SHADER_NONE;
 	memset(&c.EnginePipeline, 0, sizeof(c.EnginePipeline));
 	c.EngineBumped = false;
@@ -100,8 +100,9 @@ inline ShaderCase combiner(const std::string &name, bool reference)
 // test_ffvertexcompile's plain_description.
 inline VertexPipelineDescription plain_vertex()
 {
-	VertexPipelineDescription description;
-	memset(&description, 0, sizeof(description));
+	// Value-initialised: zero, and NormalMapped its declared false.  A memset over a structure with a
+	// default member initialiser is what gcc's -Wclass-memaccess warns about.
+	VertexPipelineDescription description = VertexPipelineDescription();
 	description.FVF = FF_FVF_XYZ | FF_FVF_NORMAL | FF_FVF_TEX2 | FF_FVF_DIFFUSE;
 	description.ColourVertexEnabled = true;
 	description.DiffuseMaterialSource = FF_MCS_COLOR1;

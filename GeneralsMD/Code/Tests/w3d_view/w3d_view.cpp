@@ -243,8 +243,7 @@ SDL_GPUShader *generatedShader(SDL_GPUDevice *device, const std::string &hlsl, b
 // The mesh draw's fixed-function state, as W3D sets it for a lit, textured, uncoloured mesh.
 VertexPipelineDescription meshVertexState()
 {
-	VertexPipelineDescription description;
-	memset(&description, 0, sizeof(description));
+	VertexPipelineDescription description = VertexPipelineDescription();	// zero, and NormalMapped false
 	description.FVF = FF_FVF_XYZ | FF_FVF_NORMAL | FF_FVF_TEX1;
 	description.LightingEnabled = true;
 	description.LightCount = 1;

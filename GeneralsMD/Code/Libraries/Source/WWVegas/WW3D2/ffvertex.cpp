@@ -669,20 +669,20 @@ std::string VertexShader_Key(const VertexPipelineDescription & description)
 	char field[64];
 
 	snprintf(field, sizeof(field), "%lu:%u%u%u:%lu,%lu,%lu,%lu",
-		description.FVF, description.LightingEnabled ? 1u : 0u,
+		(unsigned long)description.FVF, description.LightingEnabled ? 1u : 0u,
 		description.SpecularEnabled ? 1u : 0u, description.ColourVertexEnabled ? 1u : 0u,
-		description.DiffuseMaterialSource, description.AmbientMaterialSource,
-		description.EmissiveMaterialSource, description.SpecularMaterialSource);
+		(unsigned long)description.DiffuseMaterialSource, (unsigned long)description.AmbientMaterialSource,
+		(unsigned long)description.EmissiveMaterialSource, (unsigned long)description.SpecularMaterialSource);
 	key += field;
 
 	for (unsigned index = 0; index < description.LightCount; ++index) {
-		snprintf(field, sizeof(field), ":L%lu", description.Lights[index].Type);
+		snprintf(field, sizeof(field), ":L%lu", (unsigned long)description.Lights[index].Type);
 		key += field;
 	}
 
 	for (unsigned stage = 0; stage < description.StageCount; ++stage) {
-		snprintf(field, sizeof(field), ":T%lu,%lu", description.Stages[stage].TextureCoordinateIndex,
-			description.Stages[stage].TextureTransformFlags);
+		snprintf(field, sizeof(field), ":T%lu,%lu", (unsigned long)description.Stages[stage].TextureCoordinateIndex,
+			(unsigned long)description.Stages[stage].TextureTransformFlags);
 		key += field;
 	}
 
