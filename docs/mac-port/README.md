@@ -167,7 +167,7 @@ you start. That commit is the lock.
 | B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | not started |  |
 | B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | in progress | -95 |
 | B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
-| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | recon done, held for -83 |  |
+| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | in progress (wwlib half) | -a9 |
 | B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | not started |  |
 | B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) — **see [findings](B7-w3d-layout.md)** | M1 | A1 | **done, held for B10** | -14 |
 | B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in review | -83 |
@@ -177,8 +177,8 @@ you start. That commit is the lock.
 | B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | in review | -83 |
 | B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | not started | |
 | B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress | -3a |
-| B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | **not started** |  |
-| B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) | M1 | A1 | not started | |
+| B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | in progress | -18 |
+| B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) | M1 | A1 | in progress | -47 |
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | in progress | -21 |
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | in progress | -21 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
