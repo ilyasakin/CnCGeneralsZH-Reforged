@@ -28,6 +28,9 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#if !defined(_WIN32)
+#include <unistd.h>		// getpid, for the replay checkpoint folder
+#endif
 #include "Lib/Clock.h"
 #include "Lib/WideCharFns.h"
 
@@ -2296,7 +2299,11 @@ static void seekReplay( UnsignedInt target )
 static AsciiString replayCheckpointFolder( void )
 {
 	AsciiString leaf;
+#if defined(_WIN32)
 	leaf.format( "%s\\%u", REPLAY_CHECKPOINT_FOLDER, (UnsignedInt)GetCurrentProcessId() );
+#else
+	leaf.format( "%s\\%u", REPLAY_CHECKPOINT_FOLDER, (UnsignedInt)getpid() );
+#endif
 	return TheGameState->getFilePathInSaveDirectory( leaf );
 }
 
@@ -2330,7 +2337,7 @@ static void collectPostedCRCs( GameMessageList *list, std::vector< std::pair< In
 
 static void takeReplayCheckpoint( UnsignedInt frame )
 {
-	const DWORD startMs = Clock_Milliseconds();
+	const UnsignedInt startMs = Clock_Milliseconds();
 	CreateDirectoryA( TheGameState->getSaveDirectory().str(), NULL );
 	CreateDirectoryA( TheGameState->getFilePathInSaveDirectory( REPLAY_CHECKPOINT_FOLDER ).str(), NULL );
 	const AsciiString folder = replayCheckpointFolder();
@@ -2364,7 +2371,7 @@ static void rewindReplay( UnsignedInt target )
 	const Real pitch = TheTacticalView->getPitch();
 	const Real zoom = TheTacticalView->getZoom();
 	const Int framesPerSecond = TheGameEngine->getFramesPerSecondLimit();
-	const DWORD startMs = Clock_Milliseconds();
+	const UnsignedInt startMs = Clock_Milliseconds();
 
 	TheGameState->loadCheckpoint( checkpoint.path,
 		[ & ]() { TheRecorder->resumePlayback( replayFile, checkpoint.cursor ); } );
