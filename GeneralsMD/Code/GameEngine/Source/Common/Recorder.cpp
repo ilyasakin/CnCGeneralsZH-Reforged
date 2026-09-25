@@ -591,15 +591,15 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 
 	// Print out the name of the replay.
 	//
-	// WideCharFileWrite rather than fwprintf: the argument is a WideChar*, and "%ws" tells the C
-	// library it is a wchar_t* - two bytes under MSVC and four under clang.  The bytes on disk do
-	// not change; readUnicodeString below reads them back one fgetwc at a time and has to keep
-	// working.  See Lib/WideCharFns.h, which also records why this whole function needs a
-	// byte-oriented rewrite before it runs on a Mac at all.
+	// WideCharFileWrite and WideCharFilePut rather than fwprintf and fputwc: this FILE* also carries
+	// fwrite, and a stream may not mix wide and byte calls - MSVC tolerated it, a POSIX C library
+	// fails one kind.  They write what the wide calls wrote on a binary stream, each code unit as
+	// two bytes, low first, so the format is unchanged; readUnicodeString reads it back with
+	// WideCharFileGet.  See Lib/WideCharFns.h.
 	UnicodeString replayName;
 	replayName = TheGameText->fetch("GUI:LastReplay");
 	WideCharFileWrite(m_file, replayName.str());
-	fputwc(0, m_file);
+	WideCharFilePut(m_file, 0);
 
 	// Date and Time
 	WallClockTime systemTime;
@@ -611,9 +611,9 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	UnicodeString versionTimeString = TheVersion->getUnicodeBuildTime();
 	UnsignedInt versionNumber = TheVersion->getVersionNumber();
 	WideCharFileWrite(m_file, versionString.str());
-	fputwc(0, m_file);
+	WideCharFilePut(m_file, 0);
 	WideCharFileWrite(m_file, versionTimeString.str());
-	fputwc(0, m_file);
+	WideCharFilePut(m_file, 0);
 	fwrite(&versionNumber, sizeof(UnsignedInt), 1, m_file);
 	fwrite(&(TheGlobalData->m_exeCRC), sizeof(UnsignedInt), 1, m_file);
 	fwrite(&(TheGlobalData->m_iniCRC), sizeof(UnsignedInt), 1, m_file);
@@ -1266,7 +1266,7 @@ UnicodeString RecorderClass::readUnicodeString() {
 	WideChar str[1024] = u"";
 	Int index = 0;
 
-	Int c = fgetwc(m_file);
+	Int c = WideCharFileGet(m_file);
 	if (c == EOF) {
 		str[index] = 0;
 	}
@@ -1276,7 +1276,7 @@ UnicodeString RecorderClass::readUnicodeString() {
 	// last iteration stored one element past the end of the buffer.
 	while (index < 1023 && str[index] != 0) {
 		++index;
-		Int c = fgetwc(m_file);
+		Int c = WideCharFileGet(m_file);
 		if (c == EOF) {
 			str[index] = 0;
 			break;
