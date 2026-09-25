@@ -44,12 +44,24 @@ step() { echo "[vendor] $1" >&2; }
 
 # --- the same three helpers vendor.ps1 has, in the same order ------------------------------------
 
+# Both of these run inside $( ), where bash does not carry set -e, so a failed curl or unzip used to
+# be ignored: the function printed its result anyway, the caller copied an empty folder over the
+# library and the run ended with "everything the build needs is in place" (measured with a bogus
+# commit, 2026-09-25). They return failure explicitly now, which the caller's assignment turns into
+# an exit under set -e - the way vendor.ps1's $ErrorActionPreference = 'Stop' already behaved.
+# The download goes to a .part file and is renamed only once complete, because an existing file is
+# taken as already downloaded, and an interrupted transfer would otherwise be reused on every run.
 get_file() { # url destination -> prints destination
   local url="$1" destination="$2"
   if [ -e "$destination" ]; then printf '%s\n' "$destination"; return 0; fi
   mkdir -p "$(dirname "$destination")"
   step "downloading $(basename "$destination")"
-  curl -fsSL "$url" -o "$destination"
+  if ! curl -fsSL "$url" -o "$destination.part"; then
+    rm -f "$destination.part"
+    echo "[vendor] ERROR: could not download $url" >&2
+    return 1
+  fi
+  mv -f "$destination.part" "$destination"
   printf '%s\n' "$destination"
 }
 
@@ -61,8 +73,8 @@ expand_source() { # archive name -> prints the unpacked root
   mkdir -p "$target"
   step "unpacking $name"
   case "$archive" in
-    *.tar.gz) tar -xf "$archive" -C "$target" ;;
-    *)        unzip -qo "$archive" -d "$target" ;;
+    *.tar.gz) tar -xf "$archive" -C "$target" || { echo "[vendor] ERROR: could not unpack $archive" >&2; return 1; } ;;
+    *)        unzip -qo "$archive" -d "$target" || { echo "[vendor] ERROR: could not unpack $archive" >&2; return 1; } ;;
   esac
   local entry count=0 only=
   for entry in "$target"/*; do
@@ -356,6 +368,47 @@ install_nanosvg() {
   step "nanosvg -> Libraries/Source/nanosvg"
 }
 
+# --- SDL3 3.4.16, the whole repository: the window, the events, the entry point and the GPU API on
+# every platform that is not Windows (decision 3 in docs/mac-port/README.md). Windows keeps
+# Win32Device, so vendor.ps1 does not fetch it - it says so, the way report_directx does here. Same
+# .gitignore dance as litehtml. Pinned to the release's commit, not its tag, because a tag can move.
+install_sdl3() {
+  local destination="$libraries/Source/SDL3"
+  if [ -e "$destination/CMakeLists.txt" ] && [ -z "$force" ]; then return 0; fi
+  local archive source
+  archive=$(get_file 'https://github.com/libsdl-org/SDL/archive/fa2c02bb6e21974a89ea9824bc53c9932abe5f9c.zip' "$work/SDL3-3.4.16.zip")
+  source=$(expand_source "$archive" 'SDL3')
+  local keep="$destination/.gitignore" kept="$work/SDL3.gitignore"
+  rm -f "$kept"
+  if [ -e "$keep" ]; then mv "$keep" "$kept"; fi
+  rm -rf "$destination"
+  mkdir -p "$destination"
+  cp -Rf "$source/." "$destination/"
+  if [ -e "$kept" ]; then mv -f "$kept" "$keep"; fi
+  if [ ! -e "$destination/include/SDL3/SDL_gpu.h" ]; then
+    echo "[vendor] SDL3 unpacked without include/SDL3/SDL_gpu.h - not the tree this build expects" >&2
+    exit 1
+  fi
+  step "SDL3 3.4.16 -> Libraries/Source/SDL3"
+}
+
+# --- miniaudio 0.11.25, the one header and its one implementation file: audio beneath C4's port of
+# MilesAudioManager (decision 3). POSIX only, like SDL3. Copied file by file, like nanosvg, so its
+# committed .gitignore is never disturbed; upstream's CMakeLists builds extras this does not want.
+install_miniaudio() {
+  local destination="$libraries/Source/miniaudio"
+  if [ -e "$destination/miniaudio.c" ] && [ -z "$force" ]; then return 0; fi
+  local archive source
+  archive=$(get_file 'https://github.com/mackron/miniaudio/archive/9634bedb5b5a2ca38c1ee7108a9358a4e233f14d.zip' "$work/miniaudio-0.11.25.zip")
+  source=$(expand_source "$archive" 'miniaudio')
+  if [ ! -e "$source/miniaudio.h" ] || [ ! -e "$source/miniaudio.c" ]; then
+    echo "[vendor] miniaudio 0.11.25 unpacked without miniaudio.h and miniaudio.c" >&2
+    exit 1
+  fi
+  copy_files "$destination" "$source/miniaudio.h" "$source/miniaudio.c" "$source/LICENSE"
+  step "miniaudio 0.11.25 -> Libraries/Source/miniaudio"
+}
+
 get_channel_url() {
   if [ -n "${ZHR_CHANNEL_URL:-}" ]; then printf '%s/\n' "${ZHR_CHANNEL_URL%/}"; return 0; fi
   local launcher
@@ -454,5 +507,7 @@ install_gamespy
 install_litehtml
 install_litehtml_patch
 install_nanosvg
+install_sdl3
+install_miniaudio
 install_art
 step 'everything the build needs is in place'

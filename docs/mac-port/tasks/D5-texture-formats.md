@@ -8,7 +8,27 @@
 
 > **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** The question is now whether SDL3's GPU API takes BC formats on the devices we care about: Apple Silicon under Metal, and Linux Vulkan drivers. It is no longer about Metal alone.
 
-## Why
+## The BC question, answered on one machine: 2026-09-25
+
+`Tests/sdl_gpu_probe.cpp`, SDL 3.4.16 (`fa2c02bb`) static, through `SDL_GPUTextureSupportsFormat` with
+`SAMPLER` usage.
+
+| Machine | Backend | BC1 (DXT1) | BC2 (DXT2/3) | BC3 (DXT4/5) |
+|:--|:--|:--|:--|:--|
+| Apple M3 Pro, macOS 27.0 (26A428) | metal | yes | yes | yes |
+| Linux, llvmpipe (Mesa 25.2.8), CPU only | vulkan | yes | yes | yes |
+
+**On Apple Silicon under Metal, the art's DDS formats sample directly.** Step 3's decompress-on-load
+is not needed on this machine. Every other format `dx11resource.cpp` maps also samples:
+B8G8R8A8, B5G6R5, B5G5R5A1, B4G4R4A4, A8 and R8.
+
+What this does **not** establish:
+- **Other Apple GPUs.** M1 and M2 are untested.
+- **Any Linux GPU.** The llvmpipe row is Mesa's CPU rasterizer. It shows the probe's Vulkan path
+  runs, and says nothing about radv, anv or NVIDIA. It needs rerunning on real Linux hardware.
+- **Rendering correctly.** "Supported" is the device's claim, not a picture. Step 4 and the Done-when
+  still stand.
+
 
 The art is block-compressed. `README.md` advertises "481 originals at four times the resolution",
 and all of it is DXT in DDS containers. Whether Metal takes it directly is the open question this

@@ -267,5 +267,9 @@ Install-GameSpy
 Install-Litehtml
 Install-LitehtmlPatch
 Install-Nanosvg
+# SDL3 and miniaudio are the platform layer for everything that is not Windows (decision 3 in
+# docs/mac-port/README.md). Windows keeps Win32Device and Miles, so they are not fetched here;
+# vendor.sh fetches them, and says it skips DirectX the same way.
+Step 'skipping SDL3 and miniaudio: not Windows, and vendor.sh is what fetches them'
 Install-Art
 Step 'everything the build needs is in place'

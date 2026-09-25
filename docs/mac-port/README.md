@@ -167,34 +167,34 @@ you start. That commit is the lock.
 
 | ID | Task | Milestone | Depends on | Status | Owner |
 |:--|:--|:--|:--|:--|:--|
-| A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | **configure done** | -95 |
-| A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | in review (zlib reopen) | -21 |
-| A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | in review | -21 |
-| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | in progress (steps 1-3) | -3a |
-| B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | not started |  |
-| B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | in progress | -95 |
+| A1 | [CMake toolchain split](tasks/A1-cmake-toolchain-split.md) | M1 | — | done: configure on arm64; the four libraries its first acceptance named now build (was -95) | |
+| A2 | [POSIX vendor script](tasks/A2-vendor-posix.md) | M1 | — | done: merged, including the zlib reopen (was -21) | |
+| A3 | [build.sh](tasks/A3-build-sh.md) | M1 | A2 | done: merged with A2 (`build.sh`) (was -21) | |
+| B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | in progress: steps 1-3 merged; the typedef flip waits on `gameengine` compiling (was -3a) | |
+| B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | done: merged; not verified on Windows (was -8d) | |
+| B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | done: merged; later CRT spellings land in `MSVCCompat.h` as found (was -95) | |
 | B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
-| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | `wwlib` pass done; `GameEngine` half not started | -a9 |
-| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | `debuglib`/`dinput8` drops done; rest unclaimed | -18 |
-| B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) — **see [findings](B7-w3d-layout.md)** | M1 | A1 | **done, held for B10** | -14 |
-| B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in review | -83 |
-| B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | in progress | -21 |
-| B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | in progress | -14 |
-| B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | in review | -83 |
-| B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | in review | -83 |
-| B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | not started | |
-| B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress | -3a |
+| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | in progress: `GameEngine` half on `feature/mac-port-B5-gameengine`; the `wwlib` pass is done (-a9) | -18 |
+| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | in progress: `debuglib`/`dinput8` drops done; rest unclaimed | -18 |
+| B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) — **see [findings](B7-w3d-layout.md)** | M1 | A1 | done: merged with B10 (was -14) | |
+| B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | done: merged (was -83) | |
+| B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | done: merged (was -21) | |
+| B10 | [bittype.h integer widths](tasks/B10-bittype-widths.md) | M1 | A1 | done: merged; not verified on Windows (was -14) | |
+| B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | done: merged (was -83) | |
+| B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | done: merged (was -83) | |
+| B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | done: merged; not verified on Windows (was -8d) | |
+| B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress: write-up and first removals merged; live `%ls` sites remain (was -3a) | |
 | B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | **done** — wwdebug 3/3, wwmath 36/36; not verified on Windows | -18 |
-| B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) — **see defect #7** | M1 | A1 | in review: macOS half merged, Windows flip awaiting its second read | -47 |
-| B19 | [CPU detection and the tick clock on arm64](tasks/B19-cpu-detection-arm64.md) | M1 | B5 | merged; tier **decided: (c)**, builds once gameengine compiles | -a9 |
-| B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | in progress | -21 |
-| E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | in progress | -21 |
-| C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | `mixfile.cpp` piece in review; rest not started | -a9 |
+| B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) — **see defect #7** | M1 | A1 | done: macOS half and the Windows flip (decision 1) merged; not verified on Windows | -47 |
+| B19 | [CPU detection and the tick clock on arm64](tasks/B19-cpu-detection-arm64.md) | M1 | B5 | done: merged; tier decided (option (c), decision 2); verifiable once `gameengine` compiles | -a9 |
+| B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | done: `Float_To_Long` goes through `Lib/DetRound.h`, no SSE2 header left in WWMath (was -21) | |
+| E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | done: merged (was -21) | |
+| C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started: the `mixfile.cpp` piece is done (-a9); the rest is unclaimed | |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | not started | |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
 | C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | not started | |
 | C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | not started | |
-| D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | recon done; PR1 in progress | -8d |
+| D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | in progress: recon and PR1 merged; PRs 2-8 need Windows (was -8d) | |
 | D2 | [Abstract the backend interface](tasks/D2-backend-interface.md) | M3 | D1 | not started | |
 | D3 | [Shader generators emit an IR](tasks/D3-shader-generators-ir.md) | M3 | D2 | not started | |
 | D4 | [SDL3 GPU backend](tasks/D4-metal-backend.md) (file keeps its old name) | M4 | D3 | not started | |
