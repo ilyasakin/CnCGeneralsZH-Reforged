@@ -624,6 +624,25 @@ Related and **not** a defect, because someone got it right: `ConnectionManager.c
 a constant `L"%ls"` with network chat as the *argument*. It looks like a redundant format and it is
 the thing stopping a remote player's text being interpreted as one. B15 says so in capitals.
 
+### Latent undefined behaviour that MSVC happens to tolerate
+
+Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
+C library are free not to, and when they don't, the result looks like a platform bug. **If you are
+hunting a crash or corruption that only one platform shows, look here first.**
+
+- **Overlapping `strcpy`.** `WWLib/trim.cpp`'s `strtrim` and `wcstrim` shifted a string left over
+  itself with `strcpy`/`wcscpy`. Copying between overlapping regions is undefined. MSVC's copy
+  evidently runs forwards and gets away with it, and every INI line in the game goes through
+  `strtrim`. glibc's aarch64 `strcpy` under GCC writes the tail before it has read the middle, and
+  `test_wwlib`'s `strtrim_in_place` came back corrupted on Linux arm64 only. Fixed with `memmove`.
+  **The mechanism generalises:** any `strcpy`/`memcpy`/`sprintf` whose source and destination can
+  overlap works until a library copies in a different order.
+- **A `va_list` passed by `const` reference.** `StringClass::Format_Args` takes `const va_list &`.
+  Where `va_list` is a pointer (MSVC, both arm64 ABIs) the `const` binds to the reference. Under
+  x86-64 System V it is an array, the `const` binds to the elements, and it cannot be handed to
+  `vsnprintf`: a compile error on Linux amd64 alone. Fixed in `wwstring.cpp`. **`widestring.cpp`
+  has the same signature** and will hit the same error when B1 ports it.
+
 ### "ctest is green" was not what it looked like
 
 Recorded 2026-09-22, because this plan's own status reports leaned on it. A1's `PENDING_MACOS`
@@ -687,6 +706,15 @@ These are not style preferences. Breaking one of them costs somebody else a day.
    - **Do not claim verification you did not perform.** Write "not verified on Windows" in the pull
      request, plainly. A green Mac build described as if it were both is how this port silently
      forks into two games.
+   - **Show what Windows sees, with `GeneralsMD/Code/Tools/windows_view_diff.py`.** It resolves
+     MSVC x64's conditionals in every C/C++ file a change touches, before and after, and sorts each
+     file into identical, include-case-only, or different, printing the differences. Put its
+     summary in the pull request and give every "different" file a `WINDOWS-DEBT.md` row. Do not
+     reach for mingw instead: it defines `_WIN32` but not `_MSC_VER`, so it takes the POSIX side of
+     most of this tree's platform code. **What the tool cannot see:** what a macro token expands to
+     (check its definition), anything through an `#include` (each file is resolved on its own), a
+     condition on any macro other than the compiler's and platform's own, and whether MSVC accepts
+     the result. It is a text diff, not a compiler.
 
    The moment a Windows machine or a CI runner appears, E2 is promoted to the top of the queue and
    `WINDOWS-DEBT.md` is worked from the top down.
