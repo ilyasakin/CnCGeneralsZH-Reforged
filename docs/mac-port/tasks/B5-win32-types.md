@@ -152,6 +152,31 @@ So `wwlib` is not one task from a front-end build: it is that task plus C1's `_s
   stores its answer in `BiasLength`, so a second call on the same object never sees the file change.
   `Read` retries forever on a persistent read error, because the base `Error()` does nothing.
 
+## `test_wwlib` on macOS, 2026-09-25
+
+The first run of `test_wwlib` on macOS found eight failures in four families, all against published
+vectors or exact values. Fixed in three commits, and it now passes **75 of 75**:
+
+- **`#ifdef BIG_ENDIAN`** in `fixed.h` and `base64.cpp`. POSIX defines `BIG_ENDIAN` as the *name of a
+  byte order*, unconditionally, so every little-endian POSIX machine took the big-endian branch. It
+  is now `WWLib/wwendian.h`'s `WW_BIG_ENDIAN`, from `__BYTE_ORDER__`. Whether a Windows header
+  defines `BIG_ENDIAN` is unverified; see `WINDOWS-DEBT.md`.
+- **SHA-1 on `long` words:** 64-bit rounds, a 128-byte block, and an 8-byte store into the block's last 4
+  bytes, which AddressSanitizer reports as a stack-buffer-overflow when the old store is put back.
+  Every word is `uint32_t` now.
+- **MD5's `UINT4`** was `unsigned long`. It is `uint32_t` now.
+
+**Does anything the game links call these?** Checked by symbol, through every tracked source outside
+`Tools/`, with comments, strings and `#if 0` blocks stripped. **No:**
+- `PKey`, `PKPipe`, `PKStraw` and `RandomStraw` are referenced only by each other.
+- `SHAEngine` is used only by `srandom.cpp`, which has no callers and is excluded off Windows, and by
+  the tests.
+- Base64 and MD5 are used only by the tests.
+- `INIClass::Put_UUBlock`/`Get_UUBlock` are called only from `RegistryClass::Save_Registry_Values`
+  and `Load_Registry`, which nothing outside `registry.cpp` calls.
+
+The fixes matter for anything that uses these later, not for the game as it stands.
+
 ## Do
 
 1. For each site, decide which of three it is:

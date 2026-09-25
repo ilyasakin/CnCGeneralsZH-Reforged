@@ -1015,7 +1015,7 @@ endfunction()
 add_lib_test(test_wwmath wwmath wwlib wwsaveload wwdebug)
 target_include_directories(test_wwmath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
 
-add_lib_test(test_wwlib PENDING_MACOS wwlib wwmath wwsaveload wwdebug)
+add_lib_test(test_wwlib wwlib wwmath wwsaveload wwdebug)
 target_include_directories(test_wwlib PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWSaveLoad ${WW}/Wwutil)
 # generals.exe is linked /LARGEADDRESSAWARE, and that flag changes what
 # GlobalMemoryStatus saturates its 32-bit fields to (0xFFFFFFFF, not 0x7FFFFFFF).
