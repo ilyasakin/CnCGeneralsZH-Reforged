@@ -125,7 +125,15 @@ int main( void )
 	const int controlRounding = roundingGroup( false );
 	const int controlDenormal = denormalGroup( false );
 	const int controlNaN = nanPropagationGroup( false );
-	if (!controlRounding || !controlDenormal || !controlNaN)
+	/* NaN propagation can only be armed where the hardware has a default-NaN switch: arm64's FPCR.DN.
+		 x86 has none - MXCSR's FTZ and DAZ do not touch NaNs - so there the NaN group has nothing to
+		 detect and its control is not required.  Measured under Rosetta: it passes armed, as it must. */
+#if defined(__aarch64__)
+	const bool nanArmable = true;
+#else
+	const bool nanArmable = false;
+#endif
+	if (!controlRounding || !controlDenormal || (nanArmable && !controlNaN))
 	{
 		printf( "FAIL control: a group passed in the armed state (rounding %d, denormal %d, NaN %d), so it cannot see\n",
 						controlRounding, controlDenormal, controlNaN );
