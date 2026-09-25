@@ -18,6 +18,7 @@
 
 #include "ffshader.h"
 #include "ffvertex.h"
+#include "sdl3target.h"
 
 #include <stdio.h>
 
@@ -269,6 +270,12 @@ static void append_normal_mapped_lighting(std::string & hlsl, unsigned coordinat
 bool CombinerShader_Generate(const CombinerDescription & description, CombinerShaderTarget target,
 	std::string & hlsl)
 {
+	// The SDL3 GPU program is the D3D11 one with its bindings rewritten, so everything below only
+	// ever sees the two profiles it was written for.
+	if (target == COMBINER_SHADER_TARGET_SDL3_GPU) {
+		return CombinerShader_Generate(description, COMBINER_SHADER_TARGET_D3D11, hlsl)
+			&& SDL3_Shader_Retarget(hlsl, false);
+	}
 	if (description.StageCount == 0 || description.StageCount > MAXIMUM_COMBINER_STAGES) {
 		return false;
 	}

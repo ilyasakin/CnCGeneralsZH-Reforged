@@ -141,11 +141,13 @@ struct VertexPipelineDescription
 };
 
 // Which profile the generated text is for.  The two differ in the output semantic and in how the
-// constants are declared; the arithmetic between them is the same text.
+// constants are declared; the arithmetic between them is the same text.  SDL3_GPU is the D3D11 text
+// with its bindings rewritten for SDL3's GPU API (sdl3target.h), for the Metal and Vulkan backend.
 enum VertexShaderTarget
 {
 	VERTEX_SHADER_TARGET_D3D9,
-	VERTEX_SHADER_TARGET_D3D11
+	VERTEX_SHADER_TARGET_D3D11,
+	VERTEX_SHADER_TARGET_SDL3_GPU
 };
 
 bool VertexShader_Generate(const VertexPipelineDescription & description,

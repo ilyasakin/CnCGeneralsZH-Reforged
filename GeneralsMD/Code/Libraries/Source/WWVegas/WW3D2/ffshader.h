@@ -206,10 +206,14 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 // is a sampler2D read with tex2D in one and a Texture2D beside a SamplerState read with Sample in
 // the other, the output semantic is COLOR against SV_Target, and the texture factor is a constant
 // register against a constant buffer.  The arithmetic between them is the same text.
+//
+// SDL3_GPU is the D3D11 text with its bindings rewritten for SDL3's GPU API (sdl3target.h): what the
+// Metal and Vulkan backend compiles through glslang and SPIRV-Cross (decision 4).
 enum CombinerShaderTarget
 {
 	COMBINER_SHADER_TARGET_D3D9,
-	COMBINER_SHADER_TARGET_D3D11
+	COMBINER_SHADER_TARGET_D3D11,
+	COMBINER_SHADER_TARGET_SDL3_GPU
 };
 
 bool CombinerShader_Generate(const CombinerDescription & description, CombinerShaderTarget target,
