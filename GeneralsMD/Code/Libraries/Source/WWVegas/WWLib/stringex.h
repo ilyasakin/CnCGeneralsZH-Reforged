@@ -33,6 +33,17 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <wchar.h>
+
+// glibc 2.38 added strlcpy, strlcat, wcslcpy and wcslcat to <string.h> and <wchar.h>, with these
+// same BSD semantics.  Under _FORTIFY_SOURCE, which GCC on Ubuntu turns on by default whenever it
+// optimises, they arrive as gnu_inline wrappers, and a second inline definition below is an error.
+// GCC reports it ("redeclared inline without 'gnu_inline' attribute"); Clang, which does not
+// fortify by default, never sees it.  Found by the Linux GCC rows of Tools/linux-check.sh.  Where
+// the C library has them, its are the ones, and test_wwlib's strlcpy tests run against them.
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 38))
+#define STRINGEX_LIBC_HAS_STRLCPY 1
+#endif
 
 // Number of characters before the first zero character.
 template<typename T> size_t strlen_t(const T *str)
@@ -85,7 +96,9 @@ template<typename T> size_t strlcat_t(T *dst, const T *src, size_t dstsize)
 	return dstlen + srclen;						// length it tried to create
 }
 
+#if !defined(STRINGEX_LIBC_HAS_STRLCPY)
 inline size_t strlcpy(char *dst, const char *src, size_t dstsize) { return strlcpy_t(dst, src, dstsize); }
 inline size_t strlcat(char *dst, const char *src, size_t dstsize) { return strlcat_t(dst, src, dstsize); }
 inline size_t wcslcpy(wchar_t *dst, const wchar_t *src, size_t dstsize) { return strlcpy_t(dst, src, dstsize); }
 inline size_t wcslcat(wchar_t *dst, const wchar_t *src, size_t dstsize) { return strlcat_t(dst, src, dstsize); }
+#endif

@@ -49,7 +49,7 @@
 	#include "wwstring.h"
 #endif
 
-#include "vector.h"
+#include "Vector.H"
 #include "bittype.h"	// uint32, for the on-disk table below
 
 class FileClass;

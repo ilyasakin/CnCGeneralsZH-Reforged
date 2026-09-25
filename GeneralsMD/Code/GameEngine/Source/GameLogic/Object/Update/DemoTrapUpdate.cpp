@@ -42,7 +42,7 @@
 #include "GameLogic/ObjectIter.h"
 #include "GameLogic/Module/DemoTrapUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
-#include "GameLogic/Weaponset.h"
+#include "GameLogic/WeaponSet.h"
 #include "GameLogic/Weapon.h"
 
 //-------------------------------------------------------------------------------------------------

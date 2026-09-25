@@ -49,7 +49,7 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectIter.h"
-#include "GameLogic/Weaponset.h"
+#include "GameLogic/WeaponSet.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
