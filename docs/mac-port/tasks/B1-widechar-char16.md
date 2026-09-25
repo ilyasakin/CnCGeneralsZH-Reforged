@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** not started
+- **Status:** in progress: steps 1-3 merged; the typedef flip waits on `gameengine` compiling (was -3a)
 - **Size:** 48 files mention `WideChar`, 724 `L"` literals in engine + device + Main, ~20 distinct
   `wcs*` calls
 

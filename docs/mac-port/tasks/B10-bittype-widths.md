@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B7's asserts go green, C1, D4, and anything that reads a `.w3d`
-- **Status:** in review — merges with B7
+- **Status:** done: merged; not verified on Windows (was -14)
 - **Size:** two typedefs; **701 uses across 98 files in six libraries**
 - **Risk:** the highest in M1, and it is the one that cannot be verified here
 

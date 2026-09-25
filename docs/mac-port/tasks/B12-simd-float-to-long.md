@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** wwdebug, wwmath, ww3d2 — i.e. the four libraries M1 is trying to build
-- **Status:** not started
+- **Status:** done: `Float_To_Long` goes through `Lib/DetRound.h`, no SSE2 header left in WWMath (was -21)
 - **Risk:** determinism. Read the whole of "Why" before writing a line.
 
 ## Why

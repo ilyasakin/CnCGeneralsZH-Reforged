@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** strengthens E1
-- **Status:** in review
+- **Status:** done: merged (was -21)
 
 ## Why
 

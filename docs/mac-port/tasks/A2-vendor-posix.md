@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** nothing
 - **Blocks:** A3
-- **Status:** in review
+- **Status:** done: merged, including the zlib reopen (was -21)
 - **Size:** one new script, ~150 lines, mirroring `GeneralsMD/Code/Tools/vendor.ps1`
 
 ## Why

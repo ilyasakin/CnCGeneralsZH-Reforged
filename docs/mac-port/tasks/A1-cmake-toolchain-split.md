@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** nothing
 - **Blocks:** B1 B2 B3 B4 B5
-- **Status:** blocked: configure is done; the four libraries need B3 and B5 first (see Notes)
+- **Status:** done: configure on arm64; the four libraries its first acceptance named now build (was -95)
 - **Size:** one file, `GeneralsMD/Code/CMakeLists.txt` (~810 lines), plus a new toolchain include
 
 ## Why

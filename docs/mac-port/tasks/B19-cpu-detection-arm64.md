@@ -2,7 +2,7 @@
 
 - **Milestone:** M1
 - **Depends on:** B5's `wwlib` pass
-- **Status:** in review, with one decision left open on purpose (below)
+- **Status:** done: merged; tier decided (option (c), decision 2); verifiable once `gameengine` compiles
 - **Size:** `WWLib/cpudetect.{h,cpp}`, `WWLib/mpu.cpp`, one test
 
 ## Why
