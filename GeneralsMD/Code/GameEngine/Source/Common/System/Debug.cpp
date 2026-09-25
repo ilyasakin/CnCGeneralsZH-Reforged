@@ -56,6 +56,7 @@
 #endif
 #include "Common/Debug.h"
 #include "Common/EarlyCommandLine.h"
+#include "Common/ExecutableDirectory.h"
 #include "stringex.h"
 #include "Common/SystemInfo.h"
 #include "Common/UnicodeString.h"
@@ -382,17 +383,7 @@ void DebugInit(int flags)
 	#ifdef DEBUG_LOGGING
 
 		char dirbuf[ _MAX_PATH ];
-		::GetModuleFileName( NULL, dirbuf, sizeof( dirbuf ) );
-		char *pEnd = dirbuf + strlen( dirbuf );
-		while( pEnd != dirbuf ) 
-		{
-			if( *pEnd == '\\' ) 
-			{
-				*(pEnd + 1) = 0;
-				break;
-			}
-			pEnd--;
-		}
+		getExecutableDirectory( dirbuf, sizeof( dirbuf ), TRUE );
 
 		char prevbuf[ _MAX_PATH ];
 		char curbuf[ _MAX_PATH ];
