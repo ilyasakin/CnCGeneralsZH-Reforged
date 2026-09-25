@@ -34,7 +34,11 @@
 #include "Common/XferDeepCRC.h"
 #include "Common/CRC.h"
 #include "Common/Snapshot.h"
+#if defined(_WIN32)
 #include "winsock2.h" // for htonl
+#else
+#include <arpa/inet.h> // htonl, which winsock2.h supplies on Windows
+#endif
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------

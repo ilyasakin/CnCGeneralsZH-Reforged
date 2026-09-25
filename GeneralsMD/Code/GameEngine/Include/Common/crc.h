@@ -32,7 +32,11 @@
 #define _CRC_H_
 
 #include "Lib/BaseType.h"
+#if defined(_WIN32)
 #include "winsock2.h" // for htonl
+#else
+#include <arpa/inet.h> // htonl, which winsock2.h supplies on Windows
+#endif
 
 #ifdef _DEBUG
 
