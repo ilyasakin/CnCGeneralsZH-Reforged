@@ -46,12 +46,9 @@
 
 int LCW_Uncomp(void const * source, void * dest, unsigned long length=0);
 
-#ifdef _MSC_VER
+// One declaration for every compiler.  The extern "C" branch other compilers used to get named an
+// assembler LCW_Comp that no longer exists; lcw.cpp's C++ definition is the only one.  MSVC sees the
+// line it always saw.
 int LCW_Comp(void const * source, void * dest, int length);
-#else
-extern "C" {
-int __cdecl LCW_Comp(void const * source, void * dest, int length);
-}
-#endif
 
 #endif
