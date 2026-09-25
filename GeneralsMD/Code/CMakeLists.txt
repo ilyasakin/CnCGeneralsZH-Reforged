@@ -876,6 +876,13 @@ if(ZH_PLATFORM_POSIX)
   target_compile_definitions(fpucontrol_selfcheck PRIVATE
     $<TARGET_PROPERTY:gameengine,INTERFACE_COMPILE_DEFINITIONS>)
   set_target_properties(fpucontrol_selfcheck PROPERTIES CXX_STANDARD 17)
+  # Not on Linux yet: it compiles PreRTS.h, and BaseType.h's min/max macros break libstdc++'s
+  # <algorithm> (libc++ guards itself against them).  Every engine file will hit that on Linux; this
+  # is only the first default-build target to include PreRTS.h.  Built on demand there, and
+  # registered DISABLED below, so it shows as pending rather than vanishing.
+  if(ZH_PLATFORM_LINUX)
+    set_target_properties(fpucontrol_selfcheck PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  endif()
 endif()
 # Two names on this line are Windows-only, and expand to nothing elsewhere - in the same positions,
 # so the Windows list is the same items in the same order it always was.  B6's first two drops:
@@ -1196,6 +1203,9 @@ target_compile_definitions(test_gameengine PRIVATE
 add_test(NAME detround_selfcheck COMMAND detround_selfcheck)
 if(ZH_PLATFORM_POSIX)
   add_test(NAME fpucontrol_selfcheck COMMAND fpucontrol_selfcheck)
+  if(ZH_PLATFORM_LINUX)
+    set_tests_properties(fpucontrol_selfcheck PROPERTIES DISABLED TRUE)
+  endif()
 endif()
 add_test(NAME d3dxportable_selfcheck COMMAND d3dxportable_selfcheck)
 add_test(NAME wwmath_selfcheck COMMAND wwmath_selfcheck)
