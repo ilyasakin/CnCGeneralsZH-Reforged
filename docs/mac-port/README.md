@@ -270,8 +270,13 @@ that decides, task by task:
   shut out. The shader question (what D3's IR emits: MSL and SPIR-V, or SPIR-V alone with
   SDL_shadercross converting) belongs to D3 and gets written down there.
 - **Verification.** Linux is checkable on this machine, unlike Windows: a Linux container (OrbStack)
-  builds the tree with GCC and Clang and runs `ctest`. That gets run before any merge that touches
-  platform code. Its first run found three defects the macOS build had hidden. `uintptr_t` was used
+  builds the tree with GCC and Clang and runs `ctest`. **Revised 2026-09-26, at the user's
+  direction: macOS is the target to get working, and Linux is a constraint on how the code is
+  written, not a gate on each merge.** Branches merge on macOS evidence. The layering rules above
+  still bind every change: POSIX first, Darwin only as a refinement, `#error` for anything unported.
+  `linux-check.sh` runs at milestone boundaries, or when a change is specifically about
+  portability, and not per branch. Per-branch runs had cost hours of wall-clock time and once
+  filled the disk. Its first run found three defects the macOS build had hidden. `uintptr_t` was used
   without `<stdint.h>`, because Apple's headers include it transitively and glibc's do not.
   `always.h` declares `operator delete` without the `noexcept` the standard gives it, which clang
   forgives and GCC rejects. And `cpudetect.cpp` has no Linux answer, which failed at its `#error`
