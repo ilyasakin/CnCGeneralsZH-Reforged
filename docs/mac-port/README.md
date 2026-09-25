@@ -200,6 +200,7 @@ you start. That commit is the lock.
 | D3 | [Shader generators target SDL3 GPU](tasks/D3-shader-generators-ir.md) (decision 4) | M3 | — | in progress | -a9 |
 | D4 | [SDL3 GPU backend](tasks/D4-metal-backend.md) (file keeps its old name) | M4 | D3 | not started | |
 | D5 | [Texture formats](tasks/D5-texture-formats.md) | M4 | D4 | not started | |
+| D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | not started | |
 | D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done — merged; the Crusader on Metal and on Vulkan (lavapipe); D3's route taken as decision 4 | -a9 |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | not started | |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
@@ -330,6 +331,21 @@ so that detection protected nothing. What it changes on Windows: the `m_exeCRC` 
 already changes with every rebuild, so no compatibility is lost that a rebuild would not already
 lose. Until it lands, the POSIX build hashes version and scripts only, which can match no Windows
 build, and says so where it is computed. Task: `tasks/N1-build-fingerprint.md`.
+
+**6. Text is rasterised with FreeType off Windows (taken 2026-09-26; task D6).**
+The plan had no task for text. `WW3D2/render2dsentence.cpp` draws every glyph through GDI
+(`CreateFont`, `ExtTextOut` into a DIB section, then copies it into a texture), and
+`GlobalLanguage.cpp` installs the language's own font files with `AddFontResource`. Found by B5,
+which hit `AddFontResource` in the sweep. The game names "Arial" in 319 places and "Times New
+Roman" in 51, plus its own "Generals" font. Decided: **FreeType**, vendored like the other
+libraries (FTL licence, GPL-compatible), behind a glyph-rasteriser seam whose Windows body is
+today's GDI code, unchanged. Rejected: stb_truetype, whose unhinted output at the game's small UI
+sizes would look worse than the Windows build. Fonts: the game's own files load from its data, as
+`AddFontResource` does. The system fonts go through a substitution table, not a bundled copy of
+Microsoft's fonts: Arial and Times New Roman are present on macOS, and on Linux they map to the
+metric-compatible Liberation Sans and Serif (OFL). Metric compatibility matters because text width
+decides where the UI wraps lines. Text is display only and never reaches the simulation, so
+mismatched glyph metrics are a cosmetic risk, not a determinism one.
 
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
