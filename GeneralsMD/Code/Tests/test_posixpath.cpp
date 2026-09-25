@@ -327,6 +327,46 @@ TEST(windows_patterns_match_as_findfirstfile_does)
 	CHECK(!PosixPath_Matches_Pattern(NULL, "a.ini"));
 }
 
+// D6: a TEXT LocalFile reads as Windows' _read reads _O_TEXT, however the reads are sized.
+TEST(text_reads_as_windows_text_mode)
+{
+	const std::string path = temp_root("test_posixpath_text");
+	// CRLF lines, a lone CR, a CR before a CR, blank CRLF lines, and a final CR with nothing after it.
+	const std::string raw = "[Section]\r\nKey = 1\r\nlone\rcr\r\r\n\r\n\r\nend\r";
+	const std::string windows = "[Section]\nKey = 1\nlone\rcr\r\n\n\nend\r";
+	write_file(path, raw);
+	unsigned mismatched = 0;
+	for (unsigned chunk = 1; chunk <= raw.size() + 1; ++chunk) {
+		const int handle = open(path.c_str(), O_RDONLY);
+		std::string text;
+		char buffer[64];
+		int got;
+		while ((got = zh_read_text(handle, buffer, chunk)) > 0) text.append(buffer, got);
+		const off_t end = lseek(handle, 0, SEEK_CUR);
+		close(handle);
+		if (text != windows || end != (off_t)raw.size()) {
+			printf("  chunks of %u read \"%s\", ending at %lld\n", chunk, text.c_str(), (long long)end);
+			++mismatched;
+		}
+	}
+	CHECK_EQ(mismatched, 0u);
+
+	// LocalFile::scanString and its siblings read a byte at a time and put the last one back by
+	// seeking back one byte: after a "\r\n" read as '\n', that lands on the '\n', as on Windows.
+	const int handle = open(path.c_str(), O_RDONLY);
+	char c = 0;
+	for (int i = 0; i < 10; ++i) zh_read_text(handle, &c, 1);	// "[Section]" and the "\r\n"
+	CHECK_EQ((int)c, (int)'\n');
+	CHECK_EQ((long long)lseek(handle, 0, SEEK_CUR), 11LL);
+	lseek(handle, -1, SEEK_CUR);
+	CHECK_EQ(zh_read_text(handle, &c, 1), 1);
+	CHECK_EQ((int)c, (int)'\n');
+	CHECK_EQ(zh_read_text(handle, &c, 1), 1);
+	CHECK_EQ((int)c, (int)'K');
+	close(handle);
+	remove(path.c_str());
+}
+
 TEST(engine_paths_resolve_on_this_volume)
 {
 	const std::string root = temp_root("test_posixpath");

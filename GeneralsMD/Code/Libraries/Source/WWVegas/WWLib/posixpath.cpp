@@ -467,3 +467,34 @@ int zh_mkdir(const char * path)
 	}
 	return result;
 }
+
+int zh_read_text(int handle, void * buffer, unsigned bytes)
+{
+	const ssize_t got = read(handle, buffer, bytes);
+	if (got <= 0) {
+		return (int)got;
+	}
+	char * in = (char *)buffer;
+	char * out = in;
+	for (ssize_t i = 0; i < got; ++i) {
+		if (in[i] != '\r') {
+			*out++ = in[i];
+		}
+		else if (i + 1 < got) {
+			if (in[i + 1] == '\n') ++i;
+			*out++ = in[i];
+		}
+		else {
+			char next;
+			const ssize_t peeked = read(handle, &next, 1);
+			if (peeked == 1 && next == '\n') {
+				*out++ = '\n';
+			}
+			else {
+				*out++ = '\r';
+				if (peeked == 1) lseek(handle, -1, SEEK_CUR);
+			}
+		}
+	}
+	return (int)(out - in);
+}
