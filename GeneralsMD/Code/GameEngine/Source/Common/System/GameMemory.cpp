@@ -3504,7 +3504,10 @@ void initMemoryManager()
 		}
 	}
 
-	char* linktest;
+	// volatile: the pointer escapes, so an optimiser may not drop these new/delete pairs as unused.
+	// C++14 lets it omit a new-expression's allocation call, clang -O2 does, and then theLinkTester
+	// stays 0 and this exits although the right operators are linked (C1, measured on macOS).
+	char* volatile linktest;
 	
 	theLinkTester = 0; 
 
