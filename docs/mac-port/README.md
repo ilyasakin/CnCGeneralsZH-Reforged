@@ -730,6 +730,30 @@ It runs once, from `GameClient.cpp:339`, so it leaks one handle per run, and onl
 has user mapped images. Harmless in practice; recorded, not fixed. Found listing C1's file
 operations (B5's task file).
 
+**12. Writing a file whose last name component has no `'.'` spins until AsciiString throws.**
+`Win32LocalFileSystem::openFile`, for any `WRITE`, first creates the directories along the path. It
+takes tokens as directories until it finds one that contains a `'.'` with no `'.'` after it, which
+it takes to be the file. Two shapes of name defeat that rule.
+
+- **The last component has no `'.'`** (`Save\README`). Once the name runs out, `nextToken` yields an
+  empty token, which has no `'.'` either, so the loop carries on. Each pass appends a `'\'` to the
+  directory name and calls `CreateDirectory` with it, until the name passes `_MAX_DIR`. The loop ends
+  when AsciiString's 32767-character ceiling throws `ERROR_OUT_OF_MEMORY` to the caller. Before
+  that, the first pass has already created a directory named after the file.
+- **A dotted directory before a dotless file** (`Save\v1.0\README`). The walk stops at `v1.0` as
+  if it were the file, never creates it, and the open that follows fails quietly.
+
+**Not reachable today.** Every write the game makes names a file with an extension:
+- `buildDDS.txt`;
+- the map-preview copy (`MapUtil.cpp:1294`: a `.tga` name, with `'\'` and `':'` replaced by `'_'`);
+- map transfers (`ConnectionManager.cpp:790`). `IsValidTransferFileContent` requires the name's
+  last `'.'` to begin one of a fixed list of extensions, matched exactly, so it sits in the final
+  component;
+- `ScriptEngine`'s numbered backups and INI rewrites.
+
+A future caller writing an extensionless name would hit it. `PosixLocalFileSystem` keeps the rule
+but stops when the name runs out. Found by C1; recorded, not fixed on Windows.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
@@ -748,6 +772,15 @@ hunting a crash or corruption that only one platform shows, look here first.**
   x86-64 System V it is an array, the `const` binds to the elements, and it cannot be handed to
   `vsnprintf`: a compile error on Linux amd64 alone. Fixed in `wwstring.cpp`. **`widestring.cpp`
   has the same signature** and will hit the same error when B1 ports it.
+
+- **Not undefined, but the same trap: an optimiser may drop a `new`/`delete` pair.**
+  `initMemoryManager` checks the engine's operator new is the one linked by counting the calls that
+  `new char; delete ...` makes, and it `exit(-1)`s if the count is wrong. C++14 lets a compiler omit
+  a new-expression's allocation when nothing else uses the pointer. clang `-O2` did, the count stayed
+  0, and a Release build exited silently at startup. Found by C1's linked file-system test, the first
+  thing to run `GameMemory.cpp` off Windows. Fixed by making the pointer `volatile`, so it escapes.
+  Windows builds evidently keep the calls, since the game starts there. The fix is a
+  `WINDOWS-DEBT.md` row.
 
 ### "ctest is green" was not what it looked like
 

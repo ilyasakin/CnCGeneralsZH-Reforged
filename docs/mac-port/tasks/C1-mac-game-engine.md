@@ -133,7 +133,10 @@ Windows too (`File::open` defaults to `BINARY`), so their parser already copes w
 - (d) the raw sites moved to `zh_*`, `RawFileClass`, and the joins onto the executable's directory;
 - (e) the user-data directory;
 - (f) `PosixBIGFileSystem`, the POSIX engine subclass, the null CD manager, and the byte-identical
-  asset test.
+  asset test. **Requirement:** an archive the listing finds that does not start `BIGF` is skipped
+  quietly, with a log line once per file, not mounted and not fatal. That covers macOS's AppleDouble
+  `._*.big` companions (see "Found for (f)" below) and whatever else a copy from another file system
+  leaves behind. A name rule would catch only the first.
 
 Linux is a constraint on how the code is written, kept POSIX-generic, not a gate on each piece (the
 user's macOS-first direction, plan `74750f5a`).
@@ -164,8 +167,9 @@ because Windows equivalence is a different question from case.
 - **`PosixLocalFileSystem`, `PosixLocalFile`**, in `GameEngineDevice/{Include,Source}/PosixDevice/`,
   built as `posixdevice`. It stays out of the default macOS build for as long as `gameengine` does.
   - `openFile` walks the directories as Win32 does, but puts back the leading `'/'` that
-    `nextToken` drops, and stops when the name runs out. On Windows a name with no `'.'` made that
-    walk loop for ever.
+    `nextToken` drops, and stops when the name runs out. On Windows a last component with no
+    `'.'` runs that walk until AsciiString's 32767-character ceiling throws: defect 12 in the
+    README, not reachable from the game today.
   - `getFileInfo` gives FILETIME units (100 ns since 1601) and size 0 for a directory, as
     FindFirstFile does.
   - `createDirectory` makes one level and does not impose `_MAX_DIR`.
@@ -211,14 +215,42 @@ are often disabled on NTFS, and Wine does not generate them either, so the oracl
 **Found for (f): AppleDouble files.** macOS writes `._name` companions on exFAT. The installs hold 20
 `._*.big` beside Zero Hour's 20 archives and 18 beside Generals' 18 (535 and 356 `._` files in
 all). They are real files: `*.big` matches them on POSIX, and FindFirstFile would too on that
-volume. They are 4 KB, start `00 05 16 07`, and are not BIG archives. (f) decides whether the
-archive mount skips `._*` or refuses non-`BIGF` files quietly. The listing reports them, as Windows
-would.
+volume. They are 4 KB, start `00 05 16 07`, and are not BIG archives. Decided (PM, 2026-09-26):
+(f) rejects any archive that does not start `BIGF`, quietly, logging once per file, rather than
+skipping by name. The requirement is on (f) in the staging list above. The listing reports them, as
+Windows would.
 
-**Open.** The linked `PosixLocalFileSystem` test waits on -18's GameMemory seam, which is not on
-`feature/mac-port` as of `b691ae98`. `gameengine` on macOS is down from 100 failing objects to 97:
-`LocalFile`, `RAMFile` and `StreamingArchiveFile` compile, and `GameMemory` and `MemoryInit` are
-next (seam, and PR (d)).
+**gameengine on macOS** was down from 100 failing objects to 97 when (b) merged: `LocalFile`,
+`RAMFile` and `StreamingArchiveFile` compile.
+
+**The linked test (follow-up, after -18's GameMemory seam merged).** `test_posixlocalfilesystem` is
+built from the real sources, because `gameengine` does not link on macOS yet: `GameMemory`,
+`MemoryInit`, `LocalFile`, `File`, `RAMFile`, `AsciiString` and the two PosixDevice classes, plus
+what they pull in. Eight names those sources reach and the test does not are stand-ins in its
+`_stubs.cpp`, each with its reason: Debug.cpp's two, which does not compile yet, and INI's and
+FileSystem's, which can be reached only through subsystem init and `RAMFile::open(name)`. The
+unreachable ones abort if reached.
+
+- It runs on `$TMPDIR` and on the case-sensitive image: 3 tests, 95 checks, all pass.
+- What it covers:
+  - the `FilenameList` INI::loadDirectory walks, in its order. That includes `Default2.ini`
+    before `Default\x.ini`, which holds only while `'\'` is kept: the INI-CRC point;
+  - case twins keeping the same entry;
+  - `openFile`'s walk, relative and absolute, reusing a directory that exists in another case;
+  - LocalFile's `scanInt`, `scanString`, `scanReal` and `nextLine` over a CRLF file opened `TEXT`,
+    with `size()` still counting bytes;
+  - `getFileInfo`'s FILETIME against a time set with `utimes`;
+  - `createDirectory`;
+  - the `PosixLocalFile` pool size.
+- Two mutations were each caught: dropping the root that `openFile` puts back (6 red), and reading
+  `TEXT` as binary (6 red).
+- **It found a startup exit.** `initMemoryManager`'s link check counts the calls three `new`/`delete`
+  pairs make, and clang `-O2` omitted all of them, which C++14 allows. The count stayed 0 and the
+  process `exit(-1)`ed before `main`'s first test printed anything, as a macOS Release game would
+  have done at startup. `GameMemory.cpp` now holds the pointer `volatile`. That is in the README's
+  latent-trap list, and has a WINDOWS-DEBT row.
+- Not on Linux yet, for `fpucontrol_selfcheck`'s reason (BaseType.h's min/max against libstdc++):
+  registered DISABLED there.
 
 **Tooling.** `windows_view_diff.py` now turns quotes in `#error`/`#warning` text into backquotes on
 both sides, because unifdef read the apostrophe in `posixpath.h`'s `#error` as an unterminated
