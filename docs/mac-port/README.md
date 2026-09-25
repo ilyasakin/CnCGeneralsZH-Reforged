@@ -730,6 +730,23 @@ It runs once, from `GameClient.cpp:339`, so it leaks one handle per run, and onl
 has user mapped images. Harmless in practice; recorded, not fixed. Found listing C1's file
 operations (B5's task file).
 
+**12. A 3D turn toward a goal exactly behind does not turn.**
+`Locomotor.cpp:170` (`tryToRotateVector3D`) and `NeutronMissileUpdate.cpp:320` turn a heading
+toward a goal by at most the turn rate, rotating about `Normalized_Cross_Product(current, goal)`.
+When the goal is exactly opposite the heading, that cross product is exactly (0,0,0), `Normalize`
+leaves a zero vector alone, and `Matrix3D`'s axis-angle form - which asserts a unit axis
+(`matrix3d.h:594`) - builds `cos(angle)` times the identity. Measured in a Release build: heading
+(1,0,0), goal (-1,0,0), turn rate 0.1 gives (0.995,0,0) - the same heading, shortened, no turn; one
+step off opposite, (-1,0.001,0), turns normally. The same on every platform (exact zeros, no
+rounding in play), so not a desync; a Debug build of any platform stops on the assert instead.
+Whether a match ever presents an exactly opposite goal to a 3D locomotor or a neutron missile is
+not measured. `W3DWater.cpp:2441` has the same shape for a camera looking straight down, visual
+only. Found 2026-09-26 while tracing a Debug-build abort in `test_wwmath` and `wwmath_selfcheck`,
+which was the tests' own non-unit axes, fixed. Every call of the asserting overloads in the POSIX and
+mingw-as-MSVC sweeps was listed by marking them deprecated: these three and `W3DView.cpp:364`/`:367`
+(literal unit axes) are all of them outside the tests. Recorded, not fixed: a fix changes what the
+simulation computes, which is rule 3's business.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
