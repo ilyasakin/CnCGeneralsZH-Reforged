@@ -22,6 +22,9 @@
 
 #include "d3dx9runtime.h"
 #include "d3dx9math.h"
+#include "d3dx_golden.h"
+
+#include <intrin.h>
 
 static const int WINDOW_EDGE = 64;
 static const int BACK_BUFFER_WIDTH = 640;
@@ -391,6 +394,60 @@ int main(int argument_count, char ** arguments)
 		if (!transformIsRight || dot != 4.0f) {
 			printf("FAIL: the hand-declared D3DX math signatures do not match the DLL\n");
 			return 1;
+		}
+	}
+
+	// The Windows capture B17 left for E1.  d3dx9_43.dll picks its D3DXVec4Transform body by CPU:
+	// GenuineIntel sums pairwise, every other vendor and the scalar fallback sum left to right, and
+	// the two disagree on lane x of the Bezier basis.  That was read out of the DLL's dispatch code
+	// on a Mac, and each body's arithmetic was run there under Rosetta.  What a Mac cannot see is
+	// which body a real Windows process lands on.  This prints every golden row as this machine's
+	// DLL computes it, and which body that was, so the reading can be checked against a real run.
+	// It fails only if the result matches neither body; a vendor/body mismatch is reported, not
+	// failed, because HKLM\Software\Microsoft\Direct3D DisableD3DXPSGP=1 legitimately causes one.
+	// d3dxportable.h, which the Mac build uses instead, matches the left-to-right body.
+	{
+		int registers[4];
+		__cpuid(registers, 0);
+		char vendor[13];
+		memcpy(vendor + 0, &registers[1], 4);
+		memcpy(vendor + 4, &registers[3], 4);
+		memcpy(vendor + 8, &registers[2], 4);
+		vendor[12] = '\0';
+
+		D3DXMATRIX basis;
+		memcpy(&basis, D3DX_GOLDEN_BASIS, sizeof(basis));
+		unsigned int leftToRightRows = 0;
+		unsigned int intelRows = 0;
+		for (unsigned int row = 0; row < D3DX_GOLDEN_ROW_COUNT; ++row) {
+			D3DXVECTOR4 in;
+			memcpy(&in, D3DX_GOLDEN_ROWS[row].in, sizeof(in));
+			D3DXVECTOR4 out;
+			D3DXVec4Transform(&out, &in, &basis);
+			unsigned int bits[4];
+			memcpy(bits, &out, sizeof(bits));
+			printf("d3dx9 capture: row %2u -> %08x %08x %08x %08x\n", row, bits[0], bits[1], bits[2],
+				bits[3]);
+			const unsigned int * want = D3DX_GOLDEN_ROWS[row].out;
+			const bool yzw = bits[1] == want[1] && bits[2] == want[2] && bits[3] == want[3];
+			if (yzw && bits[0] == want[0]) {
+				++leftToRightRows;
+			}
+			if (yzw && bits[0] == D3DX_GOLDEN_ROWS[row].intel_x) {
+				++intelRows;
+			}
+		}
+		const bool leftToRight = leftToRightRows == D3DX_GOLDEN_ROW_COUNT;
+		const bool intel = intelRows == D3DX_GOLDEN_ROW_COUNT;
+		printf("d3dx9 capture: CPU vendor %s; D3DXVec4Transform ran the %s body\n", vendor,
+			leftToRight ? "left-to-right (scalar or non-Intel)" : intel ? "GenuineIntel pairwise" : "UNRECOGNISED");
+		if (!leftToRight && !intel) {
+			printf("FAIL: D3DXVec4Transform matches neither body recorded in d3dx_golden.h\n");
+			return 1;
+		}
+		if (intel != (strcmp(vendor, "GenuineIntel") == 0)) {
+			printf("NOTE: the body is not the one d3dxportable.h predicts for this vendor - "
+				"check DisableD3DXPSGP, and tell B17/E1\n");
 		}
 	}
 
