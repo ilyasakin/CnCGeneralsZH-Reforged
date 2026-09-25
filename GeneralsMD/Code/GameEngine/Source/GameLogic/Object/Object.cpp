@@ -94,6 +94,7 @@
 #include "GameLogic/Module/StatusDamageHelper.h"
 #include "GameLogic/Module/StickyBombUpdate.h"
 #include "GameLogic/Module/SubdualDamageHelper.h"
+#include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/TempWeaponBonusHelper.h"
 #include "GameLogic/Module/ToppleUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
@@ -245,9 +246,10 @@ Object::Object( const ThingTemplate *tt, const ObjectStatusMaskType &objectStatu
 	m_formationOffset.x = m_formationOffset.y = 0.0f;
 	m_iPos.zero();
 	//
-	for (i = 0; i < MAX_PLAYER_COUNT; ++i) 
+	for (i = 0; i < MAX_PLAYER_COUNT; ++i)
 	{
 		m_visionSpiedBy[i] = 0;
+		m_seenState[i].teamID = TEAM_ID_INVALID;
 	}
 
 	for( i = 0; i < DISABLED_COUNT; i++ )
@@ -1890,8 +1892,86 @@ ObjectShroudStatus Object::getShroudedStatus(Int playerIndex) const
 		return m_partitionData->getShroudedStatus(playerIndex); 
 
 	// This can happen for objects removed from the partition system (e.g.,
-	// for soldiers that are garrisoned inside a building). 
+	// for soldiers that are garrisoned inside a building).
 	return OBJECTSHROUD_CLEAR;
+}
+
+//-------------------------------------------------------------------------------------------------
+const ObjectSeenState *Object::getSeenStateFor( Int playerIndex ) const
+{
+	const ObjectSeenState &seen = m_seenState[ playerIndex ];
+	return seen.teamID == TEAM_ID_INVALID ? NULL : &seen;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Kept once, when the last of it goes out of sight: whatever happens to it after that, the player
+	* did not see happen. */
+//-------------------------------------------------------------------------------------------------
+void Object::rememberAsSeenBy( Int playerIndex )
+{
+	ObjectSeenState &seen = m_seenState[ playerIndex ];
+	// no team only while the game is being torn down and its sight taken away
+	if( seen.teamID != TEAM_ID_INVALID || getTeam() == NULL )
+		return;
+
+	seen.teamID = getTeam()->getID();
+	seen.apparentPlayerIndex = ObjectSeenState::NO_APPARENT_PLAYER;
+	seen.nonStealthOccupants = 0;
+	seen.suppliesExhausted = FALSE;
+
+	const BodyModuleInterface *body = getBodyModule();
+	seen.atFullHealth = body->getHealth() == body->getMaxHealth();
+
+	const ContainModuleInterface *contain = getContain();
+	if( contain )
+	{
+		const Player *apparent = contain->getApparentControllingPlayer( ThePlayerList->getNthPlayer( playerIndex ) );
+		if( apparent )
+			seen.apparentPlayerIndex = apparent->getPlayerIndex();
+		seen.nonStealthOccupants = contain->getContainCount() - contain->getStealthUnitsContained();
+	}
+
+	static const NameKeyType key_warehouseUpdate = NAMEKEY( "SupplyWarehouseDockUpdate" );
+	const SupplyWarehouseDockUpdate *warehouse = (const SupplyWarehouseDockUpdate *)findUpdateModule( key_warehouseUpdate );
+	if( warehouse )
+		seen.suppliesExhausted = warehouse->getBoxesStored() == 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Object::forgetAsSeenBy( Int playerIndex )
+{
+	m_seenState[ playerIndex ].teamID = TEAM_ID_INVALID;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** getShroudedStatus tells fogged from shrouded by whether the player "has ever seen" it, and that
+	* is only noted when something happens to ask while it is in sight - the drawing loop, on each
+	* machine for its own player.  Two machines disagree about it, so an order must not hang on it.
+	* This asks the cells and the memory, which every machine keeps on the same logic frame. */
+//-------------------------------------------------------------------------------------------------
+Bool Object::isUnknownTo( Int playerIndex ) const
+{
+	if( getTemplate()->isKindOf( KINDOF_ALWAYS_VISIBLE ) )
+		return FALSE;
+
+	if( Object_isPlanHiddenFrom( testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ), getConstructionPercent(),
+															 ThePlayerList->getNthPlayer( playerIndex )->getRelationship( getTeam() ) ) )
+		return TRUE;
+
+	// carried inside something, the same as getShroudedStatus answers
+	if( m_partitionData == NULL )
+		return FALSE;
+
+	if( m_partitionData->isInSightOf( playerIndex ) || getSeenStateFor( playerIndex ) != NULL )
+		return FALSE;
+
+	// A neutral building under fog rather than shroud is drawn for the player without ever having
+	// been in sight: a skirmish map opens fogged for everyone, so every supply dock on it is there
+	// to see from the first frame. getShroudedStatus draws the same one. Without this line the
+	// computer never knew the dock beside its own base, and built no supply centre all match.
+	const Player *player = ThePlayerList->getNthPlayer( playerIndex );
+	return !( isKindOf( KINDOF_IMMOBILE ) && player->getRelationship( getTeam() ) == NEUTRAL &&
+						!m_partitionData->isFullyShroudedFor( playerIndex ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3224,11 +3304,8 @@ Int Object::getConstructionSecondsRemaining() const
 		rate = 100.0f / INT_TO_REAL( max( 1, framesToBuild ) );
 	}
 	Real left = max( 0.0f, 100.0f - m_constructionPercent );
-	// real seconds: the logic runs at the game-speed rate, not at a fixed 30 frames a second
-	Int logicFps = TheGameEngine ? TheGameEngine->getFramesPerSecondLimit() : 0;
-	if( logicFps <= 0 )
-		logicFps = LOGICFRAMES_PER_SECOND;
-	return REAL_TO_INT_CEIL( left / rate / logicFps );
+	// for the screen only: the rate it divides by is measured on the wall clock
+	return ControlBar_secondsFromFrames( left / rate );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4226,13 +4303,14 @@ void Object::crc( Xfer *xfer )
 	* 7: save full mtx, not pos+orient.
 	* 8: Kris: Conversion of object status bits from UnsignedInt to BitFlags<>
 	* 9: Extra sighting for reveal to all with different range units
+	* 10: each player's memory of it while it is out of their sight
 	*/
 //-------------------------------------------------------------------------------------------------
 void Object::xfer( Xfer *xfer )
 {
-	
+
 	// version
-	const XferVersion currentVersion = 9;
+	const XferVersion currentVersion = 10;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4340,6 +4418,19 @@ void Object::xfer( Xfer *xfer )
 
 	// vision spied by mask
 	xfer->xferUser( &m_visionSpiedMask, sizeof( PlayerMaskType ) );
+
+	if( version >= 10 )
+	{
+		for( Int playerIndex = 0; playerIndex < MAX_PLAYER_COUNT; ++playerIndex )
+		{
+			ObjectSeenState &seen = m_seenState[ playerIndex ];
+			xfer->xferUnsignedInt( &seen.teamID );
+			xfer->xferInt( &seen.apparentPlayerIndex );
+			xfer->xferInt( &seen.nonStealthOccupants );
+			xfer->xferBool( &seen.suppliesExhausted );
+			xfer->xferBool( &seen.atFullHealth );
+		}
+	}
 
 	// sighting info, last threat
 	// John M says we don't need to save this (CBD)
@@ -5224,12 +5315,14 @@ void Object::look()
 						 skirmish screen, or a player taken over with Shift-Ctrl-T - shares its eyes with
 						 whoever is at the keyboard, so you can watch it without switching to it.  Both
 						 ways round: switch to that base and your first one keeps feeding you its sight.
-						 Off in a network game, where the logic must not depend on who is looking. */
-					if( getControllingPlayer()->getPlayerType() == PLAYER_HUMAN
-							&& !TheGameLogic->isInMultiplayerGame()
-							&& ThePlayerList->getLocalPlayer() )
+						 "Whoever is at the keyboard" is the logic's keyboard player, not the local player: a
+						 playback's local player is the ReplayObserver, and every human unit's looks came out
+						 different from the recording's.  NULL in a network game, where the logic must not
+						 depend on who is looking. */
+					Player *keyboardPlayer = ThePlayerList->getKeyboardPlayer();
+					if( getControllingPlayer()->getPlayerType() == PLAYER_HUMAN && keyboardPlayer )
 					{
-						lookingMask |= ThePlayerList->getLocalPlayer()->getPlayerMask();
+						lookingMask |= keyboardPlayer->getPlayerMask();
 					}
 
 					// Other players can also be looking through our eyes.

@@ -64,6 +64,7 @@
 #include "GameClient/Shadow.h"
 
 #include "GameLogic/Armor.h"
+#include "GameLogic/Module/ActiveBody.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/Object.h"
@@ -1543,6 +1544,27 @@ Int ThingTemplate::calcCostToBuild( const Player* player) const
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Every body module that can be hurt keeps its health in ActiveBodyModuleData; the one that
+	* cannot, InactiveBody, is not on the list and answers zero. */
+//-------------------------------------------------------------------------------------------------
+Real ThingTemplate::calcMaxHealth( void ) const
+{
+	static const char *BODIES_WITH_HEALTH[] =
+		{ "ActiveBody", "StructureBody", "HiveStructureBody", "UndeadBody", "HighlanderBody", "ImmortalBody", NULL };
+
+	const ModuleInfo &modules = getBehaviorModuleInfo();
+	for( Int m = 0; m < modules.getCount(); ++m )
+	{
+		for( const char **body = BODIES_WITH_HEALTH; *body != NULL; ++body )
+		{
+			if( modules.getNthName( m ).compareNoCase( *body ) == 0 )
+				return static_cast<const ActiveBodyModuleData *>( modules.getNthData( m ) )->m_maxHealth;
+		}
+	}
+	return 0.0f;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** NOTE that we're not paying attention to m_override here, instead the portions
 	* that retrieve template data values use the get() wrappers, which *DO* pay
 	* attention to the override values */
@@ -1555,12 +1577,10 @@ Int ThingTemplate::calcTimeToBuild( const Player* player) const
 	Real factionModifier = 1 + player->getProductionTimeChangePercent( getName() );
 	buildTime *= factionModifier;
 
-#if defined (_DEBUG) || defined (_INTERNAL) || defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
 	if( player->buildsInstantly() )
 	{
 		buildTime = 1;
 	}
-#endif
 
 	// Adjust build time based on energy supply.
 

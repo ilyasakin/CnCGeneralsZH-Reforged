@@ -36,6 +36,7 @@
 #include "Common/Player.h"
 #include "Common/SpecialPower.h"
 #include "Common/ThingTemplate.h"
+#include "Common/TunnelTracker.h"
 #include "Common/Upgrade.h"
 #include "Common/Xfer.h"
 #include "Common/XferCRC.h"
@@ -58,6 +59,7 @@
 #include "GameLogic/Module/StealthUpdate.h"
 #include "GameLogic/Module/SpecialPowerUpdateModule.h"
 #include "GameLogic/ObjectIter.h"
+#include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
 
 #ifdef _INTERNAL
@@ -2363,6 +2365,16 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 	Int floodCursor = 0;
 	Int airCursor = 0;
 
+	// through the tunnel network when that is shorter; see TunnelTracker::findTunnelShortcut
+	Object *tunnelEntrance = NULL;
+	if (gatherOnPoint && iter->first() != NULL)
+	{
+		const Real walkX = goalPos.x - groupCenter.x;
+		const Real walkY = goalPos.y - groupCenter.y;
+		tunnelEntrance = iter->first()->getControllingPlayer()->getTunnelSystem()->findTunnelShortcut( &groupCenter, &goalPos,
+			(Real)sqrt( walkX * walkX + walkY * walkY ) );
+	}
+
 	// Works better if you let the near units get the first paths... jba.
 	// Move the ones nearest the goal first.  Reduces collision problems later.
 	Object *theUnit;
@@ -2390,6 +2402,12 @@ void AIGroup::groupMoveToPosition( const Coord3D *p_posIn, Bool addWaypoint, Com
 				dest = floodGoals[floodCursor++];
 			else if (airCursor < (Int)airMembers.size() && airMembers[airCursor] == theUnit)
 				dest = airGoals[airCursor++];
+
+			if (tunnelEntrance != NULL && ai->takeTunnelTrip( tunnelEntrance, &dest, TUNNEL_TRIP_MOVE, cmdSource ))
+			{
+				ai->clearCrowdLane();
+				continue;
+			}
 
 			// a vehicle drives its lane of the group's route; a foot soldier walks through the crowd
 			if (!trunkRoute.empty() && !theUnit->isKindOf( KINDOF_INFANTRY ) && ai->isDoingGroundMovement())
@@ -3042,6 +3060,18 @@ void AIGroup::groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire,
 		 across a map drove there in single file while the same group told to walk there spread out. */
 	crowdSeedLanes( m_memberList, center, pos );
 
+	// through the tunnel network when that is shorter, and fighting again from the far mouth; see
+	// TunnelTracker::findTunnelShortcut.  A player's order or a computer's, never a script's: a mission
+	// script sends its units the way the mission was written for.
+	Object *tunnelEntrance = NULL;
+	if ((cmdSource == CMD_FROM_PLAYER || cmdSource == CMD_FROM_AI) && !m_memberList.empty())
+	{
+		const Real walkX = pos->x - center.x;
+		const Real walkY = pos->y - center.y;
+		tunnelEntrance = m_memberList.front()->getControllingPlayer()->getTunnelSystem()->findTunnelShortcut( &center, pos,
+			(Real)sqrt( walkX * walkX + walkY * walkY ) );
+	}
+
 	// path the members closest to the goal first; it leaves fewer of them to collide on arrival.
 	MemoryPoolObjectHolder iterHolder;
 	SimpleObjectIterator *iter = newInstance(SimpleObjectIterator);
@@ -3088,6 +3118,13 @@ void AIGroup::groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire,
 			dest = goalPos;
 		else
 			computeIndividualDestination( &dest, &goalPos, theUnit, &center, FALSE );
+
+		const TunnelTripEnd tripEnd = theUnit->isAbleToAttack() ? TUNNEL_TRIP_ATTACK_MOVE : TUNNEL_TRIP_MOVE;
+		if (tunnelEntrance != NULL && ai->takeTunnelTrip( tunnelEntrance, &dest, tripEnd, cmdSource ))
+		{
+			ai->clearCrowdLane();
+			continue;
+		}
 
 		// the speed of the slowest member is picked up by AIAttackMoveToState::onEnter, which runs
 		// inside this order - the move state resets the desired speed, so it cannot be set here.

@@ -57,6 +57,7 @@
 #include "Common/Money.h"
 #include "Common/Science.h"
 #include "GameLogic/AI.h"			// AISkillLevel and AIRole, asked of a player from outside the AI
+#include "GameLogic/OrderQueue.h"
 #include "Common/UnicodeString.h"
 #include "Common/NameKeyGenerator.h"
 #include "Common/Thing.h"
@@ -64,6 +65,26 @@
 #include "Common/ScoreKeeper.h"
 #include "Common/Team.h"
 #include "Common/Upgrade.h"
+
+// ----------------------------------------------------------------------------------------------
+
+/// what a MSG_CHEAT asks for.  The first five act once, the rest toggle a bit on the Player.
+enum CheatKind
+{
+	CHEAT_MONEY,
+	CHEAT_GENERAL_POINTS,
+	CHEAT_RANK_UP,
+	CHEAT_HEROIC,
+	CHEAT_REVEAL_MAP,
+	CHEAT_INFINITE_POWER,
+	CHEAT_NO_COOLDOWN,
+	CHEAT_GOD_MODE,
+	CHEAT_INSTANT_BUILD,
+	CHEAT_ONE_HIT_KILL,
+	CHEAT_TAKE_CONTROL,			///< Shift-Ctrl-T: the amount is the index of the player to take over
+
+	CHEAT_KIND_COUNT
+};
 
 // ----------------------------------------------------------------------------------------------
 
@@ -127,6 +148,12 @@ enum { UNIT_LIMIT_TOTAL = 840 };
 Int UnitLimitPerPlayer( Int nonObserverPlayers );
 // Whether a build that adds unitsItAdds (a transport and its payload) goes past the share.  0 is no cap.
 Bool UnitCapRefuses( Int unitsTowardCap, Int unitsItAdds, UnsignedInt unitCap );
+
+// The lobby's income sharing, an IncomeSharing from GameInfo.h: whether a payment is split in this
+// match, and each ally's cut when it is split evenly between sharers players.  The earner keeps what
+// the cuts leave, so rounding never loses a dollar.
+Bool IncomeSharingSplits( Int incomeSharing, Bool fromTechBuilding );
+UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers );
 
 // Pro Rules, PRO-RULES.md: what every skirmish and network match refuses whoever plays it.
 // GameLogic::isProRules() says whether a match is under them; these say what they cover, by name
@@ -335,6 +362,8 @@ public:
 	/// return the Player's Money sub-object
 	inline Money *getMoney() { return &m_money; }
 	inline const Money *getMoney() const { return &m_money; }
+	/// steady income - a supply run, a hacker's payout, a derrick's - banked and scored, and split with the allies when the lobby's income sharing covers it
+	void earnIncome( UnsignedInt amount, Bool fromTechBuilding );
 
 	UnsignedInt getSupplyBoxValue();///< Many things can affect the alue of a crate, but at heart it is a GlobalData ratio.
 
@@ -439,11 +468,13 @@ public:
 
 #endif
 
-#if defined(_DEBUG) || defined(_INTERNAL) || defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
+	/// the console's single-player cheats; only the toggles are kept here, the one-shots just act
+	Bool hasCheat( CheatKind kind ) const { return BitTest( m_cheats, 1 << kind ); }
+	void toggleCheat( CheatKind kind ) { m_cheats ^= 1 << kind; }
+
 	/// No time building cheat key
-	void toggleInstantBuild(){ m_DEMO_instantBuild = !m_DEMO_instantBuild; }
-	Bool buildsInstantly() const { return m_DEMO_instantBuild; }
-#endif
+	void toggleInstantBuild(){ toggleCheat( CHEAT_INSTANT_BUILD ); }
+	Bool buildsInstantly() const { return hasCheat( CHEAT_INSTANT_BUILD ); }
 
 	///< Power just changed at all.  Didn't make two functions so you can't forget to undo something you didin one of them.
 	///< @todo Can't do edge trigger until after demo; make things check for power on creation
@@ -752,7 +783,11 @@ public:
 
 	// return the requested hotkey squad
 	Squad *getHotkeySquad(Int squadNumber);
-	
+
+	// the orders this player has lined up with shift (fork)
+	OrderQueue *getOrderQueue() { return &m_orderQueue; }
+	const OrderQueue *getOrderQueue() const { return &m_orderQueue; }
+
 	// return the hotkey squad that a unit is in, or NO_HOTKEY_SQUAD if it isn't in one.
 	Int getSquadNumberForObject(const Object *objToFind) const;
 	
@@ -919,9 +954,7 @@ private:
 	Bool									m_DEMO_freeBuild;				///< Can I build everything for no money?
 #endif
 
-#if defined(_DEBUG) || defined(_INTERNAL) || defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
-	Bool									m_DEMO_instantBuild;		///< Can I build anything in one frame?
-#endif
+	UnsignedInt						m_cheats;								///< one bit per toggled CheatKind; not saved, a load starts clean
 
 	ScoreKeeper						m_scoreKeeper;					///< The local scorekeeper for this player
 
@@ -936,6 +969,7 @@ private:
 
 	Squad									*m_squads[NUM_HOTKEY_SQUADS];	///< The hotkeyed squads
 	Squad									*m_currentSelection;		///< This player's currently selected group
+	OrderQueue						m_orderQueue;						///< shift-queued orders, handed out as the units finish each one (fork)
 
 	Bool									m_isPlayerDead;
 	Bool									m_logicalRetaliationModeEnabled;

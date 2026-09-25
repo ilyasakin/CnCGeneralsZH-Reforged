@@ -42,6 +42,7 @@
 #include "Common/Team.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
+#include "Common/TunnelTracker.h"
 #include "Common/Upgrade.h"
 #include "Common/PerfTimer.h"
 #include "Common/UnitTimings.h"
@@ -353,6 +354,9 @@ AIUpdateInterface::AIUpdateInterface( Thing *thing, const ModuleData* moduleData
 	m_hasExitProductionRallyPoint = FALSE;
 	m_salvageReturnPosition.zero();
 	m_hasSalvageReturnPosition = FALSE;
+	m_tunnelTripGoal.zero();
+	m_hasTunnelTrip = FALSE;
+	m_tunnelTripEnd = TUNNEL_TRIP_MOVE;
 	m_locomotorSet.clear();
 	m_curLocomotor = NULL;
 	m_curLocomotorSet = LOCOMOTORSET_INVALID;
@@ -1183,10 +1187,22 @@ UpdateSleepTime AIUpdateInterface::update( void )
 	{
 		Coord3D rallyPoint = m_exitProductionRallyPoint;
 		m_hasExitProductionRallyPoint = FALSE;
-		if (getObject()->isAbleToAttack() && hasFightingWeapon(getObject()))
-			privateAttackMoveToPosition( &rallyPoint, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
-		else
-			privateMoveToPosition( &rallyPoint, CMD_FROM_AI );
+		const Bool fights = getObject()->isAbleToAttack() && hasFightingWeapon(getObject());
+
+		// a rally point across the map is reached through the tunnels when they are shorter
+		const Real walkX = rallyPoint.x - getObject()->getPosition()->x;
+		const Real walkY = rallyPoint.y - getObject()->getPosition()->y;
+		Object *entrance = getObject()->getControllingPlayer()->getTunnelSystem()->findTunnelShortcut( getObject()->getPosition(),
+			&rallyPoint, (Real)sqrt( walkX * walkX + walkY * walkY ) );
+		const Bool tunnelled = entrance != NULL
+			&& takeTunnelTrip( entrance, &rallyPoint, fights ? TUNNEL_TRIP_ATTACK_MOVE : TUNNEL_TRIP_MOVE, CMD_FROM_AI );
+		if (!tunnelled)
+		{
+			if (fights)
+				privateAttackMoveToPosition( &rallyPoint, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+			else
+				privateMoveToPosition( &rallyPoint, CMD_FROM_AI );
+		}
 		stRet = STATE_CONTINUE;
 	}
 
@@ -1199,6 +1215,30 @@ UpdateSleepTime AIUpdateInterface::update( void )
 		Coord3D returnPosition = m_salvageReturnPosition;
 		m_hasSalvageReturnPosition = FALSE;
 		privateMoveToPosition( &returnPosition, CMD_FROM_AI );
+		stRet = STATE_CONTINUE;
+	}
+
+	// A move order that a tunnel shortened: idle inside the network means the enter just finished, so
+	// leave by the mouth nearest the goal; idle outside means the exit is done, or the enter gave up,
+	// and either way what is left is the walk to the goal.
+	if (m_hasTunnelTrip && getAIStateType() == AI_IDLE)
+	{
+		Object *me = getObject();
+		Object *tunnel = me->getContainedBy();
+		if (tunnel != NULL && tunnel->getContain()->isTunnelContain())
+		{
+			Object *exit = me->getControllingPlayer()->getTunnelSystem()->findQuietTunnelNear( &m_tunnelTripGoal );
+			privateExit( exit != NULL ? exit : tunnel, CMD_FROM_AI );
+		}
+		else
+		{
+			Coord3D goal = m_tunnelTripGoal;
+			m_hasTunnelTrip = FALSE;
+			if (m_tunnelTripEnd == TUNNEL_TRIP_ATTACK_MOVE && me->isAbleToAttack() && hasFightingWeapon(me))
+				privateAttackMoveToPosition( &goal, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+			else
+				privateMoveToPosition( &goal, CMD_FROM_AI );
+		}
 		stRet = STATE_CONTINUE;
 	}
 
@@ -4393,6 +4433,11 @@ void AIUpdateInterface::aiDoCommand(const AICommandParms* parms)
 	// first and the return position recorded after, so this does not eat its own trip.
 	m_hasSalvageReturnPosition = FALSE;
 
+	// A tunnel trip drives itself with AI orders - the exit, the step out of the door - so only an
+	// order from somebody else ends it.
+	if (parms->m_cmdSource != CMD_FROM_AI)
+		m_hasTunnelTrip = FALSE;
+
 #ifdef ALLOW_SURRENDER
 	// surrendered items have very limited options, and only via AI cmds
 	if (isSurrendered())
@@ -5176,6 +5221,24 @@ void AIUpdateInterface::friend_setSalvageReturnPosition( const Coord3D *pos )
 {
 	m_salvageReturnPosition = *pos;
 	m_hasSalvageReturnPosition = TRUE;
+}
+
+//----------------------------------------------------------------------------------------
+/**
+ * Turn an order to go to `goal` into an enter into `entrance`.  update() takes it from there: out of
+ * the mouth nearest the goal, then the last leg to it.
+ */
+Bool AIUpdateInterface::takeTunnelTrip( Object *entrance, const Coord3D *goal, TunnelTripEnd end, CommandSourceType cmdSource )
+{
+	if (!isDoingGroundMovement() || !TheActionManager->canEnterObject( getObject(), entrance, cmdSource, DONT_CHECK_CAPACITY ))
+		return FALSE;
+
+	// a player's enter ends any trip (aiDoCommand), so the trip is set after it
+	aiEnter( entrance, cmdSource );
+	m_tunnelTripGoal = *goal;
+	m_tunnelTripEnd = end;
+	m_hasTunnelTrip = TRUE;
+	return TRUE;
 }
 
 //----------------------------------------------------------------------------------------
@@ -7018,12 +7081,14 @@ void AIUpdateInterface::crc( Xfer *x )
 	* 11: m_isMoving, which the duplicated m_isSafePath used to stand in place of
 	* 12: m_allowedToChase
 	* 13: m_pathfindFoundNothing
-	* 14: the salvage return position and its flag */
+	* 14: the salvage return position and its flag
+	* 16: the tunnel trip's goal and its flag
+	* 17: how the tunnel trip's last leg is walked */
 // ------------------------------------------------------------------------------------------------
 void AIUpdateInterface::xfer( Xfer *xfer )
 {
   // version
-  const XferVersion currentVersion = 15;
+  const XferVersion currentVersion = 17;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -7339,6 +7404,21 @@ void AIUpdateInterface::xfer( Xfer *xfer )
 			xfer->xferInt(&layer);
 			m_crowdPlanned[ k ].layer = (PathfindLayerEnum)layer;
 		}
+	}
+
+	if (version >= 16)
+	{
+		// a save made between a tunnel's enter and the walk out of the far mouth owes the rest of the trip
+		xfer->xferCoord3D(&m_tunnelTripGoal);
+		xfer->xferBool(&m_hasTunnelTrip);
+	}
+
+	if (version >= 17)
+	{
+		// a computer's wave comes out fighting, a move order does not
+		Int end = (Int)m_tunnelTripEnd;
+		xfer->xferInt(&end);
+		m_tunnelTripEnd = (TunnelTripEnd)end;
 	}
 
 }  // end xfer
