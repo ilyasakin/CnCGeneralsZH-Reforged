@@ -3,7 +3,9 @@
  * index.  Two dumps are compared with diff -r.
  *
  * It exists for one proof: that adding a target to the generators left the D3D9 and D3D11 text
- * byte-identical.  The same file builds against the generators before and after the change, with
+ * byte-identical.  keys.txt beside it holds each case's pipeline-cache key (CombinerShader_Key,
+ * VertexShader_Key, or the engine program's name and pipeline key), because the key is the other
+ * thing the generators hand the backend.  The same file builds against the generators before and after the change, with
  * mingw-w64 for Windows (run under Wine) and natively off Windows, so the comparison covers both the
  * text and the platforms.  D3's task file records the runs.
  *
@@ -40,10 +42,15 @@ int main(int argc, char **argv)
 	}
 
 	const std::vector<ShaderCase> cases = Shader_Cases();
-	std::string index;
+	std::string index, keys;
 	unsigned written = 0, refused = 0, reference = 0;
 	for (size_t i = 0; i < cases.size(); ++i) {
 		reference += cases[i].Reference ? 1 : 0;
+		const ShaderCase & c = cases[i];
+		const std::string key = c.Kind == SHADER_CASE_COMBINER ? CombinerShader_Key(c.Combiner)
+			: c.Kind == SHADER_CASE_VERTEX ? VertexShader_Key(c.Vertex)
+			: std::string(EngineShader_Name(c.Engine)) + (c.VertexStage ? "" : CombinerShader_Pipeline_Key(c.EnginePipeline));
+		keys += c.Name + " " + key + "\n";
 		for (size_t t = 0; t < targets.size(); ++t) {
 			std::string hlsl;
 			const bool generated = Shader_Case_Generate(cases[i], targets[t], hlsl);
@@ -65,6 +72,10 @@ int main(int argc, char **argv)
 	FILE *file = fopen((folder + "/index.txt").c_str(), "wb");
 	if (file == NULL) return 1;
 	fwrite(index.data(), 1, index.size(), file);
+	fclose(file);
+	file = fopen((folder + "/keys.txt").c_str(), "wb");
+	if (file == NULL) return 1;
+	fwrite(keys.data(), 1, keys.size(), file);
 	fclose(file);
 	printf("%zu cases (%u in the reference set), %zu targets: %u written, %u refused or not applicable\n",
 		cases.size(), reference, targets.size(), written, refused);

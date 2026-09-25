@@ -524,12 +524,12 @@ std::string CombinerShader_Key(const CombinerDescription & description)
 	for (unsigned stage = 0; stage < description.StageCount; ++stage) {
 		const CombinerStage & source = description.Stages[stage];
 		snprintf(field, sizeof(field), ":%lu,%lu,%lu,%lu",
-			source.ColourOperation, source.ColourArgument0,
-			source.ColourArgument1, source.ColourArgument2);
+			(unsigned long)source.ColourOperation, (unsigned long)source.ColourArgument0,
+			(unsigned long)source.ColourArgument1, (unsigned long)source.ColourArgument2);
 		key += field;
 		snprintf(field, sizeof(field), ",%lu,%lu,%lu,%lu",
-			source.AlphaOperation, source.AlphaArgument0,
-			source.AlphaArgument1, source.AlphaArgument2);
+			(unsigned long)source.AlphaOperation, (unsigned long)source.AlphaArgument0,
+			(unsigned long)source.AlphaArgument1, (unsigned long)source.AlphaArgument2);
 		key += field;
 		snprintf(field, sizeof(field), ",%u,%u",
 			coordinate_register(source.TextureCoordinateIndex), source.TextureBound ? 1u : 0u);
