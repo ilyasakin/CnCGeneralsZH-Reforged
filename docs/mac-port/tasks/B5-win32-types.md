@@ -298,6 +298,26 @@ Two tripwires keep `_UNIX` out: `MSVCCompat.h` `#error`s on it, and the ctest `u
 scans every source (vendored included) and every compile command, with an armed control. `thread.h`'s
 dead `osdep.h` include is left in place on purpose, because it is what makes a leak fail loudly.
 
+**Round 7, 2026-09-25.**
+
+- **Pointer-to-integer casts: 74 sites, all integer round trips, so no live truncation.** The first-error
+  sweep showed four. 73 are fixed as `(Int)(intptr_t)`; `profile_funclevel.h` is B6's. The method is
+  worth reusing: item data enters a list only through `Gadget*SetItemData`, so enumerate every store
+  first. Six lists hold real pointers (save list, map list, random-map row tags, quick match's map
+  column, the LAN game list, the right-click menus), and each is read back only as a pointer.
+- **Found: the score screen's add-buddy has always asked for profile 0.** `ScoreScreen.wnd:ButtonAdd%d`
+  has no data set; the two `GadgetButtonSetData(..., m_profileID)` stores are commented out. Dead
+  GameSpy service, so recorded and not fixed.
+- **FPU:** `setFPMode` has a POSIX branch, `restoreFPMode` is new, and `fpucontrol_selfcheck` is armed
+  and passes on arm64 and on x86-64 under Rosetta. **Found: the NaN an invalid operation generates
+  differs by architecture and cannot be set.** `0/0` is `0xFFC00000` on x86 (Windows included) and
+  `0x7FC00000` on arm64. Whether any generated NaN's bits reach a CRC, a save or the network is **open**,
+  and belongs to E1.
+- **Found: `BaseType.h` defines `min` and `max` as macros**, which break libstdc++'s `<algorithm>`. Every
+  engine file will hit it on Linux; `fpucontrol_selfcheck` is disabled there until then.
+- `Debug.h`'s `SimpleProfiler` counters are `Int64`. The other `__int64` sites (`SubsystemInterface.cpp`,
+  `Debug.cpp`, `PerfTimer.cpp`) are Debug-profiling code with `__rdtsc`, left for their own pass.
+
 <details><summary>The 62 enums</summary>
 
 | Enum | Definition | Forward declarations |
