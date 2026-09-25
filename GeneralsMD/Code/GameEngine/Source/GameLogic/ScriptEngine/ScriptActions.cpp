@@ -2607,7 +2607,12 @@ void ScriptActions::doDisplayCinematicText(const AsciiString& displayText, const
 	char buf[256];
 	char *c;
 	strcpy(buf, fontType.str());
-	for( c = buf; c != '\0'; *c++ )
+	/* KNOWN DEFECT, kept on purpose (docs/mac-port/README.md, defects in the shipping game): this
+		 compared the pointer with '\0', which MSVC read as a null pointer constant, so the test is
+		 `c != NULL` and always true.  The loop ends only on a ' ' or '-'; without one it reads past
+		 the string, and it advances c twice a pass.  Spelled as MSVC compiled it, so every platform
+		 behaves as Windows does; the rewrite needs its own test. */
+	for( c = buf; c != NULL; *c++ )
 	{
 		if( *c != ' ' && *c++ != '-' ) 
 			fontName.concat(c);
