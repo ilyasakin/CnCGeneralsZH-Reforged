@@ -1358,6 +1358,24 @@ target_include_directories(miles_listen PRIVATE ${WW}/Miles6/include)
 target_link_libraries(miles_listen PRIVATE milesaudio)
 endif()  # ZH_PLATFORM_POSIX - audio backend checks
 
+if(ZH_PLATFORM_POSIX)
+# The POSIX twin of test_ffshadercompile and test_ffvertexcompile: every generated program under the
+# SDL3 GPU target through glslang, spirv-val, SPIRV-Cross and, on macOS, the Metal driver (D3).
+# spirv-val is a tool on the machine, not something this build makes; without one the test prints
+# SKIPPED for that step and says how many it did not check.
+find_program(ZH_SPIRV_VAL spirv-val)
+add_lib_test(test_shader_sdl ffvertex engineshader sdl3shadercompile)
+if(ZH_SPIRV_VAL)
+  set_tests_properties(test_shader_sdl PROPERTIES ENVIRONMENT "ZH_SPIRV_VAL=${ZH_SPIRV_VAL}")
+endif()
+
+# The golden dump behind D3's byte-identical proof: every program in Tests/shader_cases.h, every
+# target, one file each.  A tool, not a test: two runs are compared with diff -r.
+add_executable(ffshader_dump ${TESTS}/ffshader_dump.cpp)
+target_include_directories(ffshader_dump PRIVATE ${TESTS})
+target_link_libraries(ffshader_dump PRIVATE ffvertex engineshader)
+endif()  # ZH_PLATFORM_POSIX - shader generator checks
+
 # Tools/bigfile.py reads and writes the game's BIG archives (that is how the shipped INIs
 # come out for editing).  Its selfcheck round-trips synthetic files, so it needs no game
 # data - but it does need an interpreter, so it is only registered when one is present.
