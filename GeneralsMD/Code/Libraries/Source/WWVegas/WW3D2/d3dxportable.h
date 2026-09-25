@@ -50,8 +50,9 @@
 //   - it is what Wine's d3dx9 computes, so it is what a Mac player running the Windows build under
 //     CrossOver computes today.
 // It is bit-identical to the Intel path on every lane except x, the only lane where the Bezier
-// basis has four nonzero terms.  There the two disagree on 35.7% of Tests/d3dx_oracle's basis
-// inputs.  While Windows took this function from the DLL, that was a defect of the shipping
+// basis has four nonzero terms.  There the two disagree on 46.8% of Tests/d3dx_oracle's inputs
+// shaped like BezFwdIterator's, the ones a shell's flight is built from (35.7% over all its basis
+// inputs, which include random-t vectors the game never evaluates).  While Windows took this function from the DLL, that was a defect of the shipping
 // Windows game (docs/mac-port/README.md, defect #7), and no Mac build could match an Intel and an
 // AMD Windows machine at once.  So Windows now uses this file too, and every machine sums in this
 // order.
@@ -81,12 +82,15 @@ namespace D3DXPortable
 inline float * Vec4Transform(float * out, const float * vector, const float * matrix)
 {
 #if defined(__clang__)
-	// -ffp-contract=off is already global on macOS.  This keeps the function unfused in a
-	// translation unit that loses that flag and falls back to clang's default.  Measured with
-	// -mfma on x86_64 and on arm64: with no flag, or with -ffp-contract=on, the same expression
-	// without this pragma fuses 12 times and this function fuses 0.  It does NOT hold against
-	// -ffp-contract=fast, which clang documents as overriding the pragma.  Only the build flag
-	// protects against that.
+	// CMakeLists.txt gives every GCC and Clang build -ffp-contract=off.  Under clang, this also
+	// keeps the function unfused in a translation unit that loses that flag and falls back to
+	// clang's default.  Measured with -mfma on x86_64 and on arm64: with no flag, or with
+	// -ffp-contract=on, the same expression without this pragma fuses 12 times and this function
+	// fuses 0.  It does NOT hold against -ffp-contract=fast, which clang documents as overriding
+	// the pragma.  GCC ignores it entirely, and GCC's own default IS fast.  So under GCC, and under
+	// clang with fast, only the build flag protects this.  d3dxportable_selfcheck asserts absolute
+	// bit patterns and fails if either compiler fuses here.  MSVC has nothing to fuse into on x64
+	// without /arch:AVX2.
 #pragma clang fp contract(off)
 #endif
 	const float x = vector[0];
