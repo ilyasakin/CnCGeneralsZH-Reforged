@@ -46,7 +46,7 @@
 #define POSIXPATH_H
 
 #if defined(_WIN32)
-#error posixpath.h is the POSIX side of path resolution; Windows opens the engine's spelling as it is
+#error "posixpath.h is the POSIX side of path resolution; Windows opens the engine's spelling as it is"
 #endif
 
 #include <string>
