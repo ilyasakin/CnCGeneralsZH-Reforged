@@ -1021,6 +1021,23 @@ target_include_directories(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:g
 target_compile_definitions(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
 set_target_properties(widechar_format_selfcheck PROPERTIES CXX_STANDARD 17)
 add_test(NAME widechar_format_selfcheck COMMAND widechar_format_selfcheck)
+# The game's own .csf through the real GameText.cpp, RAMFile, File and memory manager: every string
+# against an independent reading, some against their English text, and a golden hash for a Windows
+# run to diff.  Needs ZH_GAME_DATA; without it the test is Skipped (77), not Passed.  Stubs are in
+# the test file.  See Tests/test_gametext_csf.cpp.
+add_executable(gametext_csf ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gametext_csf.cpp
+  ${GE}/Source/GameClient/GameText.cpp ${GE}/Source/Common/System/RAMFile.cpp
+  ${GE}/Source/Common/System/File.cpp ${GE}/Source/Common/System/GameMemory.cpp
+  ${GE}/Source/Common/System/MemoryInit.cpp ${GE}/Source/Common/System/UnicodeString.cpp
+  ${GE}/Source/Common/System/AsciiString.cpp ${GE}/Source/Common/System/WideCharFns.cpp)
+target_include_directories(gametext_csf PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+target_compile_definitions(gametext_csf PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(gametext_csf PROPERTIES CXX_STANDARD 17)
+add_test(NAME gametext_csf COMMAND gametext_csf)
+set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
+if(ZH_GAME_DATA)
+  set_tests_properties(gametext_csf PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+endif()
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   zh_widechar_gate(widechar_crc_gate_msvc_model)
   target_compile_options(widechar_crc_gate_msvc_model PRIVATE -fshort-wchar)
