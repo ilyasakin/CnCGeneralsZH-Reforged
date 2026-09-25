@@ -215,7 +215,7 @@ GameState::SnapshotBlock *GameState::findBlockInfoByToken( AsciiString token, Sn
 	 one the person sitting there picked in Region settings. On a machine set up in one country and
 	 used in another - which is most machines that run this game now - the dates in the replay and
 	 save lists came out in a format the owner never chose. */
-UnicodeString getUnicodeDateBuffer(SYSTEMTIME timeVal)
+UnicodeString getUnicodeDateBuffer(WallClockTime timeVal)
 {
 	// setup date buffer for local region date format
 	#define DATE_BUFFER_SIZE 256
@@ -247,7 +247,7 @@ UnicodeString getUnicodeDateBuffer(SYSTEMTIME timeVal)
 	//displayDateBuffer.format( L"%ls", dateBuffer );
 }															
 
-UnicodeString getUnicodeTimeBuffer(SYSTEMTIME timeVal) 
+UnicodeString getUnicodeTimeBuffer(WallClockTime timeVal) 
 {
 	// setup time buffer for local region time format
 	UnicodeString displayTimeBuffer;
@@ -1226,7 +1226,7 @@ void GameState::populateSaveGameListbox( GameWindow *listbox, SaveLoadLayoutType
 	// add all games found to the list box
 	AvailableGameInfo *info;
 	SaveGameInfo *saveGameInfo;
-	SYSTEMTIME systemTime;
+	WallClockTime systemTime;
 	UnsignedInt count = 0;
 	for( info = m_availableGames; info; info = info->next, count++ )
 	{
@@ -1634,8 +1634,8 @@ void GameState::xfer( Xfer *xfer )
 	}  // end if
 
 	// current system time
-	SYSTEMTIME systemTime;
-	GetLocalTime( &systemTime );
+	WallClockTime systemTime;
+	getLocalWallClock( &systemTime );
 
 	// date and time
 	saveGameInfo->date.year = systemTime.wYear;
