@@ -178,7 +178,7 @@ you start. That commit is the lock.
 | B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | not started | |
 | B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress | -3a |
 | B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | **done** — wwdebug 3/3, wwmath 36/36; not verified on Windows | -18 |
-| B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) — **see defect #7** | M1 | A1 | macOS half done; **Windows half awaits the Intel/AMD decision** | -47 |
+| B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) — **see defect #7** | M1 | A1 | in review: macOS half merged, Windows flip awaiting its second read | -47 |
 | B19 | [CPU detection and the tick clock on arm64](tasks/B19-cpu-detection-arm64.md) | M1 | B5 | merged; tier **decided: (c)**, builds once gameengine compiles | -a9 |
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | in progress | -21 |
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | in progress | -21 |
@@ -509,16 +509,17 @@ processors do the maths slightly differently … Every machine uses the same one
 how the bug was found. So it shows the project has already chosen one path for every CPU once. It
 does not show that anyone has played across machines.
 
-*What it means for the port.* A Mac cannot agree with an Intel and an AMD Windows machine at once
-while Windows keeps binding the DLL. `d3dxportable.h` sums left to right: that is the SDK's
-reference order, the order of every non-Intel machine, and the order CrossOver players compute
-today. **Whether Windows should also stop taking this function from the DLL is a product decision
-and has been put to the user.** D3DX has no runtime switch equivalent to `_set_FMA3_enable`; it
-exports no CPU-optimisation control. The only per-process fix is to route BezierSegment's calls
-through `d3dxportable.h` on Windows as well. The only callers are
-`BezierSegment.cpp:112` and `BezFwdIterator.cpp:69-71`, so that is a change to `d3dx9math.h` and
-`d3dx9runtime.cpp`, not to game code. It moves the checksum of every replay recorded on an Intel
-machine.
+*What was done.* A Mac cannot agree with an Intel and an AMD Windows machine at once while
+Windows takes this function from the DLL, and D3DX has no runtime switch equivalent to
+`_set_FMA3_enable`: it exports no CPU-optimisation control. So, per decision 1 under "Decisions
+taken" above, **every platform now routes `D3DXVec4Transform` and `D3DXVec4Dot` through
+`d3dxportable.h`**. That file sums left to right: the SDK's reference order, the order of every
+non-Intel machine, and the order CrossOver players compute today. The only callers are
+`BezierSegment.cpp:112` and `BezFwdIterator.cpp:69-71`, so the change is in `d3dx9math.h` and
+`d3dx9runtime.cpp`, not in game code. The DLL's own transform stays bound as
+`D3DXVec4TransformFromDLL` for `dx9_smoke` alone, which is still the one check that can observe the
+dispatch. Replays recorded on an Intel machine before this change may not play back. It is a
+`WINDOWS-DEBT.md` row at high severity, because MSVC has never compiled it.
 
 Related and **not** a defect, because someone got it right: `ConnectionManager.cpp:706`/`:718` pass
 a constant `L"%ls"` with network chat as the *argument*. It looks like a redundant format and it is

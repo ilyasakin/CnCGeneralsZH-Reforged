@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6, and M2 leans on it
-- **Status:** in review (B17). macOS half done; the Windows half is a product decision put to the user - see defect #7 in the README
+- **Status:** in review (B17). macOS half merged (`cc93d068`); the Windows flip (decision 1 in the README) awaits its second read
 - **Risk:** the highest left in M1. This is arithmetic on the replay and network CRC path.
 
 ## Why
@@ -143,3 +143,18 @@ user's decision; see defect #7 for what that change would cost.
   `volatile` check showed Rosetta does produce x86's `0xFFC00000`, and the probe now reads a
   `volatile`. **A differential probe over a constant input measures the compiler, not the
   hardware.** That is a fourth blind spot for E3's header, alongside the three it already lists.
+
+### The Windows flip (2026-09-25)
+
+Decided by the PM under the user's delegation; the reasoning is decision 1 in the README.
+`D3DXVec4Transform` and `D3DXVec4Dot` are one pair of inline functions after the platform split in
+`d3dx9math.h`, going to `d3dxportable.h` everywhere. The DLL's transform stays bound as
+`D3DXVec4TransformFromDLL`, a name the SDK does not own, and only `dx9_smoke` calls it, so the
+capture still observes Microsoft's code and not ours.
+
+For the second reader: each SDK name resolves once on Windows. A BezFwdIterator-shaped TU down the
+`_WIN32` branch `static_assert`s that `D3DXVec4Transform` and `D3DXVec4Dot` are functions and the DLL
+entry is a pointer. mingw-w64 accepts it; against the pre-flip header it fails. Nothing else loses
+the DLL's version: outside the headers, the only callers of either name are the two Bezier files and
+`dx9_smoke`, and `dx9_smoke`'s transform calls now name the DLL pointer explicitly. `D3DXVec4Dot` was
+never the DLL's, and its expression is unchanged.
