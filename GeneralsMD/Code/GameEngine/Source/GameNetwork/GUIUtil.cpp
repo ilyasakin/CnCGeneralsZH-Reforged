@@ -450,7 +450,7 @@ void UpdatePeaceTimeComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMa
   Int itemCount = GadgetComboBoxGetLength(comboBox);
   for ( Int index = 0; index < itemCount; index++ )
   {
-    if ( (Int)GadgetComboBoxGetItemData(comboBox, index) == myGame->getPeaceTime() )
+    if ( (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, index) == myGame->getPeaceTime() )
     {
       Int selected = -1;
       GadgetComboBoxGetSelectedPos( comboBox, &selected );
@@ -471,7 +471,7 @@ Int PeaceTimeFromComboBox(GameWindow *comboBox)
   GadgetComboBoxGetSelectedPos(comboBox, &selIndex);
   if ( selIndex < 0 )
     return 0;
-  return (Int)GadgetComboBoxGetItemData(comboBox, selIndex);
+  return (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, selIndex);
 }
 
 // -----------------------------------------------------------------------------
@@ -510,7 +510,7 @@ void UpdateSuperweaponComboBox(GameWindow *comboBox, GameInfo *myGame, Bool host
   Int itemCount = GadgetComboBoxGetLength(comboBox);
   for ( Int index = 0; index < itemCount; index++ )
   {
-    if ( (Int)GadgetComboBoxGetItemData(comboBox, index) == restriction )
+    if ( (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, index) == restriction )
     {
       Int selected = -1;
       GadgetComboBoxGetSelectedPos( comboBox, &selected );
@@ -531,7 +531,7 @@ Int SuperweaponRestrictionFromComboBox(GameWindow *comboBox)
   GadgetComboBoxGetSelectedPos(comboBox, &selIndex);
   if ( selIndex < 0 )
     return SUPERWEAPONS_ALLOW;
-  return (Int)GadgetComboBoxGetItemData(comboBox, selIndex);
+  return (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, selIndex);
 }
 
 void UpdateUnitLimitCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit)
@@ -826,7 +826,7 @@ void UpdateSlotList( GameInfo *myGame, GameWindow *comboPlayer[],
 				Int pos = slot->getState();
 				for (Int item = 0; comboPlayer[i] && item < GadgetComboBoxGetLength(comboPlayer[i]); ++item)
 				{
-					if ((Int)GadgetComboBoxGetItemData(comboPlayer[i], item) == slot->getState())
+					if ((Int)(intptr_t)GadgetComboBoxGetItemData(comboPlayer[i], item) == slot->getState())
 					{
 						pos = item;
 						break;
@@ -855,7 +855,7 @@ void UpdateSlotList( GameInfo *myGame, GameWindow *comboPlayer[],
 				max = GadgetComboBoxGetLength(comboColor[i]);
 				for (idx=0; idx<max; ++idx)
 				{
-					Int color = (Int)GadgetComboBoxGetItemData(comboColor[i], idx);
+					Int color = (Int)(intptr_t)GadgetComboBoxGetItemData(comboColor[i], idx);
 					if (color == slot->getColor())
 					{
 						GadgetComboBoxSetSelectedPos(comboColor[i], idx, TRUE);
@@ -868,7 +868,7 @@ void UpdateSlotList( GameInfo *myGame, GameWindow *comboPlayer[],
 				max = GadgetComboBoxGetLength(comboTeam[i]);
 				for (idx=0; idx<max; ++idx)
 				{
-					Int team = (Int)GadgetComboBoxGetItemData(comboTeam[i], idx);
+					Int team = (Int)(intptr_t)GadgetComboBoxGetItemData(comboTeam[i], idx);
 					if (team == slot->getTeamNumber())
 					{
 						GadgetComboBoxSetSelectedPos(comboTeam[i], idx, TRUE);
@@ -881,7 +881,7 @@ void UpdateSlotList( GameInfo *myGame, GameWindow *comboPlayer[],
 				max = GadgetComboBoxGetLength(comboPlayerTemplate[i]);
 				for (idx=0; idx<max; ++idx)
 				{
-					Int playerTemplate = (Int)GadgetComboBoxGetItemData(comboPlayerTemplate[i], idx);
+					Int playerTemplate = (Int)(intptr_t)GadgetComboBoxGetItemData(comboPlayerTemplate[i], idx);
 					if (playerTemplate == slot->getPlayerTemplate())
 					{
 						GadgetComboBoxSetSelectedPos(comboPlayerTemplate[i], idx, TRUE);
