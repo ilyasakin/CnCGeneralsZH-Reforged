@@ -1243,6 +1243,12 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME include_case_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/include_case_check.py
                      ${CMAKE_BINARY_DIR}/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR})
+    # Nothing may define _UNIX: not a vendored header (GameSpy's did, until vendor.sh renamed it),
+    # not an engine header, not a compile flag.  Scans the vendored sources too, which git and this
+    # machine's grep both skip, and plants a definition first to prove it can see one.
+    add_test(NAME unix_define_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/unix_define_check.py
+                     ${CMAKE_BINARY_DIR}/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR})
   endif()
   add_test(NAME bigfile_selfcheck
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/bigfile.py selfcheck)
