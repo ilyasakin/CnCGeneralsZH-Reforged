@@ -45,6 +45,15 @@
 #include "dettrig.h"
 #endif
 
+/* B17's portable D3DXVec4Transform, the arithmetic a shell's flight path is built from. */
+#if defined(__has_include)
+#  if __has_include("d3dxportable.h") && __has_include("d3dx_sweep.h")
+#    include "d3dxportable.h"
+#    include "d3dx_sweep.h"
+#    define PROBE_HAS_D3DX 1
+#  endif
+#endif
+
 static void row_l(const char *section, const char *key, long v)
 {
 	printf("%s\t%s\t%ld\n", section, key, v);
@@ -265,6 +274,68 @@ static void probe_dettrig(void)
 }
 #endif
 
+#if defined(PROBE_HAS_D3DX)
+/* ------------------------------------------------------------------ D3DX
+ *
+ * d3dxportable.h stands in for d3dx9_43.dll on the replay CRC path.  Tests/d3dx_oracle compares
+ * its x86_64 build with Microsoft's own machine code over D3DX_SWEEP_COUNT inputs.  This section
+ * is the other link in that chain: the same header on arm64 against x86_64, over the same inputs,
+ * as one fingerprint.  The oracle prints its fingerprint too, and while the two agree, the arm64
+ * build computes what the DLL's scalar and non-Intel bodies compute on every one of those inputs.
+ * The golden rows are printed individually so that a difference can be named.
+ *
+ * The one row that is expected to differ is inf-w, where inf*0 generates a NaN.  x86 generates
+ * 0xFFC00000 and arm64 0x7FC00000.  C cannot pin a generated NaN, and a NaN here means the
+ * simulation has already diverged; the row is here so that the caveat is measured rather than
+ * asserted.
+ */
+/* Volatile: a static that is never written is a constant to clang, which then folds the NaN at
+ * compile time as 0x7FC00000 on both targets, and the row measures the compiler instead of the
+ * hardware.  Measured: without volatile both columns read 0x7FC00000. */
+static volatile float g_inf_w[4] = { 1.0f, 1.0f, 1.0f, INFINITY };
+
+static void probe_d3dx(void)
+{
+	char key[64];
+	for (unsigned int row = 0; row < D3DX_GOLDEN_ROW_COUNT; ++row) {
+		float in[4];
+		float out[4];
+		for (int lane = 0; lane < 4; ++lane) {
+			memcpy(&in[lane], &D3DX_GOLDEN_ROWS[row].in[lane], sizeof(float));
+		}
+		D3DXPortable::Vec4Transform(out, in, D3DX_GOLDEN_BASIS);
+		for (int lane = 0; lane < 4; ++lane) {
+			snprintf(key, sizeof(key), "golden/%u/%c", row, "xyzw"[lane]);
+			row_f("d3dx", key, out[lane]);
+		}
+	}
+
+	static const float CANCEL_L[4] = { 1e8f, 1.0f, -1e8f, 1.0f };
+	static const float ONES[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	row_f("d3dx", "dot/cancellation", D3DXPortable::Vec4Dot(CANCEL_L, ONES));
+
+	const float inf_w[4] = { g_inf_w[0], g_inf_w[1], g_inf_w[2], g_inf_w[3] };
+	float inf_out[4];
+	D3DXPortable::Vec4Transform(inf_out, inf_w, D3DX_GOLDEN_BASIS);
+	for (int lane = 0; lane < 4; ++lane) {
+		snprintf(key, sizeof(key), "inf-w/%c", "xyzw"[lane]);
+		row_f("d3dx", key, inf_out[lane]);
+	}
+
+	D3DXSweepState state = { D3DX_SWEEP_SEED };
+	unsigned int hash = D3DX_SWEEP_HASH_BASIS;
+	for (unsigned int index = 0; index < D3DX_SWEEP_COUNT; ++index) {
+		float vector[4];
+		float matrix[16];
+		float out[4];
+		d3dx_sweep_input(&state, index, vector, matrix);
+		D3DXPortable::Vec4Transform(out, vector, matrix);
+		hash = d3dx_sweep_mix(hash, out);
+	}
+	printf("d3dx\tsweep-fingerprint\t0x%08x\n", hash);
+}
+#endif
+
 int main(void)
 {
 	printf("meta\tarch\t%s\n", PROBE_ARCH);
@@ -275,6 +346,9 @@ int main(void)
 	probe_fpexpr();
 #if defined(PROBE_WITH_DETTRIG)
 	probe_dettrig();
+#endif
+#if defined(PROBE_HAS_D3DX)
+	probe_d3dx();
 #endif
 	return 0;
 }
