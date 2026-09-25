@@ -318,6 +318,20 @@ dead `osdep.h` include is left in place on purpose, because it is what makes a l
 - `Debug.h`'s `SimpleProfiler` counters are `Int64`. The other `__int64` sites (`SubsystemInterface.cpp`,
   `Debug.cpp`, `PerfTimer.cpp`) are Debug-profiling code with `__rdtsc`, left for their own pass.
 
+**`min`/`max`, 2026-09-26: an audit that ended up unnecessary, kept because its facts are.**
+`BaseType.h:101/105` define `min` and `max` as macros, which evaluate the chosen argument twice.
+WWLib's `always.h` `#undef`s both and defines one-type templates. To learn which calls use the
+macro, it was temporarily redefined to expand to a marker, and all 602 `gameengine` files were
+preprocessed in Release and Debug, each marker attributed to its source line. The 22 files that stop
+at a missing header were re-read with stub headers until none was fatal. **The macro expands at
+exactly one place: `BaseType.h:350-351` itself, `RealRange::combine`, on plain members.** Every
+other engine `min`/`max` comes after `always.h`'s `#undef` (`PreRTS.h` reaches it through `Thing.h`
+-> `matrix3d.h`), and so already calls the single-evaluating template, on Windows too. The macro is
+live only between `BaseType.h` and `always.h`, which is exactly where `STLTypedefs.h` includes
+`<algorithm>`, and that is why only libstdc++ broke. -47's fix (the standard headers included
+before the macros, the macros unchanged) was taken instead of a template rewrite. Not covered by the
+audit: Windows-only sources (GameEngineDevice, Main, Tools).
+
 <details><summary>The 62 enums</summary>
 
 | Enum | Definition | Forward declarations |
