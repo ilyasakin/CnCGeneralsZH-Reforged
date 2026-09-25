@@ -287,9 +287,15 @@ D-spike measured the alternative on the game's own shader text — all 49 progra
 produce, captured by running the unmodified `ffshader.cpp`, `ffvertex.cpp` and `engineshader.cpp`
 — and it is better: **HLSL → glslang's HLSL front end → SPIR-V (Vulkan) → SDL_shadercross built
 without DXC (SPIRV-Cross) → MSL (Metal)**. 49 of 49 compile, pass `spirv-val`, and are accepted by
-Metal. The route through DXC was rejected on the evidence, not on size alone: Metal refused 3 of 49
-(the bumped-terrain programs — DXC strips unused textures, and the remapped `NormalMap` collides with
-`Texture0`), and it costs 21 MB of runtime and 150 MB of source against ~7 MB for the chosen three.
+Metal. The route through DXC was rejected on footprint: it costs 21 MB of runtime and 150 MB of
+source against ~5 MB of runtime and ~10 MB vendored for the chosen three. *Corrected 2026-09-26:* the
+record first also said DXC failed on the evidence, because Metal refused 3 of 49 (the bumped-terrain
+programs), blamed on DXC stripping unused textures. D3 found that glslang strips them too, and the
+real cause is SDL_shadercross's texture/sampler pairing, which gives a texture read through another
+slot's sampler no MSL index of its own. It is the same for both compilers, and it is fixed on our side
+by the SDL3 target (one sampler per texture slot, slot counts from the SPIR-V; see
+`tasks/D3-shader-generators-ir.md`). So DXC would probably pass those 3 today. That is unmeasured,
+and it leaves footprint as the whole reason.
 So the generators keep one language; D3 shrinks to a target flag (SDL's register spaces and a BGRA
 vertex-colour swizzle) and a POSIX twin of `test_ffshadercompile`. The byte-identical-HLSL gate for
 the D3D11 path stands, so Windows is untouched. Driver compiles cost 50–225 ms per program on first
@@ -301,9 +307,9 @@ to compile and validate, not yet to draw. Evidence and tables: `tasks/D3-shader-
 opened 2026-04-06). It goes at the next major version, with at least 18 months' notice, so not before
 about October 2027. We vendor a pinned commit, and what it compiles is our own generated text, not
 untrusted input, so the stated security reason barely applies. What we lose is upstream fixes.
-**Exit, if we need one:** DXC through the same shadercross call, with `-fspv-preserve-bindings` as the
-first thing to measure against the 3 bumped-terrain programs (unmeasured: shadercross does not expose
-DXC's arguments today). Slang is the other named route, also unmeasured. Only one compile call is
+**Exit, if we need one:** DXC through the same shadercross call. With the SDL3 target's pairing fix
+the 3-program failure is not expected to recur, so the exit is a footprint cost rather than a
+correctness one (unmeasured). Slang is the other named route, also unmeasured. Only one compile call is
 specific to glslang, and D3's ctest twin runs every generated program through whichever front end is
 in use, so a switch is caught by the tests rather than in the game. Revisit by 2027-04, or at the
 first glslang release that removes the front end, whichever comes first.
