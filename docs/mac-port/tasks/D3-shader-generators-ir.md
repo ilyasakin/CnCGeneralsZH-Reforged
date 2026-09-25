@@ -3,7 +3,7 @@
 - **Milestone:** M3
 - **Depends on:** nothing since decision 4 (it depended on D2 when the plan was an IR)
 - **Blocks:** D4
-- **Status:** in review (-a9)
+- **Status:** done (-a9): merged as feature/mac-port-d3 and feature/mac-port-d3-width
 - **Size:** `ffshader.cpp` 543 lines, `ffvertex.cpp` 689, `engineshader.h` 104,
   `d3d8shadertranslate.cpp`
 
