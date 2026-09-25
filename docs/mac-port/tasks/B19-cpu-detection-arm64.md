@@ -71,3 +71,14 @@ disagree.
   it is not the same accounting. The clamp hides the difference on any real machine.
 - The compact log's time-zone bias includes daylight saving; Windows' `Bias` does not.
 - Nothing here was compiled by MSVC. See `WINDOWS-DEBT.md`.
+
+## Decision taken, 2026-09-25: option (c)
+
+The tier is decided; the marked point is no longer open. `CPUDETECT_UNMEASURED_PROCESSOR_MHZ` stays
+`0` — what the measurement class honestly knows — and `testMinimumRequirements` treats an unknown
+CPU as meeting the top preset. Reasoning in the plan README, "Decisions taken".
+
+**Not yet built.** `testMinimumRequirements` is GameEngine code and `gameengine` does not compile on
+macOS until B5's GameEngine half lands. Whoever takes it: make the unknown-CPU branch explicit and
+named, and prove it by checking that a first launch and a later launch choose the SAME preset — the
+inconsistency between them is the bug option (a) would have left in place.
