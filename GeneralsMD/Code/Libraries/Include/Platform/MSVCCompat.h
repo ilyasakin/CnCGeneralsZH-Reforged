@@ -83,6 +83,25 @@
 #endif // !_MSC_VER
 
 // ---------------------------------------------------------------------------
+// The exception specification of the global operator delete.
+//
+// <new> declares `operator delete(void*)` and `operator delete[](void*)` noexcept, and has since
+// C++11.  WWLib/always.h and Common/GameMemory.h redeclare both, and GameMemory.cpp replaces them,
+// without it.  GCC rejects that mismatch ("has a different exception specifier"): on Linux it
+// stopped 47 of the 49 failing GCC edges.  Clang accepts it.
+//
+// Empty under MSVC on purpose, so the Windows build sees exactly the declarations it always has.
+// vcruntime_new.h declares them noexcept too, so MSVC would very likely accept the keyword, but
+// nobody here can compile with MSVC to find out, and empty is the choice that is safe either way.
+// Declarations and definitions both use it, so they agree with each other on every compiler.
+// ---------------------------------------------------------------------------
+#if defined(_MSC_VER)
+#define WW_NOEXCEPT_DELETE
+#else
+#define WW_NOEXCEPT_DELETE noexcept
+#endif
+
+// ---------------------------------------------------------------------------
 // The C runtime.
 //
 // Every name below is the standard one.  The MSVC branch is what makes the standard name work on
