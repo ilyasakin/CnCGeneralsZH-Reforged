@@ -3,10 +3,146 @@
 - **Milestone:** M2
 - **Depends on:** B6
 - **Blocks:** C2 C5
-- **Status:** first piece (`mixfile.cpp`) in review; the rest not started
+- **Status:** in progress, -a9: path-resolution design approved (D1-D7, 2026-09-26), PR (a) the resolver under way; the `mixfile.cpp` piece is done
 - **Size:** mirrors `GameEngineDevice/Source/Win32Device`, 10 files / 2,756 lines
 
 > **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** The engine subclass and its file systems are POSIX code that builds on macOS and Linux both; name new files for what they are (`Posix*` for the file systems, the SDL-backed pieces after SDL) rather than `Mac*`. Darwin-only calls go behind `__APPLE__` as a refinement of the POSIX path.
+
+## Path resolution: the design (approved 2026-09-26, decisions D1-D7)
+
+**Why this needed a design before code: normalising paths would change the INI CRC.**
+`INI::loadDirectory` (`INI.cpp:219`) lists a directory into a `FilenameList`, which is a set
+ordered by `strcasecmp`. It loads the files with no separator after the directory first, then the
+rest in that order. `'\'` is 0x5C and `'/'` is 0x2F, which sort on opposite sides of the digits
+(0x30-0x39). So a listing whose joins were normalised to `/` loads subdirectory INIs in a different
+order from Windows. That order feeds the INI CRC, which multiplayer and replays compare. The same
+kind of dependency runs through:
+
+- `Maps\MapCache.ini`'s keys, lowercased, with the backslash escaped as `_5C_`;
+- the portable save and map paths (`GameState.cpp`: `"Save\"`, `"Maps\"`, lowercased prefixes);
+- about 100 `'\'` joins and splits in engine code;
+- the archive keys.
+
+So the engine's strings are never normalised.
+
+**D1. Windows spelling end to end, one resolver at the OS boundary.** Engine code keeps building and
+comparing paths exactly as on Windows. Only the string handed to `open()`, `stat()`, `rename()` and
+the like is translated, by one resolver, and nothing else in the tree converts separators or case.
+
+**The resolver (D7: in WWLib, `posixpath.{h,cpp}`, POSIX only).** WWLib is the lowest library that
+both `RawFileClass` and GameEngine link. The resolver has to work before any subsystem exists: Debug,
+MemoryInit and EarlyOptions open files first.
+
+- **Separators and roots.** `'\'` and `'/'` both separate. A leading `'/'` is absolute; anything
+  else is relative to the process's current directory, which is the install root (below). A drive
+  letter or a UNC path is refused: it can only come from Windows registry data.
+- **Matching.** Each component is tried exact first. On a miss it is matched case-insensitively,
+  with ASCII folding, against a per-directory listing cache.
+  - On a case-insensitive volume (default APFS, the exFAT the Steam installs sit on) the exact
+    lookup always succeeds and the cache is never touched.
+  - The cache is dropped by the resolver's own create, delete and rename, and re-read once on a
+    repeat miss, so a change made outside the game is seen too.
+- **D2, ambiguity.** When two entries on a case-sensitive volume differ only in case: an exact
+  match wins; otherwise the byte-order-first candidate, with one log line naming both. Windows cannot
+  have this case, so any rule is ours; this one is deterministic.
+- **Intents.**
+  - Existing: every component must exist.
+  - Create-leaf: all but the last must exist, and a new last component keeps the engine's spelling,
+    as Windows would create it.
+  - Create-path: for the write walk.
+- **What it fixes on the real install.** The survey found the code's spelling and the disk's apart
+  in several places:
+  - Win32Mouse asks for `data\cursors\SCCPointer.ANI`; the disk has `Data/Cursors/sccpointer.ani`.
+  - Bink asks for `Data/english/Movies/EA_LOGO.bik`; Zero Hour has `Data/English/Movies/EA_LOGO.BIK`.
+  - `genseczh.big` is `gensecZH.big` on disk.
+  - `MapUtil` and `GameState` lowercase whole absolute paths.
+
+**The local file system (`PosixLocalFileSystem`, `PosixLocalFile`).**
+
+- **openFile, writing.** It creates the directories along the path the way Win32's walk does,
+  including its "the first dotted token is the file" rule. Win32's walk uses `nextToken`, which
+  drops a leading `'/'`, so that code is not reused as it is.
+- **LocalFile's `_open` family** becomes portable.
+- **getFileListInDirectory** reads the directory with `opendir`/`readdir`, keeping Windows' wildcard
+  semantics:
+  - case-insensitive, so `*.ini` matches `.INI`;
+  - the `*.` rule: it recurses only into subdirectories without a dot.
+
+  It returns names exactly as Win32 does: `originalDirectory + currentDirectory + on-disk name`, with
+  `'\'` joins on recursion. The list is byte-identical to Windows for the same files.
+- **getFileInfo** converts to FILETIME units (100 ns since 1601).
+- **createDirectory** stays one level.
+
+**D3, LocalFileSystem gains copyFile, deleteFile, moveFile(replace) and a lister that never changes
+directory.** `Win32LocalFileSystem` implements them with exactly the calls the sites make today. The
+sites that change directory, list `*` and change back (`Directory.cpp`, `GameState`, `GameStateMap`,
+`InGameUI`) become explicit-directory listings, which changes the Windows code path. The condition:
+the Wine listing oracle must show the Windows `FilenameList` byte-identical before and after that
+conversion, for the real install's `Data\INI` and for the test fixture, in the same PR.
+
+**D4, `zh_*` forwarders for the raw CRT sites** (`fopen`, `open`, `remove`, `rename`, `stat`).
+About 60 sites, many of which run before `TheLocalFileSystem` exists. On Windows each forwarder is
+the CRT call, verbatim. Off Windows it resolves the path first. They are not MSVCCompat-style
+shims: they add behaviour on POSIX, which is why they do not borrow the standard names, and their
+header says so. `RawFileClass`'s POSIX open goes through the resolver too, which covers
+`_TheWritingFileFactory`: screenshots, `INIClass::Save` and wwprofile.
+
+**Roots.**
+
+- **The install root** is the process's current directory, set once at start-up (where WinMain
+  changes to the executable's directory today) and never changed afterwards. That is why the
+  listers above must not change it. Where the root comes from (the app bundle or a Steam path) is
+  C2's and C5's question.
+- **D5, the user-data directory.**
+  - **Where.**
+    - macOS: `~/Library/Application Support/Command and Conquer Generals Zero Hour Data/`.
+    - Linux: `$XDG_DATA_HOME/Command and Conquer Generals Zero Hour Data/`, defaulting to
+      `~/.local/share/...`.
+    - The same leaf name as Windows' default. There is no registry off Windows; `ZH_USER_DATA_DIR`
+      overrides the location, for tests and portable installs.
+  - **Behaviour.** The directory is created if missing. The value keeps Windows' trailing `'\'`
+    (`EarlyOptions.h`: `"%s\%s\"`), so every `endsWith("\")` and `+ "Save\"` works unchanged.
+  - **A product point to revisit.** A macOS player cannot easily browse to Application Support for
+    their replays and saves: it is hidden in Finder. A Documents location, which is what Windows
+    uses, was considered and rejected, because Apple's guidelines keep an application's own data in
+    Application Support and leave Documents to documents the user makes. The user may want to
+    revisit this.
+
+**D6, text mode.** The Windows CRT's text mode turns CRLF into LF on read, so POSIX reads opened
+`TEXT` strip a `'
+'` before a `'
+'`. Writes stay LF. Windows-written files are CRLF, and both
+platforms read either.
+
+The CRT's text mode also treats Ctrl-Z (0x1A) as end of file. That is **not** emulated, because no
+game text contains one. Measured on both installs:
+
+- 9 loose text files (the `.lcf`, `.txt` and `Data/Scripts/Scripts.ini` files): none;
+- 825 text entries in the 54 `.big` archives (556 `.ini`, 240 `.wnd`, 16 `.txt`, 13 `.str`): none.
+
+The only 0x1A bytes on the installs are in `Game.dat`, `Generals.dat`, `langdata.dat` and
+`patchget.dat`, which are binary and never opened in text mode. INI files are opened binary on
+Windows too (`File::open` defaults to `BINARY`), so their parser already copes with `'
+'`.
+
+**Staging**, each piece a PR for a second read:
+
+- (a) the resolver, the `zh_*` forwarders and `test_posixpath`;
+- (b) `LocalFile` made portable, `PosixLocalFileSystem`, and the listing and order tests;
+- (g) the Recorder rewritten byte-oriented, pulled forward because E1 and every later milestone lean
+  on replays;
+- (c) the LocalFileSystem additions and -18's worklist (B5 `f52451d8`), including defect 11's leaked
+  find handle, with the before-and-after oracle;
+- (d) the raw sites moved to `zh_*`, `RawFileClass`, and the joins onto the executable's directory;
+- (e) the user-data directory;
+- (f) `PosixBIGFileSystem`, the POSIX engine subclass, the null CD manager, and the byte-identical
+  asset test.
+
+Every piece has Linux rows, run under the machine-wide lock with the disk checked first.
+
+**Testing case.** The worktrees and the Steam install volume are case-insensitive, so a default
+macOS run proves nothing about case. The Linux rows are case-sensitive (overlayfs), and on macOS the
+tests also attach a small case-sensitive APFS image, and say SKIPPED if they cannot.
 
 ## Why
 
