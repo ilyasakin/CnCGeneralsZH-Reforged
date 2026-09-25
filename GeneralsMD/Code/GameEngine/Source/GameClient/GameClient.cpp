@@ -29,14 +29,11 @@
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Platform/SleepMilliseconds.h"
 #include "Lib/Clock.h"
 #include "GameClient/GameClient.h"
 #if !defined(_WIN32)
 #include "cpudetect.h"		// getPreloadMemoryStatus, off Windows
-#endif
-#if !defined(_WIN32)
-#include <chrono>
-#include <thread>		// the legal screen's wait: Sleep() on Windows, sleep_for elsewhere
 #endif
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
@@ -642,11 +639,7 @@ void GameClient::update( void )
 						TheWindowManager->update();
 						// redraw all views, update the GUI
 						TheDisplay->draw();
-#if defined(_WIN32)
-						Sleep(100);
-#else
-						std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-#endif
+						sleepMilliseconds( 100 );
 					}
 					setFPMode();
 

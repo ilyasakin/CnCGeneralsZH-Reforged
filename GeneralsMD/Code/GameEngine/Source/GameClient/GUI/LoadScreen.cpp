@@ -48,6 +48,7 @@
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Platform/SleepMilliseconds.h"
 #include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
@@ -542,7 +543,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 
 			if(!m_videoStream->isFrameReady())
 			{
-				Sleep(1);	
+				sleepMilliseconds( 1 );	
 				continue;
 			}
 
@@ -605,7 +606,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 
 			TheWindowManager->update();
 			TheDisplay->draw();
-			Sleep(100);
+			sleepMilliseconds( 100 );
 			currTime = Clock_Milliseconds();
 		}
 		
@@ -1058,7 +1059,7 @@ void ChallengeLoadScreen::init( GameInfo *game )
 
 			if(!m_videoStream->isFrameReady())
 			{
-				Sleep(1);	
+				sleepMilliseconds( 1 );	
 				continue;
 			}
 
@@ -1104,7 +1105,7 @@ void ChallengeLoadScreen::init( GameInfo *game )
 		// if we're min speced
 		m_videoStream->frameGoto(m_videoStream->frameCount()); // zero based
 		while(!m_videoStream->isFrameReady())
-			Sleep(1);
+			sleepMilliseconds( 1 );
 		m_videoStream->frameDecompress();
 		m_videoStream->frameRender(m_videoBuffer);
 		if(m_videoBuffer)
@@ -1123,7 +1124,7 @@ void ChallengeLoadScreen::init( GameInfo *game )
 
 			TheWindowManager->update();
 			TheDisplay->draw();
-			Sleep(100);
+			sleepMilliseconds( 100 );
 			currTime = Clock_Milliseconds();
 		}
 		
@@ -1179,7 +1180,7 @@ ShellGameLoadScreen::~ShellGameLoadScreen( void )
 
 void ShellGameLoadScreen::init( GameInfo *game )
 {
-	static BOOL firstLoad = TRUE;
+	static Bool firstLoad = TRUE;
 
 	
 	// create the layout of the load screen
@@ -1264,7 +1265,7 @@ void ShellGameLoadScreen::init( GameInfo *game )
 		while(showTime + 3000 > Clock_Milliseconds())
 		{	
 			LoadScreen::update(0);
-			Sleep(100);
+			sleepMilliseconds( 100 );
 		}
 
 	}
