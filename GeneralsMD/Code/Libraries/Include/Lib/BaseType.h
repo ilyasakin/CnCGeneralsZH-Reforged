@@ -178,7 +178,7 @@ typedef uint64_t					UnsignedInt64;	  	// 8 bytes
 #include "Lib/Trig.h"
 
 //-----------------------------------------------------------------------------
-typedef wchar_t WideChar;  ///< multi-byte character representations
+#include "Lib/WideChar.h"	// WideChar: its own header, so WW3D2 can have it without this one
 
 //-----------------------------------------------------------------------------
 template <typename NUM>
