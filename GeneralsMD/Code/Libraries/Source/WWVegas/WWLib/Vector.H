@@ -59,6 +59,7 @@
 
 #include "always.h"
 #include	<assert.h>
+#include	<stdint.h>	// uintptr_t, in VectorClass::ID; Apple's headers happened to supply it, glibc's do not
 #include	<stdlib.h>
 #include <string.h>
 #include <new>   // was <new.h>, which only MSVC has
