@@ -567,6 +567,19 @@ GlobalData* GlobalData::m_theOriginal = NULL;
 
 
 //-------------------------------------------------------------------------------------------------
+/* How far apart two clicks may be and still be a double click, in milliseconds: the player's own
+	 setting, on Windows.  Off Windows that setting is C3's to read (input is C3's), and until then this
+	 is 500, which is Windows' own default. */
+static UnsignedInt systemDoubleClickTimeMS( void )
+{
+#if defined(_WIN32)
+	return GetDoubleClickTime();
+#else
+	return 500;
+#endif
+}
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 GlobalData::GlobalData()
 {
@@ -1233,7 +1246,7 @@ GlobalData::GlobalData()
 	m_shouldUpdateTGAToDDS = FALSE;
 	
 	// Default DoubleClickTime to System double click time.
-	m_doubleClickTimeMS = GetDoubleClickTime(); // Note: This is actual MS, not frames.
+	m_doubleClickTimeMS = systemDoubleClickTimeMS(); // Note: This is actual MS, not frames.
 	
 #ifdef DUMP_PERF_STATS
 	m_dumpPerformanceStatistics = FALSE;
