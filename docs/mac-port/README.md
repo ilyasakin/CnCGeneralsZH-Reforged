@@ -202,6 +202,7 @@ you start. That commit is the lock.
 | D5 | [Texture formats](tasks/D5-texture-formats.md) | M4 | D4 | not started | |
 | D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done — merged; the Crusader on Metal and on Vulkan (lavapipe); D3's route taken as decision 4 | -a9 |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | not started | |
+| N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
@@ -313,6 +314,22 @@ correctness one (unmeasured). Slang is the other named route, also unmeasured. O
 specific to glslang, and D3's ctest twin runs every generated program through whichever front end is
 in use, so a switch is caught by the tests rather than in the game. Revisit by 2027-04, or at the
 first glslang release that removes the front end, whichever comes first.
+
+**5. The multiplayer compatibility CRC stops hashing the executable (taken 2026-09-26).**
+`GlobalData.cpp` builds `m_exeCRC` from the running executable's own bytes, the version number and
+the two multiplayer script files. LAN and GameSpy matchmaking compare it to decide who can play
+together, and the replay header stores it to warn on playback. A Mac or Linux binary can never have
+`generals.exe`'s bytes, so as written, cross-platform play is impossible by construction.
+Decided: the executable-bytes term is replaced, **on every platform**, by a *build fingerprint*.
+That is a hash over the content of every tracked source file under `GeneralsMD/Code` (the whole
+tree, not a per-platform subset), generated at build time into a header. The version and script
+terms stay. Two builds of the same source then agree whatever compiled them, and any source change
+still separates builds, which is what the executable CRC was for ("the game will go out of sync if
+they change"). What it gives up: detecting a binary modified after the build. The source is GPL,
+so that detection protected nothing. What it changes on Windows: the `m_exeCRC` value, which
+already changes with every rebuild, so no compatibility is lost that a rebuild would not already
+lose. Until it lands, the POSIX build hashes version and scripts only, which can match no Windows
+build, and says so where it is computed. Task: `tasks/N1-build-fingerprint.md`.
 
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
