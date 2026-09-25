@@ -8,13 +8,21 @@ project(GeneralsMD CXX C)
 # platform - the CRT, the Windows SDK import libraries, MIDL, DirectX, the window - asks
 # ZH_PLATFORM_WINDOWS; only a flag written in one compiler's own syntax asks which compiler is
 # reading it.  docs/mac-port/README.md has the rest of the plan.
+# Windows against POSIX, not Windows against macOS.  The port targets macOS first but is meant to
+# reach Linux and other POSIX systems, so "is this not Windows" is ZH_PLATFORM_POSIX, and the two
+# refinements below are for the few things that genuinely differ between POSIX systems (a window,
+# audio, CPU detection) - never for "is this not Windows".  An unported platform-specific file fails
+# with an #error naming what it lacks (cpudetect.cpp does this), which is louder and more useful than
+# refusing to configure.
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(ZH_PLATFORM_WINDOWS TRUE)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  set(ZH_PLATFORM_MACOS TRUE)
 else()
-  message(FATAL_ERROR
-    "Only Windows and macOS are configured here; CMAKE_SYSTEM_NAME is '${CMAKE_SYSTEM_NAME}'.")
+  set(ZH_PLATFORM_POSIX TRUE)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(ZH_PLATFORM_MACOS TRUE)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(ZH_PLATFORM_LINUX TRUE)
+  endif()
 endif()
 
 # The other half of the split.  A target that only Windows can build is gated out below; a target
@@ -23,7 +31,7 @@ endif()
 # from, but out of the default build, so that a Mac build failure means a regression in what was
 # working rather than the next task's work showing through.  Take a name off the list as its task
 # lands.  On Windows this expands to no argument at all and changes no target.
-if(ZH_PLATFORM_MACOS)
+if(ZH_PLATFORM_POSIX)
   set(ZH_NOT_YET_PORTABLE EXCLUDE_FROM_ALL)
 else()
   set(ZH_NOT_YET_PORTABLE "")
@@ -33,7 +41,7 @@ endif()
 # clangd read.  Ninja can produce it on demand; a Makefiles tree has nothing else that carries each
 # target's own -D flags.  macOS only because only the macOS tooling reads it, and it changes no
 # target and no command line.
-if(ZH_PLATFORM_MACOS)
+if(ZH_PLATFORM_POSIX)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
 
@@ -150,7 +158,11 @@ if(MSVC)
   # what the 32-bit build had to ask for explicitly, and why it pinned the x87 precision control.
   # See dettrig.h and FPUControl.h.
   add_link_options(/DEBUG)
-elseif(ZH_PLATFORM_MACOS)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  # Keyed on the COMPILER, not the OS.  These flags are what a GCC or Clang build needs to compute
+  # the simulation the way MSVC does, wherever it runs.  It used to read elseif(ZH_PLATFORM_MACOS), so
+  # a Linux build would have configured cleanly with none of them - and GCC's default is
+  # -ffp-contract=fast, and plain char is UNSIGNED on aarch64 Linux.  Both silent desyncs.
   # The clang half of the same decisions.  None of the switches above transfers: /EHa is there for
   # _set_se_translator, which is a Windows structured-exception mechanism; /Oy- and /Zi are there
   # for StackDump.cpp's hand-written EBP walk, which no arm64 build has ever had; /FS and /MP are
@@ -186,6 +198,11 @@ elseif(ZH_PLATFORM_MACOS)
   # propping up StackDump.cpp's frame walk, and C5 replaces that mechanism with the platform's own
   # rather than teaching an EBP chain to a machine that never had one.
   add_compile_options(-g)
+else()
+  message(FATAL_ERROR
+    "No determinism flags are set for compiler '${CMAKE_CXX_COMPILER_ID}'.  The simulation must be "
+    "compiled without floating-point contraction and with a signed char, or it desyncs; add this "
+    "compiler's spelling of -ffp-contract=off and -fsigned-char before building with it.")
 endif()
 
 # ---- wwdebug --------------------------------------------------------------
