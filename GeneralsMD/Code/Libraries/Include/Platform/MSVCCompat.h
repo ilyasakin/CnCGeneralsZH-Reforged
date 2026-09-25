@@ -44,6 +44,15 @@
 #ifndef MSVCCOMPAT_H
 #define MSVCCOMPAT_H
 
+// _UNIX switches on Westwood's abandoned 1990s UNIX port, about sixty sites across WWVegas, and the
+// plan's rules say never to define it (docs/mac-port/README.md, "never define _UNIX").  The vendored
+// GameSpy SDK used to define it; Tools/vendor.sh renames the SDK's macro, and the ctest
+// unix_define_check keeps any definition out of the tree and the compile flags.  This catches one
+// that arrives before every WWVegas and engine file reaches this header anyway.
+#if defined(_UNIX)
+#error "_UNIX is defined. See docs/mac-port/README.md, \"Rule: never define _UNIX\"."
+#endif
+
 // ---------------------------------------------------------------------------
 // Compiler keywords.
 //
