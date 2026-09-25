@@ -138,11 +138,14 @@ Windows too (`File::open` defaults to `BINARY`), so their parser already copes w
 - (f) `PosixBIGFileSystem`, the POSIX engine subclass, the null CD manager, and the byte-identical
   asset test.
 
-Every piece has Linux rows, run under the machine-wide lock with the disk checked first.
+Linux is a constraint on how the code is written, kept POSIX-generic, not a gate on each piece (the
+user's macOS-first direction, plan `74750f5a`).
 
-**Testing case.** The worktrees and the Steam install volume are case-insensitive, so a default
-macOS run proves nothing about case. The Linux rows are case-sensitive (overlayfs), and on macOS the
-tests also attach a small case-sensitive APFS image, and say SKIPPED if they cannot.
+**Testing case.** The worktrees and the Steam install volume are case-insensitive, so a default macOS
+run proves nothing about case. The proof is a small case-sensitive APFS image that the tests create
+and attach with `hdiutil`. That run is mandatory: an image that cannot be created or attached, or
+that turns out not to be case-sensitive, fails the test. The Wine listing oracle stays alongside it,
+because Windows equivalence is a different question from case.
 
 ## Why
 
