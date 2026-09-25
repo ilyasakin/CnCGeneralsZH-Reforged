@@ -22,13 +22,36 @@
 #include "thread.h"
 #include "mpu.h"
 #pragma warning (disable : 4201)	// Nonstandard extension - nameless struct
+#if defined(_WIN32)
 #include <windows.h>
-#include <intrin.h>
-#include "systimer.h"
-
-#ifdef _UNIX
-# include <time.h>  // for time(), localtime() and timezone variable.
 #endif
+#ifdef CPUDETECT_X86
+#include <intrin.h>
+#endif
+#include "systimer.h"
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <stdio.h>
+#include <sys/sysctl.h>
+#include <time.h>
+#endif
+
+/*
+**	This file is two ports in one, and they were done together because they cannot be separated.
+**
+**	The x86 half - CPUID, RDTSC, the Intel/AMD/VIA/Rise model tables - compiles only where
+**	CPUDETECT_X86 is set (see cpudetect.h).  Everywhere else there is no CPUID, so everything this
+**	class learns from it keeps its "unknown" default: manufacturer, family, features, caches.  That is
+**	a true answer on arm64, not a stub; there is no x86 feature bit that an Apple core has.
+**
+**	The Windows half - OS version, memory, time zone - has a Darwin arm beside each Win32 arm.  Until
+**	this port those were `#elif defined(_UNIX)` arms reading `#warning FIX`, so nothing was lost by
+**	replacing them.  Init_Memory and Init_OS used to run only inside Has_CPUID_Instruction(); they now
+**	run after it, which is the same order on x86, where CPUID is unconditionally present.
+**
+**	What the processor's *speed* is, on a processor with no cycle counter to time, is not a porting
+**	question.  It is CPUDETECT_UNMEASURED_PROCESSOR_MHZ in cpudetect.h, and it is undecided.
+*/
 
 struct OSInfoStruct {
 	const char* Code;
@@ -58,7 +81,7 @@ int CPUDetectClass::ProcessorFamily;
 int CPUDetectClass::ProcessorModel;
 int CPUDetectClass::ProcessorRevision;
 int CPUDetectClass::ProcessorSpeed;
-__int64 CPUDetectClass::ProcessorTicksPerSecond;	// Ticks per second
+sint64 CPUDetectClass::ProcessorTicksPerSecond;	// Ticks per second
 double CPUDetectClass::InvProcessorTicksPerSecond;	// 1.0 / Ticks per second
 
 unsigned CPUDetectClass::FeatureBits;
@@ -124,6 +147,7 @@ const char* CPUDetectClass::Get_Processor_Manufacturer_Name()
 	return ManufacturerNames[ProcessorManufacturer];
 }
 
+#ifdef CPUDETECT_X86
 static unsigned Calculate_Processor_Speed(__int64& ticks_per_second)
 {
 	const unsigned __int64 timer0=__rdtsc();
@@ -139,13 +163,20 @@ static unsigned Calculate_Processor_Speed(__int64& ticks_per_second)
 	ticks_per_second=(__int64)((1000.0/(double)elapsed)*(double)t);	// Ticks per second
 	return unsigned((double)t/(double)(elapsed*1000));
 }
+#endif
 
 void CPUDetectClass::Init_Processor_Speed()
 {
 	if (!Has_RDTSC_Instruction()) {
+#ifdef CPUDETECT_X86
 		ProcessorSpeed=0;
+#else
+		ProcessorSpeed=CPUDETECT_UNMEASURED_PROCESSOR_MHZ;	// the open decision - see cpudetect.h
+#endif
 		return;
 	}
+
+#ifdef CPUDETECT_X86
 
 	// Loop until two subsequent samples are within 5% of each other (max 5 iterations).
 	unsigned speed1=Calculate_Processor_Speed(ProcessorTicksPerSecond);
@@ -164,6 +195,7 @@ void CPUDetectClass::Init_Processor_Speed()
 	// If no two subsequent samples where close enough, use intermediate
 	ProcessorSpeed=total_speed/6;
 	InvProcessorTicksPerSecond=1.0/double(ProcessorTicksPerSecond);
+#endif
 }
 
 void CPUDetectClass::Init_Processor_Manufacturer()
@@ -717,6 +749,15 @@ void CPUDetectClass::Init_Processor_Family()
 
 void CPUDetectClass::Init_Processor_String()
 {
+#if !defined(CPUDETECT_X86) && defined(__APPLE__)
+	// What CPUID's brand string answers on x86, the kernel answers here: "Apple M2 Pro".
+	size_t len = sizeof(ProcessorString);
+	if (sysctlbyname("machdep.cpu.brand_string", ProcessorString, &len, NULL, 0) != 0) {
+		ProcessorString[0]='\0';
+	}
+	ProcessorString[sizeof(ProcessorString)-1]='\0';
+	return;
+#endif
 	if (!Has_CPUID_Instruction()) {
 		ProcessorString[0]='\0';
 	}
@@ -795,7 +836,13 @@ void CPUDetectClass::Init_CPUID_Instruction()
 {
 	// EA toggled EFLAGS.ID to find out.  Every processor that runs SSE2 code, which both builds
 	// require, has CPUID.
+#ifdef CPUDETECT_X86
 	HasCPUIDInstruction=true;
+#else
+	// CPUID is an x86 instruction.  arm64 has feature registers, but nothing in this class's x86
+	// vocabulary - MMX, SSE, 3DNow!, the Intel and AMD model tables - has an arm64 meaning.
+	HasCPUIDInstruction=false;
+#endif
 }
 
 void CPUDetectClass::Init_Processor_Features()
@@ -838,6 +885,13 @@ static unsigned clamp_to_signed_max(DWORDLONG bytes)
 	const DWORDLONG limit = 0x7FFFFFFFui64;
 	return (unsigned)(bytes > limit ? limit : bytes);
 }
+#elif defined(__APPLE__)
+// The same clamp, for the same callers, and so the same 0x7FFFFFFF on any machine with 2GB or more.
+static unsigned clamp_to_signed_max(unsigned long long bytes)
+{
+	const unsigned long long limit = 0x7FFFFFFFULL;
+	return (unsigned)(bytes > limit ? limit : bytes);
+}
 #endif
 
 void CPUDetectClass::Init_Memory()
@@ -866,15 +920,42 @@ void CPUDetectClass::Init_Memory()
 	AvailablePageMemory     = clamp_to_signed_max(mem.ullAvailPageFile);
 	TotalVirtualMemory      = clamp_to_signed_max(mem.ullTotalVirtual);
 	AvailableVirtualMemory  = clamp_to_signed_max(mem.ullAvailVirtual);
-#elif defined(_UNIX)
-#warning FIX Init_Memory()
+#elif defined(__APPLE__)
+	unsigned long long total = 0;
+	size_t len = sizeof(total);
+	sysctlbyname("hw.memsize", &total, &len, NULL, 0);
+
+	// ullAvailPhys is free plus standby; the nearest Mach has is free plus inactive.
+	unsigned long long avail = 0;
+	vm_statistics64_data_t vm;
+	mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+	mach_port_t host = mach_host_self();
+	if (host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&vm, &count) == KERN_SUCCESS) {
+		avail = ((unsigned long long)vm.free_count + vm.inactive_count) * (unsigned long long)vm_page_size;
+	}
+	mach_port_deallocate(mach_task_self(), host);
+
+	// ullTotalPageFile is the commit limit, physical memory plus the page file; swap is the page file.
+	struct xsw_usage swap = {};
+	len = sizeof(swap);
+	sysctlbyname("vm.swapusage", &swap, &len, NULL, 0);
+
+	TotalPhysicalMemory     = clamp_to_signed_max(total);
+	AvailablePhysicalMemory = clamp_to_signed_max(avail);
+	TotalPageMemory         = clamp_to_signed_max(total + swap.xsu_total);
+	AvailablePageMemory     = clamp_to_signed_max(avail + swap.xsu_avail);
+	// The process's address space, which on either 64-bit platform is far past the field.
+	TotalVirtualMemory      = clamp_to_signed_max(MACH_VM_MAX_ADDRESS);
+	AvailableVirtualMemory  = clamp_to_signed_max(MACH_VM_MAX_ADDRESS);
+#else
+#error "CPUDetectClass::Init_Memory has no answer for this platform"
 #endif
 }
 
 void CPUDetectClass::Init_OS()
 {
-	OSVERSIONINFO os;
 #ifdef WIN32
+	OSVERSIONINFO os;
    os.dwOSVersionInfoSize = sizeof(os);
 	GetVersionEx(&os);
 
@@ -883,8 +964,26 @@ void CPUDetectClass::Init_OS()
    OSVersionBuildNumber = os.dwBuildNumber;
    OSVersionPlatformId  = os.dwPlatformId;
    OSVersionExtraInfo   = os.szCSDVersion;
-#elif defined(_UNIX)
-#warning FIX Init_OS()
+#elif defined(__APPLE__)
+	// "15.3.1" and "24D70".  The patch number goes where an NT build number would; the platform id
+	// stays 0, which is none of Windows' VER_PLATFORM_* values.
+	char version[32] = {0};
+	size_t len = sizeof(version);
+	if (sysctlbyname("kern.osproductversion", version, &len, NULL, 0) == 0) {
+		unsigned major = 0, minor = 0, patch = 0;
+		sscanf(version, "%u.%u.%u", &major, &minor, &patch);
+		OSVersionNumberMajor = major;
+		OSVersionNumberMinor = minor;
+		OSVersionBuildNumber = patch;
+	}
+	char build[32] = {0};
+	len = sizeof(build);
+	if (sysctlbyname("kern.osversion", build, &len, NULL, 0) == 0) {
+		OSVersionExtraInfo = build;
+	}
+	OSVersionPlatformId = 0;
+#else
+#error "CPUDetectClass::Init_OS has no answer for this platform"
 #endif
 }
 
@@ -897,6 +996,7 @@ bool CPUDetectClass::CPUID(
 {
 	if (!Has_CPUID_Instruction()) return false;	// Most processors since 486 have CPUID...
 
+#ifdef CPUDETECT_X86
 	// ECX is zeroed like EA's asm did: leaf 4's cache walk reads it as the sub-leaf.
 	int registers[4];
 	__cpuidex(registers, (int)cpuid_type, 0);
@@ -907,6 +1007,9 @@ bool CPUDetectClass::CPUID(
 	u_edx_=(unsigned)registers[3];
 
 	return true;
+#else
+	return false;	// unreachable: Has_CPUID_Instruction() is false wherever this arm compiles
+#endif
 }
 
 #define SYSLOG(n) work.Format n ; CPUDetectClass::ProcessorLog+=work;
@@ -916,11 +1019,15 @@ void CPUDetectClass::Init_Processor_Log()
 	StringClass work(0,true);
 
 	SYSLOG(("Operating System: "));
+#ifdef WIN32
 	switch (OSVersionPlatformId) {
 	case VER_PLATFORM_WIN32s: SYSLOG(("Windows 3.1")); break;
 	case VER_PLATFORM_WIN32_WINDOWS: SYSLOG(("Windows 9x")); break;
 	case VER_PLATFORM_WIN32_NT: SYSLOG(("Windows NT")); break;
 	}
+#elif defined(__APPLE__)
+	SYSLOG(("macOS"));
+#endif
 	SYSLOG(("\r\n"));
 
 	SYSLOG(("Operating system version %d.%d\r\n",OSVersionNumberMajor,OSVersionNumberMinor));
@@ -928,13 +1035,10 @@ void CPUDetectClass::Init_Processor_Log()
 		(OSVersionBuildNumber&0xff000000)>>24,
 		(OSVersionBuildNumber&0xff0000)>>16,
 		(OSVersionBuildNumber&0xffff)));
-#ifdef WIN32
    // Peek_Buffer, not the object: a StringClass handed to a varargs %s is passed by address on x64
-   // and the formatter then reads the object as if it were the characters.
+   // and the formatter then reads the object as if it were the characters.  (This was a WIN32 arm and
+   // an _UNIX arm with the same line in each.)
    SYSLOG(("OS-Info: %s\r\n", OSVersionExtraInfo.Peek_Buffer()));
-#elif defined(_UNIX)
-   SYSLOG(("OS-Info: %s\r\n", OSVersionExtraInfo.Peek_Buffer()));
-#endif
 
 	SYSLOG(("Processor: %s\r\n",CPUDetectClass::Get_Processor_String()));
 	SYSLOG(("Clock speed: ~%dMHz\r\n",CPUDetectClass::Get_Processor_Speed()));
@@ -945,11 +1049,7 @@ void CPUDetectClass::Init_Processor_Log()
 	case 2: cpu_type="Dual"; break;
 	case 3: cpu_type="*Intel Reserved*"; break;
 	}
-#ifdef WIN32
    SYSLOG(("Processor type: %s\r\n", cpu_type.Peek_Buffer()));
-#elif defined(_UNIX)
-   SYSLOG(("Processor type: %s\r\n", cpu_type.Peek_Buffer()));
-#endif
 
 	SYSLOG(("\r\n"));
 
@@ -1030,10 +1130,14 @@ void CPUDetectClass::Init_Compact_Log()
    TIME_ZONE_INFORMATION time_zone;
    GetTimeZoneInformation(&time_zone);
    COMPACTLOG(("%d\t", time_zone.Bias));  // get diff between local time and UTC
-#elif defined(_UNIX)
-   time_t t = time(NULL);
-   localtime(&t);
-   COMPACTLOG(("%d\t", timezone));
+#elif defined(__APPLE__)
+   // TIME_ZONE_INFORMATION::Bias is minutes west of UTC, standard time.  tm_gmtoff is seconds east
+   // and includes daylight saving, so in summer this differs from what Windows logs by DST's offset.
+   // A log column, read by nothing.
+   time_t now = time(NULL);
+   struct tm local;
+   localtime_r(&now, &local);
+   COMPACTLOG(("%d\t", (int)(-local.tm_gmtoff / 60)));
 #endif
 
 	OSInfoStruct os_info;
@@ -1057,7 +1161,7 @@ void CPUDetectClass::Init_Compact_Log()
 static class CPUDetectInitClass
 {
 public:
-	CPUDetectInitClass::CPUDetectInitClass()
+	CPUDetectInitClass()
 	{
 		CPUDetectClass::Init_CPUID_Instruction();
 		// We pretty much need CPUID, but let's not crash if it doesn't exist.
@@ -1068,9 +1172,16 @@ public:
 			CPUDetectClass::Init_Processor_Family();
 			CPUDetectClass::Init_Processor_String();
 			CPUDetectClass::Init_Processor_Features();
-			CPUDetectClass::Init_Memory();
-			CPUDetectClass::Init_OS();
 		}
+#ifndef CPUDETECT_X86
+		else {
+			CPUDetectClass::Init_Processor_String();	// from the OS, not CPUID
+		}
+#endif
+		// Memory and the OS have nothing to do with CPUID, and on arm64 there is none.  Moved out of
+		// the block above; on x86 that block always runs, so the order is what it was.
+		CPUDetectClass::Init_Memory();
+		CPUDetectClass::Init_OS();
 		CPUDetectClass::Init_Processor_Speed();
 
 		CPUDetectClass::Init_Processor_Log();
@@ -1202,9 +1313,17 @@ void Get_OS_Info(
 	os_info.SubCode="UNKNOWN";
 	os_info.VersionString="UNKNOWN";
 
+#if defined(__APPLE__)
+	os_info.Code="MACOS";
+	os_info.VersionMajor=(unsigned char)OSVersionNumberMajor;
+	os_info.VersionMinor=(unsigned char)OSVersionNumberMinor;
+	os_info.VersionSub=(unsigned short)build_sub;
+	return;
+#endif
 	switch (OSVersionPlatformId) {
 	default:
 		break;
+#ifdef WIN32
 	case VER_PLATFORM_WIN32_WINDOWS:
 		{
 			for(int i=0;i<sizeof(Windows9xVersionTable)/sizeof(os_info);++i) {
@@ -1261,5 +1380,6 @@ void Get_OS_Info(
 			os_info.Code="WINXX";
 			return;
 		}
+#endif
 	}
 }

@@ -1409,6 +1409,7 @@ TEST(chunkio_seek_skips_payload)
 
 TEST(cpudetect_reports_something_sane)
 {
+#ifdef CPUDETECT_X86
 	/* Anything this port can run on has CPUID and RDTSC. */
 	CHECK(CPUDetectClass::Has_CPUID_Instruction());
 	CHECK(CPUDetectClass::Has_RDTSC_Instruction());
@@ -1417,6 +1418,22 @@ TEST(cpudetect_reports_something_sane)
 
 	CHECK(CPUDetectClass::Get_Processor_Speed() > 0);
 	CHECK(CPUDetectClass::Get_Processor_Ticks_Per_Second() > 0);
+#else
+	/* No x86 feature is present, and saying so is the correct answer rather than a missing one:
+	   anything that branches on SSE or MMX must take its plain path here. */
+	CHECK(!CPUDetectClass::Has_CPUID_Instruction());
+	CHECK(!CPUDetectClass::Has_RDTSC_Instruction());
+	CHECK(!CPUDetectClass::Has_MMX_Instruction_Set());
+	CHECK(!CPUDetectClass::Has_SSE_Instruction_Set());
+	CHECK_EQ((int)CPUDetectClass::Get_Processor_Manufacturer(), (int)CPUDetectClass::MANUFACTURER_UNKNOWN);
+
+	/* The open tier decision in cpudetect.h, by name, so changing it is seen here. */
+	CHECK_EQ(CPUDetectClass::Get_Processor_Speed(), CPUDETECT_UNMEASURED_PROCESSOR_MHZ);
+	CHECK_EQ(CPUDetectClass::Get_Processor_Ticks_Per_Second(), (sint64)0);
+
+	/* Memory and the OS used to be read only inside the CPUID block, which never runs here. */
+	CHECK(CPUDetectClass::Get_Available_Physical_Memory() > 0);
+#endif
 	CHECK(CPUDetectClass::Get_Total_Physical_Memory() > 0);
 
 	const char *name = CPUDetectClass::Get_Processor_Manufacturer_Name();
