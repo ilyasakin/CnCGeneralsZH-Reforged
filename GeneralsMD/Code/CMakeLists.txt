@@ -773,6 +773,13 @@ if(ZH_PLATFORM_POSIX)
   # where -lm is accepted and does nothing.  Not keyed on Linux, so the next platform needs no edit.
   target_link_libraries(miniaudio INTERFACE Threads::Threads ${CMAKE_DL_LIBS} m)
 
+  # The Miles 6.5 surface on miniaudio (C4): the same library name as the XAudio2 one on Windows, so
+  # that gameenginedevice, once it builds off Windows, links milesaudio on either and
+  # MilesAudioManager.cpp compiles unchanged against it.  Today only the tests below link it here.
+  add_library(milesaudio STATIC ${WW}/Miles6/miniaudio/miles_miniaudio.cpp)
+  target_include_directories(milesaudio PRIVATE ${WW}/Miles6/include)
+  target_link_libraries(milesaudio PRIVATE miniaudio PUBLIC Threads::Threads)
+
   # What SDL3's GPU API can do on this machine: the evidence D2 and D5 need before the backend
   # interface is designed.  Needs a GPU and a display, so it is built but not registered with ctest.
   add_executable(sdl_gpu_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/sdl_gpu_probe.cpp)
@@ -1189,6 +1196,33 @@ target_link_libraries(miles_smoke PRIVATE milesaudio)
 add_test(NAME miles_smoke COMMAND miles_smoke
          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../Run)
 endif()  # ZH_PLATFORM_WINDOWS - device and codec smoke tests
+
+if(ZH_PLATFORM_POSIX)
+# The audio backend's checks off Windows, on miniaudio's null backend so they run with no audio
+# hardware: a device that still calls the mix in real time.  miles_smoke is the same file Windows
+# runs.  test_miles_miniaudio listens to the mix through AIL_ex_start_capture and measures what
+# miles_xaudio2 would have produced; the half of it that needs the game's .big files reads them from
+# ZH_GAME_DATA (a folder holding generals/ and zerohour/, read only) and prints "skip" without it.
+set(ZH_GAME_DATA "" CACHE PATH "Folder with a Zero Hour install's generals/ and zerohour/, for tests that read game data")
+add_executable(miles_smoke ${TESTS}/miles_smoke.cpp)
+target_include_directories(miles_smoke PRIVATE ${WW}/Miles6/include)
+target_link_libraries(miles_smoke PRIVATE milesaudio)
+add_test(NAME miles_smoke COMMAND miles_smoke)
+set_tests_properties(miles_smoke PROPERTIES ENVIRONMENT "ZH_AUDIO_BACKEND=null")
+
+add_executable(test_miles_miniaudio ${TESTS}/test_miles_miniaudio.cpp)
+target_include_directories(test_miles_miniaudio PRIVATE ${WW}/Miles6/include ${LIBSRC}/miniaudio)
+target_link_libraries(test_miles_miniaudio PRIVATE test_harness milesaudio miniaudio)
+add_test(NAME test_miles_miniaudio COMMAND test_miles_miniaudio)
+set_tests_properties(test_miles_miniaudio PROPERTIES
+  ENVIRONMENT "ZH_AUDIO_BACKEND=null;ZH_DATA_DIR=${ZH_GAME_DATA}")
+
+# For human ears, not ctest: plays one sound from a .big archive (or a loose file) on the real
+# device, through the same API, at a chosen volume and pan.
+add_executable(miles_listen ${TESTS}/miles_listen.cpp)
+target_include_directories(miles_listen PRIVATE ${WW}/Miles6/include)
+target_link_libraries(miles_listen PRIVATE milesaudio)
+endif()  # ZH_PLATFORM_POSIX - audio backend checks
 
 # Tools/bigfile.py reads and writes the game's BIG archives (that is how the shipped INIs
 # come out for editing).  Its selfcheck round-trips synthetic files, so it needs no game
