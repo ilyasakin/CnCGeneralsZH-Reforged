@@ -330,6 +330,42 @@ So the replay writer does not work on macOS at all, and replays are how this pro
 change leaves the simulation alone. Rewrite it byte-oriented — the file format does not change, the
 calls that produce it do. Do this early in C1: E1 and every later milestone lean on replays.
 
+**Done in PR (g), 2026-09-26.**
+
+- **What macOS actually did (measured).** It does not fail the mixed calls, as the paragraph above
+  expected. After `fwrite`, the stream is byte-oriented (`fwide` < 0), yet `fputwc` and `fgetwc`
+  still run. They go through the locale's multibyte encoding: `'A'` becomes one byte, `U+00FC`
+  becomes `fc` in the C locale and `c3 bc` in a UTF-8 one. So a Mac-written replay would have read
+  back on the Mac and been unreadable everywhere else, which is worse than failing. glibc was not
+  measured.
+- **The format**, from MSVC's documented binary-mode behaviour: in a stream opened `"wb"`/`"rb"`,
+  the wide calls convert nothing, so each UTF-16 code unit is two bytes, low first, and a string ends
+  with a 0 unit.
+- **The change.** Three functions in `Lib/WideCharFns.h`, the funnel B1 left for this, all using
+  `fputc`/`fgetc`:
+  - `WideCharFileWrite` (was `fwprintf(L"%ls")`);
+  - `WideCharFilePut` (for `fputwc`);
+  - `WideCharFileGet` (for `fgetwc`). It returns 0xFFFF, MSVC's `WEOF`, at the end of the file,
+    including with one byte left.
+
+  `Recorder.cpp`'s five live wide calls use them. The two in the `/* */` player block are left as
+  they are. Windows now makes byte calls too, and writes the same bytes.
+- **Tests.**
+  - `widechar_file_selfcheck`: 4 tests, 25 checks. It covers exact bytes for units a conversion or
+    text mode would change (U+00DC, CJK, a surrogate pair, CR, LF, Ctrl-Z), and the header's shape
+    interleaved with `fprintf`/`fwrite`/`fread`/`fgetc` on one stream, read back.
+  - A control shows that on this libc a wide call after `fwrite` does not write the two-byte form.
+- **Wine oracle** (`Tests/replay_wide_oracle.cpp`, mingw-w64 with the CRT's own `fwprintf`). It does
+  exactly what Recorder did, run in bottle `zh-e4`:
+  - It wrote the test's expected bytes, both cases, byte for byte.
+  - Read back as the old reader did, it gave the same units, `WEOF` = 0xFFFF at the end, and 0xFFFF
+    with one byte left.
+  - As before, the msvcrt there is Wine's builtin, not Microsoft's.
+- **Not verified:** no replay recorded by the Windows game exists on this machine, so no real
+  `.rep` was compared. Recorder.cpp's object still fails on macOS only at `CopyFile` (`:768`, PR (c)).
+  So the linked end-to-end replay test waits for (c) and for `gameengine` to link.
+- **Found:** defect 14 in the README (a truncated header reads as U+FFFF names). Kept identical.
+
 ## First piece: `WWLib/mixfile.cpp`, 2026-09-25
 
 Taken only to get `wwlib` to archive, and it does. `libwwlib.a` builds on macOS with all 66 sources,

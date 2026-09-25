@@ -764,6 +764,14 @@ otherwise (documented layout, not measured here), and a stats list is far longer
 never got this player's stats. It is dead-service code (GameSpy), and there was nothing portable to
 preserve, so it is fixed with `.c_str()` (PM decision).
 
+**14. A truncated replay header reads as a name of 1023 U+FFFF characters.**
+`RecorderClass::readUnicodeString` stops a string at `c == EOF`, but `fgetwc` never returns `EOF`
+(-1): under MSVC it returns `WEOF`, which is 0xFFFF. So at the end of a truncated file the loop
+stores 0xFFFF until it reaches its 1023-unit bound, and every string read after that is the same.
+Only a damaged `.rep` reaches it. **Kept as it is
+on every platform**: `WideCharFileGet`, which replaced `fgetwc` in PR (g), returns 0xFFFF at the end
+exactly as `fgetwc` did (checked under Wine's msvcrt), so the check still never fires. Found by C1.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
