@@ -278,6 +278,13 @@ target_link_libraries(compression_selfcheck PRIVATE compression)
 add_executable(detround_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_detround.cpp)
 target_include_directories(detround_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 
+# d3dxportable.h reproduces d3dx9_43.dll's D3DXVec4Transform bit for bit, because DumbProjectile-
+# Behavior flies a shell along it and the flight is in the CRC.  Its expected values are outputs of
+# Microsoft's own machine code (Tests/d3dx_golden.h), so this is not a self-consistency check.
+# Header-only and links nothing, like detround_selfcheck.  See Tests/test_d3dxportable.cpp.
+add_executable(d3dxportable_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_d3dxportable.cpp)
+target_include_directories(d3dxportable_selfcheck PRIVATE ${WW}/WW3D2 ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
+
 # Guards the hand-rolled Matrix3D::Get_Inverse that replaced D3DXMatrixInverse.  It checks that the
 # inverse is right, including one exact answer; it is NOT determinism evidence, and its header says
 # why.  E3 is the cross-architecture evidence for DetTrig.
@@ -569,6 +576,9 @@ set_target_properties(eip_sampler PROPERTIES CXX_STANDARD 17)
 # Libraries/DirectX/Include.
 add_executable(dx9_smoke ${WW}/WW3D2/test_dx9_smoke.cpp)
 target_link_libraries(dx9_smoke PRIVATE d3dx9runtime user32)
+# Tests/ for d3dx_golden.h: dx9_smoke prints what this machine's d3dx9_43.dll computes for
+# B17's golden rows, and which of its CPU-dispatched bodies ran.
+target_include_directories(dx9_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
 endif()  # ZH_PLATFORM_WINDOWS - renderer, Direct3D 9/11 backends, dx9_smoke
 
 # ===========================================================================
@@ -1060,6 +1070,7 @@ target_compile_definitions(test_gameengine PRIVATE
 # The three hand-written self-checks predate the harness; run them from ctest
 # too so one command covers everything.
 add_test(NAME detround_selfcheck COMMAND detround_selfcheck)
+add_test(NAME d3dxportable_selfcheck COMMAND d3dxportable_selfcheck)
 add_test(NAME wwmath_selfcheck COMMAND wwmath_selfcheck)
 add_test(NAME compression_selfcheck COMMAND compression_selfcheck)
 # The device and codec smoke tests below belong to targets only a Windows configuration defines.
@@ -1156,6 +1167,17 @@ add_test(NAME arch_differential
                  ${CMAKE_CURRENT_SOURCE_DIR}
                  ${CMAKE_CURRENT_BINARY_DIR}/arch_diff)
 set_tests_properties(arch_differential PROPERTIES SKIP_RETURN_CODE 77)
+
+# The D3DX oracle: runs Microsoft's own D3DXVec4Transform machine code under Rosetta and compares
+# d3dxportable.h against it.  It needs d3dx9_43.dll, which this repository does not carry, so it
+# reads ZH_D3DX9_X64 at run time (a Steam install's Jun2010_d3dx9_43_x64.cab, or the DLL) and skips
+# without it.  A green run matches two of the DLL's three bodies, not "Windows";
+# Tests/d3dx_oracle/run_d3dx_oracle.sh says why.
+add_test(NAME d3dx_oracle
+         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/d3dx_oracle/run_d3dx_oracle.sh
+                 ${CMAKE_CURRENT_SOURCE_DIR}
+                 ${CMAKE_CURRENT_BINARY_DIR}/d3dx_oracle)
+set_tests_properties(d3dx_oracle PROPERTIES SKIP_RETURN_CODE 77)
 
 if(RELEASE_DEBUG_LOGGING)
   target_compile_definitions(gameengine PRIVATE RELEASE_DEBUG_LOGGING)

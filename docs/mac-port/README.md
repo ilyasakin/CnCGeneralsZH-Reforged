@@ -178,8 +178,9 @@ you start. That commit is the lock.
 | B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | in review | -83 |
 | B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | not started | |
 | B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress | -3a |
-| B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | **done**, not verified on Windows | -18 |
-| B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) | M1 | A1 | in progress | -47 |
+| B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | **done** — wwdebug 3/3, wwmath 36/36; not verified on Windows | -18 |
+| B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) — **see defect #7** | M1 | A1 | macOS half done; **Windows half awaits the Intel/AMD decision** | -47 |
+||||||| 9f4c1811
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | in progress | -21 |
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | in progress | -21 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
@@ -429,6 +430,52 @@ the code, not observed. UTF-8 introduces no path-illegal byte, so B1's sweep inc
 About a dozen callers pass a `TheGameText->fetch(...)` result as a printf format
 (`InGameUI.cpp:280`, `:339`, `:7855` and others). Safe only because the shipped `.csf` strings
 contain no `%`. None is user- or network-controlled today. Flagged, not actioned.
+
+**7. An Intel and an AMD Windows machine compute a shell's flight path differently.**
+Found by B17, 2026-09-25. **Half of this is measured and half is inferred. They are kept apart
+below on purpose, because blurring them is how defect #3's first version went wrong in both
+directions at once.**
+
+*Measured.* `d3dx9_43.dll` (x64, 9.29.952.3111, the June 2010 redistributable that every Steam
+install ships in `_CommonRedist`) does not have one `D3DXVec4Transform`. The export is a thunk
+through a slot, and a one-time dispatch at RVA `0x5e198` fills that slot:
+
+| Condition | Body | Sums lane *j* as |
+|:--|:--|:--|
+| `DisablePSGP`/`DisableD3DXPSGP`=1 under `HKLM\Software\Microsoft\Direct3D`, or no SSE | scalar, `0x3efa0` | `((x·m0j + y·m1j) + z·m2j) + w·m3j` |
+| CPUID vendor `GenuineIntel` | SSE, `0x211e60` | `(x·m0j + y·m1j) + (z·m2j + w·m3j)` |
+| any other vendor | SSE, `0x2112c0` | `((x·m0j + y·m1j) + z·m2j) + w·m3j` |
+
+The dispatch was **read** from the disassembly. The three bodies were **run**: they are leaf
+functions, so `Tests/d3dx_oracle` copies Microsoft's bytes into an executable page and calls them
+under Rosetta. Over BezierSegment's basis matrix, the Intel body differs from the other two **only
+in lane x**, the cubic coefficient `-P0+3P1-3P2+P3`. It is the one lane with four nonzero terms.
+There it differs on **35.7%** of the oracle's basis inputs, and on about **45%** of control-point
+vectors shaped like a real shot. Replaying `BezFwdIterator`'s forward differencing under each order,
+**51%** of synthetic flight paths have at least one point that differs. Wine's builtin `d3dx9`, which
+CrossOver runs, sums left to right (its disassembly was read, not run).
+
+*Inferred, not observed.* `BezFwdIterator::start` passes control-point coordinates through
+`D3DXVec4Transform`. `DumbProjectileBehavior.cpp:638` moves the projectile to each path point.
+`Object::crc` xfers the whole transform matrix (`Object.cpp:4112`). So a mixed Intel/AMD network
+game on the current Windows build should report a mismatch after a shell-firing unit shoots, and
+a replay recorded on one vendor should diverge on the other. **Nobody has seen this happen.**
+`README.md` at the repository root says LAN and online play between separate machines "have not
+been tested", and `lan-play.ps1` runs its copies on one machine, which means one CPU vendor and one
+DLL body. That setup cannot show this, however many games it plays. The precedent is the other way:
+players *have* played across machines (`CHANGELOG.md:943` records a desync reported against v2.0.0), and `215f84a5` fixed a desync of exactly this shape — the
+x64 CRT choosing FMA3 or SSE2 `log()` by CPU — with `_set_FMA3_enable(0)` in `WinMain`.
+
+*What it means for the port.* A Mac cannot agree with an Intel and an AMD Windows machine at once
+while Windows keeps binding the DLL. `d3dxportable.h` sums left to right: that is the SDK's
+reference order, the order of every non-Intel machine, and the order CrossOver players compute
+today. **Whether Windows should also stop taking this function from the DLL is a product decision
+and has been put to the user.** D3DX has no runtime switch equivalent to `_set_FMA3_enable`; it
+exports no CPU-optimisation control. The only per-process fix is to route BezierSegment's calls
+through `d3dxportable.h` on Windows as well. The only callers are
+`BezierSegment.cpp:112` and `BezFwdIterator.cpp:69-71`, so that is a change to `d3dx9math.h` and
+`d3dx9runtime.cpp`, not to game code. It moves the checksum of every replay recorded on an Intel
+machine.
 
 Related and **not** a defect, because someone got it right: `ConnectionManager.cpp:706`/`:718` pass
 a constant `L"%ls"` with network chat as the *argument*. It looks like a redundant format and it is
