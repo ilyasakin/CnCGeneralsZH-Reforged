@@ -48,6 +48,7 @@
 #include "ffactory.h"
 #include "thread.h"
 #include "mutex.h"
+#include "Lib/Clock.h"	/* Clock_Milliseconds_Coarse: GetTickCount on Windows, by Clock.h's contract */
 
 #include <stdlib.h>
 #if defined(_WIN32)
@@ -735,6 +736,11 @@ TEST(stringclass_long_strings_survive_reassignment)
 	}
 }
 
+/* These two test WideStringClass's wide half, which is _WIN32-only by B1's agreed decision: its only
+   implementations are Win32 calls, and off Windows it is guarded out of wwstring.h and widestring.h
+   rather than given a second UTF-16 conversion beside the engine's own.  They come back when B1's
+   char16_t work gives that half a body everywhere.  Guarded, not deleted, so they are still here. */
+#if defined(_WIN32)
 TEST(widestring_basics)
 {
 	WideStringClass w(L"wide");
@@ -766,6 +772,7 @@ TEST(widestring_compare_and_format)
 	f.Format(L"%d-%d", 4, 5);
 	CHECK(f == L"4-5");
 }
+#endif	// _WIN32: WideStringClass's wide half, B1
 
 /* _strlwr/_strupr turn asset and definition names into hash keys, so both builds must produce the
    same key.  On Windows this runs MSVC's own; elsewhere, MSVCCompat.h's.  The expected strings are
@@ -1670,12 +1677,12 @@ TEST(threadclass_stop_deadlocks_if_the_caller_holds_the_workers_lock)
 	worker.Execute();
 	ThreadClass::Sleep_Ms(20); // let it get into its loop
 
-	unsigned start = GetTickCount();
+	unsigned start = Clock_Milliseconds_Coarse();
 	{
 		FastCriticalSectionClass::LockClass held(lock);
 		worker.Stop(300);
 	}
-	unsigned elapsed = GetTickCount() - start;
+	unsigned elapsed = Clock_Milliseconds_Coarse() - start;
 
 	CHECK(elapsed >= 250);
 }
@@ -1690,9 +1697,9 @@ TEST(threadclass_stop_returns_promptly_when_called_unlocked)
 	worker.Execute();
 	ThreadClass::Sleep_Ms(20);
 
-	unsigned start = GetTickCount();
+	unsigned start = Clock_Milliseconds_Coarse();
 	worker.Stop(300);
-	unsigned elapsed = GetTickCount() - start;
+	unsigned elapsed = Clock_Milliseconds_Coarse() - start;
 
 	CHECK(elapsed < 250);
 }
@@ -1776,12 +1783,12 @@ TEST(mutexclass_timed_acquire_gives_up_and_says_so)
 	worker.Execute();
 	while (!worker.Held) { ThreadClass::Sleep_Ms(1); }
 
-	unsigned start = GetTickCount();
+	unsigned start = Clock_Milliseconds_Coarse();
 	{
 		MutexClass::LockClass timed(m, 60);
 		CHECK(timed.Failed());
 	}
-	CHECK((GetTickCount() - start) >= 50);
+	CHECK((Clock_Milliseconds_Coarse() - start) >= 50);
 
 	worker.Stop(1000);
 }
@@ -1852,9 +1859,9 @@ TEST(threadclass_running_flag_reaches_the_worker)
 	CHECK(w.Is_Running());
 	ThreadClass::Sleep_Ms(30);
 
-	unsigned start = GetTickCount();
+	unsigned start = Clock_Milliseconds_Coarse();
 	w.Stop(3000);
-	CHECK((GetTickCount() - start) < 1000);
+	CHECK((Clock_Milliseconds_Coarse() - start) < 1000);
 	CHECK(!w.Is_Running());
 	CHECK(w.Ticks > 0);
 }
