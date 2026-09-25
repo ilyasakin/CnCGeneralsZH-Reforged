@@ -407,6 +407,10 @@ if(ZH_PLATFORM_POSIX)
     # against QueryPerformanceCounter.  Nothing calls any of the four - cpudetect.cpp and Except.cpp
     # include mpu.h and use nothing from it, and cpudetect reads __rdtsc itself.
     ${WW}/WWLib/mpu.cpp)
+  # And one POSIX-only file: the engine's paths resolved against a POSIX file system, and the zh_*
+  # forwarders built on it (C1, decisions D1 and D4).  WWLib because RawFileClass and GameEngine both
+  # link it, and the resolver has to work before any engine subsystem exists.
+  list(APPEND WWLIB_SOURCES ${WW}/WWLib/posixpath.cpp)
 endif()
 add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE} ${WWLIB_SOURCES})
 target_include_directories(wwlib PUBLIC ${WW}/WWLib
@@ -1362,6 +1366,12 @@ target_link_libraries(miles_listen PRIVATE milesaudio)
 endif()  # ZH_PLATFORM_POSIX - audio backend checks
 
 if(ZH_PLATFORM_POSIX)
+# The engine's paths against a POSIX file system (C1): the default volume, and on macOS a
+# case-sensitive APFS image it creates, since neither macOS's default volume nor the Steam installs'
+# exFAT tells case apart.  Linux's runs are case-sensitive already.
+add_lib_test(test_posixpath wwlib wwdebug)
+target_include_directories(test_posixpath PRIVATE ${WW}/WWLib ${WW}/WWDebug)
+
 # The POSIX twin of test_ffshadercompile and test_ffvertexcompile: every generated program under the
 # SDL3 GPU target through glslang, spirv-val, SPIRV-Cross and, on macOS, the Metal driver (D3).
 # spirv-val is a tool on the machine, not something this build makes; without one the test prints
