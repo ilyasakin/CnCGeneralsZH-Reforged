@@ -773,6 +773,13 @@ if(ZH_PLATFORM_POSIX)
   # where -lm is accepted and does nothing.  Not keyed on Linux, so the next platform needs no edit.
   target_link_libraries(miniaudio INTERFACE Threads::Threads ${CMAKE_DL_LIBS} m)
 
+  # The Miles 6.5 surface on miniaudio (C4): the same library name as the XAudio2 one on Windows, so
+  # that gameenginedevice, once it builds off Windows, links milesaudio on either and
+  # MilesAudioManager.cpp compiles unchanged against it.  Today only the tests below link it here.
+  add_library(milesaudio STATIC ${WW}/Miles6/miniaudio/miles_miniaudio.cpp)
+  target_include_directories(milesaudio PRIVATE ${WW}/Miles6/include)
+  target_link_libraries(milesaudio PRIVATE miniaudio PUBLIC Threads::Threads)
+
   # What SDL3's GPU API can do on this machine: the evidence D2 and D5 need before the backend
   # interface is designed.  Needs a GPU and a display, so it is built but not registered with ctest.
   add_executable(sdl_gpu_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/sdl_gpu_probe.cpp)
