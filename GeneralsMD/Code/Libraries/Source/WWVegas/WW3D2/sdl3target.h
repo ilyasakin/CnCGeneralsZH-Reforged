@@ -26,7 +26,7 @@
 ** Doing it here rather than in every generator's string literals leaves the D3D11 text - which the
 ** Windows backend compiles, and which D3's golden dump proves unchanged - untouched by construction.
 **
-** Four changes, and nothing else:
+** Five changes, and nothing else:
 **
 **   1. Register spaces.  SDL_gpu.h (SDL_CreateGPUShader) binds a vertex program's textures and
 **      samplers from space0 and its constant buffers from space1, and a pixel program's from space2
@@ -46,6 +46,20 @@
 **      DXGI_FORMAT_B8G8R8A8_UNORM (dx11layout.cpp) and hands the shader r, g, b, a; SDL has no such
 **      vertex format, so the backend reads it as UBYTE4_NORM and the program swaps it back.
 **
+**   5. Every texture read through its own sampler, at its own slot.  SDL binds textures and
+**      samplers as pairs, slot n being texture n with sampler n, and SDL_shadercross pairs them by
+**      that rule too: a texture read through another slot's sampler is given no slot of its own and
+**      collides with texture 0 on Metal.  The generators do exactly that with the normal map (t4),
+**      read through stage 0's sampler - and in the bumped terrain through stage 1's as well, for the
+**      far layer.  So each such read is rebound:
+**        - the reads through the lowest-numbered sampler keep the texture's own slot, with a sampler
+**          of that slot beside it;
+**        - the reads through any other sampler read a second name for the same texture, at the next
+**          slot above every one the program declared, with its own sampler.
+**      The program then opens with one "// SDL3 slot N: texture tT, sampler state sS" line per slot so
+**      rebound, which is the backend's contract: slot N is bound to texture T with stage S's sampler
+**      state.  Every other slot n is texture n with sampler state n.
+**
 ** A program with anything this does not recognise - an unknown semantic, a register kind other than
 ** t, s or b - is refused, the way a generator refuses a description it does not know, rather than
 ** passed on half rewritten.
@@ -55,9 +69,12 @@
 #define SDL3TARGET_H
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include <algorithm>
 #include <string>
+#include <vector>
 
 // Where each varying goes: the diffuse and specular colours, eight coordinate sets (four for the
 // stages, four for the normal mapped lighting) and the fog.
@@ -156,6 +173,107 @@ inline bool locate_members(std::string & hlsl, const char * name, bool attribute
 	}
 }
 
+// "Texture2D Name : register(t4);" -> Name, 4.  Only the D3D11 form, before spaces are placed.
+inline bool parse_declaration(const std::string & line, const char * type, char kind, std::string & name, int & slot)
+{
+	const std::string opening = std::string(type) + " ";
+	if (line.compare(0, opening.size(), opening) != 0) return false;
+	const size_t colon = line.find(" : register(");
+	if (colon == std::string::npos) return false;
+	name = line.substr(opening.size(), colon - opening.size());
+	const size_t at = colon + 12;
+	if (at >= line.size() || line[at] != kind) return false;
+	slot = atoi(line.c_str() + at + 1);
+	return true;
+}
+
+inline bool pair_samplers(std::string & hlsl)
+{
+	struct Declared { std::string name; int slot; size_t line_end; };
+	std::vector<Declared> textures, samplers;
+	int highest = -1;
+	for (size_t line = 0; line < hlsl.size();) {
+		size_t end = hlsl.find('\n', line);
+		if (end == std::string::npos) end = hlsl.size();
+		const std::string text = hlsl.substr(line, end - line);
+		Declared d;
+		if (parse_declaration(text, "Texture2D", 't', d.name, d.slot)) {
+			d.line_end = end;
+			textures.push_back(d);
+			if (d.slot > highest) highest = d.slot;
+		}
+		else if (parse_declaration(text, "SamplerState", 's', d.name, d.slot)) {
+			d.line_end = end;
+			samplers.push_back(d);
+			if (d.slot > highest) highest = d.slot;
+		}
+		line = end + 1;
+	}
+
+	std::string plan, declarations_after_last;
+	for (size_t t = 0; t < textures.size(); ++t) {
+		const Declared & texture = textures[t];
+		// The samplers this texture is read through, lowest slot first.
+		std::vector<const Declared *> through;
+		for (size_t k = 0; k < samplers.size(); ++k) {
+			const std::string sample = texture.name + ".Sample(" + samplers[k].name + ",";
+			const std::string level = texture.name + ".SampleLevel(" + samplers[k].name + ",";
+			if (hlsl.find(sample) != std::string::npos || hlsl.find(level) != std::string::npos) {
+				through.push_back(&samplers[k]);
+			}
+		}
+		for (size_t i = 1; i < through.size(); ++i) {
+			for (size_t j = i; j > 0 && through[j - 1]->slot > through[j]->slot; --j) std::swap(through[j - 1], through[j]);
+		}
+		if (through.empty() || (through.size() == 1 && through[0]->slot == texture.slot)) {
+			continue;
+		}
+		// A sampler of the texture's own slot, used or not, leaves that slot to it: every other read
+		// goes to a new slot rather than declaring a second sampler there.
+		bool slot_taken = false;
+		for (size_t k = 0; k < samplers.size(); ++k) slot_taken = slot_taken || samplers[k].slot == texture.slot;
+		for (size_t i = 0; i < through.size(); ++i) {
+			const Declared & sampler = *through[i];
+			if (sampler.slot == texture.slot) {
+				continue;	// already its own pair
+			}
+			const bool keeps_slot = !slot_taken;
+			slot_taken = true;
+			const int slot = keeps_slot ? texture.slot : ++highest;
+			const std::string texture_name = keeps_slot ? texture.name : texture.name + "_" + sampler.name;
+			const std::string sampler_name = texture_name + "_Sampler";
+			char line[256];
+			if (!keeps_slot) {
+				snprintf(line, sizeof(line), "Texture2D %s : register(t%d);\n", texture_name.c_str(), slot);
+				declarations_after_last += line;
+			}
+			snprintf(line, sizeof(line), "SamplerState %s : register(s%d);\n", sampler_name.c_str(), slot);
+			declarations_after_last += line;
+			snprintf(line, sizeof(line), "// SDL3 slot %d: texture t%d, sampler state s%d\n", slot, texture.slot, sampler.slot);
+			plan += line;
+			static const char * const CALLS[] = { ".Sample(", ".SampleLevel(" };
+			for (int c = 0; c < 2; ++c) {
+				const std::string from = texture.name + CALLS[c] + sampler.name + ",";
+				const std::string to = texture_name + CALLS[c] + sampler_name + ",";
+				for (size_t at = hlsl.find(from); at != std::string::npos; at = hlsl.find(from, at + to.size())) {
+					hlsl.replace(at, from.size(), to);
+				}
+			}
+		}
+	}
+	if (!plan.empty()) {
+		// The new declarations go after the last texture or sampler the program declared, which is
+		// before anything reads them.
+		size_t after = 0;
+		for (size_t t = 0; t < textures.size(); ++t) after = std::max(after, textures[t].line_end);
+		for (size_t k = 0; k < samplers.size(); ++k) after = std::max(after, samplers[k].line_end);
+		const size_t at = hlsl.find('\n', after);
+		hlsl.insert(at == std::string::npos ? hlsl.size() : at + 1, declarations_after_last);
+		hlsl.insert(0, plan);
+	}
+	return true;
+}
+
 } // namespace sdl3target_detail
 
 // Rewrites one generated D3D11 program for SDL3 GPU in place.  False, leaving hlsl in an unspecified
@@ -163,7 +281,7 @@ inline bool locate_members(std::string & hlsl, const char * name, bool attribute
 inline bool SDL3_Shader_Retarget(std::string & hlsl, bool vertex_stage)
 {
 	using namespace sdl3target_detail;
-	if (!place_registers(hlsl, vertex_stage)) {
+	if (!pair_samplers(hlsl) || !place_registers(hlsl, vertex_stage)) {
 		return false;
 	}
 	std::string attribute_colours[2], varying_colours[2];
