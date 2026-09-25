@@ -286,12 +286,21 @@ void reallySaveReplay(void)
 
 	if (TheLocalFileSystem->doesFileExist(filename.str()))
 	{
+#if defined(_WIN32)
 		if(DeleteFile(filename.str()) == 0)
 		{
 			wchar_t buffer[1024];
 			FormatMessageW ( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, buffer, sizeof(buffer), NULL);
 			UnicodeString errorStr;
 			errorStr.set(buffer);
+#else
+		// The system's reason, as the Windows branch shows it.  strerror is ASCII in the "C" locale
+		// the game keeps (see the plan's locale rule), so translate() is exact here.
+		if(remove(filename.str()) != 0)
+		{
+			UnicodeString errorStr;
+			errorStr.translate(AsciiString(strerror(errno)));
+#endif
 			errorStr.trim();
 			if(messageBoxWin)
 			{
