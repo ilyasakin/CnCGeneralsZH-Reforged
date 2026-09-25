@@ -351,6 +351,9 @@ if(NOT ZH_PLATFORM_WINDOWS)
     # resources.  No callers at all.
     ${WW}/WWLib/data.cpp       ${WW}/WWLib/rcfile.cpp     ${WW}/WWLib/msgloop.cpp
     ${WW}/WWLib/keyboard.cpp   ${WW}/WWLib/LaunchWeb.cpp  ${WW}/WWLib/WWCOMUtil.cpp
+    # verchk.cpp had one caller after all: Wwutil's Get_File_Id_String declares its
+    # Get_Image_File_Header extern inside the function, so a search for verchk.h misses it.  That
+    # call is Windows-only now; off Windows the timestamp is 0.
     ${WW}/WWLib/verchk.cpp
     # The HINSTANCE/HWND globals, which win.h declares only under _WINDOWS.
     ${WW}/WWLib/win.cpp
@@ -993,7 +996,7 @@ endif()
 add_lib_test(test_wwsaveload PENDING_MACOS wwsaveload wwlib wwmath wwdebug)
 target_include_directories(test_wwsaveload PRIVATE ${WW}/WWSaveLoad ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/Wwutil)
 
-add_lib_test(test_wwutil PENDING_MACOS wwutil wwmath wwlib wwdebug)
+add_lib_test(test_wwutil wwutil wwmath wwlib wwdebug)
 target_include_directories(test_wwutil PRIVATE ${WW}/Wwutil ${WW}/WWLib ${WW}/WWMath)
 
 # Lib/Clock.h is header-only and links nothing, so this runs on both platforms from day one -
