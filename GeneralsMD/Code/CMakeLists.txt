@@ -1214,8 +1214,14 @@ add_executable(test_miles_miniaudio ${TESTS}/test_miles_miniaudio.cpp)
 target_include_directories(test_miles_miniaudio PRIVATE ${WW}/Miles6/include ${LIBSRC}/miniaudio)
 target_link_libraries(test_miles_miniaudio PRIVATE test_harness milesaudio miniaudio)
 add_test(NAME test_miles_miniaudio COMMAND test_miles_miniaudio)
-set_tests_properties(test_miles_miniaudio PROPERTIES
-  ENVIRONMENT "ZH_AUDIO_BACKEND=null;ZH_DATA_DIR=${ZH_GAME_DATA}")
+# ZH_DATA_DIR is set only when ZH_GAME_DATA was configured.  Setting it unconditionally overwrote a
+# ZH_DATA_DIR from the caller's environment with an empty string, and the data half skipped silently.
+if(ZH_GAME_DATA)
+  set_tests_properties(test_miles_miniaudio PROPERTIES
+    ENVIRONMENT "ZH_AUDIO_BACKEND=null;ZH_DATA_DIR=${ZH_GAME_DATA}")
+else()
+  set_tests_properties(test_miles_miniaudio PROPERTIES ENVIRONMENT "ZH_AUDIO_BACKEND=null")
+endif()
 
 # For human ears, not ctest: plays one sound from a .big archive (or a loose file) on the real
 # device, through the same API, at a chosen volume and pan.
