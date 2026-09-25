@@ -1388,6 +1388,12 @@ if(ZH_PLATFORM_POSIX)
 add_lib_test(test_posixpath wwlib wwdebug)
 target_include_directories(test_posixpath PRIVATE ${WW}/WWLib ${WW}/WWDebug)
 
+# The POSIX half of the Wine listing oracle (Tests/fs_oracle.cpp; its Windows half is built with
+# mingw-w64 and run under Wine, as C1's task file records).
+add_executable(fs_oracle ${TESTS}/fs_oracle.cpp)
+target_include_directories(fs_oracle PRIVATE ${WW}/WWLib)
+target_link_libraries(fs_oracle PRIVATE wwlib wwdebug)
+
 # The POSIX twin of test_ffshadercompile and test_ffvertexcompile: every generated program under the
 # SDL3 GPU target through glslang, spirv-val, SPIRV-Cross and, on macOS, the Metal driver (D3).
 # spirv-val is a tool on the machine, not something this build makes; without one the test prints
