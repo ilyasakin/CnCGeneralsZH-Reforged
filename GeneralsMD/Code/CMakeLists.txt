@@ -360,7 +360,11 @@ if(NOT ZH_PLATFORM_WINDOWS)
     ${WW}/WWLib/registry.cpp
     # SecureRandomClass has no caller, and its only non-Windows seed is the _UNIX arm, which the
     # plan forbids switching on.
-    ${WW}/WWLib/srandom.cpp)
+    ${WW}/WWLib/srandom.cpp
+    # Get_CPU_Rate, Get_CPU_Clock, Get_RDTSC_CPU_Speed and RDTSC: an x86 time-stamp counter timed
+    # against QueryPerformanceCounter.  Nothing calls any of the four - cpudetect.cpp and Except.cpp
+    # include mpu.h and use nothing from it, and cpudetect reads __rdtsc itself.
+    ${WW}/WWLib/mpu.cpp)
 endif()
 add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE} ${WWLIB_SOURCES})
 target_include_directories(wwlib PUBLIC ${WW}/WWLib
