@@ -169,7 +169,6 @@ you start. That commit is the lock.
 | B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
 | B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | `wwlib` pass done; `GameEngine` half not started | -a9 |
 | B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | `debuglib`/`dinput8` drops done; rest unclaimed | -18 |
-||||||| 9f4c1811
 | B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) — **see [findings](B7-w3d-layout.md)** | M1 | A1 | **done, held for B10** | -14 |
 | B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in review | -83 |
 | B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | in progress | -21 |
@@ -180,7 +179,6 @@ you start. That commit is the lock.
 | B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | in progress | -3a |
 | B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | **done** — wwdebug 3/3, wwmath 36/36; not verified on Windows | -18 |
 | B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) — **see defect #7** | M1 | A1 | macOS half done; **Windows half awaits the Intel/AMD decision** | -47 |
-||||||| 9f4c1811
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | in progress | -21 |
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | in progress | -21 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | not started | |
