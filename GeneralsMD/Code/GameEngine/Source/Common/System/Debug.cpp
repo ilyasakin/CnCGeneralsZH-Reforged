@@ -886,7 +886,8 @@ void ReleaseCrashLocalized(const AsciiString& p, const AsciiString& m)
 	}
 	else if (TheSystemIsUnicode)
 	{
-		::MessageBoxW(NULL, mesg.str(), prompt.str(), MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
+		// Win32's W API: WideChar and WCHAR are the same two bytes on Windows, which makes the cast honest.
+		::MessageBoxW(NULL, reinterpret_cast<LPCWSTR>(mesg.str()), reinterpret_cast<LPCWSTR>(prompt.str()), MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
 	}
 	else
 	{

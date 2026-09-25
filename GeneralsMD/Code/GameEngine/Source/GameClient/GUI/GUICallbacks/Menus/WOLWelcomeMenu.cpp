@@ -249,7 +249,7 @@ static void updateNumPlayersOnline(void)
 		//This was a Harvard initiated fix.
 		headingStr.format(TheGameText->fetch("MOTD:NumPlayersHeading"));
 
-		while (headingStr.nextToken(&line, UnicodeString(L"\n")))
+		while (headingStr.nextToken(&line, UnicodeString(u"\n")))
 		{
 			if (line.getCharAt(line.getLength()-1) == '\r')
 				line.removeLastChar();	// there is a trailing '\r'
@@ -258,12 +258,12 @@ static void updateNumPlayersOnline(void)
 
 			if (line.isEmpty())
 			{
-				line = UnicodeString(L" ");
+				line = UnicodeString(u" ");
 			}
 
 			GadgetListBoxAddEntryText(listboxInfo, line, GameSpyColor[GSCOLOR_MOTD_HEADING], -1, -1);
 		}
-		GadgetListBoxAddEntryText(listboxInfo, UnicodeString(L" "), GameSpyColor[GSCOLOR_MOTD_HEADING], -1, -1);
+		GadgetListBoxAddEntryText(listboxInfo, UnicodeString(u" "), GameSpyColor[GSCOLOR_MOTD_HEADING], -1, -1);
 
 		while (aMotd.nextToken(&aLine, "\n"))
 		{
@@ -649,7 +649,7 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 					room.m_groupID = resp.groupRoom.id;
 					room.m_maxWaiting = resp.groupRoom.maxWaiting;
 					room.m_name = resp.groupRoomName.c_str();
-					room.m_translatedName = UnicodeString(L"TEST");
+					room.m_translatedName = UnicodeString(u"TEST");
 					room.m_numGames = resp.groupRoom.numGames;
 					room.m_numPlaying = resp.groupRoom.numPlaying;
 					room.m_numWaiting = resp.groupRoom.numWaiting;

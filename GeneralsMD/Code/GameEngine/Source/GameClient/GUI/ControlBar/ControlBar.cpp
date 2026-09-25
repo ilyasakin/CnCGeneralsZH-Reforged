@@ -778,7 +778,7 @@ void ControlBar::populatePurchaseScience( Player* player )
 	win = TheWindowManager->winGetWindowFromId( m_contextParent[ CP_PURCHASE_SCIENCE ], TheNameKeyGenerator->nameToKey( "GeneralsExpPoints.wnd:StaticTextRankPointsAvailable" ) );
 	if(win)
 	{
-		tempUS.format(L"%d", player->getSciencePurchasePoints());
+		tempUS.format(u"%d", player->getSciencePurchasePoints());
 		GadgetStaticTextSetText(win, tempUS);
 	}
 	
@@ -4907,18 +4907,18 @@ static UnicodeString getMetaKeyLabel( GameMessage::Type wanted )
 
 		// function keys have no printable character; name them
 		if( rec->m_key >= MK_F1 && rec->m_key <= MK_F10 )
-			label.format( L"F%d", rec->m_key - MK_F1 + 1 );
+			label.format( u"F%d", rec->m_key - MK_F1 + 1 );
 		else if( rec->m_key == MK_F11 )
-			label.set( L"F11" );
+			label.set( u"F11" );
 		else if( rec->m_key == MK_F12 )
-			label.set( L"F12" );
+			label.set( u"F12" );
 		else
 		{
 			WideChar c = TheKeyboard->getPrintableKey( (UnsignedByte)rec->m_key, 0 );
 			if( c )
 			{
-				if( c >= L'a' && c <= L'z' )
-					c -= (L'a' - L'A');
+				if( c >= u'a' && c <= u'z' )
+					c -= (u'a' - u'A');
 
 				WideChar text[ 2 ] = { c, 0 };
 				label.set( text );
@@ -4946,10 +4946,10 @@ static UnicodeString getLabelHotKeyLabel( const AsciiString& textLabel )
 {
 	UnicodeString label;
 	const UnicodeString text = TheGameText->fetchUntranslated( textLabel.str() );
-	const WideChar *marker = wcschr( text.str(), L'&' );
+	const WideChar *marker = WideCharChr( text.str(), u'&' );
 	if( marker && marker[ 1 ] )
 	{
-		const WideChar letter[ 2 ] = { (WideChar)towupper( marker[ 1 ] ), 0 };
+		const WideChar letter[ 2 ] = { (WideChar)WideCharToUpper( marker[ 1 ] ), 0 };
 		label.set( letter );
 	}
 	return label;
@@ -5021,7 +5021,7 @@ void ControlBar::setControlCommand( GameWindow *button, const CommandButton *com
 		// a button with no label has no build tooltip either - clear the func, the window is
 		// recycled and would otherwise keep the one the previous occupant installed.
 		button->winSetTooltipFunc( NULL );
-		GadgetButtonSetText( button, UnicodeString( L"" ) );
+		GadgetButtonSetText( button, UnicodeString( u"" ) );
 	}
 
 	// save the command in the user data of the window
@@ -5770,7 +5770,7 @@ void ControlBar::updatePurchaseScienceHotKeys( void )
 			else
 			{
 				win->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON );
-				GadgetButtonSetText( win, UnicodeString( L"" ) );
+				GadgetButtonSetText( win, UnicodeString( u"" ) );
 			}
 		}
 	}
@@ -6807,9 +6807,9 @@ void ControlBar::drawSpecialPowerShortcutMultiplierText()
 		if( numReady > 1 )
 		{
 			UnicodeString count;
-			count.format( L"%d", numReady );
+			count.format( u"%d", numReady );
 			if( !text.isEmpty() )
-				text.concat( L" " );
+				text.concat( u" " );
 			text.concat( count );
 		}
 

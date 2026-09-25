@@ -272,12 +272,14 @@ UnicodeString getUnicodeDateBuffer(WallClockTime timeVal)
 			return displayDateBuffer;
 		}	
 	}
-	wchar_t dateBuffer[ DATE_BUFFER_SIZE ];
+	// WideChar, cast at the W call: the same two bytes as WCHAR on Windows.  The size is in characters,
+	// as GetDateFormatW takes it; it used to be sizeof(dateBuffer), twice the buffer.
+	WideChar dateBuffer[ DATE_BUFFER_SIZE ];
 	GetDateFormatW( LOCALE_USER_DEFAULT,
 								 DATE_SHORTDATE,
 								 &timeVal,
 								 NULL,
-								 dateBuffer, sizeof(dateBuffer) );
+								 reinterpret_cast<LPWSTR>( dateBuffer ), DATE_BUFFER_SIZE );
 	displayDateBuffer.set(dateBuffer);
 	return displayDateBuffer;
 	//displayDateBuffer.format( L"%ls", dateBuffer );
@@ -311,13 +313,14 @@ UnicodeString getUnicodeTimeBuffer(WallClockTime timeVal)
 	}
 	// setup time buffer for local region time format
 	#define TIME_BUFFER_SIZE 256
-	wchar_t timeBuffer[ TIME_BUFFER_SIZE ];
+	// As dateBuffer above: WideChar, cast at the W call, sized in characters.
+	WideChar timeBuffer[ TIME_BUFFER_SIZE ];
 	GetTimeFormatW( LOCALE_USER_DEFAULT,
 								 TIME_NOSECONDS,
 								 &timeVal,
 								 NULL,
-								 timeBuffer,
-								 sizeof(timeBuffer) );
+								 reinterpret_cast<LPWSTR>( timeBuffer ),
+								 TIME_BUFFER_SIZE );
 	displayTimeBuffer.set(timeBuffer);
 	return displayTimeBuffer;
 #endif
@@ -1301,7 +1304,7 @@ void GameState::populateSaveGameListbox( GameWindow *listbox, SaveLoadLayoutType
 			
 			displayLabel = TheGameText->fetch( saveGameInfo->mapLabel, &exists );
 			if( exists == FALSE )
-				displayLabel.format( L"%S", saveGameInfo->mapLabel.str() );
+				displayLabel.format( u"%S", saveGameInfo->mapLabel.str() );
 
 		}  // end if
 

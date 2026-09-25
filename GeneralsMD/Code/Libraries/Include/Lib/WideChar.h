@@ -29,6 +29,14 @@
 #ifndef LIB_WIDECHAR_H
 #define LIB_WIDECHAR_H
 
-typedef wchar_t WideChar;	///< UTF-16 code unit on Windows, where wchar_t is two bytes
+// char16_t, not wchar_t: wchar_t is two bytes under MSVC and four everywhere else, and the width of
+// this type is the width of every UTF-16 .csf string, map chunk, save game, LAN packet and - through
+// Xfer::xferUnicodeString (Xfer.cpp:209), hashed by XferCRC - the replay and network checksum.  Windows
+// always had two unsigned bytes here; char16_t is two unsigned bytes on every compiler, so every byte
+// those formats and that checksum see is unchanged there, and now the same on every other platform.
+// Tests/test_widechar_crc_gate.cpp is the proof, against a table computed independently.
+typedef char16_t WideChar;	///< a UTF-16 code unit, on every platform
+
+static_assert(sizeof(WideChar) == 2, "WideChar's width is the replay and network CRC's: see XferCRC.cpp");
 
 #endif // LIB_WIDECHAR_H

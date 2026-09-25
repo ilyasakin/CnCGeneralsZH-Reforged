@@ -254,7 +254,7 @@ static void drawCountBadge( GameWindow *window, Int count )
 	Int width, height;
 
 	UnicodeString text;
-	text.format( L"%d", count );
+	text.format( u"%d", count );
 	DisplayString *badge = badgeString( text, getBadgeFont( window, COUNT_BADGE_DESIGN_POINTS ) );
 	if( badge == NULL )
 		return;
@@ -289,7 +289,7 @@ static void drawSecondsBadge( GameWindow *window, Int seconds )
 	Int width, height;
 
 	UnicodeString text;
-	text.format( L"%ds", seconds );
+	text.format( u"%ds", seconds );
 	DisplayString *label = badgeString( text, getBadgeFont( window ) );
 	if( label == NULL )
 		return;
@@ -320,7 +320,7 @@ static void drawCostBadge( GameWindow *window, Int cost )
 	Int width, height;
 
 	UnicodeString text;
-	text.format( L"$%d", cost );
+	text.format( u"$%d", cost );
 	DisplayString *label = badgeString( text, getBadgeFont( window ) );
 	if( label == NULL )
 		return;
@@ -357,7 +357,7 @@ static void drawPowerBadge( GameWindow *window, Int power )
 	const Int draws = -power;
 
 	UnicodeString text;
-	text.format( draws > 0 ? L"-%d" : L"+%d", draws > 0 ? draws : -draws );
+	text.format( draws > 0 ? u"-%d" : u"+%d", draws > 0 ? draws : -draws );
 	DisplayString *label = badgeString( text, getBadgeFont( window ) );
 	if( label == NULL )
 		return;

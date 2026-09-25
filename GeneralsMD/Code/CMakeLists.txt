@@ -1397,6 +1397,15 @@ if(Python3_Interpreter_FOUND)
   # default macOS volume fold case and Linux does not, so a miscased include builds on the first two
   # and is a missing header on the third; the first Linux build found 298.  This catches them on a
   # Mac, from compile_commands.json, without Linux.  POSIX only: that is where the file is exported.
+  # Nothing the POSIX build compiles may carry text as wchar_t - four bytes here, two on Windows -
+  # and no literal anywhere in the engine may hold a raw non-ASCII byte, which MSVC and clang read as
+  # different characters.  WideChar is char16_t (B1); this finds what the compiler cannot, such as an
+  # L'x' that converts silently.  Exceptions, each with its reason, in Tools/widechar_check_allow.txt.
+  if(ZH_PLATFORM_POSIX)
+    add_test(NAME widechar_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/widechar_check.py
+                     ${CMAKE_BINARY_DIR}/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR})
+  endif()
   if(ZH_PLATFORM_POSIX)
     add_test(NAME include_case_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/include_case_check.py

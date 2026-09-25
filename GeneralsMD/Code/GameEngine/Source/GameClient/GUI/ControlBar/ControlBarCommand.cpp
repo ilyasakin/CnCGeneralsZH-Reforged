@@ -695,7 +695,7 @@ void ControlBar::resetBuildQueueButtons( void )
 		m_queueData[ i ].control->winClearStatus( WIN_STATUS_USE_OVERLAY_STATES );
 
 		// set the text of the window to nothing by default
-		GadgetButtonSetText( m_queueData[ i ].control, UnicodeString( L"" ) );
+		GadgetButtonSetText( m_queueData[ i ].control, UnicodeString( u"" ) );
 
 		//Clear any potential veterancy rank, or else we'll see it when it's empty!
 		GadgetButtonDrawOverlayImage( m_queueData[ i ].control, NULL );

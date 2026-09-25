@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <string>
+
 #ifndef _WIDECHARFNS_H_
 #define _WIDECHARFNS_H_
 
@@ -52,6 +54,12 @@
 //-----------------------------------------------------------------------------------------------
 // Length, copy, concatenate
 //-----------------------------------------------------------------------------------------------
+
+/** A std::basic_string of WideChar, for code that wants the standard container's find/substr and a
+	  c_str() to hand straight to UnicodeString.  std::wstring used to be that type, while WideChar
+	  was wchar_t; it stopped being so when WideChar became char16_t (B1).  UnicodeString is still
+	  the engine's string - this is for the few places that already used the standard one. */
+typedef std::basic_string<WideChar> WideCharString;
 
 size_t    WideCharLen  ( const WideChar *s );
 WideChar *WideCharCpy  ( WideChar *dst, const WideChar *src );

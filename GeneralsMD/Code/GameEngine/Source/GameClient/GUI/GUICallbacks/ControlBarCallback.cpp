@@ -537,7 +537,7 @@ WindowMsgHandledType ControlBarSystem( GameWindow *window, UnsignedInt msg,
 					{
 						msg->appendWideCharArgument( *c++ );
 					}
-					msg->appendWideCharArgument( L'\0' ); // trailing NULL
+					msg->appendWideCharArgument( u'\0' ); // trailing NULL
 				}
 			}
 			break;

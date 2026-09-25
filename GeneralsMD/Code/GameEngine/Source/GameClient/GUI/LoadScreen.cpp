@@ -409,7 +409,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 
 	m_percent = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( AsciiString( "SinglePlayerLoadScreen.wnd:Percent" ) ));
 	DEBUG_ASSERTCRASH(m_percent, ("Can't initialize the m_percent for the single player loadscreen"));
-	GadgetStaticTextSetText(m_percent,UnicodeString(L"0%"));
+	GadgetStaticTextSetText(m_percent,UnicodeString(u"0%"));
 	m_percent->winHide(TRUE);
 
 	m_objectiveWin = TheWindowManager->winGetWindowFromId( m_loadScreen,TheNameKeyGenerator->nameToKey( AsciiString( "SinglePlayerLoadScreen.wnd:ObjectivesWin" ) ));
@@ -572,7 +572,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 					shiftedPercent = 0;
 				Int percent = (shiftedPercent + FRAME_FUDGE_ADD)/1.3;
 				UnicodeString per;
-				per.format(L"%d%%",percent);
+				per.format(u"%d%%",percent);
 				TheMouse->setCursorTooltip(UnicodeString::TheEmptyString);
 				GadgetProgressBarSetProgress(m_progressBar, percent);
 				GadgetStaticTextSetText(m_percent, per);
@@ -630,7 +630,7 @@ void SinglePlayerLoadScreen::update( Int percent )
 {
 	percent = (percent + FRAME_FUDGE_ADD)/1.3;
 	UnicodeString per;
-	per.format(L"%d%%",percent);
+	per.format(u"%d%%",percent);
 	TheMouse->setCursorTooltip(UnicodeString::TheEmptyString);
 	GadgetProgressBarSetProgress(m_progressBar, percent);
 	GadgetStaticTextSetText(m_percent, per);
@@ -1084,7 +1084,7 @@ void ChallengeLoadScreen::init( GameInfo *game )
 					shiftedPercent = 0;
 				Int percent = (shiftedPercent + FRAME_FUDGE_ADD)/1.3;
 				UnicodeString per;
-				per.format(L"%d%%",percent);
+				per.format(u"%d%%",percent);
 				TheMouse->setCursorTooltip(UnicodeString::TheEmptyString);
 				GadgetProgressBarSetProgress(m_progressBar, percent);
 			}
@@ -1151,7 +1151,7 @@ void ChallengeLoadScreen::update( Int percent )
 {
 	percent = (percent + FRAME_FUDGE_ADD)/1.3;
 	UnicodeString per;
-	per.format(L"%d%%",percent);
+	per.format(u"%d%%",percent);
 	TheMouse->setCursorTooltip(UnicodeString::TheEmptyString);
 	GadgetProgressBarSetProgress(m_progressBar, percent);
 
@@ -1785,7 +1785,7 @@ void GameSpyLoadScreen::init( GameInfo *game )
 		{
 			numWins += it->second;
 		}
-		formatString.format(L"%d/%d", numWins, numLosses);
+		formatString.format(u"%d/%d", numWins, numLosses);
 		GadgetStaticTextSetText(m_playerWinLosses[netSlot], formatString);
 		m_playerWinLosses[netSlot]->winSetEnabledTextColors(houseColor, m_playerWinLosses[netSlot]->winGetEnabledTextBorderColor());
 		// favoriteFaction
@@ -1827,7 +1827,7 @@ void GameSpyLoadScreen::init( GameInfo *game )
 		}
 		numGames += GetAdditionalDisconnectsFromUserFile(stats.id);
 
-		formatString.format(L"%d", numGames);
+		formatString.format(u"%d", numGames);
 		GadgetStaticTextSetText(m_playerTotalDisconnects[netSlot], formatString);
 		m_playerTotalDisconnects[netSlot]->winSetEnabledTextColors(houseColor, m_playerTotalDisconnects[netSlot]->winGetEnabledTextBorderColor());
 		GadgetStaticTextSetText(m_playerSide[netSlot], slot->getApparentPlayerTemplateDisplayName() );
