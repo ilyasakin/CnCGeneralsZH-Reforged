@@ -44,6 +44,8 @@
 #include "chunkio.h"
 #include "wwfile.h"
 #include "rawfile.h"
+#include "mixfile.h"
+#include "ffactory.h"
 #include "thread.h"
 #include "mutex.h"
 
@@ -1257,6 +1259,121 @@ TEST(rawfile_date_time_is_dos_packed_utc)
 	CHECK(!file.Set_Date_Time(((0x3A5CUL & ~(0xFUL << 5)) | (13UL << 5)) << 16));
 	file.Close();
 	file.Delete();
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Mix files
+//
+// A Renegade-era archive that Zero Hour never opens (ThumbnailManagerClass's
+// Pre_Init and Add_Thumbnail_Manager have no callers) but still links.  The
+// format's fields are 4 bytes; they were `long`, so on LP64 the reader took
+// 8-byte fields and misread every mix file, including its own writer's.  The
+// expected bytes below were built by hand in Python - struct.pack("<i") and
+// zlib.crc32 over the upper-cased name - not by the code under test, so a
+// writer and reader that agree with each other at the wrong width still fail.
+// What this does not establish: anything about a mix file from a real game
+// install, which Zero Hour does not ship.
+//////////////////////////////////////////////////////////////////////////////
+
+static const unsigned char MIX_EXPECTED[90] = {
+	0x4D, 0x49, 0x58, 0x31, 0x28, 0x00, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	/* MIX1, table 40, names 68, unused */
+	0x61, 0x6C, 0x70, 0x68, 0x61, 0x00, 0x00, 0x00,													/* "alpha", padded to 8 */
+	0x62, 0x72, 0x61, 0x76, 0x6F, 0x21, 0x21, 0x21, 0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	/* "bravo!!!!", padded */
+	0x02, 0x00, 0x00, 0x00,																			/* two files, sorted by CRC: */
+	0x88, 0xB8, 0xAC, 0x8B, 0x18, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00,							/* DIR\B.TXT 0x8BACB888 @24, 9 */
+	0x34, 0x9A, 0x8D, 0x96, 0x10, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00,							/* A.TXT     0x968D9A34 @16, 5 */
+	0x02, 0x00, 0x00, 0x00,																			/* names, same order: */
+	0x0A, 0x64, 0x69, 0x72, 0x5C, 0x42, 0x2E, 0x54, 0x58, 0x54, 0x00,								/* "dir\B.TXT" - backslash kept */
+	0x06, 0x41, 0x2E, 0x54, 0x58, 0x54, 0x00,														/* "A.TXT" */
+};
+
+static void mix_write_source(const char *name, const char *text)
+{
+	RawFileClass file(name);
+	CHECK(file.Open(FileClass::WRITE) != 0);
+	file.Write(text, (int)strlen(text));
+	file.Close();
+}
+
+static bool mix_read_member(MixFileFactoryClass &mix, const char *name, char *out, int size)
+{
+	memset(out, 0, size);
+	FileClass *file = mix.Get_File(name);
+	if (file == NULL) return false;
+	file->Open();
+	int got = file->Read(out, size - 1);
+	mix.Return_File(file);
+	return got > 0;
+}
+
+TEST(mixfile_writes_the_format_byte_for_byte)
+{
+	mix_write_source("test_wwlib_mix_a.tmp", "alpha");
+	mix_write_source("test_wwlib_mix_b.tmp", "bravo!!!!");
+	{
+		MixFileCreator creator("test_wwlib.mix");
+		creator.Add_File("test_wwlib_mix_a.tmp", "A.TXT");
+		creator.Add_File("test_wwlib_mix_b.tmp", "dir\\B.TXT");	/* archive-internal: keeps its backslash */
+	}	/* the destructor writes the table and patches the header */
+
+	RawFileClass raw("test_wwlib.mix");
+	unsigned char bytes[128];
+	memset(bytes, 0xCD, sizeof(bytes));
+	CHECK(raw.Open(FileClass::READ) != 0);
+	CHECK_EQ(raw.Read(bytes, sizeof(bytes)), (int)sizeof(MIX_EXPECTED));
+	raw.Close();
+	CHECK_MEM(bytes, MIX_EXPECTED, sizeof(MIX_EXPECTED));
+
+	RawFileClass("test_wwlib_mix_a.tmp").Delete();
+	RawFileClass("test_wwlib_mix_b.tmp").Delete();
+	raw.Delete();
+}
+
+TEST(mixfile_reads_and_flushes_through_the_real_file_system)
+{
+	/* Written from the expected bytes, not by MixFileCreator, so the reader is
+	   checked against the format rather than against the writer. */
+	{
+		RawFileClass out("test_wwlib.mix");
+		CHECK(out.Open(FileClass::WRITE) != 0);
+		CHECK_EQ(out.Write(MIX_EXPECTED, sizeof(MIX_EXPECTED)), (int)sizeof(MIX_EXPECTED));
+		out.Close();
+	}
+
+	SimpleFileFactoryClass ff;
+	char text[32];
+	{
+		MixFileFactoryClass mix("test_wwlib.mix", &ff);
+		CHECK(mix.Is_Valid());
+		DynamicVectorClass<StringClass> names;
+		CHECK(mix.Build_Filename_List(names));
+		CHECK_EQ(names.Count(), 2);
+
+		/* Member lookup is by CRC of the upper-cased name, so case does not matter. */
+		CHECK(mix_read_member(mix, "a.txt", text, sizeof(text)));
+		CHECK_STR(text, "alpha");
+		CHECK(mix_read_member(mix, "DIR\\b.txt", text, sizeof(text)));
+		CHECK_STR(text, "bravo!!!!");
+
+		/* Flush_Changes: the _splitpath, temp-name and delete/rename path.  Delete_File edits the
+		   internal list, which only Build_Internal_Filename_List fills; without it the delete
+		   matches nothing and the flush is correctly a no-op. */
+		CHECK(mix.Build_Internal_Filename_List());
+		mix.Delete_File("A.TXT");
+		mix.Flush_Changes();
+	}
+	CHECK(!RawFileClass("_tmpmix01.dat").Is_Available());	/* renamed over the original */
+
+	MixFileFactoryClass after("test_wwlib.mix", &ff);
+	CHECK(after.Is_Valid());
+	DynamicVectorClass<StringClass> left;
+	CHECK(after.Build_Filename_List(left));
+	CHECK_EQ(left.Count(), 1);
+	CHECK(!mix_read_member(after, "A.TXT", text, sizeof(text)));
+	CHECK(mix_read_member(after, "dir\\B.TXT", text, sizeof(text)));
+	CHECK_STR(text, "bravo!!!!");
+
+	RawFileClass("test_wwlib.mix").Delete();
 }
 
 TEST(chunkio_nested_chunks_round_trip)
