@@ -9,7 +9,45 @@
 
 > **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** Step 1 is decided: the non-Windows backend is **SDL3's GPU API** (Metal underneath on macOS, Vulkan on Linux). The fallback, if you find something the game needs that it cannot express, is one Vulkan backend with MoltenVK on macOS. Record the gap that forced it here. The interface stays abstract either way.
 
-## Why
+## What SDL3's GPU API can do, probed: 2026-09-25
+
+`Tests/sdl_gpu_probe.cpp` (built on POSIX, not in ctest; it needs a GPU and a display). SDL 3.4.16,
+static, video and GPU only. It asks about what the game asks of Direct3D today, as the D3D11
+backend answers it. Measured on an **Apple M3 Pro, macOS 27.0 (26A428), `metal` backend**:
+
+- **Nothing probed forces the fallback.** Every sampled and colour-target format the game maps is
+  supported, BC1-3 included; see D5.
+- **D24S8 is not supported; D32S8 is.** The game creates D24S8 (`dx11device.cpp`), and the shadow
+  volumes need the stencil, so the backend maps D24S8 to **D32_FLOAT_S8_UINT**. This is Apple
+  GPU hardware, not SDL, so Vulkan over MoltenVK would meet the same limit, and it is not a reason
+  to take the fallback. D16 and D32F are supported; bare D24 is not.
+- **MSAA:** 2x and 4x, not 8x. **Present modes:** vsync and immediate, not mailbox. **Swapchain:**
+  B8G8R8A8_UNORM, SDR and SDR-linear.
+- **Shader formats:** MSL and metallib on Metal; SPIR-V on Vulkan. That is D3's question.
+- **Clip distance, depth clamping, anisotropy:** SDL_gpu.h documents all three as *required* by a
+  default device, with properties that only relax them, so a device that creates has them. The game
+  does use anisotropic filtering (`dx11state.cpp:310`). It does not use user clip planes: every
+  `D3DRS_CLIPPLANEENABLE` reference is a name table or a commented-out reset.
+- **Coordinates:** SDL_gpu.h documents a left-handed system "following the convention of D3D12 and
+  Metal".
+
+**Not queryable, so not measured:**
+- Point size must be written by a POINTLIST vertex shader, and the game draws no points (every
+  `D3DRS_POINT*` reference is commented out).
+- The game uses 4 texture stages (`DX11_BACKEND_TEXTURE_STAGES`). SDL_gpu.h documents no per-stage
+  sampler limit.
+- Fog, alpha test and the stage combiners are shader code, as `dx11backend` generates them today.
+
+**A caveat on the probe itself:** `SDL_GPUTextureSupportsSampleCount` said yes to 2x and 4x for
+D24S8, a format the same device had just refused. Its answer does not imply the format is
+supported; check the format first.
+
+**Linux:** built with GCC 13.3 and Clang 18.1 (Ubuntu 24.04, arm64, zero warnings), with X11,
+Wayland and Vulkan video paths in. It has **not** been run on a Linux GPU. The container has no
+display or GPU, where the probe reports "No available video device". Run on Mesa's llvmpipe with
+SDL's offscreen driver, it completes on the Vulkan backend. That shows the code path works. It does
+not show what any real Linux GPU supports (llvmpipe claims D24S8 and 4x-only MSAA, for instance).
+
 
 Once D1 has everything going through `DX8Wrapper`, the wrapper still talks to a concrete
 `IDirect3DDevice9`. This task turns that into an interface with two implementations, so a third can
