@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** B1 B2 B3 B4 B5
 - **Blocks:** C1 C5 E1
-- **Status:** not started
+- **Status:** in progress — the `debuglib` and `dinput8` drops only (zhr2-B6); the rest is unclaimed
 - **Size:** `CMakeLists.txt` lines 515–539, plus whatever stubbing the link errors demand
 
 ## Why
