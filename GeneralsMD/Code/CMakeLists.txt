@@ -1423,6 +1423,34 @@ if(ZH_PLATFORM_POSIX)
 add_lib_test(test_posixpath wwlib wwdebug)
 target_include_directories(test_posixpath PRIVATE ${WW}/WWLib ${WW}/WWDebug)
 
+# PosixLocalFileSystem through the engine's own interface (C1): built from the real memory manager,
+# LocalFile, File and PosixDevice sources with gameengine's include paths and definitions, because
+# gameengine does not link on macOS yet.  The few names those sources reach and the test does not are
+# in its _stubs.cpp, which says why each one is there.  Not on Linux yet, for fpucontrol_selfcheck's
+# reason (BaseType.h's min/max against libstdc++); registered DISABLED there.
+set(ZH_POSIXLFS_SOURCES
+  ${TESTS}/test_posixlocalfilesystem.cpp ${TESTS}/test_posixlocalfilesystem_stubs.cpp
+  ${GE}/Source/Common/System/GameMemory.cpp ${GE}/Source/Common/System/MemoryInit.cpp
+  ${GE}/Source/Common/System/CriticalSection.cpp ${GE}/Source/Common/System/JobSystem.cpp
+  ${GE}/Source/GameLogic/System/FPUControl.cpp ${GE}/Source/Common/System/ExecutableDirectory.cpp
+  ${GE}/Source/Common/System/SubsystemInterface.cpp ${GE}/Source/Common/System/AsciiString.cpp
+  ${GE}/Source/Common/System/WideCharFns.cpp ${GE}/Source/Common/System/File.cpp
+  ${GE}/Source/Common/System/LocalFile.cpp ${GE}/Source/Common/System/LocalFileSystem.cpp
+  ${GE}/Source/Common/System/RAMFile.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFileSystem.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFile.cpp)
+add_executable(test_posixlocalfilesystem ${ZH_POSIXLFS_SOURCES})
+target_include_directories(test_posixlocalfilesystem PRIVATE
+  $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+target_compile_definitions(test_posixlocalfilesystem PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(test_posixlocalfilesystem PROPERTIES CXX_STANDARD 17)
+target_link_libraries(test_posixlocalfilesystem PRIVATE test_harness wwlib wwdebug)
+add_test(NAME test_posixlocalfilesystem COMMAND test_posixlocalfilesystem)
+if(ZH_PLATFORM_LINUX)
+  set_target_properties(test_posixlocalfilesystem PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  set_tests_properties(test_posixlocalfilesystem PROPERTIES DISABLED TRUE)
+endif()
+
 # The POSIX half of the Wine listing oracle (Tests/fs_oracle.cpp; its Windows half is built with
 # mingw-w64 and run under Wine, as C1's task file records).
 add_executable(fs_oracle ${TESTS}/fs_oracle.cpp)
