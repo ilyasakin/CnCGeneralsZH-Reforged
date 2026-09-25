@@ -40,7 +40,13 @@
 
 
 #include "refcount.h"
+/*
+**	For DebugBreak, in the !NDEBUG half only.  Off Windows that half does not compile yet, and should
+**	not until wwdebug has a portable break (B16); a release build needs nothing from here.  B5.
+*/
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 
 
 #ifndef NDEBUG

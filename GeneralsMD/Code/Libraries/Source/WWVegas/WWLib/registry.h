@@ -40,6 +40,17 @@
 #ifndef REGISTRY_H
 #define REGISTRY_H
 
+/*
+**	RegistryClass is the Win32 registry, HKEY throughout, and registry.cpp is built into wwlib only
+**	on Windows - see the note in CMakeLists.txt.  Its callers keep device and audio settings in it;
+**	on another platform they need somewhere else to keep them, and choosing where is their decision,
+**	not a shim's.  The error below is here so that decision is met by name rather than as an unknown
+**	WCHAR forty lines down.  ww3d.cpp includes this header and uses nothing from it.  B5.
+*/
+#if !defined(_WIN32)
+#error "registry.h is the Win32 registry and is built only on Windows; see the comment above"
+#endif
+
 #ifndef ALWAYS_H
 #include "always.h"
 #endif

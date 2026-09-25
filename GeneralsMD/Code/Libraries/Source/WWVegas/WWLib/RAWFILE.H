@@ -48,14 +48,18 @@
 
 // #include	"win.h"
 
-#ifdef _UNIX
-#include <stdio.h>
-#include "osdep.h"
-  #define	NULL_HANDLE	 	NULL	
-  #define	HANDLE_TYPE		FILE*	
-#else
+/*
+**	Off Windows the handle is a POSIX file descriptor, which is what a Win32 file HANDLE is: an
+**	unbuffered, seekable OS handle, with BufferedFileClass adding the buffering on top.  This used to
+**	be a _UNIX arm holding a stdio FILE*; rawfile.cpp says what that arm did and why it is gone.  B5.
+*/
+#if defined(_WIN32)
   #define	NULL_HANDLE		INVALID_HANDLE_VALUE
   #define	HANDLE_TYPE		HANDLE
+#else
+  #include <stdint.h>
+  #define	NULL_HANDLE		(-1)
+  #define	HANDLE_TYPE		int
 #endif
 
 #include	"wwfile.h"
@@ -112,7 +116,13 @@ class RawFileClass : public FileClass
 		virtual bool Set_Date_Time(unsigned long datetime);
 		virtual void Error(int error, int canretry = false, char const * filename=NULL);
 		virtual void Bias(int start, int length=-1);
+#if defined(_WIN32)
 		virtual void * Get_File_Handle(void) { return Handle; } 
+#else
+		// A descriptor carried in the pointer, as Attach takes it; closed reads back as FileClass's
+		// own (void *)-1.
+		virtual void * Get_File_Handle(void) { return reinterpret_cast<void *>(static_cast<intptr_t>(Handle)); }
+#endif
 
 		virtual void	Attach (void *handle, int rights=READ);
 		virtual void	Detach (void);		
@@ -141,10 +151,10 @@ class RawFileClass : public FileClass
 		/*
 		**	This is the low level DOS handle. A -1 indicates an empty condition.
 		*/
-		#ifdef _UNIX
-			FILE*  Handle;
-		#else
+		#if defined(_WIN32)
 			void * Handle;
+		#else
+			int Handle;
 		#endif
 
 		StringClass Filename;
