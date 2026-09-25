@@ -133,7 +133,7 @@ static AsciiString obfuscate( AsciiString in )
 			c++, c2++;
 	}
 	AsciiString out = buf;
-	delete buf;
+	delete[] buf;		// NEW char[] above; `delete buf` was a mismatch both CRTs tolerated
 	return out;
 }
 

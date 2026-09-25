@@ -791,6 +791,16 @@ hunting a crash or corruption that only one platform shows, look here first.**
   thing to run `GameMemory.cpp` off Windows. Fixed by making the pointer `volatile`, so it escapes.
   Windows builds evidently keep the calls, since the game starts there. The fix is a
   `WINDOWS-DEBT.md` row.
+- **A mismatched `delete` in the saved-login obfuscation - fixed.** `WOLLoginMenu.cpp`'s
+  `obfuscate()` allocated its buffer with `NEW char[...]` and freed it with `delete buf`. Freeing an
+  array with the non-array form is undefined; MSVC's CRT and the macOS one both release a `char`
+  array either way, which is why it never showed. `delete[]` now (PM decision): the same behaviour on
+  both, without the undefined part.
+- **An XOR whose write lands one character late, on every compiler - kept.** In the same function,
+  `*c = *c++ ^ *c2++;`. Since C++17 the right-hand side of `=` is sequenced before the left, so `c` has
+  already moved on when `*c` is written: each byte is stored one position further than the loop reads
+  as meaning. MSVC in C++17 mode and clang apply the same order, so both platforms produce the same
+  bytes. Changing it would make every saved GameSpy login unreadable, so it stays (PM decision).
 
 ### "ctest is green" was not what it looked like
 
