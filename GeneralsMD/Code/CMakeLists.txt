@@ -862,6 +862,21 @@ target_compile_definitions(gameengine PUBLIC
 # C++17 for the std::hash_map -> unordered_map alias and string_view hashing in
 # STLTypedefs.h.
 set_target_properties(gameengine PROPERTIES CXX_STANDARD 17)
+
+# setFPMode's POSIX branch must leave floating point as Windows' default MXCSR does: round to nearest,
+# denormals kept, NaN payloads propagated.  Built from FPUControl.cpp alone - it lives in its own
+# translation unit for exactly this - with the engine's includes and definitions, so it runs before
+# gameengine links.  Armed: it first sets the state setFPMode must undo and requires every check to
+# fail there.  POSIX only for now; nothing here has run it on Windows.  See Tests/test_fpucontrol.cpp.
+if(ZH_PLATFORM_POSIX)
+  add_executable(fpucontrol_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_fpucontrol.cpp
+                                      ${GE}/Source/GameLogic/System/FPUControl.cpp)
+  target_include_directories(fpucontrol_selfcheck PRIVATE
+    $<TARGET_PROPERTY:gameengine,INTERFACE_INCLUDE_DIRECTORIES>)
+  target_compile_definitions(fpucontrol_selfcheck PRIVATE
+    $<TARGET_PROPERTY:gameengine,INTERFACE_COMPILE_DEFINITIONS>)
+  set_target_properties(fpucontrol_selfcheck PROPERTIES CXX_STANDARD 17)
+endif()
 # Two names on this line are Windows-only, and expand to nothing elsewhere - in the same positions,
 # so the Windows list is the same items in the same order it always was.  B6's first two drops:
 #  - debuglib: no live GameEngine code calls it (every Debug::/DLOG/DASSERT hit is commented out).
@@ -1179,6 +1194,9 @@ target_compile_definitions(test_gameengine PRIVATE
 # The three hand-written self-checks predate the harness; run them from ctest
 # too so one command covers everything.
 add_test(NAME detround_selfcheck COMMAND detround_selfcheck)
+if(ZH_PLATFORM_POSIX)
+  add_test(NAME fpucontrol_selfcheck COMMAND fpucontrol_selfcheck)
+endif()
 add_test(NAME d3dxportable_selfcheck COMMAND d3dxportable_selfcheck)
 add_test(NAME wwmath_selfcheck COMMAND wwmath_selfcheck)
 add_test(NAME compression_selfcheck COMMAND compression_selfcheck)

@@ -4222,7 +4222,7 @@ void RMGLayout::build( const RandomMapSettings& settings )
 	buildTerrainClasses( perm );
 	buildBlends();
 
-	_controlfp( callersFPMode, FP_MODE_FIELDS );
+	restoreFPMode( callersFPMode );
 }
 
 //-----------------------------------------------------------------------------
