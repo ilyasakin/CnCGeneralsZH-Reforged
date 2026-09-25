@@ -37,6 +37,12 @@
 # varies. Bugs keyed on the OS or on endianness need a test that asserts the intended value -
 # a round-trip in a selfcheck - not a comparison against a twin that shares the assumption.
 #
+# It is also blind to any probe whose input the compiler can see.  clang folds arithmetic on a
+# constant at compile time, on the build machine, and prints the same answer into both binaries.
+# B17 hit this twice: an inf*0 probe read 0x7FC00000 on both targets until its input became
+# volatile, and then x86_64 read 0xFFC00000.  A `static` array that nothing writes counts as a
+# constant too.  Feed a probe from a volatile, or from a global the compiler cannot prove unchanged.
+#
 # So: a green run here is NOT a green run against Windows.  E1's standing item in
 # WINDOWS-DEBT.md is reduced by this task, not discharged by it.  If you find yourself about to
 # write "determinism verified" because this passed, read this paragraph again.
@@ -89,6 +95,9 @@ clang -arch arm64  "$work/canary.c" -o "$work/canary_arm" 2>/dev/null \
 WW="$code_root/Libraries/Source/WWVegas"
 shims=(-D__cdecl= "-D__int64=long long" -include cstddef)
 incs=(-I"$WW/WWMath" -I"$WW/WWLib" -I"$WW/Wwutil" -I"$WW" -I"$code_root/Libraries/Include")
+# d3dxportable.h and the sweep it shares with Tests/d3dx_oracle.  Last, so that nothing in WW3D2
+# can shadow a header the probe already reaches.
+incs+=(-I"$WW/WW3D2" -I"$code_root/Tests")
 
 dettrig_src="$WW/WWMath/dettrig.cpp"
 dettrig_flags=()
