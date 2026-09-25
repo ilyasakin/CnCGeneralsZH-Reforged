@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** in review — the `wwlib` pass (below); the `GameEngine` files are untouched
+- **Status:** `wwlib` pass done (-a9). `GameEngine` half in progress (-18): the `PreRTS.h` guard and the enum pass are done, see below
 - **Size:** 21 of 604 files in `GameEngine/Source` — 8 Common, 7 GameClient, 6 GameNetwork
 
 ## Why
@@ -176,6 +176,153 @@ vectors or exact values. Fixed in three commits, and it now passes **75 of 75**:
   and `Load_Registry`, which nothing outside `registry.cpp` calls.
 
 The fixes matter for anything that uses these later, not for the game as it stands.
+## The `GameEngine` half, 2026-09-25 — the guard, and what was behind it
+
+**Sequencing, decided: step 2 before step 1, and step 1 per file.** With `#if defined(_WIN32)` around
+`PreRTS.h`'s Windows block, Windows still gets the whole precompiled header, so giving each Windows
+file its own `#include`s (step 1) changes nothing on Windows today. On macOS those files fail
+either way, because they are excluded or ported. Step 1 only matters on the day someone slims the
+*Windows* side of `PreRTS.h`. And it cannot be verified here: which SDK header a file needs is a
+guess without an SDK, and a wrong guess stays invisible until that day. So each bucket-(c) file gets
+its own includes **when it is excluded or moved**, not as a batch up front. Do not re-open this
+without a Windows machine.
+
+**The guard** wraps lines 43-96 unchanged. The `#else` is the portable subset of that block, plus
+`<wchar.h>`. The Windows evidence is in `WINDOWS-DEBT.md`: include sequence and `-dM` macro set are
+identical, each with a differing control. **The token-stream diff is blind for this file**: it
+preprocesses to one line, and its control was identical too.
+
+**What it exposed was not mostly Win32 types.** Before the guard, all 602 files stopped at
+`atlbase.h`. After it, a census (every file at `-ferror-limit=0`, errors de-duplicated by site)
+found **1,868 distinct error sites**. By files affected:
+
+| Root cause | Files |
+|:--|--:|
+| Forward-declared enums (`enum X;`), an MSVC extension ISO C++ forbids; reached through `STLTypedefs.h` in the PCH | **602** |
+| Windows APIs and types: this task's buckets (a)-(c) | 154 |
+| "Non-constant-expression cannot be narrowed from unsigned long" in INI `FieldParse` tables | 66 |
+| `__int64` | 2 |
+
+**The narrowing errors are a cascade of the enums, not a root cause of their own.** Probed on the
+three worst files, with `-fms-compatibility` used only to make clang accept the forward enums:
+
+| File | Narrowing | Forward-enum | Total errors |
+|:--|--:|--:|--:|
+| `GameLOD.cpp` | 6 → 0 | 22 → 0 | 60 → 124 |
+| `ObjectCreationList.cpp` | 45 → 0 | 40 → 0 | 141 → 140 |
+| `INIMiscAudio.cpp` | 36 → 0 | 13 → 0 | 63 → 109 |
+
+The mechanism: each table's target struct has a member of a forward-declared enum type. The struct
+is therefore broken, `offsetof` over it is no longer a constant, and the `Int` field reports
+narrowing. The totals rising is why `-fms-compatibility` is rejected; see the plan's rules.
+
+**The enum pass.** Every forward-declared enum got an explicit underlying type on its declaration
+and on its definition. It is spelled `: Int` where the file already uses `Int`, and plain `: int`
+elsewhere; the two are the same type (`BaseType.h:130`). MSVC gives an unfixed unscoped enum `int`
+as its underlying type, so this should be the same type there. On clang it pins an implicit choice
+to MSVC's, and it removes clang's license to assume an enum holds only its declared range, which
+closes a codegen difference as well as a front-end one. 62 enums: 60 definitions, 136 forward
+declarations, 101 files. Six of those forward declarations are in `GameEngineDevice` and `WorldBuilder`, which
+is required: MSVC rejects a forward declaration whose underlying type differs from the definition's.
+
+- **Range:** every definition was scanned for values at or above `0x80000000` and for `1 << 31`-style
+  shifts, and none was found. Clang also rejects any enumerator that does not fit a fixed type, and it
+  reported none.
+- **Size:** a throwaway TU asserted `sizeof == 4` and an underlying type of `int` for nine
+  enums that go through `Xfer` or INI (`ObjectID`, `DrawableID`, `BodyDamageType`, `KindOfType`,
+  `WeaponSlotType`, `ModelConditionFlagType`, `ScienceType`, `_TerrainLOD`, `ObjectStatusType`), plus
+  one deliberately false control. Only the control fired.
+- **Diff:** 191 changed lines are an old line plus one `: Int`/`: int`. Four are new opaque
+  declarations. One is `typedef enum _TerrainLOD;`, a typedef that declared no name, which became
+  `enum _TerrainLOD : Int;`.
+- **Elaborated first use.** `View.h` named `enum FilterModes` and `enum FilterTypes` in its virtuals
+  before either was declared, which in C++ is an implicit, unfixed declaration. `W3DShaderManager.h`
+  does the same with `FilterModes`, and `W3DBridgeBuffer.h` with `BodyDamageType`. Each of the three
+  now declares the enum before using it, so it no longer depends on what its includer brought in
+  first. Two of the three are Windows-only.
+- **Left alone:** `CustomScenePassModes`, `GraphicsVenderID` and `waveType` are declared and defined
+  only in `GameEngineDevice`, and `GameLODLevel` is declared only there.
+
+Found on the way:
+
+- **`ObjectStatusType` is declared and never defined.** `RiderChangeContain.h:49` has a member of
+  that type, which `parseIndexList` fills and `MAKE_OBJECT_STATUS_MASK` reads as an index. MSVC
+  treated the opaque enum as a complete int-sized type with no enumerators, and `: Int` makes exactly
+  that legal C++.
+- **`HackerAttackMode` and `GameLODLevel` are dead declarations**, with no uses. Delete them some day.
+
+Census after the pass: **1,868 → 467 distinct sites**, with no enum or narrowing site left. The
+first-error sweep still reads 0/602, because every file now stops first at `UnicodeString.h:407`
+(`_wcsicmp`).
+
+<details><summary>The 62 enums</summary>
+
+| Enum | Definition | Forward declarations |
+|:--|:--|--:|
+| `_TerrainLOD` | `GameClient/TerrainVisual.h:173` | 1 |
+| `AcademyClassificationType` | `Common/AcademyStats.h:71` | 2 |
+| `AIDebugOptions` | `GameLogic/AI.h:67` | 1 |
+| `AIStateType` | `GameLogic/AIStateMachine.h:61` | 1 |
+| `AnimTypes` | `GameClient/AnimateWindowManager.h:83` | 1 |
+| `ArmorSetType` | `GameLogic/ArmorSet.h:46` | 1 |
+| `AttitudeType` | `GameLogic/AI.h:605` | 1 |
+| `AudioAffect` | `Common/AudioAffect.h:35` | 2 |
+| `AudioPriority` | `Common/AudioEventInfo.h:52` | 1 |
+| `AudioType` | `Common/AudioEventInfo.h:44` | 1 |
+| `BattlePlanStatus` | `GameLogic/Module/BattlePlanUpdate.h:101` | 1 |
+| `BodyDamageType` | `GameLogic/Module/BodyModule.h:53` | 7 |
+| `BridgeTowerType` | `GameClient/TerrainRoads.h:49` | 1 |
+| `BuildableStatus` | `Common/ThingTemplate.h:217` | 1 |
+| `CanAttackResult` | `GameLogic/WeaponSet.h:188` | 4 |
+| `CanMakeType` | `Common/BuildAssistant.h:75` | 1 |
+| `ChipsetType` | `Common/GameLOD.h:76` | 1 |
+| `CommandOption` | `GameClient/ControlBar.h:75` | 2 |
+| `CommandSourceType` | `Common/GameCommon.h:235` | 8 |
+| `CpuType` | `Common/GameLOD.h:67` | 1 |
+| `DamageType` | `GameLogic/Damage.h:50` | 1 |
+| `DrawableID` | `Common/GameType.h:48` | 3 |
+| `EditorSortingType` | `Common/ThingSort.h:36` | 1 |
+| `EvaMessage` | `GameClient/Eva.h:41` | 1 |
+| `FilterModes` | `GameClient/CommandXlat.h:98` | 2 |
+| `FilterTypes` | `GameClient/CommandXlat.h:87` | 2 |
+| `GadgetGameMessage` | `GameClient/Gadget.h:136` | 1 |
+| `GeometryType` | `Common/Geometry.h:49` | 1 |
+| `GUICommandType` | `GameClient/ControlBar.h:168` | 2 |
+| `HackerAttackMode` | **none** - see below | 2 |
+| `HordeActionType` | `GameLogic/Module/HordeUpdate.h:49` | 1 |
+| `KindOfType` | `Common/KindOf.h:44` | 2 |
+| `LegalBuildCode` | `Common/BuildAssistant.h:89` | 1 |
+| `LocomotorSetType` | `GameLogic/Module/AIUpdate.h:77` | 1 |
+| `MaxHealthChangeType` | `GameLogic/Module/BodyModule.h:75` | 2 |
+| `ModelConditionFlagType` | `Common/ModelState.h:93` | 3 |
+| `NameKeyType` | `Common/NameKeyGenerator.h:51` | 4 |
+| `ObjectID` | `Common/GameType.h:41` | 7 |
+| `ObjectStatusType` | **none** - see below | 1 |
+| `ParticlePriorityType` | `GameClient/ParticleSys.h:92` | 1 |
+| `ParticleSystemID` | `GameClient/ParticleSys.h:61` | 7 |
+| `PhysicsTurningType` | `GameLogic/Module/PhysicsUpdate.h:42` | 2 |
+| `ProductionID` | `GameLogic/Module/ProductionUpdate.h:46` | 1 |
+| `ProductionType` | `GameLogic/Module/ProductionUpdate.h:51` | 1 |
+| `RadarPriorityType` | `Common/Radar.h:129` | 2 |
+| `RadiusCursorType` | `GameClient/InGameUI.h:92` | 1 |
+| `ScienceType` | `Common/Science.h:43` | 14 |
+| `ShadowType` | `GameClient/Shadow.h:41` | 4 |
+| `SpecialPowerType` | `Common/SpecialPowerType.h:40` | 5 |
+| `StaticGameLODLevel` | `Common/GameLOD.h:45` | 3 |
+| `StealthLookType` | `GameClient/Drawable.h:238` | 1 |
+| `TerrainDecalType` | `GameClient/Drawable.h:279` | 1 |
+| `TimeOfDay` | `Common/GameType.h:68` | 3 |
+| `UpgradeStatusType` | `Common/Upgrade.h:49` | 1 |
+| `WaypointID` | `GameLogic/TerrainLogic.h:55` | 1 |
+| `WeaponBonusConditionType` | `GameLogic/Weapon.h:172` | 3 |
+| `WeaponChoiceCriteria` | `GameLogic/WeaponSet.h:173` | 1 |
+| `WeaponLockType` | `GameLogic/WeaponSet.h:180` | 1 |
+| `WeaponSetConditionType` | `GameLogic/WeaponSet.h:110` | 1 |
+| `WeaponSetType` | `GameLogic/WeaponSetType.h:41` | 3 |
+| `WeaponSlotType` | `Common/GameType.h:173` | 1 |
+| `WeaponStatus` | `GameLogic/WeaponStatus.h:33` | 1 |
+
+</details>
 
 ## Do
 

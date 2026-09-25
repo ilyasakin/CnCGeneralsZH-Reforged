@@ -60,10 +60,10 @@ class ProductionPrerequisite;
 struct FieldParse;
 class Player;
 class INI;
-enum RadarPriorityType;
-enum ScienceType;
-enum EditorSortingType;
-enum ShadowType;
+enum RadarPriorityType : Int;
+enum ScienceType : Int;
+enum EditorSortingType : Int;
+enum ShadowType : Int;
 class WeaponTemplateSet;
 class ArmorTemplateSet;
 class FXList;
@@ -214,7 +214,7 @@ static const char *BuildCompletionNames[] =
 };
 #endif  // end DEFINE_BUILD_COMPLETION_NAMES
 
-enum BuildableStatus
+enum BuildableStatus : Int
 {
 	// saved into savegames... do not change or remove values!
 	BSTATUS_YES = 0,

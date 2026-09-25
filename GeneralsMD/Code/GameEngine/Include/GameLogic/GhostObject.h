@@ -43,8 +43,8 @@
 
 class Object;
 class PartitionData;
-enum GeometryType;
-enum ObjectID;
+enum GeometryType : Int;
+enum ObjectID : Int;
 
 class GhostObject : public Snapshot
 {

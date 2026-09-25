@@ -64,10 +64,10 @@ class STLSpecialAlloc;
 
 // FORWARD DECLARATIONS
 class Object;
-enum NameKeyType;
-enum ObjectID;
-enum DrawableID;
-enum ParticleSystemID;
+enum NameKeyType : int;
+enum ObjectID : int;
+enum DrawableID : int;
+enum ParticleSystemID : int;
 
 #include <algorithm>
 #include <bitset>
