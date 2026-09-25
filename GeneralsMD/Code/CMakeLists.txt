@@ -274,18 +274,19 @@ target_link_libraries(compression_selfcheck PRIVATE compression)
 add_executable(detround_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_detround.cpp)
 target_include_directories(detround_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 
-# Guards the hand-rolled Matrix3D::Get_Inverse that replaced D3DXMatrixInverse.
+# Guards the hand-rolled Matrix3D::Get_Inverse that replaced D3DXMatrixInverse.  It checks that the
+# inverse is right, including one exact answer; it is NOT determinism evidence, and its header says
+# why.  E3 is the cross-architecture evidence for DetTrig.
+#
+# wwlib and wwsaveload on every platform.  test_inverse.cpp needs only Matrix3D, but the link does
+# not stop there: quat.cpp needs _FastAcosTable, which pulls in wwmath.cpp, and wwmath.cpp's
+# WWMath::Init and Do_Force_Links reach LookupTableMgrClass (wwlib's file factory, strings, chunk
+# I/O) and every spline's persist factory (wwsaveload).  ld -why_load shows the chain.  A macOS line
+# with wwdebug alone was here once, on the belief that wwmath resolved against it; it had never been
+# linked, and it does not.  So on macOS this waits for wwlib and wwsaveload to build.
 add_executable(wwmath_selfcheck ${WW}/WWMath/test_inverse.cpp)
 target_include_directories(wwmath_selfcheck PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
-if(ZH_PLATFORM_WINDOWS)
-  target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwsaveload wwlib wwdebug)
-else()
-  # test_inverse.cpp includes matrix3d.h and nothing else, and wwmath's own objects resolve against
-  # wwdebug alone.  wwsaveload and wwlib are on the Windows line because they were free there;
-  # neither compiles under clang yet, and this self-check is the first evidence that determinism
-  # survives clang on arm64, so it is not allowed to wait for them.  Put them back with wwlib.
-  target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwdebug)
-endif()
+target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwsaveload wwlib wwdebug)
 
 # ---- wwlib ----------------------------------------------------------------
 add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE}
