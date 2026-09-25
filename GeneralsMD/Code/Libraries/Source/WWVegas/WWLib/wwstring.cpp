@@ -259,7 +259,13 @@ StringClass::Format_Args (const TCHAR *format, const va_list & arg_list )
 	#ifdef _UNICODE
 		retval = _vsnwprintf (temp_buffer, 512, format, arg_list);
 	#else
-		retval = vsnprintf (temp_buffer, sizeof(temp_buffer)/sizeof(TCHAR), format, arg_list);
+		// const_cast: arg_list arrives as `const va_list &` and vsnprintf takes a va_list it may
+		// consume.  Where va_list is a pointer (MSVC, arm64) the const binds to the reference and the
+		// call compiled as it stood.  Where it is an array (x86-64 System V: __va_list_tag[1]) the
+		// const binds to the elements, the array decays to a const pointer, and GCC and Clang both
+		// reject the call.  Found by the Linux amd64 build.  The cast changes no value anywhere.
+		retval = vsnprintf (temp_buffer, sizeof(temp_buffer)/sizeof(TCHAR), format,
+			const_cast<va_list &>(arg_list));
 	#endif
 	
 	//
