@@ -3,7 +3,7 @@
 - **Milestone:** M5
 - **Depends on:** C2
 - **Blocks:** E2
-- **Status:** not started
+- **Status:** in progress: lower half (the Miles API on miniaudio), -a9
 - **Size:** `MilesAudioManager.cpp` is 3,637 lines; the XAudio2 implementation under it is
   `Libraries/Source/WWVegas/Miles6/xaudio2/miles_xaudio2.cpp`
 
