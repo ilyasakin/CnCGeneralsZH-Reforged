@@ -675,6 +675,25 @@ Related and **not** a defect, because someone got it right: `ConnectionManager.c
 a constant `L"%ls"` with network chat as the *argument*. It looks like a redundant format and it is
 the thing stopping a remote player's text being interpreted as one. B15 says so in capitals.
 
+**8. A malformed font string in a map script reads past the end of the stack buffer.**
+`ScriptActions.cpp`, the cinematic-text font parser: `for( c = buf; c != '\0'; *c++ )` compares the
+*pointer* with `'\0'`. MSVC took `'\0'` as a null pointer constant, so the condition is always true,
+and the loop ends only on a `' '` or `'-'`. It also advances `c` twice a pass, and `concat()`s the
+whole rest of the string each time, and the `while (*c != ':')` after it has no bound either. A user
+map's script can reach it. Found by B5 (clang refuses the comparison). **Kept as it is on every
+platform** (spelled `c != NULL`, which is what MSVC compiled): a fix is a rewrite that changes what
+Windows displays today and wants its own test.
+
+**9. Replay error boxes overstated their buffer to `FormatMessageW` - fixed.**
+`PopupReplay.cpp`, both error paths, passed `sizeof(buffer)` (2048 bytes) as a count of wide characters
+for a 1024-`wchar_t` buffer, so a system message over 1024 characters would overrun the stack. Fixed
+by B5 (`sizeof(buffer)/sizeof(buffer[0])`); any message that fits is unchanged.
+
+**10. The score screen's "add buddy" always asks for profile 0.**
+`ScoreScreen.wnd:ButtonAdd%d` never has data set: the two `GadgetButtonSetData(..., m_profileID)`
+stores are commented out, so `GadgetButtonGetData` returns NULL and `playerID` is 0. Dead GameSpy
+service; recorded, not fixed.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
