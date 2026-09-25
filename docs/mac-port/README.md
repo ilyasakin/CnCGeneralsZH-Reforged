@@ -753,6 +753,7 @@ it takes to be the file. Two shapes of name defeat that rule.
 
 A future caller writing an extensionless name would hit it. `PosixLocalFileSystem` keeps the rule
 but stops when the name runs out. Found by C1; recorded, not fixed on Windows.
+
 **13. A staging-room stats message sent the address of a string instead of the string - fixed.**
 `WOLGameSetupMenu.cpp:125` passed `formatPlayerKVPairs(...)`'s `std::string` straight into
 `AsciiString::format("%d %s", ...)`'s varargs, where every other caller adds `.c_str()`. On MSVC
@@ -763,6 +764,23 @@ otherwise (documented layout, not measured here), and a stats list is far longer
 "STATS/" UTM carried the profile id and then the pointer's bytes. Other players in the staging room
 never got this player's stats. It is dead-service code (GameSpy), and there was nothing portable to
 preserve, so it is fixed with `.c_str()` (PM decision).
+
+**14. A 3D turn toward a goal exactly behind does not turn.**
+`Locomotor.cpp:170` (`tryToRotateVector3D`) and `NeutronMissileUpdate.cpp:320` turn a heading
+toward a goal by at most the turn rate, rotating about `Normalized_Cross_Product(current, goal)`.
+When the goal is exactly opposite the heading, that cross product is exactly (0,0,0), `Normalize`
+leaves a zero vector alone, and `Matrix3D`'s axis-angle form - which asserts a unit axis
+(`matrix3d.h:594`) - builds `cos(angle)` times the identity. Measured in a Release build: heading
+(1,0,0), goal (-1,0,0), turn rate 0.1 gives (0.995,0,0) - the same heading, shortened, no turn; one
+step off opposite, (-1,0.001,0), turns normally. The same on every platform (exact zeros, no
+rounding in play), so not a desync; a Debug build of any platform stops on the assert instead.
+Whether a match ever presents an exactly opposite goal to a 3D locomotor or a neutron missile is
+not measured. `W3DWater.cpp:2441` has the same shape for a camera looking straight down, visual
+only. Found 2026-09-26 while tracing a Debug-build abort in `test_wwmath` and `wwmath_selfcheck`,
+which was the tests' own non-unit axes, fixed. Every call of the asserting overloads in the POSIX and
+mingw-as-MSVC sweeps was listed by marking them deprecated: these three and `W3DView.cpp:364`/`:367`
+(literal unit axes) are all of them outside the tests. Recorded, not fixed: a fix changes what the
+simulation computes, which is rule 3's business.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
