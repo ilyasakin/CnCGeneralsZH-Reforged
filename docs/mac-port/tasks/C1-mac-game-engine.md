@@ -3,7 +3,7 @@
 - **Milestone:** M2
 - **Depends on:** B6
 - **Blocks:** C2 C5
-- **Status:** not started
+- **Status:** first piece (`mixfile.cpp`) in review; the rest not started
 - **Size:** mirrors `GameEngineDevice/Source/Win32Device`, 10 files / 2,756 lines
 
 ## Why
@@ -79,6 +79,52 @@ is concerned.
 So the replay writer does not work on macOS at all, and replays are how this project proves a
 change leaves the simulation alone. Rewrite it byte-oriented — the file format does not change, the
 calls that produce it do. Do this early in C1: E1 and every later milestone lean on replays.
+
+## First piece: `WWLib/mixfile.cpp`, 2026-09-25
+
+Taken only to get `wwlib` to archive, and it does. `libwwlib.a` builds on macOS with all 66 sources,
+and `-all_load` of it with `libwwdebug.a` resolves every symbol.
+
+- **The `.mix` reader is not on Zero Hour's path.** Its one user is WW3D2's
+  `ThumbnailManagerClass::Create_Thumbnails`. That is reached only from `Pre_Init` and
+  `Add_Thumbnail_Manager`, and neither has a caller. It still links, because `TextureLoader::Init`
+  calls `ThumbnailManagerClass::Init`, so excluding the file would have handed the D-track
+  unresolved symbols. It was ported instead.
+- **`_splitpath`, the drive-letter question**, arises in `Flush_Changes`, which rewrites a mix file
+  in place with raw `DeleteFile`/`MoveFile`, a real-filesystem boundary of its own. On POSIX the
+  directory is everything up to the last `/`. There is no drive, and a backslash is an ordinary
+  filename character. **It does not normalise:** by this rule that is the local file system's job,
+  in one place, and doing it here would make a second.
+- **The format itself was broken on LP64.** `MIXFILE_HEADER` and the reader's `FileInfoStruct` were
+  `long`s read straight off disk, 8 bytes each on macOS, against the writer's explicit 4-byte fields.
+  Every mix file would have misread, including this build's own. They are pinned to `sint32`/`uint32`.
+- **Tests** (`test_wwlib`):
+  - The writer is checked against 90 bytes built by hand in Python, not by the code under test. That
+    also confirms `CRC_Stringi` is standard CRC-32.
+  - The reader and `Flush_Changes` are checked against those same bytes.
+  - Green on the default volume and on a case-sensitive APFS image; a probe confirmed the image
+    really is case-sensitive.
+  - Putting `long` back turns 15 checks red.
+  - The archive-internal name `dir\B.TXT` keeps its backslash in the file, as this task's rule
+    requires.
+- `Add_Files`/`Setup_Mix_File`, a makemix developer tool with no callers, stays Win32 only.
+
+**For the rest of C1, found on the way:**
+
+- `_TheFileFactory` is overridden by `W3DFileSystem`, but **`_TheWritingFileFactory` never is**. So
+  `ww3d.cpp:1412`/`:1442`, `wwprofile.cpp:576` and `INIClass::Save` (`ini.cpp:629`) write through
+  WWLib's `RawFileClass` directly: a second real-filesystem boundary outside the engine's local
+  file system. "Normalise in one place" needs to know it exists.
+- Pre-existing defects in `Flush_Changes`, on both platforms, in code Zero Hour never runs:
+  - It deletes the original mix even when `Get_Temp_Filename` found no free name, and then renames
+    nothing over it. That loses the file.
+  - It deletes and renames `MixFilename` raw, while reading it through the factory's
+    sub-directory. With a non-empty sub-directory (texturethumbnail sets
+    `..\\data\\client\\mixfiles\\`) the two refer to different files.
+  - Both behaviours are mirrored, not fixed: fixing either changes Windows.
+- The class's contract is easy to trip over: `Delete_File` only edits a list that
+  `Build_Internal_Filename_List()` fills. Without that call, a delete-and-flush silently does nothing.
+  The test does it that way and says so.
 
 ## Do not
 
