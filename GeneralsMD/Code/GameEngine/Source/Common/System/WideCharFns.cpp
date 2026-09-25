@@ -926,27 +926,46 @@ size_t WideCharFromUtf8( const char *in, WideChar *out, size_t outUnits )
 	return written;
 }
 
+// The replay header's strings, as MSVC's wide stream calls wrote and read them on the "wb"/"rb"
+// FILE* Recorder.cpp uses: in binary mode they convert nothing, so each code unit is its two bytes,
+// low byte first.  Written here with fputc and read with fgetc, which are byte calls, so the stream
+// can carry them between its fwrite and fread calls on every C library (C1, PR (g)).
+
+static bool putUnit( FILE *f, UnsignedInt unit )
+{
+	return ::fputc( (int)(unit & 0xFF), f ) != EOF && ::fputc( (int)((unit >> 8) & 0xFF), f ) != EOF;
+}
+
+Int WideCharFilePut( FILE *f, WideChar c )
+{
+	const UnsignedInt unit = (UnsignedInt)c & 0xFFFF;
+	if (f == NULL || !putUnit( f, unit ))
+		return WIDECHAR_FILE_EOF;
+	return (Int)unit;
+}
+
+Int WideCharFileGet( FILE *f )
+{
+	if (f == NULL)
+		return WIDECHAR_FILE_EOF;
+	const int low = ::fgetc( f );
+	if (low == EOF)
+		return WIDECHAR_FILE_EOF;
+	const int high = ::fgetc( f );
+	if (high == EOF)
+		return WIDECHAR_FILE_EOF;
+	return (Int)(((UnsignedInt)high << 8) | (UnsignedInt)low);
+}
+
 Int WideCharFileWrite( FILE *f, const WideChar *s )
 {
 	if (f == NULL || s == NULL)
 		return -1;
-
-#ifdef _WIN32
-
-	// Byte for byte the call this replaces: fwprintf(f, L"%ws", s).
-	return (Int)::fwprintf( f, L"%ls", AS_CRT( s ) );
-
-#else
-
-	// See the header: this is the Mac build's placeholder, not its answer.  Recorder.cpp mixes
-	// fwrite and fwprintf on one FILE*, which a POSIX C library will not do, so the replay writer
-	// needs a byte-oriented rewrite before any of this runs - C1/M2 work.  Until then this at
-	// least keeps the WideChar-to-wchar_t conversion in one place instead of five.
-	const ScopedUtf8Ctype utf8;		// see WideCharFormatV
-
-	wchar_t wide[ WIDE_SCRATCH ];
-	widenToWchar( s, wide, WIDE_SCRATCH );
-	return (Int)::fwprintf( f, L"%ls", wide );
-
-#endif
+	Int written = 0;
+	for (; *s != 0; ++s, ++written)
+	{
+		if (!putUnit( f, (UnsignedInt)*s & 0xFFFF ))
+			return -1;
+	}
+	return written;
 }
