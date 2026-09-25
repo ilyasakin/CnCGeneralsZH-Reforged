@@ -1024,6 +1024,21 @@ WindowMsgHandledType MainMenuInput( GameWindow *window, UnsignedInt msg,
 	return MSG_IGNORED;
 
 }  // end MainMenuInput
+
+//-------------------------------------------------------------------------------------------------
+/* Starts the map editor beside the game, without waiting for it.  WorldBuilder is a Windows program:
+	 off Windows there is none to start, so this says it failed and the menu shows its "could not
+	 load" box, as it does on Windows when the exe is missing. */
+static Bool startWorldBuilder( const char *exe )
+{
+#if defined(_WIN32)
+	return _spawnl(_P_NOWAIT, exe, exe, NULL) >= 0;
+#else
+	(void)exe;
+	return FALSE;
+#endif
+}
+
 //-------------------------------------------------------------------------------------------------
 /** Main menu window system callback */
 //-------------------------------------------------------------------------------------------------
@@ -1494,13 +1509,13 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			else if( controlID == worldBuilderID )
 			{
 #if defined _DEBUG
-				if(_spawnl(_P_NOWAIT,"WorldBuilderD.exe","WorldBuilderD.exe", NULL) < 0)
+				if(!startWorldBuilder("WorldBuilderD.exe"))
 					MessageBoxOk(TheGameText->fetch("GUI:WorldBuilder"), TheGameText->fetch("GUI:WorldBuilderLoadFailed"),NULL);
 #elif defined  _INTERNAL
-				if(_spawnl(_P_NOWAIT,"WorldBuilderI.exe","WorldBuilderI.exe", NULL) < 0)
+				if(!startWorldBuilder("WorldBuilderI.exe"))
 					MessageBoxOk(TheGameText->fetch("GUI:WorldBuilder"), TheGameText->fetch("GUI:WorldBuilderLoadFailed"),NULL);
 #else
-				if(_spawnl(_P_NOWAIT,"WorldBuilder.exe","WorldBuilder.exe", NULL) < 0)
+				if(!startWorldBuilder("WorldBuilder.exe"))
 					MessageBoxOk(TheGameText->fetch("GUI:WorldBuilder"), TheGameText->fetch("GUI:WorldBuilderLoadFailed"),NULL);
 #endif
 			}
