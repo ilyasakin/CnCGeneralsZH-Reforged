@@ -897,6 +897,18 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 # includer - the live code went to GameNetwork/GameSpy/ instead.
 list(REMOVE_ITEM GAMEENGINE_SOURCES
   ${GE}/Source/GameNetwork/GameSpyGameInfo.cpp)
+# Platform bodies of one interface: each side's file is left out of the other's build, so Windows
+# gets exactly the sources it had.  B5, bucket (c).
+#  - StackDump.cpp: dbghelp symbol lookup and a structured-exception context walk, Windows only.
+#    StackDumpPosix.cpp is the same Common/StackDump.h interface from backtrace() and dladdr();
+#    crash reporting proper is C5's.
+if(ZH_PLATFORM_WINDOWS)
+  list(REMOVE_ITEM GAMEENGINE_SOURCES
+    ${GE}/Source/Common/System/StackDumpPosix.cpp)
+else()
+  list(REMOVE_ITEM GAMEENGINE_SOURCES
+    ${GE}/Source/Common/System/StackDump.cpp)
+endif()
 
 # ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.
 # The link list below is left exactly as it is on purpose - B6 owns it.
