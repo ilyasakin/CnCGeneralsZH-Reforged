@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 #
-# Builds and tests the tree on Linux, in containers, from a Mac: {gcc, clang} x {arm64, amd64}.
-# Configure, build and ctest for each, then one table, then an exit status that is nonzero if any
-# of the four did not pass.
+# Builds and tests the tree on Linux, in containers, from a Mac: {gcc, clang} x {arm64, amd64} in
+# Release, and a fifth row, arm64 gcc in Debug.  Configure, build and ctest for each, then one table,
+# then an exit status that is nonzero if any row did not pass.
+#
+# The Debug row is there because a Debug build is a different program: DEBUG_LOG, DEBUG_ASSERTCRASH
+# and MEMORYPOOL_DEBUG compile in, reference symbols a Release build never names, and run checks a
+# Release build never runs.  B1's tests linked in Release and not in Debug for exactly that reason,
+# and nothing here saw it until a Debug build was tried by hand.  gcc, because it is the stricter of
+# the two here (eager vtables, fortify).  arm64, because it is native and so the fast one.
 #
 # =============================================================================================
 # WHAT THIS PROVES, AND WHAT IT DOES NOT
@@ -33,8 +39,9 @@
 # missing. A check that cannot run and says "ok" is the failure this project has hit five times.
 # =============================================================================================
 #
-#   linux-check.sh                     all four rows
-#   linux-check.sh arm64/gcc ...       only the named rows (arm64|amd64 / gcc|clang)
+#   linux-check.sh                           all five rows
+#   linux-check.sh arm64/gcc amd64/clang/Debug  only the named rows: arch/compiler[/config], with
+#                                               arm64|amd64, gcc|clang, Release (default)|Debug
 #
 # Logs go to $ZH_LINUX_CHECK_WORK (default ${TMPDIR:-/tmp}/zhr-linux-check), one per row.
 # Run Tools/vendor.sh on the host first: the repository is mounted read-only and the vendored
@@ -53,6 +60,35 @@ fail() { echo "[linux-check] ERROR: $1"; exit 2; }
 # --- can this machine do the job at all? Not being able to is a failure, not a skip. ----------
 command -v docker >/dev/null 2>&1 || fail "docker is not on PATH. This check cannot run, so it has not passed."
 docker info >/dev/null 2>&1 || fail "docker is installed but its daemon does not answer (is OrbStack running?)."
+
+# --- one run at a time, machine-wide -----------------------------------------------------------
+# Every row builds the whole tree inside a container, and OrbStack's disk image grows on the host
+# with each one.  On 2026-09-26 three sessions ran four rows each at once, filled a 460 GB disk
+# and stopped the Docker daemon.  So runs queue on one lock, at a fixed path every session shares.
+# A second run waits and says who it is waiting for; a lock whose owner has died is taken over.
+# mkdir is the lock because it is atomic everywhere and needs no flock(1), which macOS lacks.
+LOCK=/tmp/zhr-linux-check.lock
+while ! mkdir "$LOCK" 2>/dev/null; do
+  holder=$(cat "$LOCK/owner" 2>/dev/null)
+  holder_pid=${holder%% *}
+  if [ -n "$holder_pid" ] && ! kill -0 "$holder_pid" 2>/dev/null; then
+    say "taking over a stale lock from a run that is no longer alive ($holder)"
+    rm -rf "$LOCK"
+    continue
+  fi
+  say "waiting for another linux-check run to finish: ${holder:-owner not yet recorded}"
+  sleep 20
+done
+echo "$$ $(date '+%Y-%m-%d %H:%M:%S') $root ${*:-all rows}" > "$LOCK/owner"
+trap 'rm -rf "$LOCK"' EXIT
+
+# --- room to work -----------------------------------------------------------------------------
+# A row needs a few GB inside OrbStack's disk image, which lives on this volume.  Below the floor,
+# refuse rather than find out halfway through by stopping the Docker daemon.
+MIN_FREE_GB=${ZH_LINUX_CHECK_MIN_FREE_GB:-15}
+free_gb=$(df -Pk "$work" | awk 'NR==2 { printf "%d", $4 / 1048576 }')
+say "free disk: ${free_gb} GB (floor ${MIN_FREE_GB} GB)"
+[ "$free_gb" -ge "$MIN_FREE_GB" ] || fail "only ${free_gb} GB free, below the ${MIN_FREE_GB} GB floor.  Free space first; this run would fill the disk and stop the Docker daemon."
 
 # The vendored sources are fetched, not tracked, and an empty directory builds nothing and says so
 # cheerfully. Check the ones configure needs; a missing one is the host's job to fix.
@@ -82,7 +118,7 @@ PY
 [ "$(tr -cd '\0' < "$filelist" | wc -c)" -gt 1000 ] || fail "the file list is nearly empty; refusing to test nothing"
 
 rows=("$@")
-[ ${#rows[@]} -gt 0 ] || rows=(arm64/gcc arm64/clang amd64/gcc amd64/clang)
+[ ${#rows[@]} -gt 0 ] || rows=(arm64/gcc arm64/clang amd64/gcc amd64/clang arm64/gcc/Debug)
 
 # --- one image per architecture, built on first use --------------------------------------------
 # The X11, Wayland, EGL, DRM and Vulkan headers are SDL3's: without them its configure stops with
@@ -103,14 +139,31 @@ ensure_image() { # arch
     say "building $image (first run with this package list)" >&2
     printf '%s\n' "$DOCKERFILE" | docker build -q --platform "linux/$1" -t "$image" - >/dev/null \
       || fail "could not build $image"
+    remove_superseded_images >&2
   fi
   echo "$image"
 }
 
+# Images this script built for an older package list.  Only this repository's name, never a
+# `docker system prune`: other projects keep images on the same daemon.  The build cache is left
+# alone for the same reason - Docker cannot prune the cache of one image's builds without the rest.
+# And only images more than a day old: two branches with different package lists can be in use on
+# one machine at once, and removing the other branch's fresh image makes each rebuild the other's
+# forever.  (Found by testing this function: it would have removed an image another session was
+# running at that moment - Docker refused, but the next session to start would have rebuilt it.)
+remove_superseded_images() {
+  local old
+  old=$(docker image ls --filter until=24h --format '{{.Repository}}:{{.Tag}}' 'zhr-linux-check' \
+    | grep -v -- "-$IMAGE_HASH\$")
+  [ -z "$old" ] && return 0
+  say "removing superseded images: $(echo $old)"
+  docker image rm $old >/dev/null || say "note: could not remove every superseded image"
+}
+
 # --- one row: configure, build, ctest inside a throwaway container ----------------------------
 # The container prints @@ marker lines; everything else is the log.
-run_row() { # arch compiler logfile
-  local arch="$1" compiler="$2" log="$3" image cc cxx
+run_row() { # arch compiler config logfile
+  local arch="$1" compiler="$2" config="$3" log="$4" image cc cxx
   image=$(ensure_image "$arch") || exit 2
   case "$compiler" in
     gcc)   cc=gcc   cxx=g++ ;;
@@ -120,7 +173,7 @@ run_row() { # arch compiler logfile
   # -i: without it docker does not forward stdin, bash reads an empty script, and the row does
   # nothing at all.  The first version of this script had exactly that bug; @@ran below catches it.
   docker run -i --rm --platform "linux/$arch" -v "$root":/src:ro -v "$work":/lists:ro \
-    -e CC="$cc" -e CXX="$cxx" "$image" \
+    -e CC="$cc" -e CXX="$cxx" -e CONFIG="$config" "$image" \
     bash -s > "$log" 2>&1 <<'INSIDE'
 set -u
 # The repository arrives through a bind mount of the Mac's volume, which stays case-INSENSITIVE
@@ -143,7 +196,7 @@ if [ -e /tmp/src/GeneralsMD/Code/Libraries/Source/WWVegas/WWLib/vector.h ]; then
 fi
 echo "@@ran $(uname -m) $($CXX --version | head -1), case-sensitive copy"
 B=/tmp/build
-cmake -S /tmp/src/GeneralsMD/Code -B $B -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S /tmp/src/GeneralsMD/Code -B $B -G Ninja -DCMAKE_BUILD_TYPE=$CONFIG
 echo "@@configure $?"
 [ -e $B/build.ninja ] || exit 0
 cmake --build $B -- -k 0 2>&1 | tee /tmp/build.log
@@ -166,12 +219,15 @@ list()  { sed -n "s/^@@$2 //p" "$1" | tr '\n' ' ' | sed 's/ $//'; }
 overall=0
 table=()
 for row in "${rows[@]}"; do
-  arch="${row%/*}"; compiler="${row#*/}"
+  IFS=/ read -r arch compiler config <<<"$row"
+  config="${config:-Release}"
   case "$arch" in arm64|amd64) ;; *) fail "unknown architecture in '$row' (arm64|amd64)";; esac
-  log="$work/$arch-$compiler.log"
-  say "linux/$arch $compiler ... (log: $log)"
+  case "$config" in Release|Debug) ;; *) fail "unknown configuration in '$row' (Release|Debug)";; esac
+  suffix=""; [ "$config" = Release ] || suffix="-$config"
+  log="$work/$arch-$compiler$suffix.log"
+  say "linux/$arch $compiler $config ... (log: $log)"
   start=$(date +%s)
-  run_row "$arch" "$compiler" "$log"
+  run_row "$arch" "$compiler" "$config" "$log"
   secs=$(( $(date +%s) - start ))
 
   cfg=$(field "$log" configure); cfg=${cfg:-none}
@@ -190,7 +246,7 @@ for row in "${rows[@]}"; do
   if [ -z "$ran" ]; then verdict=FAIL; overall=1; say "linux/$arch $compiler: the container ran nothing"; fi
   if [ "$ttotal" = "?" ] || [ "$ttotal" = 0 ]; then verdict=FAIL; overall=1; fi
   if [ "$ttotal" != "?" ] && [ "$tfailed" != "?" ]; then passed="$((ttotal - tfailed))/$ttotal"; else passed="-"; fi
-  table+=("$(printf '%-12s %-6s %-9s %-15s %-8s %-5s %4ss' "linux/$arch" "$compiler" \
+  table+=("$(printf '%-12s %-6s %-8s %-9s %-15s %-8s %-5s %4ss' "linux/$arch" "$compiler" "$config" \
       "$( [ "$cfg" = 0 ] && echo ok || echo "FAIL($cfg)")" \
       "$( [ "$bstat" = 0 ] && echo ok || echo "FAIL $bfailed edges")" \
       "$passed" "$verdict" "$secs")")
@@ -201,7 +257,7 @@ for row in "${rows[@]}"; do
 done
 
 echo
-printf '%-12s %-6s %-9s %-15s %-8s %-5s %5s\n' platform cc configure build ctest verdict time
+printf '%-12s %-6s %-8s %-9s %-15s %-8s %-5s %5s\n' platform cc config configure build ctest verdict time
 for line in "${table[@]}"; do echo "$line"; done
 echo
 if [ $overall -eq 0 ]; then
