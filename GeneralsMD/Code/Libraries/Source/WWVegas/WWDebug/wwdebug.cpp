@@ -43,7 +43,15 @@
 
 
 #include "wwdebug.h"
+// Off Windows there is no message box, no DBWIN32 listener and no GetLastError: system errors are
+// errno and strerror_r, and a failed assert goes to stderr and aborts. The Windows branches below
+// are unchanged.
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include <errno.h>
+#include <unistd.h>
+#endif
 //#include "win.h" can use this if allowed to see wwlib
 #include <stdlib.h>
 #include <stdarg.h>
@@ -51,7 +59,8 @@
 #include <assert.h>
 #include <string.h>
 #include <signal.h>
-#include "except.h"
+// The real spelling on disk; a case-sensitive volume takes only this one.
+#include "Except.h"
 
 
 static PrintFunc			_CurMessageHandler = NULL;
@@ -65,7 +74,11 @@ static ProfileFunc		_CurProfileStopHandler = NULL;
 
 void Convert_System_Error_To_String(int id, char* buffer, int buf_len)
 {
-#ifndef _UNIX
+#ifndef _WIN32
+	if (buffer != NULL && buf_len > 0) {
+		strerror_r(id, buffer, buf_len);
+	}
+#elif !defined(_UNIX)
 	FormatMessage(
 		FORMAT_MESSAGE_FROM_SYSTEM,
 		NULL,
@@ -79,7 +92,11 @@ void Convert_System_Error_To_String(int id, char* buffer, int buf_len)
 
 int Get_Last_System_Error()
 {
+#ifdef _WIN32
 	return GetLastError();
+#else
+	return errno;
+#endif
 }
 
 /***********************************************************************************************
@@ -295,6 +312,15 @@ void WWDebug_Assert_Fail(const char * expr,const char * file, int line)
 
 	} else {
 
+#ifndef _WIN32
+		// No dialog to answer, so no Retry or Ignore: say what failed and take the Abort path.
+		// There is no exception handler here to be trying to exit, which is what the Windows
+		// branch checks first.
+		fprintf(stderr, "WWDebug_Assert_Fail: %s (%d) Assert: %s\n", file, line, expr);
+		fflush(stderr);
+		raise(SIGABRT);
+		_exit(3);
+#else
 		/*
 		// If the exception handler is try to quit the game then don't show an assert.
 		*/
@@ -316,6 +342,7 @@ void WWDebug_Assert_Fail(const char * expr,const char * file, int line)
 			__debugbreak();
       	return;
 		}
+#endif
    }
 }
 #endif
@@ -445,9 +472,10 @@ void WWDebug_Profile_Stop( const char * title)
 
 
 
-#ifdef WWDEBUG
+// DBWIN32 is a Windows debug-output channel to an external listener; nothing else has one.
+#if defined(WWDEBUG) && defined(_WIN32)
 /***********************************************************************************************
- * WWDebug_DBWin32_Message_Handler --                                                          *
+ * WWDebug_DBWin32_Message_Handler --                                                        *
  *                                                                                             *
  * INPUT:                                                                                      *
  *                                                                                             *
@@ -518,4 +546,4 @@ void WWDebug_DBWin32_Message_Handler( const char * str )
 
     return;
 }
-#endif // WWDEBUG
+#endif // WWDEBUG && _WIN32

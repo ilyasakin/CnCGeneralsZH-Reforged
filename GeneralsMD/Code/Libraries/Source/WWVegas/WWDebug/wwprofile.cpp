@@ -53,7 +53,9 @@
 #include "wwprofile.h"
 #include "fastallocator.h"
 #include "wwdebug.h"
+#ifdef _WIN32
 #include <windows.h>
+#endif
 //#include "systimer.h"
 #include "systimer.h"
 #include "rawfile.h"
@@ -61,6 +63,7 @@
 #include "simplevec.h"
 #include "cpudetect.h"
 #include "hashtemplate.h"
+#include "thread.h"
 #include <stdio.h>
 
 static SimpleDynVecClass<WWProfileHierachyNodeClass*> ProfileCollectVector;
@@ -81,6 +84,8 @@ WWINLINE double WWProfile_Get_Inv_Processor_Ticks_Per_Second(void)
 	return CPUDetectClass::Get_Inv_Processor_Ticks_Per_Second();
 #elif defined (_UNIX)
 	return 0.001;
+#else
+	return 1.0 / (double)Clock_Ticks_Per_Second();	// pairs with Clock_Ticks in WWProfile_Get_Ticks
 #endif
 }
 
@@ -96,12 +101,16 @@ WWINLINE double WWProfile_Get_Inv_Processor_Ticks_Per_Second(void)
  * HISTORY:                                                                                    *
  *   9/24/2000  gth : Created.                                                                 *
  *=============================================================================================*/
-inline void WWProfile_Get_Ticks(_int64 * ticks)
+inline void WWProfile_Get_Ticks(int64_t * ticks)
 {
 #ifdef _UNIX
        *ticks = TIMEGETTIME();
-#else
+#elif defined (WIN32)
 	*ticks = __rdtsc();
+#else
+	// There is no portable cycle counter; Lib/Clock.h's high-resolution tick is what the rest of
+	// the tree uses off Windows.  WIN32, not _WIN32, so that this and the rate above always agree.
+	*ticks = Clock_Ticks();
 #endif
 }
 
@@ -330,7 +339,7 @@ bool	WWProfileHierachyNodeClass::Return( void )
 {
 	if (--RecursionCounter == 0) {
 		if ( TotalCalls != 0 ) {
-			__int64 time;
+			int64_t time;
 			WWProfile_Get_Ticks(&time);
 			time-=StartTime;
 
@@ -351,7 +360,7 @@ WWProfileHierachyNodeClass		WWProfileManager::Root( "Root", NULL );
 WWProfileHierachyNodeClass	*	WWProfileManager::CurrentNode = &WWProfileManager::Root;
 WWProfileHierachyNodeClass	*	WWProfileManager::CurrentRootNode = &WWProfileManager::Root;
 int									WWProfileManager::FrameCounter = 0;
-__int64								WWProfileManager::ResetTime = 0;
+int64_t								WWProfileManager::ResetTime = 0;
 
 static unsigned int				ThreadID = static_cast<unsigned int>(-1);
 
@@ -376,7 +385,7 @@ static unsigned int				ThreadID = static_cast<unsigned int>(-1);
  *=============================================================================================*/
 void	WWProfileManager::Start_Profile( const char * name )
 {
-	if (::GetCurrentThreadId() != ThreadID) {
+	if (ThreadClass::_Get_Current_Thread_ID() != ThreadID) {
 		return;
 	}
 
@@ -390,7 +399,7 @@ void	WWProfileManager::Start_Profile( const char * name )
 
 void	WWProfileManager::Start_Root_Profile( const char * name )
 {
-	if (::GetCurrentThreadId() != ThreadID) {
+	if (ThreadClass::_Get_Current_Thread_ID() != ThreadID) {
 		return;
 	}
 
@@ -416,7 +425,7 @@ void	WWProfileManager::Start_Root_Profile( const char * name )
  *=============================================================================================*/
 void	WWProfileManager::Stop_Profile( void )
 {
-	if (::GetCurrentThreadId() != ThreadID) {
+	if (ThreadClass::_Get_Current_Thread_ID() != ThreadID) {
 		return;
 	}
 
@@ -429,7 +438,7 @@ void	WWProfileManager::Stop_Profile( void )
 
 void	WWProfileManager::Stop_Root_Profile( void )
 {
-	if (::GetCurrentThreadId() != ThreadID) {
+	if (ThreadClass::_Get_Current_Thread_ID() != ThreadID) {
 		return;
 	}
 
@@ -458,7 +467,7 @@ void	WWProfileManager::Stop_Root_Profile( void )
  *=============================================================================================*/
 void	WWProfileManager::Reset( void )
 {
-	ThreadID = ::GetCurrentThreadId();
+	ThreadID = ThreadClass::_Get_Current_Thread_ID();
 
 	Root.Reset();
 	FrameCounter = 0;
@@ -509,7 +518,7 @@ void WWProfileManager::Increment_Frame_Counter( void )
  *=============================================================================================*/
 float WWProfileManager::Get_Time_Since_Reset( void )
 {
-	__int64 time;
+	int64_t time;
 	WWProfile_Get_Ticks(&time);
 	time -= ResetTime;
 
@@ -590,7 +599,7 @@ void	WWProfileManager::End_Collecting(const char* filename)
 					if (name[i]==',') name[i]='.';
 					if (name[i]==';') name[i]=':';
 				}
-				str.Format("ID: %d %s\r\n",ite.Peek_Value(),name);
+				str.Format("ID: %d %s\r\n",ite.Peek_Value(),name.Peek_Buffer());
 				file->Write(str.Peek_Buffer(),str.Get_Length());
 			}
 
@@ -990,7 +999,7 @@ WWTimeItClass::WWTimeItClass( const char * name )
 
 WWTimeItClass::~WWTimeItClass( void )
 {
-	__int64 End;
+	int64_t End;
 	WWProfile_Get_Ticks( &End );
 	End -= Time;
 #ifdef WWDEBUG
@@ -1012,7 +1021,7 @@ WWMeasureItClass::WWMeasureItClass( float * p_result )
 
 WWMeasureItClass::~WWMeasureItClass( void )
 {
-	__int64 End;
+	int64_t End;
 	WWProfile_Get_Ticks( &End );
 	End -= Time;
 	WWASSERT(PResult != NULL);
@@ -1039,7 +1048,7 @@ WWMemoryAndTimeLog::WWMemoryAndTimeLog(const char* name)
 	IntermediateAllocSizeStart=AllocSizeStart;
 	StringClass tmp(0,true);
 	for (unsigned i=0;i<TabCount;++i) tmp+="\t";
-	WWRELEASE_SAY(("%s%s {\n",tmp,name));
+	WWRELEASE_SAY(("%s%s {\n",tmp.Peek_Buffer(),name));
 	TabCount++;
 }
 
@@ -1048,13 +1057,13 @@ WWMemoryAndTimeLog::~WWMemoryAndTimeLog()
 	if (TabCount>0) TabCount--;
 	StringClass tmp(0,true);
 	for (unsigned i=0;i<TabCount;++i) tmp+="\t";
-	WWRELEASE_SAY(("%s} ",tmp));
+	WWRELEASE_SAY(("%s} ",tmp.Peek_Buffer()));
 
 	unsigned current_time=WWProfile_Get_System_Time();
 	int current_alloc_count=FastAllocatorGeneral::Get_Allocator()->Get_Total_Allocation_Count();
 	int current_alloc_size=FastAllocatorGeneral::Get_Allocator()->Get_Total_Allocated_Size();
 	WWRELEASE_SAY(("IN TOTAL %s took %d.%3.3d s, did %d memory allocations of %d bytes\n",
-		Name,
+		Name.Peek_Buffer(),
 		(current_time - TimeStart)/1000, (current_time - TimeStart)%1000,
 		current_alloc_count - AllocCountStart,
 		current_alloc_size - AllocSizeStart));
@@ -1071,7 +1080,7 @@ void WWMemoryAndTimeLog::Log_Intermediate(const char* text)
 	StringClass tmp(0,true);
 	for (unsigned i=0;i<TabCount;++i) tmp+="\t";
 	WWRELEASE_SAY(("%s%s took %d.%3.3d s, did %d memory allocations of %d bytes\n",
-		tmp,
+		tmp.Peek_Buffer(),
 		text,
 		(current_time - IntermediateTimeStart)/1000, (current_time - IntermediateTimeStart)%1000,
 		current_alloc_count - IntermediateAllocCountStart,

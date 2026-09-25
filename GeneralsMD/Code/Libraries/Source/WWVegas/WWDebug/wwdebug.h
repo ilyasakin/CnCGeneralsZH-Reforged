@@ -95,7 +95,9 @@ void					WWDebug_Profile_Stop( const char * title);
 /*
 ** A message handler to display to DBWIN32
 */
+#ifdef _WIN32
 void					WWDebug_DBWin32_Message_Handler( const char * message);
+#endif
 #endif
 
 
