@@ -51,8 +51,9 @@ File * PosixLocalFileSystem::openFile(const Char *filename, Int access /* = 0 */
 		// Win32LocalFileSystem's walk: every token before the file is a directory to create, and the
 		// file is the first token with a '.' when no '.' follows it.  nextToken drops a leading
 		// separator, which on Windows only loses nothing ("C:" comes first); here it would turn an
-		// absolute path relative, so the root is put back.  A name with no '.' at all made that walk
-		// loop for ever; here it stops when the name runs out.
+		// absolute path relative, so the root is put back.  A last component with no '.' ran that
+		// walk on Windows until AsciiString's length ceiling threw (defect 12 in docs/mac-port's
+		// README); here it stops when the name runs out.
 		AsciiString string;
 		string = filename;
 		AsciiString token;
