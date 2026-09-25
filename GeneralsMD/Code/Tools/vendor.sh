@@ -298,6 +298,64 @@ install_gamespy() {
 art_pattern='Reforged.*\.big$'
 art_release='https://github.com/olcayseygan/CnCGeneralsZH-Reforged/releases/download/art-latest'
 
+# --- litehtml 0.10, the whole repository: the HTML and CSS layout engine behind the pages upstream
+# draws over the battlefield. gameengine links it, so unlike DirectX it is needed on macOS too.
+# Same .gitignore dance as GameSpy, and for the same reason.
+install_litehtml() {
+  local destination="$libraries/Source/litehtml"
+  if [ -e "$destination/CMakeLists.txt" ] && [ -z "$force" ]; then return 0; fi
+  local archive source
+  archive=$(get_file 'https://github.com/litehtml/litehtml/archive/9bc84b8b8d15a4e50f18b327aa30955048b441c2.zip' "$work/litehtml-0.10.zip")
+  source=$(expand_source "$archive" 'litehtml')
+  local keep="$destination/.gitignore" kept="$work/litehtml.gitignore"
+  rm -f "$kept"
+  if [ -e "$keep" ]; then mv "$keep" "$kept"; fi
+  rm -rf "$destination"
+  mkdir -p "$destination"
+  cp -Rf "$source/." "$destination/"
+  if [ -e "$kept" ]; then mv -f "$kept" "$keep"; fi
+  step "litehtml 0.10 -> Libraries/Source/litehtml"
+}
+
+# --- The fork's one change to litehtml, Libraries/Source/litehtml-parsed-css.patch. HtmlOverlay.cpp
+# does not compile without it. A patched copy says so by the parameter name `master_parsed` in
+# document.h, so a copy fetched before the patch existed gets it on the next run too.
+#
+# GIT_CEILING_DIRECTORIES is not optional. litehtml sits inside this repository's checkout, and
+# without the ceiling git finds the outer repository, treats every file in the patch as outside it,
+# skips them all - and says nothing. vendor.ps1 records exactly that.
+#
+# And the result is checked by the marker, not by git apply's exit status. The failure above is the
+# silent kind; a status check would pass on the one case it exists to catch.
+install_litehtml_patch() {
+  local destination="$libraries/Source/litehtml"
+  local header="$destination/include/litehtml/document.h"
+  if grep -q 'master_parsed' "$header" 2>/dev/null; then return 0; fi
+  local patch="$libraries/Source/litehtml-parsed-css.patch"
+  GIT_CEILING_DIRECTORIES="$libraries/Source" \
+    git -C "$destination" -c core.autocrlf=false apply "$patch" || true
+  if ! grep -q 'master_parsed' "$header" 2>/dev/null; then
+    echo "[vendor] litehtml-parsed-css.patch did not apply to Libraries/Source/litehtml" >&2
+    echo "[vendor] ($header still lacks master_parsed)" >&2
+    exit 1
+  fi
+  step "litehtml-parsed-css.patch -> Libraries/Source/litehtml"
+}
+
+# --- nanosvg, the two headers: parses and rasterises the SVG pictures a page names in url(). Copied
+# file by file rather than by replacing the folder, so its committed .gitignore is never disturbed.
+install_nanosvg() {
+  local destination="$libraries/Source/nanosvg"
+  if [ -e "$destination/nanosvgrast.h" ] && [ -z "$force" ]; then return 0; fi
+  local archive source
+  archive=$(get_file 'https://github.com/memononen/nanosvg/archive/239e102ec2c691f2902e20ace2ed36ee4a35cfe6.zip' "$work/nanosvg.zip")
+  source=$(expand_source "$archive" 'nanosvg')
+  local headers=()
+  while IFS= read -r f; do headers+=("$f"); done < <(list_top_level "$source/src" '.h')
+  copy_files "$destination" "${headers[@]}" "$source/LICENSE.txt"
+  step "nanosvg -> Libraries/Source/nanosvg"
+}
+
 get_channel_url() {
   if [ -n "${ZHR_CHANNEL_URL:-}" ]; then printf '%s/\n' "${ZHR_CHANNEL_URL%/}"; return 0; fi
   local launcher
@@ -393,5 +451,8 @@ install_zlib
 install_lzhl
 report_directx
 install_gamespy
+install_litehtml
+install_litehtml_patch
+install_nanosvg
 install_art
 step 'everything the build needs is in place'
