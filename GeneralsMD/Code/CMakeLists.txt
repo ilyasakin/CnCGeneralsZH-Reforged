@@ -784,6 +784,22 @@ if(ZH_PLATFORM_POSIX)
   # interface is designed.  Needs a GPU and a display, so it is built but not registered with ctest.
   add_executable(sdl_gpu_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/sdl_gpu_probe.cpp)
   target_link_libraries(sdl_gpu_probe PRIVATE SDL3::SDL3-static)
+
+  # The D-spike: one real model and its DDS textures, read from the game's archives, drawn through
+  # SDL3's GPU API.  Parses W3D with WWLib's chunkio and w3d_file.h; WW3D2 itself is not built.  Needs
+  # a GPU and the game's data, so it is built but not registered with ctest.  Its shaders are
+  # generated ahead of time by Tests/w3d_view/shaders/build_shaders.sh and checked in, so building it
+  # needs no shader compiler.
+  add_executable(w3d_view
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_view/w3d_view.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_view/w3d_model.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_view/dds_image.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_view/big_archive.cpp)
+  target_include_directories(w3d_view PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_view
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
+    ${WW}/WW3D2 ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_link_libraries(w3d_view PRIVATE SDL3::SDL3-static wwmath wwlib wwsaveload wwdebug)
 endif()
 
 # d3d8to9 is no longer built.  It was a d3d8.dll next to generals.exe that translated
