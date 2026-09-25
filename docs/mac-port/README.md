@@ -197,6 +197,36 @@ you start. That commit is the lock.
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
 
+### Decisions taken, 2026-09-25
+
+The user delegated every decision on this port. These were taken by the PM session, with the
+reasoning written here so they can be revisited rather than re-argued.
+
+**1. Windows routes the simulation's D3DX maths through the portable implementation too (defect #7).**
+Chosen because it is correct *whichever way the unobserved fact turns out*, not because the fact
+was confirmed. The oracle (`d3dx_oracle`, run against Microsoft's real `d3dx9_43.dll`) measured that
+`d3dxportable.h` is bit-identical to the DLL's scalar and non-Intel bodies — 0 of 1,000,000 inputs
+differ. So:
+- on a Windows machine that runs the scalar or AMD body, the switch changes **nothing**;
+- on one that runs the Intel body, it makes that machine agree with every other.
+
+The dispatch — which CPU gets which body — is still read from disassembly, not observed. But the
+choice no longer depends on it: routing Windows through the portable code is a no-op if the reading
+is wrong and a desync fix if it is right. The one cost, Intel-recorded replays' checksums moving,
+arises only in the world where the desync is real, where those replays already diverge on AMD.
+This matches the project's own precedent, `215f84a5`, which took the CRT's per-CPU `log()` choice
+away from every machine. What remains unverified is that it **builds** under MSVC; that is a
+`WINDOWS-DEBT.md` row, not a reason to wait.
+
+**2. An unmeasurable CPU is treated as fast when choosing the default preset — option (c) of B19.**
+Apple Silicon publishes no clock rate. `CPUDETECT_UNMEASURED_PROCESSOR_MHZ` stays `0`, which is
+what the measurement class honestly knows; `testMinimumRequirements` treats an unknown CPU as meeting
+the top preset. Rejected: (a) leaving it, because first and later launches disagree and the animated
+menu background runs once then never; (b) a nominal MHz, because it puts a chosen number in a class
+whose job is measurement; (d) a named arm64 CPU type, as more code for the same result. Every Apple
+Silicon Mac exceeds a 2003 game's requirements by orders of magnitude, so "top tier" is not in
+doubt — only where to say it. Verifiable once `gameengine` compiles, which is B5's GameEngine half.
+
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
 Added 2026-09-22 after two Windows-only breaks in one afternoon, both with the same shape and
