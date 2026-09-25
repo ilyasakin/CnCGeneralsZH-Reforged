@@ -38,7 +38,7 @@ D3DXMatrixUnaryFunction		D3DXMatrixTranspose = NULL;
 D3DXMatrixTripleFunction	D3DXMatrixScaling = NULL;
 D3DXMatrixTripleFunction	D3DXMatrixTranslation = NULL;
 D3DXMatrixAngleFunction		D3DXMatrixRotationZ = NULL;
-D3DXVec4TransformFunction	D3DXVec4Transform = NULL;
+D3DXVec4TransformFunction	D3DXVec4TransformFromDLL = NULL;
 D3DXVec3TransformFunction	D3DXVec3Transform = NULL;
 
 // The last D3DX9 release, and the one d3d8to9 binds, so a machine that runs this fork
@@ -130,7 +130,7 @@ bool Bind_D3DX9_Runtime(void)
 		GetProcAddress(D3DX9Module, "D3DXMatrixTranslation");
 	D3DXMatrixRotationZ = (D3DXMatrixAngleFunction)
 		GetProcAddress(D3DX9Module, "D3DXMatrixRotationZ");
-	D3DXVec4Transform = (D3DXVec4TransformFunction)
+	D3DXVec4TransformFromDLL = (D3DXVec4TransformFunction)
 		GetProcAddress(D3DX9Module, "D3DXVec4Transform");
 	D3DXVec3Transform = (D3DXVec3TransformFunction)
 		GetProcAddress(D3DX9Module, "D3DXVec3Transform");
@@ -151,7 +151,7 @@ bool Bind_D3DX9_Runtime(void)
 		&& D3DXMatrixScaling != NULL
 		&& D3DXMatrixTranslation != NULL
 		&& D3DXMatrixRotationZ != NULL
-		&& D3DXVec4Transform != NULL
+		&& D3DXVec4TransformFromDLL != NULL
 		&& D3DXVec3Transform != NULL;
 
 	if (!BindSucceeded) {
@@ -186,7 +186,7 @@ static void release_module(void)
 	D3DXMatrixScaling = NULL;
 	D3DXMatrixTranslation = NULL;
 	D3DXMatrixRotationZ = NULL;
-	D3DXVec4Transform = NULL;
+	D3DXVec4TransformFromDLL = NULL;
 	D3DXVec3Transform = NULL;
 
 	if (D3DX9Module != NULL) {
