@@ -101,7 +101,7 @@ static GameWindow *parentIgnore = NULL;
 static GameWindow *listboxIgnore = NULL;
 
 static Bool isOverlayActive = false;
-void insertChat( BuddyMessage msg );
+static void insertChat( BuddyMessage msg );
 // RightClick pointers ---------------------------------------------------------------------
 static GameWindow *rcMenu = NULL;
 static WindowLayout *noticeLayout = NULL;
