@@ -602,9 +602,9 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	fputwc(0, m_file);
 
 	// Date and Time
-	SYSTEMTIME systemTime;
-	GetLocalTime( &systemTime );
-	fwrite(&systemTime, sizeof(SYSTEMTIME), 1, m_file);
+	WallClockTime systemTime;
+	getLocalWallClock( &systemTime );
+	fwrite(&systemTime, sizeof(WallClockTime), 1, m_file);
 
 	// write out version info
 	UnicodeString versionString = TheVersion->getUnicodeVersion();
@@ -751,8 +751,8 @@ void RecorderClass::stopRecording() {
  */
 void RecorderClass::archiveReplay(const AsciiString& fileName)
 {
-	SYSTEMTIME st;
-	GetLocalTime(&st);
+	WallClockTime st;
+	getLocalWallClock(&st);
 
 	AsciiString sourcePath = getReplayDir();
 	sourcePath.concat(fileName);
@@ -897,7 +897,7 @@ Bool RecorderClass::readReplayHeader(ReplayHeader& header)
 	header.replayName = readUnicodeString();
 
 	// Read the date and time.  We don't really do anything with this either. Oh well.
-	fread(&header.timeVal, sizeof(SYSTEMTIME), 1, m_file);
+	fread(&header.timeVal, sizeof(WallClockTime), 1, m_file);
 
 	// Read in the Version info
 	header.versionString = readUnicodeString();

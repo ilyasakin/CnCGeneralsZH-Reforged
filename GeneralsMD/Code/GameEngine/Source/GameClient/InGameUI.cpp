@@ -9317,8 +9317,8 @@ void InGameUI::drawHudOverlay( void )
 	UnsignedInt realSecs = (nowMs - m_hudRealClockBaseMs) / 1000;
 
 	// the machine's own clock first, for a player who wants to know when to stop
-	SYSTEMTIME wallClock;
-	GetLocalTime( &wallClock );
+	WallClockTime wallClock;
+	getLocalWallClock( &wallClock );
 
 	UnicodeString text;
 	text.format( L"%02d:%02d   %02d:%02d:%02d(%02d:%02d:%02d)   %dhz(%dfps) %s",
