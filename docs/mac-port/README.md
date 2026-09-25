@@ -281,6 +281,22 @@ that decides, task by task:
   spelled in a case other than their file's. `include_case_check` in `ctest` now catches that class
   on a Mac.
 
+**4. Shaders stay HLSL; SPIR-V and MSL are derived at run time (taken 2026-09-25, from the D-spike).**
+D3 was going to make the shader generators emit an IR with an MSL emitter beside the HLSL one. The
+D-spike measured the alternative on the game's own shader text — all 49 programs the generators
+produce, captured by running the unmodified `ffshader.cpp`, `ffvertex.cpp` and `engineshader.cpp`
+— and it is better: **HLSL → glslang's HLSL front end → SPIR-V (Vulkan) → SDL_shadercross built
+without DXC (SPIRV-Cross) → MSL (Metal)**. 49 of 49 compile, pass `spirv-val`, and are accepted by
+Metal. The route through DXC was rejected on the evidence, not on size alone: Metal refused 3 of 49
+(the bumped-terrain programs — DXC strips unused textures, and the remapped `NormalMap` collides with
+`Texture0`), and it costs 21 MB of runtime and 150 MB of source against ~7 MB for the chosen three.
+So the generators keep one language; D3 shrinks to a target flag (SDL's register spaces and a BGRA
+vertex-colour swizzle) and a POSIX twin of `test_ffshadercompile`. The byte-identical-HLSL gate for
+the D3D11 path stands, so Windows is untouched. Driver compiles cost 50–225 ms per program on first
+use, so programs are compiled ahead of need. Proven to *draw*, not only compile, by
+`Tests/w3d_view` (screenshot: `d-spike-crusader-metal.png`); the 49 programs themselves are proven
+to compile and validate, not yet to draw. Evidence and tables: `tasks/D3-shader-generators-ir.md`.
+
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
 Added 2026-09-22 after two Windows-only breaks in one afternoon, both with the same shape and

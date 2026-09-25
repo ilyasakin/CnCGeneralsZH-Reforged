@@ -1,4 +1,4 @@
-# D3 — Shader generators emit an IR
+# D3 — Shader generators target SDL3 GPU (was: emit an IR)
 
 - **Milestone:** M3
 - **Depends on:** D2
