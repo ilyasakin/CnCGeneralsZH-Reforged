@@ -637,7 +637,7 @@ WindowMsgHandledType RCGameDetailsMenuSystem( GameWindow *window, UnsignedInt ms
 			{
 				GameWindow *control = (GameWindow *)mData1;
 				Int controlID = control->winGetWindowId();
-				Int selectedID = (Int)window->winGetUserData();
+				Int selectedID = (Int)(intptr_t)window->winGetUserData();
 				if(!selectedID)
 					break;
 				closeRightClickMenu(window);
