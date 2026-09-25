@@ -15,6 +15,19 @@
  *   5. on macOS, has Metal compile it: SDL_CreateGPUShader on a real device, which hands the MSL to
  *      the driver (newLibraryWithSource).  Not the offline `xcrun metal`, which is not installed.
  *
+ * A second test, on macOS, links every generated vertex program with every pixel program it meets
+ * in the game into a real SDL pipeline: the stages agree by the locations sdl3target.h pins, or Metal
+ * says which input is not written.  Which programs meet is the game's pairing, not every pair:
+ *   - the engine's Trees vertex program meets ffshader's combiner programs only.  W3DTreeBuffer
+ *     binds Trees.vso and no pixel shader (it loads Trees.pso and never binds it), and engineshader
+ *     transcribes no Trees pixel program;
+ *   - the engine's pixel programs (water, terrain, road, monochrome) meet ffvertex's programs only:
+ *     their draws bind a .pso over the fixed-function vertex pipeline;
+ *   - a normal mapped pixel program meets only vertex programs that write the normal mapped
+ *     varyings, as ffshader.h requires of its callers.
+ * Trees against a water or terrain pixel program does not link - they read coordinate sets 2 and 3
+ * and Trees writes two - and the game never draws it.
+ *
  * Steps 3 and 5 can be unavailable - no spirv-val on the machine, no GPU in the session - and then
  * they say SKIPPED on a line of their own, with the reason and the count they did not check.  A
  * skipped step is never folded into a pass.
@@ -123,6 +136,54 @@ void print_tally(const char * what, const Tally & t, bool validating, bool metal
 
 } // namespace
 
+// "[[vk::location(4)]] float2 TexCoord0 : TEXCOORD0;" lines of a vertex program's Input structure,
+// as SDL vertex attributes over one interleaved buffer.  D3DCOLOR is four bytes read as UBYTE4_NORM,
+// which is why sdl3target.h swaps it back to RGBA in the program.
+bool vertex_layout(const std::string & hlsl, std::vector<SDL_GPUVertexAttribute> & attributes, Uint32 & pitch)
+{
+	attributes.clear();
+	pitch = 0;
+	const size_t start = hlsl.find("struct Input\n{\n");
+	if (start == std::string::npos) return false;
+	const size_t end = hlsl.find("};", start);
+	size_t line = hlsl.find('\n', start + 14) + 1;
+	while (line < end) {
+		const size_t stop = hlsl.find('\n', line);
+		const std::string text = hlsl.substr(line, stop - line);
+		line = stop + 1;
+		const size_t open = text.find("[[vk::location(");
+		if (open == std::string::npos) continue;
+		SDL_GPUVertexAttribute attribute;
+		SDL_zero(attribute);
+		attribute.location = (Uint32)atoi(text.c_str() + open + 15);
+		attribute.offset = pitch;
+		if (text.find(": COLOR") != std::string::npos) {
+			attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM;
+			pitch += 4;
+		}
+		else if (text.find(" float4 ") != std::string::npos) {
+			attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+			pitch += 16;
+		}
+		else if (text.find(" float3 ") != std::string::npos) {
+			attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+			pitch += 12;
+		}
+		else if (text.find(" float2 ") != std::string::npos) {
+			attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+			pitch += 8;
+		}
+		else return false;
+		attributes.push_back(attribute);
+	}
+	return !attributes.empty();
+}
+
+bool writes_normal_mapped_varyings(const std::string & hlsl)
+{
+	return hlsl.find("ViewPosition : TEXCOORD4") != std::string::npos;
+}
+
 TEST(every_generated_program_reaches_sdl3_gpu)
 {
 	const char * spirv_val = getenv("ZH_SPIRV_VAL");
@@ -222,4 +283,105 @@ TEST(every_generated_program_reaches_sdl3_gpu)
 		SDL_DestroyGPUDevice(device);
 	}
 	SDL_Quit();
+}
+
+TEST(every_vertex_program_links_with_every_pixel_program_it_can_meet)
+{
+#if !defined(__APPLE__)
+	printf("  SKIPPED pipeline linking: Metal only; on Linux the stages are checked by spirv-val alone\n");
+#else
+	SDL_GPUDevice * device = NULL;
+	if (SDL_Init(SDL_INIT_VIDEO)) {
+		device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL, true, NULL);
+	}
+	if (device == NULL) {
+		printf("  SKIPPED pipeline linking: no GPU device in this session (%s)\n", SDL_GetError());
+		return;
+	}
+
+	struct Built
+	{
+		std::string name;
+		std::string hlsl;
+		SDL_GPUShader * shader;
+		bool normal_mapped;
+		bool engine;
+	};
+	std::vector<Built> vertex, pixel;
+	const std::vector<ShaderCase> cases = Shader_Cases();
+	for (size_t i = 0; i < cases.size(); ++i) {
+		Built built;
+		built.name = cases[i].Name;
+		std::vector<unsigned char> spirv;
+		std::string log;
+		if (!Shader_Case_Generate(cases[i], SHADER_CASE_SDL3_GPU, built.hlsl)
+			|| !SDL3_Compile_HLSL_To_SPIRV(built.hlsl, cases[i].VertexStage, spirv, log)) {
+			CHECK(false);
+			continue;
+		}
+		built.shader = SDL3_Create_Shader(device, spirv, cases[i].VertexStage, log);
+		built.engine = cases[i].Kind == SHADER_CASE_ENGINE;
+		built.normal_mapped = cases[i].VertexStage ? writes_normal_mapped_varyings(built.hlsl)
+			: built.hlsl.find("ViewPosition : TEXCOORD4") != std::string::npos;
+		if (built.shader == NULL) {
+			CHECK(false);
+			continue;
+		}
+		(cases[i].VertexStage ? vertex : pixel).push_back(built);
+	}
+
+	unsigned pairs = 0, linked = 0;
+	for (size_t v = 0; v < vertex.size(); ++v) {
+		std::vector<SDL_GPUVertexAttribute> attributes;
+		Uint32 pitch = 0;
+		if (!vertex_layout(vertex[v].hlsl, attributes, pitch)) {
+			printf("  %s: no vertex layout could be read from its Input structure\n", vertex[v].name.c_str());
+			CHECK(false);
+			continue;
+		}
+		SDL_GPUVertexBufferDescription buffer;
+		SDL_zero(buffer);
+		buffer.pitch = pitch;
+		buffer.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+		SDL_GPUColorTargetDescription target;
+		SDL_zero(target);
+		target.format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+
+		for (size_t p = 0; p < pixel.size(); ++p) {
+			if (pixel[p].normal_mapped && !vertex[v].normal_mapped) continue;
+			if (vertex[v].engine && pixel[p].engine) continue;	// the game never draws that pair
+			++pairs;
+			SDL_GPUGraphicsPipelineCreateInfo info;
+			SDL_zero(info);
+			info.vertex_shader = vertex[v].shader;
+			info.fragment_shader = pixel[p].shader;
+			info.vertex_input_state.vertex_buffer_descriptions = &buffer;
+			info.vertex_input_state.num_vertex_buffers = 1;
+			info.vertex_input_state.vertex_attributes = &attributes[0];
+			info.vertex_input_state.num_vertex_attributes = (Uint32)attributes.size();
+			info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+			info.target_info.color_target_descriptions = &target;
+			info.target_info.num_color_targets = 1;
+			SDL_ClearError();
+			SDL_GPUGraphicsPipeline * pipeline = SDL_CreateGPUGraphicsPipeline(device, &info);
+			if (pipeline != NULL) {
+				++linked;
+				SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
+			}
+			else {
+				printf("  %s + %s: Metal refused the pipeline: %s\n", vertex[v].name.c_str(), pixel[p].name.c_str(), SDL_GetError());
+				CHECK(false);
+			}
+		}
+	}
+	printf("  %zu vertex x %zu pixel programs: %u pairs the game can form, %u linked on Metal\n", vertex.size(), pixel.size(),
+		pairs, linked);
+	CHECK(pairs > 0);
+	CHECK_EQ(linked, pairs);
+
+	for (size_t i = 0; i < vertex.size(); ++i) SDL_ReleaseGPUShader(device, vertex[i].shader);
+	for (size_t i = 0; i < pixel.size(); ++i) SDL_ReleaseGPUShader(device, pixel[i].shader);
+	SDL_DestroyGPUDevice(device);
+	SDL_Quit();
+#endif
 }
