@@ -166,6 +166,12 @@ int main(int argc, char ** argv)
 	unsigned long other_vs_scalar = 0;
 	unsigned long basis_rows = 0;
 	unsigned long intel_x_differs = 0;
+	// The basis rows split two ways, and only one of them is a shape the game makes: control
+	// points, as BezFwdIterator::start passes them.  The t-vector rows use random t, where the
+	// game only ever evaluates t = 0.5, which is exact.  So the combined rate is not the rate a
+	// player's shells see; this one is.
+	unsigned long control_rows = 0;
+	unsigned long control_x_differs = 0;
 	unsigned long intel_yzw_differs = 0;
 	unsigned long general_rows = 0;
 	unsigned long intel_general_differs = 0;
@@ -194,6 +200,9 @@ int main(int argc, char ** argv)
 				intel_differs = true;
 				if (basis && lane == 0) {
 					++intel_x_differs;
+					if (index % 4u < 2u) {
+						++control_x_differs;
+					}
 				} else if (basis) {
 					++intel_yzw_differs;
 				}
@@ -211,6 +220,9 @@ int main(int argc, char ** argv)
 		}
 		if (basis) {
 			++basis_rows;
+			if (index % 4u < 2u) {
+				++control_rows;
+			}
 		} else {
 			++general_rows;
 			if (intel_differs) {
@@ -226,6 +238,8 @@ int main(int argc, char ** argv)
 	printf("[d3dx-oracle]   DLL GenuineIntel vs scalar, basis:  lane x differs on %lu of %lu (%.1f%%), "
 		"lanes y/z/w on %lu\n", intel_x_differs, basis_rows, 100.0 * (double)intel_x_differs / (double)basis_rows,
 		intel_yzw_differs);
+	printf("[d3dx-oracle]     of which control-point inputs,     BezFwdIterator's shape: %lu of %lu (%.1f%%)\n",
+		control_x_differs, control_rows, 100.0 * (double)control_x_differs / (double)control_rows);
 	printf("[d3dx-oracle]   DLL GenuineIntel vs scalar, general: %lu of %lu inputs differ\n",
 		intel_general_differs, general_rows);
 	printf("[d3dx-oracle] sweep fingerprint (portable, x86_64): 0x%08x\n", hash);

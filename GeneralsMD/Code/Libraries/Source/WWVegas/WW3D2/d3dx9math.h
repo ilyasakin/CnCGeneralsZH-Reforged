@@ -47,8 +47,8 @@
 // On other platforms there is no DLL, so the non-Windows branch declares only the types
 // GameEngine reaches, D3DXVECTOR4 and D3DXMATRIX, and includes no d3d9.h, so GameLogic's path
 // through BezierSegment.h does not pull in the Direct3D header there.  The renderer's names are
-// absent on purpose: nothing outside WW3D2 and GameEngineDevice uses them, neither compiles on
-// macOS, and the Metal backend will decide what they become.
+// absent on purpose: nothing outside WW3D2 and GameEngineDevice uses them, neither compiles off
+// Windows yet, and the renderer backend (D2) will decide what they become.
 
 #ifndef D3DX9MATH_H
 #define D3DX9MATH_H

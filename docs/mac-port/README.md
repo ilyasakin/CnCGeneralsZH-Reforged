@@ -490,7 +490,7 @@ The dispatch was **read** from the disassembly. The three bodies were **run**: t
 functions, so `Tests/d3dx_oracle` copies Microsoft's bytes into an executable page and calls them
 under Rosetta. Over BezierSegment's basis matrix, the Intel body differs from the other two **only
 in lane x**, the cubic coefficient `-P0+3P1-3P2+P3`. It is the one lane with four nonzero terms.
-There it differs on **35.7%** of the oracle's basis inputs, and on about **45%** of control-point
+There it differs on **35.7%** of the oracle's basis inputs, and on **46.8%** of control-point
 vectors shaped like a real shot. Replaying `BezFwdIterator`'s forward differencing under each order,
 **51%** of synthetic flight paths have at least one point that differs. Wine's builtin `d3dx9`, which
 CrossOver runs, sums left to right (its disassembly was read, not run).
