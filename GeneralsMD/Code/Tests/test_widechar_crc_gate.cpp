@@ -58,7 +58,6 @@
 #include "Common/KindOf.h"
 #include "Common/UnicodeString.h"
 #include "Common/XferCRC.h"
-#include "Common/AudioEventRTS.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -95,11 +94,8 @@ const UpgradeTemplate *UpgradeCenter::findUpgrade( const AsciiString & ) const {
 UpgradeTemplate *UpgradeCenter::firstUpgradeTemplate( void ) { notOnThisPath( "UpgradeCenter" ); return NULL; }
 template<> const char *KindOfMaskType::s_bitNameList[] = { NULL };
 // GCC emits inline destructors that clang does not - MessageStream.h's GameMessageArgument, which
-// names the pool allocator, and one that names AudioEventRTS's.  Never on the hashing path either.
-MemoryPoolFactory *TheMemoryPoolFactory = NULL;
-void MemoryPool::freeBlock( void * ) { notOnThisPath( "MemoryPool::freeBlock" ); }
-MemoryPool *MemoryPoolFactory::createMemoryPool( const char *, Int, Int, Int ) { notOnThisPath( "MemoryPoolFactory" ); return NULL; }
-AudioEventRTS::~AudioEventRTS() { notOnThisPath( "AudioEventRTS" ); }
+// names the pool allocator, and one that names AudioEventRTS's.  Never on the hashing path either;
+// their stubs are shared with fpucontrol_selfcheck, in Tests/gcc_eager_vtable_stubs.cpp.
 
 // ---------------------------------------------------------------------------------------- table
 // Code units, then XferCRC over Xfer::xferUnicodeString at two bytes a unit and at four.

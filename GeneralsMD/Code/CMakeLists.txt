@@ -930,11 +930,13 @@ set_target_properties(gameengine PROPERTIES CXX_STANDARD 17)
 # fail there.  POSIX only for now; nothing here has run it on Windows.  See Tests/test_fpucontrol.cpp.
 if(ZH_PLATFORM_POSIX)
   add_executable(fpucontrol_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_fpucontrol.cpp
-                                      ${GE}/Source/GameLogic/System/FPUControl.cpp)
+                                      ${GE}/Source/GameLogic/System/FPUControl.cpp
+                                      ${CMAKE_CURRENT_SOURCE_DIR}/Tests/gcc_eager_vtable_stubs.cpp)
   target_include_directories(fpucontrol_selfcheck PRIVATE
     $<TARGET_PROPERTY:gameengine,INTERFACE_INCLUDE_DIRECTORIES>)
   target_compile_definitions(fpucontrol_selfcheck PRIVATE
-    $<TARGET_PROPERTY:gameengine,INTERFACE_COMPILE_DEFINITIONS>)
+    $<TARGET_PROPERTY:gameengine,INTERFACE_COMPILE_DEFINITIONS>
+    ZH_EAGER_VTABLE_STUB_STRINGS)		# it links no AsciiString.cpp or UnicodeString.cpp
   set_target_properties(fpucontrol_selfcheck PROPERTIES CXX_STANDARD 17)
 endif()
 # Two names on this line are Windows-only, and expand to nothing elsewhere - in the same positions,
@@ -963,7 +965,8 @@ set(ZH_WIDECHAR_GATE_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_crc_gate.cpp
   ${GE}/Source/Common/System/Xfer.cpp ${GE}/Source/Common/System/XferCRC.cpp
   ${GE}/Source/Common/System/UnicodeString.cpp ${GE}/Source/Common/System/AsciiString.cpp
-  ${GE}/Source/Common/System/WideCharFns.cpp)
+  ${GE}/Source/Common/System/WideCharFns.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/Tests/gcc_eager_vtable_stubs.cpp)
 function(zh_widechar_gate name)
   add_executable(${name} ${ZH_WIDECHAR_GATE_SOURCES})
   target_include_directories(${name} PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
