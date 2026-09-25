@@ -16,7 +16,8 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// The two D3DX functions that reach GameLogic, written out for a platform with no d3dx9_43.dll.
+// The two D3DX functions that reach GameLogic, written out so that every machine computes them the
+// same way.  d3dx9math.h routes both here on every platform, Windows included.
 //
 // BezierSegment and BezFwdIterator call D3DXVec4Transform and D3DXVec4Dot, and
 // DumbProjectileBehavior flies a shell along the result, so this arithmetic is part of the replay
@@ -49,10 +50,11 @@
 //   - it is what Wine's d3dx9 computes, so it is what a Mac player running the Windows build under
 //     CrossOver computes today.
 // It is bit-identical to the Intel path on every lane except x, the only lane where the Bezier
-// basis has four nonzero terms, and there the two disagree on about 45% of realistic inputs.
-// The consequence is written down in docs/mac-port/README.md as a defect of the shipping Windows
-// game, not of this port.  Nothing here can make a Mac agree with an Intel and an AMD Windows
-// machine at once.
+// basis has four nonzero terms.  There the two disagree on 35.7% of Tests/d3dx_oracle's basis
+// inputs.  While Windows took this function from the DLL, that was a defect of the shipping
+// Windows game (docs/mac-port/README.md, defect #7), and no Mac build could match an Intel and an
+// AMD Windows machine at once.  So Windows now uses this file too, and every machine sums in this
+// order.
 //
 // Rules for anyone editing this file:
 //   - Do not reassociate, fuse, vectorise by hand or "improve" either function.  The goal is
