@@ -2366,7 +2366,12 @@ void INIClass::DuplicateCRCError(const char *message, const char *section, const
 	snprintf(buffer, sizeof(buffer), "%s - Duplicate Entry \"%s\" in section \"%s\" (%s)\n", message,
 		entry, section, Filename);
 
+#if defined(_WIN32)
 	OutputDebugString(buffer);
+#else
+	// The debugger's output channel on Windows; stderr is the one a Mac debugger shows.  B5.
+	fputs(buffer, stderr);
+#endif
 	assert(0);
 
 #ifdef NDEBUG

@@ -167,8 +167,9 @@ you start. That commit is the lock.
 | B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | not started |  |
 | B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | in progress | -95 |
 | B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
-| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | in progress (wwlib half) | -a9 |
-| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | in progress (the `debuglib`/`dinput8` drops only) | -18 |
+| B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | `wwlib` pass done; `GameEngine` half not started | -a9 |
+| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | `debuglib`/`dinput8` drops done; rest unclaimed | -18 |
+||||||| 9f4c1811
 | B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) — **see [findings](B7-w3d-layout.md)** | M1 | A1 | **done, held for B10** | -14 |
 | B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | in review | -83 |
 | B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | in progress | -21 |

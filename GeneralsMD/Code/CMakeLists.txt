@@ -289,7 +289,7 @@ target_include_directories(wwmath_selfcheck PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad
 target_link_libraries(wwmath_selfcheck PRIVATE wwmath wwsaveload wwlib wwdebug)
 
 # ---- wwlib ----------------------------------------------------------------
-add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE}
+set(WWLIB_SOURCES
   ${WW}/WWLib/_convert.cpp   ${WW}/WWLib/_mono.cpp      ${WW}/WWLib/argv.cpp
   ${WW}/WWLib/b64pipe.cpp    ${WW}/WWLib/b64straw.cpp   ${WW}/WWLib/base64.cpp
   ${WW}/WWLib/blit.cpp       ${WW}/WWLib/blowfish.cpp   ${WW}/WWLib/buff.cpp
@@ -318,6 +318,37 @@ add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE}
   ${WW}/WWLib/widestring.cpp ${WW}/WWLib/win.cpp        ${WW}/WWLib/WWCOMUtil.cpp
   ${WW}/WWLib/wwfile.cpp     ${WW}/WWLib/wwfont.cpp     ${WW}/WWLib/wwstring.cpp
   ${WW}/WWLib/xpipe.cpp      ${WW}/WWLib/xstraw.cpp     ${WW}/WWLib/xsurface.cpp)
+# Win32 subsystem code, left out of wwlib everywhere but Windows.  Each of these is a whole file of
+# one Windows API rather than a type leaking out of one, so there is nothing to port short of
+# reimplementing the API, and none of them has a caller that is not itself Windows code - searched
+# across GeneralsMD/Code on 2026-09-25, B5.  On Windows this list is not read, and wwlib gets the
+# same sources in the same order as before.  Put one back only with a caller that needs it.
+if(NOT ZH_PLATFORM_WINDOWS)
+  list(REMOVE_ITEM WWLIB_SOURCES
+    # DirectDraw, the pre-Direct3D 2D surface API.  The renderer never reaches it; DSurface is named
+    # nowhere outside WWLib, and draw.cpp, the fourth file of the set, was already out.  ConvertClass
+    # survives as a type: wwfont.cpp uses only its inline Convert_Pixel, WW3D2's txt*.cpp only
+    # references to it.
+    ${WW}/WWLib/convert.cpp    ${WW}/WWLib/ddraw.cpp      ${WW}/WWLib/dsurface.cpp
+    # The \\.\MONO device driver for a second, monochrome debug monitor.  WW3D2's rendobj.cpp
+    # includes _mono.h and names nothing from it.
+    ${WW}/WWLib/_mono.cpp      ${WW}/WWLib/mono.cpp
+    # Win32 resources, the message pump and its keyboard, ShellExecute, COM IDispatch and version
+    # resources.  No callers at all.
+    ${WW}/WWLib/data.cpp       ${WW}/WWLib/rcfile.cpp     ${WW}/WWLib/msgloop.cpp
+    ${WW}/WWLib/keyboard.cpp   ${WW}/WWLib/LaunchWeb.cpp  ${WW}/WWLib/WWCOMUtil.cpp
+    ${WW}/WWLib/verchk.cpp
+    # The HINSTANCE/HWND globals, which win.h declares only under _WINDOWS.
+    ${WW}/WWLib/win.cpp
+    # RegistryClass is HKEY throughout.  Its callers are dx8wrapper.cpp, W3DDisplay.cpp and
+    # WWAudio.cpp, which persist device and audio settings; where those live on macOS is theirs
+    # to decide, and registry.h says so to anyone who includes it.
+    ${WW}/WWLib/registry.cpp
+    # SecureRandomClass has no caller, and its only non-Windows seed is the _UNIX arm, which the
+    # plan forbids switching on.
+    ${WW}/WWLib/srandom.cpp)
+endif()
+add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE} ${WWLIB_SOURCES})
 target_include_directories(wwlib PUBLIC ${WW}/WWLib
   PRIVATE ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwlib PRIVATE wwdebug)
