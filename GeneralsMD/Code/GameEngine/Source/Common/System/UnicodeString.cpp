@@ -47,6 +47,8 @@
 #include "Lib/WideCharFns.h"
 #include "Common/CriticalSection.h"
 
+#include <wctype.h>	// iswspace; Apple's headers happen to supply it, glibc's do not
+
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
