@@ -966,19 +966,28 @@ target_link_libraries(gameengine PUBLIC
 # gameengine, so it runs on every platform today rather than when gameengine links.  The
 # -fshort-wchar twin gives wchar_t MSVC's two unsigned bytes, which is the Windows model on a
 # Mac or Linux box; see Tests/test_widechar_crc_gate.cpp for what the pair proves and does not.
-set(ZH_WIDECHAR_GATE_SOURCES
-  ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_crc_gate.cpp
+# The real sources both of B1's tests are built from, and the one stub file they share.
+set(ZH_WIDECHAR_TEST_SUPPORT
   ${GE}/Source/Common/System/Xfer.cpp ${GE}/Source/Common/System/XferCRC.cpp
   ${GE}/Source/Common/System/UnicodeString.cpp ${GE}/Source/Common/System/AsciiString.cpp
-  ${GE}/Source/Common/System/WideCharFns.cpp)
+  ${GE}/Source/Common/System/WideCharFns.cpp ${CMAKE_CURRENT_SOURCE_DIR}/Tests/widechar_test_stubs.cpp)
 function(zh_widechar_gate name)
-  add_executable(${name} ${ZH_WIDECHAR_GATE_SOURCES})
+  add_executable(${name} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_crc_gate.cpp ${ZH_WIDECHAR_TEST_SUPPORT})
   target_include_directories(${name} PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
   target_compile_definitions(${name} PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
   set_target_properties(${name} PROPERTIES CXX_STANDARD 17)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 zh_widechar_gate(widechar_crc_gate)
+# The wide-format funnel against MSVC's legacy wide printf: %s wide, %S narrow.  Off Windows it
+# checks the hand-written formatter; on Windows the same expected strings check the real
+# _vsnwprintf.  See Tests/test_widechar_format.cpp.
+add_executable(widechar_format_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_format.cpp
+  ${ZH_WIDECHAR_TEST_SUPPORT})
+target_include_directories(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+target_compile_definitions(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(widechar_format_selfcheck PROPERTIES CXX_STANDARD 17)
+add_test(NAME widechar_format_selfcheck COMMAND widechar_format_selfcheck)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   zh_widechar_gate(widechar_crc_gate_msvc_model)
   target_compile_options(widechar_crc_gate_msvc_model PRIVATE -fshort-wchar)

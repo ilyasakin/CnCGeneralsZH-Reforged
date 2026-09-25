@@ -29,7 +29,7 @@ counting them together:
 | | Specifiers | What the argument is | Why it is a problem |
 |:--|--:|:--|:--|
 | `%ls` / `%ws` in a wide format | 25 | `WideChar*` | The width. Correct on MSVC today and after the flip, since `char16_t` and `wchar_t` are layout-compatible there. Broken on macOS, and broken *inside* `WideCharFormatV`: that funnel widens the **format** to `wchar_t` but the **argument** is still a `char16_t*` sitting in the `va_list` where nothing can reach it. |
-| `%S` in a wide format | 7 | `char*` | Not a width problem at all. `%S` inside a wide format means "narrow string" on MSVC, and every one of these really is passed an `AsciiString::str()` or a `const char*`. On POSIX the conversion runs through `mbrtowc`, so it is locale-dependent in the same way `vswprintf` was, and the engine's own bytes are not UTF-8. |
+| `%S` in a wide format | 7 | `char*` | Not a width problem at all. `%S` inside a wide format means "narrow string" on MSVC, and every one of these really is passed an `AsciiString::str()` or a `const char*`. **Correction, 2026-09-26:** this cell used to say that on POSIX the conversion runs through `mbrtowc`. It does not. In C99's `vswprintf`, `%S` is a WIDE string (`wchar_t*`), the opposite of MSVC's legacy meaning, so a narrow argument was read as wide. And `%s` is the narrow one, which is why 39 more formats, passing a `WideChar*` through a plain `%s`, printed garbage on POSIX; this table never counted them. Both are now fixed in one place: the POSIX funnel implements MSVC's legacy meanings. See B15's task file. |
 
 Verified argument types for all seven `%S`: `GameState.cpp:1219` is `AsciiString mapLabel`
 (`GameState.h:105`); `PopupSaveLoad.cpp:465,467` are `const char *` from
