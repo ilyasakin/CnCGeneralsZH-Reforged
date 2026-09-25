@@ -55,9 +55,9 @@ static const Int CONSOLE_MAX_ROWS = 64;								///< display strings kept alive, 
 static const Int CONSOLE_SCROLLBACK_LIMIT = 256;
 static const Int CONSOLE_HISTORY_LIMIT = 32;
 
-static const WideChar *CONSOLE_PROMPT = L"> ";
-static const WideChar *CONSOLE_CURSOR = L"_";
-static const WideChar CONSOLE_FIRST_PRINTABLE_CHAR = L' ';
+static const WideChar *CONSOLE_PROMPT = u"> ";
+static const WideChar *CONSOLE_CURSOR = u"_";
+static const WideChar CONSOLE_FIRST_PRINTABLE_CHAR = u' ';
 
 static const Color CONSOLE_PANEL_COLOR = GameMakeColor( 0, 0, 0, 225 );
 static const Color CONSOLE_EDGE_COLOR = GameMakeColor( 90, 90, 90, 255 );
@@ -353,7 +353,7 @@ void GameConsole::runCommand( AsciiString commandLine )
 		return;
 	}
 
-	UnicodeString unknown( L"unknown command: " );
+	UnicodeString unknown( u"unknown command: " );
 	UnicodeString name;
 	name.translate( command );
 	unknown.concat( name );

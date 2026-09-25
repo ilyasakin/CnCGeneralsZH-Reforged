@@ -281,7 +281,7 @@ void StartPressed(void)
 		{
 			UnicodeString text;
 			text.format(TheGameText->fetch("LAN:TooManyPlayers"), (md)?md->m_numPlayers:0);
-			TheLAN->OnChat(UnicodeString(L"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
+			TheLAN->OnChat(UnicodeString(u"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
 		}
 		return;
 	}
@@ -292,7 +292,7 @@ void StartPressed(void)
 		if (TheLAN->AmIHost())
 		{
 			UnicodeString text = TheGameText->fetch("GUI:NeedHumanPlayers");
-			TheLAN->OnChat(UnicodeString(L"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
+			TheLAN->OnChat(UnicodeString(u"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
 		}
 		return;
 	}
@@ -304,7 +304,7 @@ void StartPressed(void)
 		{
 			UnicodeString text;
 			text.format(TheGameText->fetch("LAN:NeedMorePlayers"),numUsers);
-			TheLAN->OnChat(UnicodeString(L"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
+			TheLAN->OnChat(UnicodeString(u"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
 		}
 		return;
 	}
@@ -333,7 +333,7 @@ void StartPressed(void)
 		{
 			UnicodeString text;
 			text.format(TheGameText->fetch("LAN:NeedMoreTeams"));
-			TheLAN->OnChat(UnicodeString(L"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
+			TheLAN->OnChat(UnicodeString(u"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
 		}
 		return;
 	}
@@ -342,7 +342,7 @@ void StartPressed(void)
 	{
 		UnicodeString text;
 		text.format(TheGameText->fetch("GUI:SandboxMode"));
-			TheLAN->OnChat(UnicodeString(L"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
+			TheLAN->OnChat(UnicodeString(u"SYSTEM"), TheLAN->GetLocalIP(), text, LANAPI::LANCHAT_SYSTEM);
 	}
 
 	// see if everyone's accepted and count the number of players in the game
@@ -351,12 +351,12 @@ void StartPressed(void)
 	Bool willTransfer = TRUE;
 	if (mapData)
 	{
-		mapDisplayName.format(L"%ls", mapData->m_displayName.str());
+		mapDisplayName.format(u"%ls", mapData->m_displayName.str());
 		willTransfer = !mapData->m_isOfficial;
 	}
 	else
 	{
-		mapDisplayName.format(L"%hs", myGame->getMap().str());
+		mapDisplayName.format(u"%hs", myGame->getMap().str());
 		willTransfer = WouldMapTransfer(myGame->getMap());
 	}
 	for( i = 0; i < MAX_SLOTS; i++ )
@@ -1094,7 +1094,7 @@ void updateGameOptions( void )
 		const MapMetaData *mapData = TheMapCache->findMap( TheLAN->GetMyGame()->getMap() );
 		if (mapData && localSlot && localSlot->hasMap())
 		{
-			mapDisplayName.format(L"%ls", mapData->m_displayName.str());
+			mapDisplayName.format(u"%ls", mapData->m_displayName.str());
 		}
 		else
 		{
@@ -1103,7 +1103,7 @@ void updateGameOptions( void )
 			{
 				s = s.reverseFind('\\') + 1;
 			}
-			mapDisplayName.format(L"%hs", s.str());
+			mapDisplayName.format(u"%hs", s.str());
 		}
 		UnicodeString old = GadgetStaticTextGetText(textEntryMapDisplay);
 		if(old.compare(mapDisplayName) != 0)

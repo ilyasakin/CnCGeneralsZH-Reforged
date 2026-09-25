@@ -34,7 +34,7 @@
 // A basic_string of WideChar, not std::wstring: the result is built in WideChar units and every
 // caller hands its c_str() straight to UnicodeString.  std::wstring stopped being that type the
 // moment WideChar became char16_t (B1); this is the one signature that change reached.
-std::basic_string<WideChar> MultiByteToWideCharSingleLine( const char *orig );
+WideCharString MultiByteToWideCharSingleLine( const char *orig );
 std::string WideCharStringToMultiByte( const WideChar *orig );
 
 #endif // __GAMESPY_THREADUTILS_H__

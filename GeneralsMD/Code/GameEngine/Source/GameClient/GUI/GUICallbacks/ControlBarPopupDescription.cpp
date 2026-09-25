@@ -421,7 +421,7 @@ enum
 static void putUpgradeTargets( BuildTooltipCard &card, const UpgradeTemplate *upgrade, const Player *player )
 {
 	const UpgradeEffect plain = {};
-	std::set< std::wstring > named;
+	std::set< WideCharString > named;
 	for( const CommandButton *button = TheControlBar->getCommandButtons(); button; button = button->getNext() )
 	{
 		if( card.upgrades.size() >= UPGRADE_TARGETS_SHOWN )
@@ -731,7 +731,7 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 							obi = (*bmi)->getOverchargeBehaviorInterface();
 							if( obi )
 							{
-								descrip.concat( L"\n" );
+								descrip.concat( u"\n" );
 								if( obi->isOverchargeActive() )
 									descrip.concat( TheGameText->fetch( "TOOLTIP:TooltipNukeReactorOverChargeIsOn" ) );
 								else
@@ -833,7 +833,7 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 					if (firstRequirement)
 						firstRequirement = false;
 					else
-						requires.concat(L", ");
+						requires.concat(u", ");
 				}
 				requires.concat(requiresList);
 			}
@@ -943,7 +943,7 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 						if (firstRequirement)
 							firstRequirement = false;
 						else
-							requires.concat(L", ");
+							requires.concat(u", ");
 					}
 					requires.concat(requiresList);
 				}
@@ -1003,7 +1003,7 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 	// still needs
 	if( !card.warning.isEmpty() )
 	{
-		descrip.concat( L"\n\n" );
+		descrip.concat( u"\n\n" );
 		descrip.concat( card.warning );
 	}
 	if( card.hasStats )
@@ -1015,7 +1015,7 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 			UnicodeString weapon;
 			// the gap is here rather than in the string: the string table collapses runs of spaces
 			weapon.format( TheGameText->fetch( "TOOLTIP:WeaponStats" ), card.damage, card.range );
-			stats.concat( L"   " );
+			stats.concat( u"   " );
 			stats.concat( weapon );
 		}
 		descrip.concat( stats );
@@ -1023,7 +1023,7 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 	if( !card.requires.isEmpty() )
 	{
 		if( !descrip.isEmpty() )
-			descrip.concat( L"\n" );
+			descrip.concat( u"\n" );
 		descrip.concat( card.requires );
 	}
 

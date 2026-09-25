@@ -37,10 +37,10 @@
 	 unsigned bytes there, which is what makes the cast honest.  Elsewhere it is WideCharFromUtf8,
 	 which agrees with it on every well-formed input.  (The two differ only in how many U+FFFD they
 	 put where the bytes are not UTF-8 at all.) */
-std::basic_string<WideChar> MultiByteToWideCharSingleLine( const char *orig )
+WideCharString MultiByteToWideCharSingleLine( const char *orig )
 {
 	const size_t len = strlen( orig );
-	std::basic_string<WideChar> dest( len + 1, (WideChar)0 );	// UTF-8 never needs more units than bytes
+	WideCharString dest( len + 1, (WideChar)0 );	// UTF-8 never needs more units than bytes
 
 #if defined(_WIN32)
 	MultiByteToWideChar( CP_UTF8, 0, orig, -1, reinterpret_cast<LPWSTR>( &dest[0] ), (int)len );

@@ -487,7 +487,7 @@ WindowMsgHandledType PopupHostGameSystem( GameWindow *window, UnsignedInt msg, W
 
 					// Clean up the text (remove leading/trailing chars, etc)
 					const WideChar *c = txtInput.str();
-					while (c && (iswspace(*c)))
+					while (c && (WideCharIsSpace(*c)))
 						c++;
 
 					if (c)

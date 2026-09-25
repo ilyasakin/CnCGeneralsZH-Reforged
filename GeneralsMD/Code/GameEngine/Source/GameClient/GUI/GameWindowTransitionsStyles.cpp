@@ -1515,7 +1515,7 @@ void CountUpTransition::init( GameWindow *win )
 	
 	m_currentValue = 0;
 	UnicodeString currVal;
-	currVal.format(L"%d",m_currentValue);
+	currVal.format(u"%d",m_currentValue);
 	GadgetStaticTextSetText(m_win, currVal);
 }
 
@@ -1535,7 +1535,7 @@ void CountUpTransition::update( Int frame )
 				break;
 			m_currentValue = 0;
 			UnicodeString currVal;
-			currVal.format(L"%d",m_currentValue);
+			currVal.format(u"%d",m_currentValue);
 			GadgetStaticTextSetText(m_win, currVal);
 
 			m_win->winHide(TRUE);
@@ -1570,7 +1570,7 @@ void CountUpTransition::update( Int frame )
 			m_currentValue = m_intValue;
 
 		UnicodeString currVal;
-		currVal.format(L"%d",m_currentValue);
+		currVal.format(u"%d",m_currentValue);
 		GadgetStaticTextSetText(m_win, currVal);
 	}
 	if( frame == m_frameLength )

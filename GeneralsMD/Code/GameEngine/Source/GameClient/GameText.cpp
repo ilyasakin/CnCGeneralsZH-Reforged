@@ -270,7 +270,7 @@ GameTextManager::GameTextManager()
 #endif
 	m_mapStringInfo(NULL),
 	m_mapStringLUT(NULL),
-	m_failed(L"***FATAL*** String Manager failed to initilaize properly")
+	m_failed(u"***FATAL*** String Manager failed to initilaize properly")
 {
 	// Added By Sadullah Nader
 	// Initializations missing and needed
@@ -464,7 +464,8 @@ void GameTextManager::init( void )
 	if (ApplicationHWnd) {
 		//Set it twice because Win 9x does not support SetWindowTextW.
 		::SetWindowText(ApplicationHWnd, ourNameA.str());
-		::SetWindowTextW(ApplicationHWnd, ourName.str());
+		// Win32's W API: WideChar and WCHAR are the same two bytes on Windows, which makes the cast honest.
+		::SetWindowTextW(ApplicationHWnd, reinterpret_cast<LPCWSTR>(ourName.str()));
 	}
 
 }
@@ -585,7 +586,7 @@ void GameTextManager::removeLeadingAndTrailing ( Char *buffer )
 
 	ptr = first = buffer;
 
-	while ( (ch = *first) != 0 && iswspace ( ch ))
+	while ( (ch = *first) != 0 && WideCharIsSpace( ch ))
 	{
 			first++;
 	}
@@ -594,7 +595,7 @@ void GameTextManager::removeLeadingAndTrailing ( Char *buffer )
 
 	ptr -= 2;;
 
-	while ( (ptr > buffer) && (ch = *ptr) != 0 && iswspace ( ch ) )
+	while ( (ptr > buffer) && (ch = *ptr) != 0 && WideCharIsSpace( ch ) )
 	{
 		ptr--;
 	}
@@ -663,7 +664,7 @@ void GameTextManager::readToEndOfQuote( File *file, Char *in, Char *out, Char *w
 			slash = FALSE;
 		}
 
-		if ( iswspace ( ch ))
+		if ( WideCharIsSpace( ch ))
 		{
 			ch = ' ';
 		}
@@ -700,7 +701,7 @@ void GameTextManager::readToEndOfQuote( File *file, Char *in, Char *out, Char *w
 		{
 
 			case 0:
-				if ( iswspace ( ch ) || ch == '=' )
+				if ( WideCharIsSpace( ch ) || ch == '=' )
 				{
 					break;
 				}
@@ -842,7 +843,7 @@ void GameTextManager::translateCopy( WideChar *outbuf, Char *inbuf )
 	}
 	else if( m_munkee )
 	{
-		wcscpy(outbuf, L"Munkee");
+		WideCharCpy(outbuf, u"Munkee");
 		return;
 	}
 #endif
@@ -1387,7 +1388,7 @@ UnicodeString GameTextManager::fetch( const Char *label, Bool *exists )
 
 		// See if we already have the missing string
 		UnicodeString missingString;
-		missingString.format(L"MISSING: '%hs'", label);
+		missingString.format(u"MISSING: '%hs'", label);
 
 		NoString *noString = m_noStringList;
 

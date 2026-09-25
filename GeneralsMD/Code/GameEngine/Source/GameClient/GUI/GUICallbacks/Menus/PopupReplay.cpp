@@ -288,8 +288,12 @@ void reallySaveReplay(void)
 	{
 		if(DeleteFile(filename.str()) == 0)
 		{
-			wchar_t buffer[1024];
-			FormatMessageW ( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, buffer, sizeof(buffer), NULL);
+			// Win32 only: WideChar and WCHAR are the same two bytes there, which is what makes the cast
+			// honest.  B5 replaces DeleteFile/CopyFile and this message off Windows.  The size is in
+			// characters, as FormatMessageW takes it; it used to be sizeof(buffer), twice that.
+			WideChar buffer[1024];
+			FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, reinterpret_cast<LPWSTR>( buffer ),
+				sizeof( buffer ) / sizeof( buffer[0] ), NULL );
 			UnicodeString errorStr;
 			errorStr.set(buffer);
 			errorStr.trim();
@@ -313,8 +317,12 @@ void reallySaveReplay(void)
 	// copy the replay to the right place
 	if(CopyFile(oldFilename.str(),filename.str(), FALSE) == 0)
 	{
-		wchar_t buffer[1024];
-		FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, buffer, sizeof(buffer), NULL);
+		// Win32 only: WideChar and WCHAR are the same two bytes there, which is what makes the cast
+		// honest.  B5 replaces DeleteFile/CopyFile and this message off Windows.  The size is in
+		// characters, as FormatMessageW takes it; it used to be sizeof(buffer), twice that.
+		WideChar buffer[1024];
+		FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, reinterpret_cast<LPWSTR>( buffer ),
+			sizeof( buffer ) / sizeof( buffer[0] ), NULL );
 		UnicodeString errorStr;
 		errorStr.set(buffer);
 		errorStr.trim();

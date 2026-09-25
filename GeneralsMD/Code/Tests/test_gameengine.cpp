@@ -269,7 +269,7 @@ TEST(boot_memory_manager)
 
 	UnicodeString u;
 	u.translate( a );
-	CHECK( wcscmp( u.str(), L"Command & Conquer: Generals" ) == 0 );
+	CHECK( WideCharCmp( u.str(), u"Command & Conquer: Generals" ) == 0 );
 }
 
 /* winnt.h defines BitTest as the _bittest intrinsic, which takes a LONG*, so if
@@ -5226,27 +5226,27 @@ TEST(a_transferred_file_has_to_be_what_its_name_says_it_is)
 	 everyone's idea of who is in the room.  It was taken exactly as sent. */
 TEST(a_player_name_from_another_machine_cannot_rewrite_the_lobby)
 {
-	CHECK( IsUsablePlayerName( L"Olcay" ) );
-	CHECK( IsUsablePlayerName( L"[GLA] scud" ) );
-	CHECK( IsUsablePlayerName( L"\x00fcmit" ) );				// accents and non-latin are fine
+	CHECK( IsUsablePlayerName( u"Olcay" ) );
+	CHECK( IsUsablePlayerName( u"[GLA] scud" ) );
+	CHECK( IsUsablePlayerName( u"\x00fcmit" ) );				// accents and non-latin are fine
 
 	// the three separators the game state string is cut on
-	CHECK( !IsUsablePlayerName( L"a,b" ) );
-	CHECK( !IsUsablePlayerName( L"a:b" ) );
-	CHECK( !IsUsablePlayerName( L"a;b" ) );
+	CHECK( !IsUsablePlayerName( u"a,b" ) );
+	CHECK( !IsUsablePlayerName( u"a:b" ) );
+	CHECK( !IsUsablePlayerName( u"a;b" ) );
 
 	// control characters, in both bands, and the line separators
-	CHECK( !IsUsablePlayerName( L"a\nb" ) );
-	CHECK( !IsUsablePlayerName( L"a\x0085" "b" ) );
-	CHECK( !IsUsablePlayerName( L"a\x2028" "b" ) );
+	CHECK( !IsUsablePlayerName( u"a\nb" ) );
+	CHECK( !IsUsablePlayerName( u"a\x0085" "b" ) );
+	CHECK( !IsUsablePlayerName( u"a\x2028" "b" ) );
 
 	// half a surrogate pair is not a character
-	CHECK( !IsUsablePlayerName( L"a\xd800" "b" ) );
+	CHECK( !IsUsablePlayerName( u"a\xd800" "b" ) );
 
 	// a name has to have something in it
-	CHECK( !IsUsablePlayerName( L"" ) );
-	CHECK( !IsUsablePlayerName( L"   " ) );
-	CHECK( !IsUsablePlayerName( L"\x3000\x00a0" ) );			// ideographic and no-break spaces
+	CHECK( !IsUsablePlayerName( u"" ) );
+	CHECK( !IsUsablePlayerName( u"   " ) );
+	CHECK( !IsUsablePlayerName( u"\x3000\x00a0" ) );			// ideographic and no-break spaces
 	CHECK( !IsUsablePlayerName( NULL ) );
 }
 
@@ -5289,7 +5289,7 @@ static NetCommandRef *makeChat( const WideChar *body, Int length )
 	UnicodeString text;
 	Int k;
 	for( k = 0; k < length; ++k )
-		text.concat( body ? body[k] : (WideChar)(L'a' + (k % 26)) );
+		text.concat( body ? body[k] : (WideChar)(u'a' + (k % 26)) );
 	chat->setText( text );
 	chat->setPlayerMask( 0xFF );
 	chat->setPlayerID( 1 );
@@ -9977,13 +9977,13 @@ TEST(every_ai_rung_is_named_the_same_way_as_every_other)
 
 		// and one style for the lot: "Easy Army" beside "Medium AI" is what this is here to stop
 		// (CHECK_STR is narrow-char, and casting a WideChar* into it compares one byte and passes)
-		CHECK( wcscmp( name.str() + name.getLength() - 3, L" AI" ) == 0 );
+		CHECK( WideCharCmp( name.str() + name.getLength() - 3, u" AI" ) == 0 );
 	}
 
 	// no two rungs share a name, or the drop-down cannot say which one you picked
 	for (Int a = 0; a < numRungs; ++a)
 		for (Int b = a + 1; b < numRungs; ++b)
-			CHECK( wcscmp( SlotStateName( rungs[a] ).str(), SlotStateName( rungs[b] ).str() ) != 0 );
+			CHECK( WideCharCmp( SlotStateName( rungs[a] ).str(), SlotStateName( rungs[b] ).str() ) != 0 );
 }
 /* Five is what a column of the strip shows before the rest of the queue folds into the "+N" that
 	 closes it as a sixth cell.  It used to be sixteen across the bottom of the screen, which at a
@@ -11150,7 +11150,7 @@ TEST(string_file_bytes_decode_utf8_and_keep_latin1)
 
 	const unsigned char plain[] = "K";
 	CHECK_EQ( decodeStringFileCharacter( plain, &decoded ), 1 );
-	CHECK_EQ( (Int)decoded, (Int)L'K' );
+	CHECK_EQ( (Int)decoded, (Int)u'K' );
 
 	const unsigned char dotlessI[] = { 0xC4, 0xB1, 0 };						// U+0131, the ı in Kışla
 	CHECK_EQ( decodeStringFileCharacter( dotlessI, &decoded ), 2 );

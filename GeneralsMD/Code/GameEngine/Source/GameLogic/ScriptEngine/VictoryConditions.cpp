@@ -319,7 +319,7 @@ void VictoryConditions::cachePlayerPtrs( void )
 	for (Int i=0; i<MAX_PLAYER_COUNT; ++i)
 	{
 		Player *player = ThePlayerList->getNthPlayer(i);
-		DEBUG_LOG(("Checking whether to cache player %d - [%s], house [%s]\n", i, WideCharAsUtf8( player?player->getPlayerDisplayName().str():L"<NOBODY>" ).str(), WideCharAsUtf8( (player&&player->getPlayerTemplate())?player->getPlayerTemplate()->getDisplayName().str():L"<NONE>" ).str()));
+		DEBUG_LOG(("Checking whether to cache player %d - [%s], house [%s]\n", i, WideCharAsUtf8( player?player->getPlayerDisplayName().str():u"<NOBODY>" ).str(), WideCharAsUtf8( (player&&player->getPlayerTemplate())?player->getPlayerTemplate()->getDisplayName().str():u"<NONE>" ).str()));
 		if (player && player != ThePlayerList->getNeutralPlayer() && player->getPlayerTemplate() && player->getPlayerTemplate() != civTemplate && !player->isPlayerObserver())
 		{
 			DEBUG_LOG(("Caching player\n"));

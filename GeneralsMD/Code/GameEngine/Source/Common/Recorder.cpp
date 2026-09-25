@@ -1263,7 +1263,7 @@ Bool RecorderClass::openPlayback(AsciiString filename, Int &difficulty, Int &ran
 UnicodeString RecorderClass::readUnicodeString() {
 	// Was UnsignedShort: VC6's wchar_t was a typedef for it, so L"" initialised it
 	// and UnicodeString took it.  wchar_t is its own type now.
-	WideChar str[1024] = L"";
+	WideChar str[1024] = u"";
 	Int index = 0;
 
 	Int c = fgetwc(m_file);
@@ -1283,7 +1283,7 @@ UnicodeString RecorderClass::readUnicodeString() {
 		}
 		str[index] = c;
 	}
-	str[1023] = L'\0';
+	str[1023] = u'\0';
 
 	UnicodeString retval(str);
 	return retval;

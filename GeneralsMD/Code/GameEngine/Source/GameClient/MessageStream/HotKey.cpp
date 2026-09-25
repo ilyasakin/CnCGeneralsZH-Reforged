@@ -232,7 +232,7 @@ AsciiString HotKeyManager::searchHotKey( const UnicodeString& uStr )
 	const WideChar *marker = (const WideChar *)uStr.str();
 	while (marker && *marker)
 	{
-		if (*marker == L'&')
+		if (*marker == u'&')
 		{
 			// found a '&' - now look for the next char
 			UnicodeString tmp = UnicodeString::TheEmptyString;
