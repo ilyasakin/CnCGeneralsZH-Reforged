@@ -33,7 +33,7 @@
 
 #include "Lib/WideCharFns.h"
 
-#include "Common/CRC.h"
+#include "Common/crc.h"
 #include "Common/GameState.h"
 #include "Common/Registry.h"
 #include "Common/GlobalData.h"

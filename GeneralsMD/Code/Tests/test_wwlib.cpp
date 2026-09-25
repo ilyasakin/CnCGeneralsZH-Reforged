@@ -35,7 +35,7 @@
 #include "nstrdup.h"
 #include "strtok_r.h"
 #include "gcd_lcm.h"
-#include "vector.h"
+#include "Vector.H"
 #include "simplevec.h"
 #include "hash.h"
 #include "multilist.h"

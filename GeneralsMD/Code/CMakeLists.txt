@@ -39,8 +39,8 @@ endif()
 
 # compile_commands.json: every source's exact compile command, which Tools/syntax_sweep.py and
 # clangd read.  Ninja can produce it on demand; a Makefiles tree has nothing else that carries each
-# target's own -D flags.  macOS only because only the macOS tooling reads it, and it changes no
-# target and no command line.
+# target's own -D flags.  POSIX only because only the POSIX tooling reads it - include_case_check
+# among them - and it changes no target and no command line.
 if(ZH_PLATFORM_POSIX)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
@@ -72,7 +72,7 @@ set(WW ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/WWVegas)
 set(COMP ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/Compression)
 
 # Libraries/Include holds the handful of headers that belong to no library and are wanted by all
-# of them: Lib/BaseType.h, Lib/trig.h and, since B2, Lib/Clock.h.  Thirteen targets read the clock
+# of them: Lib/BaseType.h, Lib/Trig.h and, since B2, Lib/Clock.h.  Thirteen targets read the clock
 # - the five WWVegas libraries, the four dx11 ones and three of their tests - and naming each of
 # them here is a list that goes stale the first time somebody adds a target and forgets.
 #
@@ -822,7 +822,7 @@ target_include_directories(gameengine PUBLIC
   ${GE}/Include ${GE}/Include/Precompiled
   ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
   ${WW} ${WW}/WWLib
-  # The game includes "GameSpy/Peer/Peer.h", the SDK's own headers include each
+  # The game includes "gamespy/peer/peer.h", the SDK's own headers include each
   # other as "gscommon.h", so both levels have to be on the path.
   ${LIBSRC}/GameSpy/include ${LIBSRC}/GameSpy/include/gamespy ${COMP}
   # WW3D2 is here for d3dx9math.h alone: BezierSegment carries D3DXMATRIX, and
@@ -1195,6 +1195,15 @@ endif()  # ZH_PLATFORM_WINDOWS - device and codec smoke tests
 # data - but it does need an interpreter, so it is only registered when one is present.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+  # Every #include in the POSIX build must name its file in the file's own case.  Windows and a
+  # default macOS volume fold case and Linux does not, so a miscased include builds on the first two
+  # and is a missing header on the third; the first Linux build found 298.  This catches them on a
+  # Mac, from compile_commands.json, without Linux.  POSIX only: that is where the file is exported.
+  if(ZH_PLATFORM_POSIX)
+    add_test(NAME include_case_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/include_case_check.py
+                     ${CMAKE_BINARY_DIR}/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR})
+  endif()
   add_test(NAME bigfile_selfcheck
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/bigfile.py selfcheck)
   # Tools/vfx_tune.py rewrites those INIs in place; its selfcheck runs both rule sets over a

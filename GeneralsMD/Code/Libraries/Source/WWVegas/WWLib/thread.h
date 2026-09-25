@@ -27,7 +27,7 @@
 #endif
 
 #include "always.h"
-#include "vector.h"
+#include "Vector.H"
 
 #include <atomic>
 #include <thread>
