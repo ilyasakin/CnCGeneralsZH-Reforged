@@ -39,7 +39,8 @@
 /* FPUControl.h alone, not PreRTS.h: the engine headers define key functions inline outside their
 	 classes (GameMemory.h's EMPTY_DTOR), and GCC emits those classes' vtables in every TU that sees
 	 them, which then need the engine's out-of-line pieces (AudioEventRTS, MemoryPool) that this
-	 self-check does not link.  Clang does not, which is why macOS never noticed; Linux/gcc did.
+	 self-check does not link.  Clang does not when optimizing, which is why macOS never noticed;
+	 Linux/gcc did.  (Clang at -O0 can: see the stub file.)
 	 FPUControl.cpp itself must include PreRTS.h, so it names them anyway: they are stubbed, to abort
 	 if ever called, in Tests/gcc_eager_vtable_stubs.cpp. */
 #include "GameLogic/FPUControl.h"
