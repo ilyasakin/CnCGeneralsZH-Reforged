@@ -99,7 +99,7 @@ class STLSpecialAlloc;
 // Everything above that is not Windows, and nothing that is.  Each of these is also on the Windows
 // side, in the same relative order, so a file that leaned on one of them sees the same thing here.
 // <wchar.h> is the one addition: MSVC's <string.h> declares wcslen and the other wide-string
-// functions itself, and Darwin's does not.
+// functions itself, and glibc's and Darwin's do not.
 #include <assert.h>
 #include <ctype.h>
 #include <float.h>

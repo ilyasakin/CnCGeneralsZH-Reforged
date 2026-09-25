@@ -37,8 +37,8 @@
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class Thing;
-enum StealthLookType;
-enum EvaMessage;
+enum StealthLookType : Int;
+enum EvaMessage : Int;
 class FXList;
 
 enum

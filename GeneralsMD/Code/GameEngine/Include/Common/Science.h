@@ -40,7 +40,7 @@
 class Player;
 
 //-------------------------------------------------------------------------------------------------
-enum ScienceType
+enum ScienceType : Int
 {
 	SCIENCE_INVALID = -1
 };
