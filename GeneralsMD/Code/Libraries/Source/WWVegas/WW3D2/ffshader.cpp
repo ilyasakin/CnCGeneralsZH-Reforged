@@ -18,6 +18,7 @@
 
 #include "ffshader.h"
 #include "ffvertex.h"
+#include "sdl3target.h"
 
 #include <stdio.h>
 
@@ -28,10 +29,10 @@ static const char * const TEXTURE_FACTOR_REGISTER = "c0";
 
 // D3DTA_SELECTMASK is the argument itself; the two flags above it are modifiers the device applies
 // to whatever the argument turned out to be.
-static const DWORD ARGUMENT_SELECT_MASK = D3DTA_SELECTMASK;
+static const FixedFunctionValue ARGUMENT_SELECT_MASK = FF_TA_SELECTMASK;
 
 // The low half of D3DTSS_TEXCOORDINDEX is the coordinate set; the high half is a generation mode.
-static const DWORD COORDINATE_SET_MASK = 0xffff;
+static const FixedFunctionValue COORDINATE_SET_MASK = 0xffff;
 
 // The shader declares two coordinate sets, which is every one the four measured maps ask for.  A
 // third is a refusal rather than a shader that samples a register it never declared.
@@ -43,74 +44,74 @@ static const unsigned DECLARED_COORDINATE_SETS = 2;
 // its own stage register instead is the other reading of the documentation and it was measured:
 // on Flash Effect at frame 400 it takes the difference against the fixed-function frame from 0.25%
 // to 0.81%, so the set is what the device means.
-static unsigned coordinate_register(DWORD texture_coordinate_index)
+static unsigned coordinate_register(FixedFunctionValue texture_coordinate_index)
 {
 	return static_cast<unsigned>(texture_coordinate_index & COORDINATE_SET_MASK);
 }
 
 // "current" is initialised to the diffuse colour, which is what the device gives D3DTA_CURRENT at
 // stage 0, so the two need no distinguishing here.
-static bool argument_expression(DWORD argument, std::string & expression)
+static bool argument_expression(FixedFunctionValue argument, std::string & expression)
 {
 	switch (argument & ARGUMENT_SELECT_MASK) {
-	case D3DTA_DIFFUSE:  expression = "input.Diffuse";  break;
-	case D3DTA_CURRENT:  expression = "current"; break;
-	case D3DTA_TEXTURE:  expression = "texel"; break;
-	case D3DTA_TFACTOR:  expression = "TextureFactor"; break;
-	case D3DTA_SPECULAR: expression = "input.Specular"; break;
+	case FF_TA_DIFFUSE:  expression = "input.Diffuse";  break;
+	case FF_TA_CURRENT:  expression = "current"; break;
+	case FF_TA_TEXTURE:  expression = "texel"; break;
+	case FF_TA_TFACTOR:  expression = "TextureFactor"; break;
+	case FF_TA_SPECULAR: expression = "input.Specular"; break;
 	default:
 		return false;
 	}
 
 	// Replicate first, complement second: that is the order the reference rasteriser applies them,
 	// so 1 - a.a and not (1 - a).a for an argument carrying both.
-	if ((argument & D3DTA_ALPHAREPLICATE) != 0) {
+	if ((argument & FF_TA_ALPHAREPLICATE) != 0) {
 		expression = "(" + expression + ").aaaa";
 	}
-	if ((argument & D3DTA_COMPLEMENT) != 0) {
+	if ((argument & FF_TA_COMPLEMENT) != 0) {
 		expression = "(1.0 - " + expression + ")";
 	}
 	return true;
 }
 
-static bool operation_expression(DWORD operation, const std::string & argument0,
+static bool operation_expression(FixedFunctionValue operation, const std::string & argument0,
 	const std::string & argument1, const std::string & argument2, std::string & expression)
 {
 	switch (operation) {
-	case D3DTOP_SELECTARG1:
+	case FF_TOP_SELECTARG1:
 		expression = argument1;
 		return true;
-	case D3DTOP_SELECTARG2:
+	case FF_TOP_SELECTARG2:
 		expression = argument2;
 		return true;
-	case D3DTOP_MODULATE:
+	case FF_TOP_MODULATE:
 		expression = "(" + argument1 + " * " + argument2 + ")";
 		return true;
-	case D3DTOP_MODULATE2X:
+	case FF_TOP_MODULATE2X:
 		expression = "(" + argument1 + " * " + argument2 + " * 2.0)";
 		return true;
-	case D3DTOP_MODULATE4X:
+	case FF_TOP_MODULATE4X:
 		expression = "(" + argument1 + " * " + argument2 + " * 4.0)";
 		return true;
-	case D3DTOP_ADD:
+	case FF_TOP_ADD:
 		expression = "(" + argument1 + " + " + argument2 + ")";
 		return true;
-	case D3DTOP_ADDSIGNED:
+	case FF_TOP_ADDSIGNED:
 		expression = "(" + argument1 + " + " + argument2 + " - 0.5)";
 		return true;
-	case D3DTOP_SUBTRACT:
+	case FF_TOP_SUBTRACT:
 		expression = "(" + argument1 + " - " + argument2 + ")";
 		return true;
-	case D3DTOP_MULTIPLYADD:
+	case FF_TOP_MULTIPLYADD:
 		expression = "(" + argument0 + " + " + argument1 + " * " + argument2 + ")";
 		return true;
-	case D3DTOP_LERP:
+	case FF_TOP_LERP:
 		expression = "lerp(" + argument2 + ", " + argument1 + ", " + argument0 + ")";
 		return true;
-	case D3DTOP_ADDSIGNED2X:
+	case FF_TOP_ADDSIGNED2X:
 		expression = "((" + argument1 + " + " + argument2 + " - 0.5) * 2.0)";
 		return true;
-	case D3DTOP_ADDSMOOTH:
+	case FF_TOP_ADDSMOOTH:
 		expression = "(" + argument1 + " + " + argument2 + " - " + argument1 + " * " + argument2
 			+ ")";
 		return true;
@@ -118,42 +119,42 @@ static bool operation_expression(DWORD operation, const std::string & argument0,
 	// The four alpha blends differ only in where the blending alpha comes from, and the terrain
 	// uses three of them: the ground layers are blended by the vertex alpha and the noise layers by
 	// the alpha carried in the stage before them.
-	case D3DTOP_BLENDDIFFUSEALPHA:
+	case FF_TOP_BLENDDIFFUSEALPHA:
 		expression = "lerp(" + argument2 + ", " + argument1 + ", input.Diffuse.a)";
 		return true;
-	case D3DTOP_BLENDTEXTUREALPHA:
+	case FF_TOP_BLENDTEXTUREALPHA:
 		expression = "lerp(" + argument2 + ", " + argument1 + ", texel.a)";
 		return true;
-	case D3DTOP_BLENDFACTORALPHA:
+	case FF_TOP_BLENDFACTORALPHA:
 		expression = "lerp(" + argument2 + ", " + argument1 + ", TextureFactor.a)";
 		return true;
-	case D3DTOP_BLENDCURRENTALPHA:
+	case FF_TOP_BLENDCURRENTALPHA:
 		expression = "lerp(" + argument2 + ", " + argument1 + ", current.a)";
 		return true;
 
 	// Premultiplied: the first argument already carries its own alpha, so it is added rather than
 	// interpolated and only the second is faded out.
-	case D3DTOP_BLENDTEXTUREALPHAPM:
+	case FF_TOP_BLENDTEXTUREALPHAPM:
 		expression = "(" + argument1 + " + " + argument2 + " * (1.0 - texel.a))";
 		return true;
 
 	// The four modulate-and-add operations, which write a colour built from one argument's alpha
 	// and the other's colour.  D3D9 leaves the alpha channel of the result undefined for these and
 	// the engine does not read it, so the alpha here is whatever the arithmetic produces.
-	case D3DTOP_MODULATEALPHA_ADDCOLOR:
+	case FF_TOP_MODULATEALPHA_ADDCOLOR:
 		expression = "(" + argument1 + " + " + argument1 + ".a * " + argument2 + ")";
 		return true;
-	case D3DTOP_MODULATECOLOR_ADDALPHA:
+	case FF_TOP_MODULATECOLOR_ADDALPHA:
 		expression = "(" + argument1 + " * " + argument2 + " + " + argument1 + ".a)";
 		return true;
-	case D3DTOP_MODULATEINVALPHA_ADDCOLOR:
+	case FF_TOP_MODULATEINVALPHA_ADDCOLOR:
 		expression = "((1.0 - " + argument1 + ".a) * " + argument2 + " + " + argument1 + ")";
 		return true;
-	case D3DTOP_MODULATEINVCOLOR_ADDALPHA:
+	case FF_TOP_MODULATEINVCOLOR_ADDALPHA:
 		expression = "((1.0 - " + argument1 + ") * " + argument2 + " + " + argument1 + ".a)";
 		return true;
 
-	case D3DTOP_DOTPRODUCT3:
+	case FF_TOP_DOTPRODUCT3:
 		// The device works on signed values here and saturates the result into all four channels.
 		expression = "saturate(dot((" + argument1 + ").rgb * 2.0 - 1.0, ("
 			+ argument2 + ").rgb * 2.0 - 1.0)).xxxx";
@@ -182,31 +183,31 @@ static bool operation_expression(DWORD operation, const std::string & argument0,
 static const char * const ALPHA_LEVEL =
 	"    float alpha_level = floor(current.a * 255.0 + 0.5);\n";
 
-static bool alpha_test_expression(DWORD function, std::string & expression)
+static bool alpha_test_expression(FixedFunctionValue function, std::string & expression)
 {
 	switch (function) {
-	case D3DCMP_NEVER:
+	case FF_CMP_NEVER:
 		expression = "clip(-1.0);\n";
 		return true;
-	case D3DCMP_LESS:
+	case FF_CMP_LESS:
 		expression = "clip(AlphaReference.x - alpha_level - 1.0);\n";
 		return true;
-	case D3DCMP_LESSEQUAL:
+	case FF_CMP_LESSEQUAL:
 		expression = "clip(AlphaReference.x - alpha_level);\n";
 		return true;
-	case D3DCMP_GREATER:
+	case FF_CMP_GREATER:
 		expression = "clip(alpha_level - AlphaReference.x - 1.0);\n";
 		return true;
-	case D3DCMP_GREATEREQUAL:
+	case FF_CMP_GREATEREQUAL:
 		expression = "clip(alpha_level - AlphaReference.x);\n";
 		return true;
-	case D3DCMP_EQUAL:
+	case FF_CMP_EQUAL:
 		expression = "clip(0.5 - abs(alpha_level - AlphaReference.x));\n";
 		return true;
-	case D3DCMP_NOTEQUAL:
+	case FF_CMP_NOTEQUAL:
 		expression = "clip(abs(alpha_level - AlphaReference.x) - 0.5);\n";
 		return true;
-	case D3DCMP_ALWAYS:
+	case FF_CMP_ALWAYS:
 		// Nothing to write: every pixel survives, which is what no alpha test at all means.
 		expression.clear();
 		return true;
@@ -269,6 +270,12 @@ static void append_normal_mapped_lighting(std::string & hlsl, unsigned coordinat
 bool CombinerShader_Generate(const CombinerDescription & description, CombinerShaderTarget target,
 	std::string & hlsl)
 {
+	// The SDL3 GPU program is the D3D11 one with its bindings rewritten, so everything below only
+	// ever sees the two profiles it was written for.
+	if (target == COMBINER_SHADER_TARGET_SDL3_GPU) {
+		return CombinerShader_Generate(description, COMBINER_SHADER_TARGET_D3D11, hlsl)
+			&& SDL3_Shader_Retarget(hlsl, false);
+	}
 	if (description.StageCount == 0 || description.StageCount > MAXIMUM_COMBINER_STAGES) {
 		return false;
 	}
@@ -330,7 +337,7 @@ bool CombinerShader_Generate(const CombinerDescription & description, CombinerSh
 		// the terrain relies on it, blending its ground layers by an alpha two stages older than
 		// the colour being written.
 		std::string alpha_expression = "current";
-		if (source.AlphaOperation != D3DTOP_DISABLE
+		if (source.AlphaOperation != FF_TOP_DISABLE
 			&& !operation_expression(source.AlphaOperation, alpha_argument0, alpha_argument1,
 				alpha_argument2, alpha_expression)) {
 			return false;

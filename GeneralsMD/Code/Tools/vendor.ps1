@@ -271,5 +271,8 @@ Install-Nanosvg
 # docs/mac-port/README.md). Windows keeps Win32Device and Miles, so they are not fetched here;
 # vendor.sh fetches them, and says it skips DirectX the same way.
 Step 'skipping SDL3 and miniaudio: not Windows, and vendor.sh is what fetches them'
+# glslang, SPIRV-Cross and SDL_shadercross compile the shader generators' SDL3 GPU target (decision 4).
+# Windows compiles the D3D11 target with d3dcompiler_47.dll, so they are not fetched here either.
+Step 'skipping glslang, SPIRV-Cross and SDL_shadercross: the SDL3 GPU shader path, vendor.sh fetches them'
 Install-Art
 Step 'everything the build needs is in place'

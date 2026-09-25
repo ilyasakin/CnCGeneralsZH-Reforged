@@ -35,7 +35,7 @@
 #ifndef FFSHADER_H
 #define FFSHADER_H
 
-#include <d3d9.h>
+#include "ffstate.h"
 
 #include <string>
 
@@ -48,15 +48,15 @@ const unsigned MAXIMUM_COMBINER_STAGES = 4;
 // D3DTA_ALPHAREPLICATE the way the device does; the generator applies both.
 struct CombinerStage
 {
-	DWORD ColourOperation;
-	DWORD ColourArgument0;
-	DWORD ColourArgument1;
-	DWORD ColourArgument2;
-	DWORD AlphaOperation;
-	DWORD AlphaArgument0;
-	DWORD AlphaArgument1;
-	DWORD AlphaArgument2;
-	DWORD TextureCoordinateIndex;
+	FixedFunctionValue ColourOperation;
+	FixedFunctionValue ColourArgument0;
+	FixedFunctionValue ColourArgument1;
+	FixedFunctionValue ColourArgument2;
+	FixedFunctionValue AlphaOperation;
+	FixedFunctionValue AlphaArgument0;
+	FixedFunctionValue AlphaArgument1;
+	FixedFunctionValue AlphaArgument2;
+	FixedFunctionValue TextureCoordinateIndex;
 	bool  TextureBound;
 };
 
@@ -70,7 +70,7 @@ struct PixelPipelineDescription
 	bool AlphaTestEnabled;
 
 	// D3DCMP_*, the comparison the surviving alpha has to pass.
-	DWORD AlphaFunction;
+	FixedFunctionValue AlphaFunction;
 
 	bool FogEnabled;
 };
@@ -206,10 +206,14 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 // is a sampler2D read with tex2D in one and a Texture2D beside a SamplerState read with Sample in
 // the other, the output semantic is COLOR against SV_Target, and the texture factor is a constant
 // register against a constant buffer.  The arithmetic between them is the same text.
+//
+// SDL3_GPU is the D3D11 text with its bindings rewritten for SDL3's GPU API (sdl3target.h): what the
+// Metal and Vulkan backend compiles through glslang and SPIRV-Cross (decision 4).
 enum CombinerShaderTarget
 {
 	COMBINER_SHADER_TARGET_D3D9,
-	COMBINER_SHADER_TARGET_D3D11
+	COMBINER_SHADER_TARGET_D3D11,
+	COMBINER_SHADER_TARGET_SDL3_GPU
 };
 
 bool CombinerShader_Generate(const CombinerDescription & description, CombinerShaderTarget target,

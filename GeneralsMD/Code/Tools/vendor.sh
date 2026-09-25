@@ -452,6 +452,94 @@ install_miniaudio() {
   step "miniaudio 0.11.25 -> Libraries/Source/miniaudio"
 }
 
+# Replaces a vendored folder's contents with the named entries of an unpacked source, keeping the
+# folder's committed .gitignore. For the three shader libraries below, which upstream ship with
+# tens of megabytes of test data this build never reads.
+#   copy_entries <source> <destination> <entry>...
+copy_entries() {
+  local source="$1" destination="$2"; shift 2
+  local keep="$destination/.gitignore" kept="$work/$(basename "$destination").gitignore"
+  rm -f "$kept"
+  if [ -e "$keep" ]; then mv "$keep" "$kept"; fi
+  rm -rf "$destination"
+  mkdir -p "$destination"
+  local entry
+  for entry in "$@"; do
+    if [ ! -e "$source/$entry" ]; then
+      echo "[vendor] ERROR: $(basename "$destination") unpacked without $entry" >&2
+      exit 1
+    fi
+    cp -R "$source/$entry" "$destination/"
+  done
+  if [ -e "$kept" ]; then mv -f "$kept" "$keep"; fi
+}
+
+# --- glslang, pinned to vulkan-sdk-1.4.357.0 (168d452a): the HLSL front end that compiles the
+# shader generators' SDL3 target to SPIR-V (decision 4 in docs/mac-port/README.md). POSIX only; the
+# Windows build compiles HLSL with d3dcompiler_47.dll and never needs it.
+#
+# THIS TAG IS PAST THE HLSL FRONT END'S DEPRECATION. Upstream deprecated it in April 2026
+# (KhronosGroup/glslang#4210) and will remove it in a future major release, not before about
+# October 2027. A bump must check that ENABLE_HLSL still exists at the new commit; decision 4 records
+# the way out (DXC through SDL_shadercross, then Slang).
+#
+# Copied without Test/, gtests/ and the rest of upstream's CI: what the library build reads is the
+# sources, the version it takes from CHANGES.md, and StandAlone/ for one header the C interface uses.
+install_glslang() {
+  local destination="$libraries/Source/glslang"
+  if [ -e "$destination/glslang/HLSL/hlslParseHelper.cpp" ] && [ -z "$force" ]; then return 0; fi
+  local archive source
+  archive=$(get_file 'https://github.com/KhronosGroup/glslang/archive/168d452a4f460d24b588fed08477a81c44ee27a1.zip' "$work/glslang-vulkan-sdk-1.4.357.0.zip")
+  source=$(expand_source "$archive" 'glslang')
+  copy_entries "$source" "$destination" CMakeLists.txt parse_version.cmake CHANGES.md build_info.h.tmpl \
+    build_info.py LICENSE.txt LICENSES README.md glslang SPIRV StandAlone
+  if [ ! -e "$destination/glslang/HLSL/hlslParseHelper.cpp" ]; then
+    echo "[vendor] glslang unpacked without its HLSL front end - not the tree this build expects" >&2
+    exit 1
+  fi
+  step "glslang vulkan-sdk-1.4.357.0 -> Libraries/Source/glslang"
+}
+
+# --- SPIRV-Cross at 1a616956, the commit SDL_shadercross 1ff05bec pins as its own submodule, which is
+# what the D-spike measured all 49 programs through: SPIR-V to MSL for SDL's Metal backend. POSIX
+# only. Copied without reference/, shaders*/ and samples/, which are its test suite.
+install_spirv_cross() {
+  local destination="$libraries/Source/SPIRV-Cross"
+  if [ -e "$destination/spirv_msl.cpp" ] && [ -z "$force" ]; then return 0; fi
+  local archive source
+  archive=$(get_file 'https://github.com/KhronosGroup/SPIRV-Cross/archive/1a6169566c73d3da552748fc372fe2bbb856e46e.zip' "$work/SPIRV-Cross-1a616956.zip")
+  source=$(expand_source "$archive" 'SPIRV-Cross')
+  local entries=(CMakeLists.txt cmake include pkg-config LICENSE LICENSES README.md GLSL.std.450.h
+    NonSemanticShaderDebugInfo100.h)
+  local file
+  for file in "$source"/spirv*.cpp "$source"/spirv*.hpp "$source"/spirv*.h; do
+    entries+=("$(basename "$file")")
+  done
+  copy_entries "$source" "$destination" "${entries[@]}"
+  if [ ! -e "$destination/spirv_msl.cpp" ] || [ ! -e "$destination/spirv_cross_c.h" ]; then
+    echo "[vendor] SPIRV-Cross unpacked without spirv_msl.cpp and spirv_cross_c.h" >&2
+    exit 1
+  fi
+  step "SPIRV-Cross 1a616956 -> Libraries/Source/SPIRV-Cross"
+}
+
+# --- SDL_shadercross at 1ff05bec (it has no releases): the one C file that turns SPIR-V into an SDL
+# GPU shader, MSL on Metal. Only its source, header and licence: CMakeLists.txt builds it as a target
+# of its own, without DXC and without upstream's CMake, whose vendored mode insists on DXC's source
+# even when DXC is off.
+install_shadercross() {
+  local destination="$libraries/Source/SDL_shadercross"
+  if [ -e "$destination/src/SDL_shadercross.c" ] && [ -z "$force" ]; then return 0; fi
+  local archive source
+  archive=$(get_file 'https://github.com/libsdl-org/SDL_shadercross/archive/1ff05bec573988a98ef9e0260b4da44f512b8367.zip' "$work/SDL_shadercross-1ff05bec.zip")
+  source=$(expand_source "$archive" 'SDL_shadercross')
+  copy_entries "$source" "$destination" LICENSE.txt README.txt
+  mkdir -p "$destination/src" "$destination/include/SDL3_shadercross"
+  cp -f "$source/src/SDL_shadercross.c" "$destination/src/"
+  cp -f "$source/include/SDL3_shadercross/SDL_shadercross.h" "$destination/include/SDL3_shadercross/"
+  step "SDL_shadercross 1ff05bec -> Libraries/Source/SDL_shadercross"
+}
+
 get_channel_url() {
   if [ -n "${ZHR_CHANNEL_URL:-}" ]; then printf '%s/\n' "${ZHR_CHANNEL_URL%/}"; return 0; fi
   local launcher
@@ -554,5 +642,8 @@ install_litehtml_patch
 install_nanosvg
 install_sdl3
 install_miniaudio
+install_glslang
+install_spirv_cross
+install_shadercross
 install_art
 step 'everything the build needs is in place'
