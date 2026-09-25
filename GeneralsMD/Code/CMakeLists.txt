@@ -773,6 +773,63 @@ if(ZH_PLATFORM_POSIX)
   # where -lm is accepted and does nothing.  Not keyed on Linux, so the next platform needs no edit.
   target_link_libraries(miniaudio INTERFACE Threads::Threads ${CMAKE_DL_LIBS} m)
 
+  # ---- The shader generators and what compiles their SDL3 GPU target (decision 4, D3) -----------
+  # The generators are string building over a description; since ffstate.h they need nothing from
+  # the DirectX SDK, so off Windows they are the same three libraries without d3d9.
+  add_library(ffshader STATIC ${WW}/WW3D2/ffshader.cpp)
+  target_include_directories(ffshader PUBLIC ${WW}/WW3D2)
+  add_library(ffvertex STATIC ${WW}/WW3D2/ffvertex.cpp)
+  target_include_directories(ffvertex PUBLIC ${WW}/WW3D2)
+  add_library(engineshader STATIC ${WW}/WW3D2/engineshader.cpp)
+  target_include_directories(engineshader PUBLIC ${WW}/WW3D2)
+  target_link_libraries(engineshader PUBLIC ffshader)
+
+  # glslang (HLSL to SPIR-V) and SPIRV-Cross (SPIR-V to MSL), fetched and pinned by vendor.sh, with
+  # only the parts decision 4 uses.  Their options are set inside a function so they stay out of the
+  # rest of this file, and both are EXCLUDE_FROM_ALL: what gets built is what links against them.
+  function(zh_add_shader_compilers)
+    # Both read options with the old CMP0077 behaviour, under which option() ignores a normal
+    # variable its parent set.  Without this, every setting below would silently not apply.
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(BUILD_SHARED_LIBS OFF)
+    set(ENABLE_HLSL ON)
+    set(ENABLE_OPT OFF)
+    set(ENABLE_SPIRV ON)
+    set(ENABLE_GLSLANG_BINARIES OFF)
+    set(ENABLE_PCH OFF)
+    set(GLSLANG_TESTS OFF)
+    set(GLSLANG_ENABLE_INSTALL OFF)
+    set(BUILD_EXTERNAL OFF)
+    add_subdirectory(${LIBSRC}/glslang ${CMAKE_CURRENT_BINARY_DIR}/glslang EXCLUDE_FROM_ALL)
+    set(SPIRV_CROSS_CLI OFF)
+    set(SPIRV_CROSS_ENABLE_TESTS OFF)
+    set(SPIRV_CROSS_SHARED OFF)
+    set(SPIRV_CROSS_STATIC ON)
+    set(SPIRV_CROSS_ENABLE_HLSL OFF)
+    set(SPIRV_CROSS_ENABLE_CPP OFF)
+    set(SPIRV_CROSS_ENABLE_REFLECT OFF)
+    set(SPIRV_CROSS_ENABLE_UTIL OFF)
+    set(SPIRV_CROSS_ENABLE_MSL ON)
+    set(SPIRV_CROSS_ENABLE_GLSL ON)
+    set(SPIRV_CROSS_ENABLE_C_API ON)
+    set(SPIRV_CROSS_SKIP_INSTALL ON)
+    add_subdirectory(${LIBSRC}/SPIRV-Cross ${CMAKE_CURRENT_BINARY_DIR}/SPIRV-Cross EXCLUDE_FROM_ALL)
+  endfunction()
+  zh_add_shader_compilers()
+
+  # SDL_shadercross is one C file, built here rather than through its own CMakeLists, whose vendored
+  # mode insists on DXC's source even with DXC off.  No SDL_SHADERCROSS_DXC: HLSL never reaches it,
+  # only the SPIR-V glslang wrote.
+  add_library(sdl3_shadercross STATIC ${LIBSRC}/SDL_shadercross/src/SDL_shadercross.c)
+  target_include_directories(sdl3_shadercross PUBLIC ${LIBSRC}/SDL_shadercross/include)
+  target_link_libraries(sdl3_shadercross PUBLIC SDL3::SDL3-static PRIVATE spirv-cross-c)
+
+  # HLSL to SPIR-V to what a device takes, behind the one function that names the HLSL front end.
+  add_library(sdl3shadercompile STATIC ${WW}/WW3D2/sdl3shadercompile.cpp)
+  target_include_directories(sdl3shadercompile PUBLIC ${WW}/WW3D2)
+  target_link_libraries(sdl3shadercompile PUBLIC SDL3::SDL3-static
+    PRIVATE sdl3_shadercross glslang::glslang glslang::glslang-default-resource-limits)
+
   # The Miles 6.5 surface on miniaudio (C4): the same library name as the XAudio2 one on Windows, so
   # that gameenginedevice, once it builds off Windows, links milesaudio on either and
   # MilesAudioManager.cpp compiles unchanged against it.  Today only the tests below link it here.
