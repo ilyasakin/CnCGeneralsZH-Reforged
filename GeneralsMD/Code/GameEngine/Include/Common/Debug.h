@@ -231,10 +231,10 @@ DEBUG_EXTERN_C void ReleaseCrashLocalized(const AsciiString& p, const AsciiStrin
 class SimpleProfiler
 {
 private:
-	__int64 m_freq;
-	__int64 m_startThisSession;
-	__int64 m_totalThisSession;
-	__int64 m_totalAllSessions;
+	Int64 m_freq;
+	Int64 m_startThisSession;
+	Int64 m_totalThisSession;
+	Int64 m_totalAllSessions;
 	int			m_numSessions;
 
 public:
