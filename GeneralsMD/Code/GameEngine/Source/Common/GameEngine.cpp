@@ -27,6 +27,10 @@
 // Author: Michael S. Booth, April 2001
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "Platform/SleepMilliseconds.h"
+#if !defined(_WIN32)
+#include <unistd.h>		// getpid, for the model-checksum cache's scratch file
+#endif
 #include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
@@ -189,8 +193,10 @@ void initSubsystem(SUBSYSTEM*& sysref, AsciiString name, SUBSYSTEM* sys, Xfer *p
 }
 
 //-------------------------------------------------------------------------------------------------
+#if defined(_WIN32)
 extern HINSTANCE ApplicationHInstance;  ///< our application instance
-extern CComModule _Module;
+extern CComModule _Module;		// ATL's module, for the embedded browser's COM; nothing off Windows uses COM
+#endif
 
 //-------------------------------------------------------------------------------------------------
 static void updateTGAtoDDS();
@@ -259,7 +265,11 @@ static void writeModelChecksumCache( const ModelChecksumMap &cache )
 {
 	AsciiString finalPath = modelChecksumCachePath();
 	AsciiString scratchPath;
+#if defined(_WIN32)
 	scratchPath.format( "%s.%u", finalPath.str(), (UnsignedInt)GetCurrentProcessId() );
+#else
+	scratchPath.format( "%s.%u", finalPath.str(), (UnsignedInt)getpid() );
+#endif
 
 	FILE *cacheFile = fopen( scratchPath.str(), "w" );
 	if (cacheFile == NULL)
@@ -424,7 +434,9 @@ GameEngine::GameEngine( void )
 	m_quitting = FALSE;
 	m_isActive = FALSE;
 
+#if defined(_WIN32)
 	_Module.Init(NULL, ApplicationHInstance);
+#endif
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -484,7 +496,9 @@ GameEngine::~GameEngine()
 
 	Drawable::killStaticImages();
 
+#if defined(_WIN32)
 	_Module.Term();
+#endif
 
 	/* After everything that could still fork.  parallel_for never returns with work in flight, so
 		 there is nothing to drain here - but a worker parked on the semaphore still has to be told
@@ -1912,11 +1926,11 @@ static void updateResDrill( void )
 		 The wait is on the wall clock and not on logic frames because stage one opens the quit menu,
 		 the way a player reaches the options screen in a match, and that menu pauses the game.  A
 		 paused single-player game runs no logic at all, so a frame count here would never come due. */
-	const DWORD RES_DRILL_DISMISS_DELAY_MS = 2000;
+	const UnsignedInt RES_DRILL_DISMISS_DELAY_MS = 2000;
 
 	static Bool applied = FALSE;
 	static Bool dismissed = FALSE;
-	static DWORD appliedTimeMs = 0;
+	static UnsignedInt appliedTimeMs = 0;
 
 	if( applied )
 	{
@@ -2157,7 +2171,7 @@ static void updateHeadlessRun( void )
 	if (!unattended || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
 		return;
 
-	static DWORD runStartTime = 0;
+	static UnsignedInt runStartTime = 0;
 	static UnsignedInt runStartFrame = 0;
 	static Int peakUnits[ MAX_PLAYER_COUNT ];
 	if (runStartTime == 0)
@@ -2236,7 +2250,7 @@ static void updateHeadlessRun( void )
 	if (why == NULL)
 		return;
 
-	const DWORD wallMs = Clock_Milliseconds() - runStartTime;
+	const UnsignedInt wallMs = Clock_Milliseconds() - runStartTime;
 	const Real logicFps = wallMs ? (Real)(frame - runStartFrame) * 1000.0f / (Real)wallMs : 0.0f;
 
 	DEBUG_LOG(("HEADLESS RESULT: %s on frame %d (%d frames in %.1fs wall, %.0f logic fps, %.1fx real time)\n",
@@ -2343,7 +2357,7 @@ void GameEngine::update( void )
 		static Real fpsClientTotal = 0.0f, fpsClientMax = 0.0f;
 		static Real fpsLogicTotal = 0.0f, fpsLogicMax = 0.0f;
 		static Int fpsLogicTicks = 0, fpsCatchupPasses = 0;
-		static DWORD fpsWindowStart = Clock_Milliseconds();
+		static UnsignedInt fpsWindowStart = Clock_Milliseconds();
 		static Real fpsRadarTotal = 0.0f, fpsAudioTotal = 0.0f, fpsDrawTotal = 0.0f, fpsDrawMax = 0.0f;
 		static Real fpsSceneTotal = 0.0f, fpsUITotal = 0.0f, fpsPostTotal = 0.0f, fpsWinTotal = 0.0f;
 		static Real fpsStripGatherTotal = 0.0f, fpsStripDrawTotal = 0.0f;
@@ -2382,7 +2396,7 @@ void GameEngine::update( void )
 				now = Clock_Ticks();
 				const Int jitter = TheGlobalData->m_drawDelayJitterMS > 0
 					? (Int)( now % ( TheGlobalData->m_drawDelayJitterMS + 1 ) ) : 0;
-				::Sleep( TheGlobalData->m_drawDelayMS + jitter );
+				sleepMilliseconds( TheGlobalData->m_drawDelayMS + jitter );
 			}
 			TheMessageStream->propagateMessages();
 
@@ -2441,9 +2455,9 @@ void GameEngine::update( void )
 														 && videoLogicFrame + 1 >= TheGlobalData->m_videoStartFrame
 														 && videoLogicFrame <= TheGlobalData->m_videoEndFrame );
 
-		static DWORD prevLogicTime = Clock_Milliseconds();
+		static UnsignedInt prevLogicTime = Clock_Milliseconds();
 		static Real logicAccumMs = 0.0f;
-		DWORD now = Clock_Milliseconds();
+		UnsignedInt now = Clock_Milliseconds();
 		Real elapsedMs = (Real)(now - prevLogicTime);
 		prevLogicTime = now;
 
@@ -2604,8 +2618,8 @@ void GameEngine::update( void )
 		if( clientMS > fpsClientMax ) fpsClientMax = clientMS;
 		if( logicMS > fpsLogicMax ) fpsLogicMax = logicMS;
 		{
-			const DWORD nowMS = Clock_Milliseconds();
-			const DWORD windowMS = nowMS - fpsWindowStart;
+			const UnsignedInt nowMS = Clock_Milliseconds();
+			const UnsignedInt windowMS = nowMS - fpsWindowStart;
 			if( windowMS >= 1000 )
 			{
 				const Real fps = (Real)fpsFrames * 1000.0f / (Real)windowMS;
@@ -2648,16 +2662,18 @@ void GameEngine::update( void )
 
 // Horrible reference, but we really, really need to know if we are windowed.
 extern bool DX8Wrapper_IsWindowed;
+#if defined(_WIN32)
 extern HWND ApplicationHWnd;
+#endif
 
 /** -----------------------------------------------------------------------------------------------
  * The "main loop" of the game engine. It will not return until the game exits. 
  */
 void GameEngine::execute( void )
 {
-	DWORD prevLoopTime = Clock_Milliseconds();
+	UnsignedInt prevLoopTime = Clock_Milliseconds();
 #if defined(_DEBUG) || defined(_INTERNAL)
-	DWORD startTime = Clock_Milliseconds() / 1000;
+	UnsignedInt startTime = Clock_Milliseconds() / 1000;
 #endif
 
 	// pretty basic for now
@@ -2679,7 +2695,7 @@ void GameEngine::execute( void )
 				// enter only if in benchmark mode
 				if (TheGlobalData->m_benchmarkTimer > 0)
 				{
-					DWORD currentTime = Clock_Milliseconds() / 1000;
+					UnsignedInt currentTime = Clock_Milliseconds() / 1000;
 					if (TheGlobalData->m_benchmarkTimer < currentTime - startTime)
 					{
 						if (TheGameLogic->isInGame())
