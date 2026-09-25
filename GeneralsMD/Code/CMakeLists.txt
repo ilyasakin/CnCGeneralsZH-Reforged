@@ -912,16 +912,23 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 #    DownloadManagerPosix.cpp defines it NULL.  DownloadMenu.cpp itself is built everywhere, because
 #    .wnd files bind its callbacks by name through FunctionLexicon, which must be the same on
 #    every platform.
+#  - IMEManager.cpp: the IMM32 input method editor (Chinese, Japanese and Korean text entry).  Its
+#    only exports are TheIMEManager and CreateIMEManagerInterface; GameClient::init handles a NULL
+#    manager and every other caller tests for one, and no test calls it.  IMEManagerPosix.cpp answers
+#    NULL.  IME text entry off Windows is C3's.  (IMECandidate.cpp, whose window callbacks .wnd files
+#    name through FunctionLexicon, is a different file and is built everywhere.)
 if(ZH_PLATFORM_WINDOWS)
   list(REMOVE_ITEM GAMEENGINE_SOURCES
     ${GE}/Source/Common/System/StackDumpPosix.cpp
     ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp
-    ${GE}/Source/GameNetwork/DownloadManagerPosix.cpp)
+    ${GE}/Source/GameNetwork/DownloadManagerPosix.cpp
+    ${GE}/Source/GameClient/GUI/IMEManagerPosix.cpp)
 else()
   list(REMOVE_ITEM GAMEENGINE_SOURCES
     ${GE}/Source/Common/System/StackDump.cpp
     ${GE}/Source/GameNetwork/WOLBrowser/WebBrowser.cpp
-    ${GE}/Source/GameNetwork/DownloadManager.cpp)
+    ${GE}/Source/GameNetwork/DownloadManager.cpp
+    ${GE}/Source/GameClient/GUI/IMEManager.cpp)
 endif()
 
 # ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.
