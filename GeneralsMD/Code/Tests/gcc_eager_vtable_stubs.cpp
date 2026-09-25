@@ -71,5 +71,8 @@ void UnicodeString::releaseBuffer() { neverCalled( "UnicodeString::releaseBuffer
 #if defined(_DEBUG)
 // Named by this file's own ~AudioEventRTS above, which destroys the event's AsciiString members.
 void AsciiString::validate() const { neverCalled( "AsciiString::validate" ); }
+// Named under GCC by the eager ~UnicodeString in ScienceInfo's destructor (linux-check's Debug row,
+// arm64 gcc); clang on macOS does not emit it.
+void UnicodeString::validate() const { neverCalled( "UnicodeString::validate" ); }
 #endif
 #endif
