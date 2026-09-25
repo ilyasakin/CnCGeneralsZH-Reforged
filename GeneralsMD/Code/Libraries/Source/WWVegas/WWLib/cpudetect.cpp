@@ -901,6 +901,73 @@ static unsigned clamp_to_signed_max(unsigned long long bytes)
 }
 #endif
 
+#if !defined(WIN32)
+/* The system's memory figures, unclamped.  Init_Memory clamps them for the class's own fields;
+   GameClient's preload diagnostics ask for them again, unclamped, before and after each step, where
+   the clamp would read 0x7FFFFFFF on any machine with 2GB free and say nothing. */
+void CPUDetectClass::Query_Memory(unsigned long long& totalPhysical, unsigned long long& availablePhysical,
+	unsigned long long& totalPage, unsigned long long& availablePage,
+	unsigned long long& totalVirtual, unsigned long long& availableVirtual)
+{
+#if defined(__APPLE__)
+	unsigned long long total = 0;
+	size_t len = sizeof(total);
+	sysctlbyname("hw.memsize", &total, &len, NULL, 0);
+
+	// ullAvailPhys is free plus standby; the nearest Mach has is free plus inactive.
+	unsigned long long avail = 0;
+	vm_statistics64_data_t vm;
+	mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+	mach_port_t host = mach_host_self();
+	if (host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&vm, &count) == KERN_SUCCESS) {
+		avail = ((unsigned long long)vm.free_count + vm.inactive_count) * (unsigned long long)vm_page_size;
+	}
+	mach_port_deallocate(mach_task_self(), host);
+
+	// ullTotalPageFile is the commit limit, physical memory plus the page file; swap is the page file.
+	struct xsw_usage swap = {};
+	len = sizeof(swap);
+	sysctlbyname("vm.swapusage", &swap, &len, NULL, 0);
+
+	totalPhysical     = total;
+	availablePhysical = avail;
+	totalPage         = total + swap.xsu_total;
+	availablePage     = avail + swap.xsu_avail;
+	// The process's address space, which on either 64-bit platform is far past the field.
+	totalVirtual      = MACH_VM_MAX_ADDRESS;
+	availableVirtual  = MACH_VM_MAX_ADDRESS;
+#else
+	// POSIX.  The total is what matters - W3DShaderManager::testMinimumRequirements reads it to pick
+	// a preset - and sysconf answers it exactly.  The rest feed the processor log and GameClient's
+	// preload diagnostics.
+	const long page_size = sysconf(_SC_PAGE_SIZE);
+	const long pages = sysconf(_SC_PHYS_PAGES);
+	const unsigned long long total =
+		(pages > 0 && page_size > 0) ? (unsigned long long)pages * (unsigned long long)page_size : 0;
+
+	// _SC_AVPHYS_PAGES is a glibc/BSD extension, and it counts free pages only, where Windows'
+	// ullAvailPhys also counts standby.  Low, never high; 0 where it does not exist.
+	unsigned long long avail = 0;
+#if defined(_SC_AVPHYS_PAGES)
+	const long avail_pages = sysconf(_SC_AVPHYS_PAGES);
+	if (avail_pages > 0 && page_size > 0) {
+		avail = (unsigned long long)avail_pages * (unsigned long long)page_size;
+	}
+#endif
+
+	// POSIX has no portable question for swap, so the page file is reported as physical memory
+	// alone, which is what Windows reports on a machine with its page file turned off.
+	totalPhysical     = total;
+	availablePhysical = avail;
+	totalPage         = total;
+	availablePage     = avail;
+	// The process's address space, which on any 64-bit platform is far past the field.
+	totalVirtual      = ~0ULL;
+	availableVirtual  = ~0ULL;
+#endif
+}
+#endif
+
 void CPUDetectClass::Init_Memory()
 {
 #ifdef WIN32
@@ -927,60 +994,15 @@ void CPUDetectClass::Init_Memory()
 	AvailablePageMemory     = clamp_to_signed_max(mem.ullAvailPageFile);
 	TotalVirtualMemory      = clamp_to_signed_max(mem.ullTotalVirtual);
 	AvailableVirtualMemory  = clamp_to_signed_max(mem.ullAvailVirtual);
-#elif defined(__APPLE__)
-	unsigned long long total = 0;
-	size_t len = sizeof(total);
-	sysctlbyname("hw.memsize", &total, &len, NULL, 0);
-
-	// ullAvailPhys is free plus standby; the nearest Mach has is free plus inactive.
-	unsigned long long avail = 0;
-	vm_statistics64_data_t vm;
-	mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
-	mach_port_t host = mach_host_self();
-	if (host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&vm, &count) == KERN_SUCCESS) {
-		avail = ((unsigned long long)vm.free_count + vm.inactive_count) * (unsigned long long)vm_page_size;
-	}
-	mach_port_deallocate(mach_task_self(), host);
-
-	// ullTotalPageFile is the commit limit, physical memory plus the page file; swap is the page file.
-	struct xsw_usage swap = {};
-	len = sizeof(swap);
-	sysctlbyname("vm.swapusage", &swap, &len, NULL, 0);
-
-	TotalPhysicalMemory     = clamp_to_signed_max(total);
-	AvailablePhysicalMemory = clamp_to_signed_max(avail);
-	TotalPageMemory         = clamp_to_signed_max(total + swap.xsu_total);
-	AvailablePageMemory     = clamp_to_signed_max(avail + swap.xsu_avail);
-	// The process's address space, which on either 64-bit platform is far past the field.
-	TotalVirtualMemory      = clamp_to_signed_max(MACH_VM_MAX_ADDRESS);
-	AvailableVirtualMemory  = clamp_to_signed_max(MACH_VM_MAX_ADDRESS);
 #else
-	// POSIX.  Only the total leaves this class - W3DShaderManager::testMinimumRequirements reads it
-	// to pick a preset - and sysconf answers it exactly.  The rest feed the processor log.
-	const long page_size = sysconf(_SC_PAGE_SIZE);
-	const long pages = sysconf(_SC_PHYS_PAGES);
-	const unsigned long long total =
-		(pages > 0 && page_size > 0) ? (unsigned long long)pages * (unsigned long long)page_size : 0;
-
-	// _SC_AVPHYS_PAGES is a glibc/BSD extension, and it counts free pages only, where Windows'
-	// ullAvailPhys also counts standby.  Low, never high; 0 where it does not exist.
-	unsigned long long avail = 0;
-#if defined(_SC_AVPHYS_PAGES)
-	const long avail_pages = sysconf(_SC_AVPHYS_PAGES);
-	if (avail_pages > 0 && page_size > 0) {
-		avail = (unsigned long long)avail_pages * (unsigned long long)page_size;
-	}
-#endif
-
-	// POSIX has no portable question for swap, so the page file is reported as physical memory
-	// alone, which is what Windows reports on a machine with its page file turned off.
-	TotalPhysicalMemory     = clamp_to_signed_max(total);
-	AvailablePhysicalMemory = clamp_to_signed_max(avail);
-	TotalPageMemory         = clamp_to_signed_max(total);
-	AvailablePageMemory     = clamp_to_signed_max(avail);
-	// The process's address space, which on any 64-bit platform is far past the field.
-	TotalVirtualMemory      = clamp_to_signed_max(~0ULL);
-	AvailableVirtualMemory  = clamp_to_signed_max(~0ULL);
+	unsigned long long totalPhysical, availablePhysical, totalPage, availablePage, totalVirtual, availableVirtual;
+	Query_Memory(totalPhysical, availablePhysical, totalPage, availablePage, totalVirtual, availableVirtual);
+	TotalPhysicalMemory     = clamp_to_signed_max(totalPhysical);
+	AvailablePhysicalMemory = clamp_to_signed_max(availablePhysical);
+	TotalPageMemory         = clamp_to_signed_max(totalPage);
+	AvailablePageMemory     = clamp_to_signed_max(availablePage);
+	TotalVirtualMemory      = clamp_to_signed_max(totalVirtual);
+	AvailableVirtualMemory  = clamp_to_signed_max(availableVirtual);
 #endif
 }
 
