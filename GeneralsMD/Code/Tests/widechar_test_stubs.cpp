@@ -66,11 +66,8 @@ const UpgradeTemplate *UpgradeCenter::findUpgrade( const AsciiString & ) const {
 UpgradeTemplate *UpgradeCenter::firstUpgradeTemplate( void ) { notOnThisPath( "UpgradeCenter" ); return NULL; }
 template<> const char *KindOfMaskType::s_bitNameList[] = { NULL };
 // GCC emits inline destructors that clang does not - MessageStream.h's GameMessageArgument, which
-// names the pool allocator, and one that names AudioEventRTS's.  Never on the hashing path either.
-MemoryPoolFactory *TheMemoryPoolFactory = NULL;
-void MemoryPool::freeBlock( void * ) { notOnThisPath( "MemoryPool::freeBlock" ); }
-MemoryPool *MemoryPoolFactory::createMemoryPool( const char *, Int, Int, Int ) { notOnThisPath( "MemoryPoolFactory" ); return NULL; }
-AudioEventRTS::~AudioEventRTS() { notOnThisPath( "AudioEventRTS" ); }
+// names the pool allocator, and one that names AudioEventRTS's.  Never on the hashing path either;
+// their stubs are shared with fpucontrol_selfcheck, in Tests/gcc_eager_vtable_stubs.cpp.
 
 
 // Debug builds only, each under the same macro as its declaration, so it exists exactly when a build

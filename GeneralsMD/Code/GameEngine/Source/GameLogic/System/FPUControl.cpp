@@ -71,6 +71,16 @@ void setFPMode( void )
 		 double go through SSE/NEON, and the simulation has no long double and no x87 code (checked
 		 2026-09-25).  Then round to nearest, the one field the Windows branch sets. */
 	fesetenv( FE_DFL_ENV );
+#if defined(__aarch64__)
+	/* FE_DFL_ENV is not enough on glibc.  Measured on Ubuntu 24.04, glibc 2.39, aarch64: after
+		 fesetenv(FE_DFL_ENV) FPCR's FZ is clear but DN is still set, because glibc's _FPU_RESERVED
+		 (0xfe0fe0f8) keeps bit 25.  macOS clears both.  So clear FZ and DN here, whatever the C
+		 library does: with DN set a NaN's payload is not propagated, as it is on Windows. */
+	unsigned long long fpcr;
+	__asm__ volatile( "mrs %0, fpcr" : "=r"( fpcr ) );
+	fpcr &= ~((1ull << 24) | (1ull << 25));
+	__asm__ volatile( "msr fpcr, %0" : : "r"( fpcr ) );
+#endif
 	fesetround( FE_TONEAREST );
 	assertDenormalsAndNaNsAsWindows();
 #else
