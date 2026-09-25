@@ -50,6 +50,14 @@
 #include "chunkio.h"
 #include "wwdebug.h"
 #include "saveload.h"
+/*
+**	The whole class, not a forward declaration.  SimplePersistFactoryClass::Save calls obj->Save()
+**	on a PersistClass *, which does not depend on T or CHUNKID, so standard two-phase lookup checks
+**	it where the template is defined and needs PersistClass complete there.  MSVC's /permissive
+**	defers the check to instantiation, which is why this compiled there.  persist.h includes only
+**	always.h, refcount.h and postloadable.h, and defines nothing but its include guard.
+*/
+#include "persist.h"
 
 class PersistClass;
 

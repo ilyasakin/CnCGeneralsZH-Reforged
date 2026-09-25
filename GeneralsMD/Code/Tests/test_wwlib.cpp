@@ -767,6 +767,26 @@ TEST(widestring_compare_and_format)
 	CHECK(f == L"4-5");
 }
 
+/* _strlwr/_strupr turn asset and definition names into hash keys, so both builds must produce the
+   same key.  On Windows this runs MSVC's own; elsewhere, MSVCCompat.h's.  The expected strings are
+   written out by hand: ASCII letters convert, digits and punctuation do not, and 0xC9 - a Latin-1
+   E-acute, which a locale-aware conversion would change - is left alone, because nothing here ever
+   leaves the "C" locale.  Both return their argument, which font3d.cpp relies on. */
+TEST(strlwr_and_strupr_are_ascii_only_and_in_place)
+{
+	char lower[] = "Tank_\xC9" "Crew.W3D";
+	CHECK(_strlwr(lower) == lower);
+	CHECK_STR(lower, "tank_\xC9" "crew.w3d");
+
+	char upper[] = "Tank_\xE9" "crew.w3d";
+	CHECK(_strupr(upper) == upper);
+	CHECK_STR(upper, "TANK_\xE9" "CREW.W3D");
+
+	char plain[] = "MiXeD9";
+	CHECK_STR(strlwr(plain), "mixed9");
+	CHECK_STR(strupr(plain), "MIXED9");
+}
+
 TEST(strtrim_in_place)
 {
 	char buffer[64];
