@@ -42,6 +42,7 @@ class Bridge;
 class Object;
 class Weapon;
 class PathfindZoneManager;
+class PathfindCell;		// PathfindCellInfo names it before its definition; a friend declaration alone does not declare it
 
 // How close is close enough when moving.
 
