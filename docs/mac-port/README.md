@@ -753,7 +753,7 @@ it takes to be the file. Two shapes of name defeat that rule.
 
 A future caller writing an extensionless name would hit it. `PosixLocalFileSystem` keeps the rule
 but stops when the name runs out. Found by C1; recorded, not fixed on Windows.
-**12. A staging-room stats message sent the address of a string instead of the string - fixed.**
+**13. A staging-room stats message sent the address of a string instead of the string - fixed.**
 `WOLGameSetupMenu.cpp:125` passed `formatPlayerKVPairs(...)`'s `std::string` straight into
 `AsciiString::format("%d %s", ...)`'s varargs, where every other caller adds `.c_str()`. On MSVC
 x64 a non-trivial class in varargs is passed as the address of a temporary copy (measured: clang
