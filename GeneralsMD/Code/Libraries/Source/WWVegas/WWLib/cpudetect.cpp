@@ -34,6 +34,13 @@
 #include <stdio.h>
 #include <sys/sysctl.h>
 #include <time.h>
+#elif !defined(_WIN32)
+// The POSIX base, for every non-Windows platform that is not Darwin: sysconf for memory, uname for
+// the OS.  Darwin keeps the sysctl/Mach arms above, which answer more than POSIX can.
+#include <stdio.h>
+#include <sys/utsname.h>
+#include <time.h>
+#include <unistd.h>
 #endif
 
 /*
@@ -885,7 +892,7 @@ static unsigned clamp_to_signed_max(DWORDLONG bytes)
 	const DWORDLONG limit = 0x7FFFFFFFui64;
 	return (unsigned)(bytes > limit ? limit : bytes);
 }
-#elif defined(__APPLE__)
+#else
 // The same clamp, for the same callers, and so the same 0x7FFFFFFF on any machine with 2GB or more.
 static unsigned clamp_to_signed_max(unsigned long long bytes)
 {
@@ -948,7 +955,32 @@ void CPUDetectClass::Init_Memory()
 	TotalVirtualMemory      = clamp_to_signed_max(MACH_VM_MAX_ADDRESS);
 	AvailableVirtualMemory  = clamp_to_signed_max(MACH_VM_MAX_ADDRESS);
 #else
-#error "CPUDetectClass::Init_Memory has no answer for this platform"
+	// POSIX.  Only the total leaves this class - W3DShaderManager::testMinimumRequirements reads it
+	// to pick a preset - and sysconf answers it exactly.  The rest feed the processor log.
+	const long page_size = sysconf(_SC_PAGE_SIZE);
+	const long pages = sysconf(_SC_PHYS_PAGES);
+	const unsigned long long total =
+		(pages > 0 && page_size > 0) ? (unsigned long long)pages * (unsigned long long)page_size : 0;
+
+	// _SC_AVPHYS_PAGES is a glibc/BSD extension, and it counts free pages only, where Windows'
+	// ullAvailPhys also counts standby.  Low, never high; 0 where it does not exist.
+	unsigned long long avail = 0;
+#if defined(_SC_AVPHYS_PAGES)
+	const long avail_pages = sysconf(_SC_AVPHYS_PAGES);
+	if (avail_pages > 0 && page_size > 0) {
+		avail = (unsigned long long)avail_pages * (unsigned long long)page_size;
+	}
+#endif
+
+	// POSIX has no portable question for swap, so the page file is reported as physical memory
+	// alone, which is what Windows reports on a machine with its page file turned off.
+	TotalPhysicalMemory     = clamp_to_signed_max(total);
+	AvailablePhysicalMemory = clamp_to_signed_max(avail);
+	TotalPageMemory         = clamp_to_signed_max(total);
+	AvailablePageMemory     = clamp_to_signed_max(avail);
+	// The process's address space, which on any 64-bit platform is far past the field.
+	TotalVirtualMemory      = clamp_to_signed_max(~0ULL);
+	AvailableVirtualMemory  = clamp_to_signed_max(~0ULL);
 #endif
 }
 
@@ -983,7 +1015,21 @@ void CPUDetectClass::Init_OS()
 	}
 	OSVersionPlatformId = 0;
 #else
-#error "CPUDetectClass::Init_OS has no answer for this platform"
+	// POSIX: uname's release, "6.8.0-45-generic" on Linux.  As on Darwin, the third number goes where
+	// an NT build number would, the platform id stays 0, and the full "Linux 6.8.0-45-generic" is
+	// the extra info.
+	struct utsname name;
+	if (uname(&name) == 0) {
+		unsigned major = 0, minor = 0, patch = 0;
+		sscanf(name.release, "%u.%u.%u", &major, &minor, &patch);
+		OSVersionNumberMajor = major;
+		OSVersionNumberMinor = minor;
+		OSVersionBuildNumber = patch;
+		OSVersionExtraInfo = name.sysname;
+		OSVersionExtraInfo += " ";
+		OSVersionExtraInfo += name.release;
+	}
+	OSVersionPlatformId = 0;
 #endif
 }
 
@@ -1027,6 +1073,8 @@ void CPUDetectClass::Init_Processor_Log()
 	}
 #elif defined(__APPLE__)
 	SYSLOG(("macOS"));
+#else
+	SYSLOG(("%s", (const char *)OSVersionExtraInfo));
 #endif
 	SYSLOG(("\r\n"));
 
@@ -1130,7 +1178,9 @@ void CPUDetectClass::Init_Compact_Log()
    TIME_ZONE_INFORMATION time_zone;
    GetTimeZoneInformation(&time_zone);
    COMPACTLOG(("%d\t", time_zone.Bias));  // get diff between local time and UTC
-#elif defined(__APPLE__)
+#else
+   // Every non-Windows platform: tm_gmtoff is BSD, glibc and musl, and POSIX since 2024.  Without
+   // this arm the column would be missing and every later column of the compact log would shift.
    // TIME_ZONE_INFORMATION::Bias is minutes west of UTC, standard time.  tm_gmtoff is seconds east
    // and includes daylight saving, so in summer this differs from what Windows logs by DST's offset.
    // A log column, read by nothing.
@@ -1315,6 +1365,13 @@ void Get_OS_Info(
 
 #if defined(__APPLE__)
 	os_info.Code="MACOS";
+	os_info.VersionMajor=(unsigned char)OSVersionNumberMajor;
+	os_info.VersionMinor=(unsigned char)OSVersionNumberMinor;
+	os_info.VersionSub=(unsigned short)build_sub;
+	return;
+#elif !defined(_WIN32)
+	// The POSIX base.  Init_OS put uname's release numbers where Windows puts its version.
+	os_info.Code="POSIX";
 	os_info.VersionMajor=(unsigned char)OSVersionNumberMajor;
 	os_info.VersionMinor=(unsigned char)OSVersionNumberMinor;
 	os_info.VersionSub=(unsigned short)build_sub;
