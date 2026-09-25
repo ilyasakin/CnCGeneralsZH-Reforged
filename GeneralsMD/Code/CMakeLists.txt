@@ -29,6 +29,14 @@ else()
   set(ZH_NOT_YET_PORTABLE "")
 endif()
 
+# compile_commands.json: every source's exact compile command, which Tools/syntax_sweep.py and
+# clangd read.  Ninja can produce it on demand; a Makefiles tree has nothing else that carries each
+# target's own -D flags.  macOS only because only the macOS tooling reads it, and it changes no
+# target and no command line.
+if(ZH_PLATFORM_MACOS)
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
+
 # The zip goes to machines that have never installed a Visual Studio redistributable, and
 # generals.exe imported MSVCP140.dll and VCRUNTIME140.dll by name.  That fails in the Windows
 # loader before a line of our code runs, so there is no DebugLogFile.txt and no crash file to
