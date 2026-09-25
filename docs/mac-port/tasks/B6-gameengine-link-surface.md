@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** B1 B2 B3 B4 B5
 - **Blocks:** C1 C5 E1
-- **Status:** in progress — the `debuglib` and `dinput8` drops only (zhr2-B6); the rest is unclaimed
+- **Status:** in progress — the `debuglib` and `dinput8` drops only (-18); the rest is unclaimed
 - **Size:** `CMakeLists.txt` lines 515–539, plus whatever stubbing the link errors demand
 
 ## Why
@@ -53,6 +53,24 @@ standalone on arm64: `libgamespy.a`, 102 objects, 1488 defined symbols with the 
 (`qr2_initA`, `qr2_create_socket`, …), 0 errors, 9 warnings. It found pthreads on its own and
 needed no flags. Delete "stub gamespy". The open question is now the much smaller one of whether
 the **game's** GameSpy call sites compile, which is untested.
+
+**The two safe drops are done, 2026-09-25 (-18), and re-verifying them corrected three rows
+below.** `debuglib` and `dinput8` are off `gameengine`'s macOS line; the Windows list is unchanged,
+item for item. Re-measured rather than inherited:
+
+- `debuglib`: the original search (`Debug_`/`debug.h`) was for names the library does not use. Its
+  API is `Debug::`, `DFAIL`, `DASSERT`, `DLOG`, `DCRASH`. With those: four hits, all commented out.
+  Same verdict, now with the right query behind it.
+- `profile` is **not** "in-repo and portable". It calls `debug` throughout, includes `<mmsystem.h>`,
+  and like `debug` is only defined on Windows. While `profile` stays on the line, `debuglib` stays in
+  the closure; dropping it from `gameengine` removes a name, not a dependency.
+- `dinput8` is an accident for GameEngine and **load-bearing on Windows**: `gameenginedevice` calls
+  `DirectInput8Create` and gets `dinput8` only through `gameengine`'s PUBLIC line. It has to stay
+  there on Windows until someone moves it to `gameenginedevice`, where it belongs.
+
+On macOS both names were reaching the linker as `-ldebuglib`/`-ldinput8`, because neither target
+exists there - as do `profile`, `wwdownload`, `eabrowserdispatch`, `gamespy`, `ww3d2`, `wininet`,
+`imagehlp` and `imm32` today. `gameengine` still does not link.
 
 **The rest of the 17, categorised** (source analysis plus building what builds; `gameengine` still
 does not link, so none of this is confirmed by a successful link):
