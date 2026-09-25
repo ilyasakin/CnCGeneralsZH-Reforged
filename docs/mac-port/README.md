@@ -462,9 +462,12 @@ game on the current Windows build should report a mismatch after a shell-firing 
 a replay recorded on one vendor should diverge on the other. **Nobody has seen this happen.**
 `README.md` at the repository root says LAN and online play between separate machines "have not
 been tested", and `lan-play.ps1` runs its copies on one machine, which means one CPU vendor and one
-DLL body. That setup cannot show this, however many games it plays. The precedent is the other way:
-players *have* played across machines (`CHANGELOG.md:943` records a desync reported against v2.0.0), and `215f84a5` fixed a desync of exactly this shape — the
-x64 CRT choosing FMA3 or SSE2 `log()` by CPU — with `_set_FMA3_enable(0)` in `WinMain`.
+DLL body. That setup cannot show this, however many games it plays. There is a precedent of the same
+shape: `215f84a5` found that the x64 CRT chooses an FMA3 or an SSE2 `log()` by CPU, one bit apart,
+and fixed it with `_set_FMA3_enable(0)` in `WinMain`. Its CHANGELOG entry ("two players'
+processors do the maths slightly differently … Every machine uses the same one now") does not say
+how the bug was found. So it shows the project has already chosen one path for every CPU once. It
+does not show that anyone has played across machines.
 
 *What it means for the port.* A Mac cannot agree with an Intel and an AMD Windows machine at once
 while Windows keeps binding the DLL. `d3dxportable.h` sums left to right: that is the SDK's
