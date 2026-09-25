@@ -99,9 +99,9 @@ same split.
 | `eabrowserdispatch` | real, stubbable | 9 GameEngine files reference `WebBrowser` | null impl in `Stubs/` |
 | `wwdownload` | real, stubbable | 11 files reference the download path | null impl in `Stubs/` |
 | `benchmark` | real | 7 files; `GameLOD.cpp` sizes detail off it | **already builds on macOS** — keep |
-| `profile` | real, thin | 2 files: `Shell.cpp`, `GameLogic.cpp` | keep; it is in-repo and portable |
-| `debuglib` | **accident** | **zero** GameEngine files match `Debug_`/`debug.h` | drop from the macOS line |
-| `dinput8` | **accident** | 107 `DIK_` constants from `<dinput.h>`; **zero** calls to `DirectInput8Create`, `IDirectInput8` or `IDirectInputDevice` | header constants only — needs a key-code table, not a library |
+| `profile` | real, thin | 2 files: `Shell.cpp`, `GameLogic.cpp` | keep — **but not portable as it stands** (2026-09-25): it is built on `debug` (`Debug::AddCommands`, `Debug::Command`, `DFAIL`/`DASSERT` throughout), `profile.cpp:31` includes `<mmsystem.h>`, and both targets are defined only inside `if(ZH_PLATFORM_WINDOWS)`. Keeping it on macOS means porting `debug` too, or stubbing both |
+| `debuglib` | **accident** | **zero** live GameEngine calls. (`Debug_`/`debug.h` was the wrong search — the library's API is `Debug::`, `DFAIL`, `DASSERT`, `DLOG`, `DCRASH`. Re-run with those on 2026-09-25: 4 hits in GameEngine/GameEngineDevice, all commented out. Same conclusion.) | **dropped from the macOS line** (B6 drops). Still arrives through `profile` wherever `profile` is linked |
+| `dinput8` | accident **for GameEngine**, load-bearing on Windows | 107 `DIK_` constants from `<dinput.h>`; **zero** calls to `DirectInput8Create`, `IDirectInput8` or `IDirectInputDevice` in GameEngine. But `gameenginedevice`'s `Win32DIKeyboard.cpp:120` and `Win32DIMouse.cpp:49` call `DirectInput8Create` and get `dinput8` only through `gameengine`'s PUBLIC line | **dropped from the macOS line only** (B6 drops). On Windows it must stay, or move to `gameenginedevice`. GameEngine still needs a key-code table for `KeyDefs.h` |
 | `wininet` | real, Windows-only | `ChromaKeyboard.cpp` | Windows branch |
 | `imagehlp` | real, Windows-only | `StackDump.cpp` — C5's | Windows branch |
 | `imm32` | real, Windows-only | `IMEManager.cpp` | Windows branch |

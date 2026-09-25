@@ -2,9 +2,9 @@
 
 - **Milestone:** M1
 - **Depends on:** nothing
-- **Blocks:** six tests, including the determinism evidence
-- **Status:** not started
-- **Size:** one file, `Libraries/Source/WWVegas/WWDebug/wwdebug.cpp`
+- **Blocks:** six tests (**not** determinism evidence — see "What was done")
+- **Status:** done — `feature/mac-port-B16`, not verified on Windows. Done criterion redefined, see below.
+- **Size:** was "one file". Measured: `wwdebug.cpp`, `wwprofile.h`, `wwprofile.cpp`, and `WWLib/systimer.h`
 
 ## Why
 
@@ -21,9 +21,8 @@ separate non-Windows link line, with a comment saying why somebody bothered:
 > this self-check is the first evidence that determinism survives clang on arm64, so it is not
 > allowed to wait for them
 
-It still does not run. **Clearing this file turns the first real determinism evidence on arm64 —
-which E1 wants and nobody has — from an unbuildable target into a running one.** That makes it the
-highest-leverage single file in the M1 build.
+**That comment was wrong, and so was this paragraph** — see "What was done". `wwmath_selfcheck` is
+not determinism evidence and never was; E3 is.
 
 ## Scope
 
@@ -78,3 +77,54 @@ architecture.
   `wwdebug`, `wwmath` and `compression` carry no deferral marker, so they are targets this project
   expects to build here today, and a test of a target that is supposed to work and does not should
   fail loudly.
+
+## What was done — 2026-09-25, `zhr2-B16`
+
+**The task file was wrong a third time, in three ways.** Recorded so the next reader does not have
+to rediscover it.
+
+1. `wwdebug.cpp` has two more Windows sites than the table lists: `Is_Trying_To_Exit` and
+   `ExitProcess` at `:301-302` (`Except.h` declares nothing off `_MSC_VER`). They, `MessageBoxA`,
+   `__debugbreak` and the DBWIN32 block only appear with `-DWWDEBUG` — which this `CMakeLists.txt`
+   never defines, so that whole path is dead in every current configuration.
+2. **"`wwdebug.cpp` only" was the wrong scope. Fixing `wwdebug.cpp` alone unblocks nothing.** The
+   `wwdebug` target has three sources. `wwprofile.cpp` blocked the library (its own `<windows.h>`,
+   `__rdtsc`, `GetCurrentThreadId`, and `WWLib/systimer.h`, which still included `<windows.h>`), and
+   `wwprofile.h:101`'s `__int64` blocked `wwmath`'s `cullsys.cpp` and `wwmath.cpp`.
+3. **`wwmath_selfcheck` is not determinism evidence, for two independent reasons.** It checked
+   `M * inverse(M)` against identity to a `1e-4` tolerance, which passes under any rounding on any
+   compiler. And it could not fail in Release: its failure path was `assert(0)`, compiled out by
+   `-DNDEBUG`, after which it printed `OK` and exited 0 — and ctest judges the exit code. Measured
+   below. The "not allowed to wait for wwlib" reasoning in `CMakeLists.txt` also rested on the
+   belief that `wwmath` links against `wwdebug` alone; nobody had linked it, and it does not.
+
+**Done criterion, redefined by the PM:** `wwdebug` 3/3 and `wwmath` 36/36 building. Both archive.
+`wwmath_selfcheck` linking is blocked on `wwlib` and `wwsaveload`, i.e. on B5.
+
+| Commit | What |
+|:--|:--|
+| `8a84887e` | `wwdebug.cpp`: `errno`/`strerror_r`; a no-handler assert goes to stderr and takes the Abort path (no dialog, so no Retry/Ignore — hence no `__builtin_debugtrap`); DBWIN32 handler and declaration `_WIN32` only. `except.h` → `Except.h`. |
+| `9e63d75c` | `systimer.h`: `<windows.h>`/`mmsys.h` behind `_WIN32`; B2 had already moved the body to `Clock_Milliseconds`. `wwlib` 58 → 61/82 as a side effect. |
+| `afdb96ee` | `wwprofile`: `__int64` → `int64_t` (B3), `GetCurrentThreadId` → `ThreadClass::_Get_Current_Thread_ID` (B14's precedent in `wwmemlog.cpp`), a `Lib/Clock.h` tick off Windows, and five `StringClass`es passed to `%s` through varargs — clang rejects them as "call will abort at runtime". |
+| `3861c151` | `test_inverse.cpp` returns failures and checks one exact answer; `wwmath_selfcheck` links `wwlib`/`wwsaveload` everywhere. |
+
+**The selfcheck, measured in a Release build** (`-O3 -DNDEBUG`, the real `test_inverse.o`, the real
+`libwwmath.a`/`libwwdebug.a`, and a scratch-only stub object for the 19 `wwlib`/`wwsaveload`
+symbols the force-links reach — each stub aborts if called, and none was):
+
+| `Get_Inverse` | Old test | New test |
+|:--|:--|:--|
+| unchanged | `OK`, exit 0 | `OK`, exit 0 |
+| translation sign dropped | 12 `FAIL` lines, then **`OK`, exit 0** | 15 failures, exit 1 |
+| column 0 off by one ulp | `OK`, exit 0 | 1 failure (the exact check), exit 1 |
+
+The exact check is the scale matrix's inverse: every scale is a power of two, so every reciprocal and
+product is exact and the answer is the same bits on any IEEE compiler. That also means it cannot
+tell two compilers apart — the test header says so.
+
+**Left alone, deliberately:** `wwdebug.h:146`, `WWDEBUG_BREAK` expands to `__debugbreak()`. It has
+zero users; if one appears in code macOS compiles, it is a compile error, which is loud.
+
+**Surfaced, not B16's:** with `wwdebug` building, `wwutil` is now reached and fails in `miscutil.cpp`
+on `mmsys.h:48`'s `<mmsystem.h>`. It is in `all` with no deferral marker.
+
