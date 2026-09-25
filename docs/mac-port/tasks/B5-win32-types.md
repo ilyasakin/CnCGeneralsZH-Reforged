@@ -292,8 +292,11 @@ this tree, yet 20 WWVegas files include it under `_UNIX`, which makes a leak lou
 be silent for any `_UNIX` branch that does something else. `matrix3d.h` and `vector3.h` show up
 after the define in `Recorder.cpp`, but only as guard-skipped re-entries: they carry a `#pragma once`
 before their guard, so clang re-opens them, and their first real entry is earlier. Counting line
-markers instead of first entries says otherwise; that is how this was nearly misreported. The fix
-is a decision, not taken here.
+markers instead of first entries says otherwise; that is how this was nearly misreported. **Resolved, same day:** `vendor.sh` renames the SDK's macro to `GSI_UNIX`. All 117 SDK objects have
+identical machine code before and after, and a control shows `GSI_UNIX` still drives its POSIX paths.
+Two tripwires keep `_UNIX` out: `MSVCCompat.h` `#error`s on it, and the ctest `unix_define_check`
+scans every source (vendored included) and every compile command, with an armed control. `thread.h`'s
+dead `osdep.h` include is left in place on purpose, because it is what makes a leak fail loudly.
 
 <details><summary>The 62 enums</summary>
 
