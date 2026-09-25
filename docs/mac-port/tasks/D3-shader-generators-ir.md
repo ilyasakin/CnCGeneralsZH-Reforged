@@ -1,9 +1,9 @@
 # D3 — Shader generators target SDL3 GPU (was: emit an IR)
 
 - **Milestone:** M3
-- **Depends on:** D2
+- **Depends on:** nothing since decision 4 (it depended on D2 when the plan was an IR)
 - **Blocks:** D4
-- **Status:** not started
+- **Status:** in progress, -a9
 - **Size:** `ffshader.cpp` 543 lines, `ffvertex.cpp` 689, `engineshader.h` 104,
   `d3d8shadertranslate.cpp`
 
