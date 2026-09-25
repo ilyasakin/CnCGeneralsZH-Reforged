@@ -104,6 +104,8 @@
 // 3 arguments".  So off MSVC, the standard headers this tree's headers include are parsed here,
 // before the macros exist, and their include guards keep them from being parsed again under them.
 // A header this list misses fails loudly the same way, never silently.
+// Keyed on the COMPILER'S LIBRARY, hence !_MSC_VER and not !_WIN32: the question is whose <algorithm>
+// this is, not which operating system runs it.  mingw is Windows with libstdc++ and needs the list.
 #if !defined(_MSC_VER) && defined(__cplusplus)
 #include <algorithm>
 #include <atomic>
