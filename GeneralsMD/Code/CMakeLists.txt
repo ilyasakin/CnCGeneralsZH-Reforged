@@ -902,12 +902,18 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 #  - StackDump.cpp: dbghelp symbol lookup and a structured-exception context walk, Windows only.
 #    StackDumpPosix.cpp is the same Common/StackDump.h interface from backtrace() and dladdr();
 #    crash reporting proper is C5's.
+#  - WebBrowser.cpp: an ATL/COM wrapper around Internet Explorer for the dead WOL service's pages.
+#    Nothing ever creates TheWebBrowser, on Windows either (Win32GameEngine::createWebBrowser has
+#    no caller), and every caller - INIWebpageURL, WOLLadderScreen, WOLLoginMenu - tests it for NULL
+#    first.  WebBrowserPosix.cpp is the same interface without COM, TheWebBrowser NULL.
 if(ZH_PLATFORM_WINDOWS)
   list(REMOVE_ITEM GAMEENGINE_SOURCES
-    ${GE}/Source/Common/System/StackDumpPosix.cpp)
+    ${GE}/Source/Common/System/StackDumpPosix.cpp
+    ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp)
 else()
   list(REMOVE_ITEM GAMEENGINE_SOURCES
-    ${GE}/Source/Common/System/StackDump.cpp)
+    ${GE}/Source/Common/System/StackDump.cpp
+    ${GE}/Source/GameNetwork/WOLBrowser/WebBrowser.cpp)
 endif()
 
 # ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.
