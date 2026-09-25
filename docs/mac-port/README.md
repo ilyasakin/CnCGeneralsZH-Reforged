@@ -318,8 +318,20 @@ of the three corrupt data rather than fail to build, and both reach the bytes th
 network packets are made of.
 
 So: before assuming a vendored library ports cleanly, grep it for `__APPLE__`, `MACOS`,
-`TARGET_OS_*`, `_WIN32`, `__BIG_ENDIAN__`, **`__i386__`/`_M_IX86`**, `unsigned long` and `#ifdef`
-around type definitions. Treat every one as a claim about 2003 hardware until checked.
+`TARGET_OS_*`, `_WIN32`, `__BIG_ENDIAN__`, **`BIG_ENDIAN`/`LITTLE_ENDIAN`/`BYTE_ORDER`**,
+**`__i386__`/`_M_IX86`**, `unsigned long` and `#ifdef` around type definitions. Treat every one as a
+claim about 2003 hardware until checked.
+
+**`BIG_ENDIAN`, `LITTLE_ENDIAN` and `BYTE_ORDER` were added on 2026-09-25**, by a sixth instance, in
+**our own code rather than vendored code**: `WWLib/fixed.h:207` and `WWLib/base64.cpp:90`/`:102` chose
+their byte layout with `#ifdef BIG_ENDIAN`. On POSIX systems that is not a flag but the *name of a
+byte order*, defined unconditionally beside `LITTLE_ENDIAN` and `BYTE_ORDER`. Darwin's
+`<machine/endian.h>` always defines it, and glibc's `<endian.h>` does under `_DEFAULT_SOURCE`. So
+every little-endian Mac and Linux machine took the big-endian branch. Measured in a wwlib
+translation unit: `BIG_ENDIAN` 4321, `BYTE_ORDER` 1234. `test_wwlib`'s published RFC 4648 vectors
+and the `fixed` tests caught it. The list's `__BIG_ENDIAN__` could not have: a grep for it does not
+match the bare name. The fix is `WWLib/wwendian.h`'s `WW_BIG_ENDIAN`, from the compiler's own
+`__BYTE_ORDER__`, tested with `#if`. **Test a byte-order macro's value, never whether it is defined.**
 
 **`__i386__` was added to that list on 2026-09-22**, by a fifth instance that the list as it stood
 could not have found: `gimex.h:99` selected the `ARGB` channel order with
@@ -337,8 +349,9 @@ it is a landmine rather than a fire — which is the argument for fixing it whil
 open, not against.
 
 **Which half of this can be automated**, which matters if anyone turns it into a CI check: the
-predicate patterns (`__APPLE__`, `TARGET_OS_`, `MACOS`, `__BIG_ENDIAN`, `POWERPC`, and
-`__i386__`/`_M_IX86` added after a fifth instance was found written as a positive CPU test) are
+predicate patterns (`__APPLE__`, `TARGET_OS_`, `MACOS`, `__BIG_ENDIAN`, `POWERPC`,
+`__i386__`/`_M_IX86` added after a fifth instance was found written as a positive CPU test, and
+`#ifdef BIG_ENDIAN`/`LITTLE_ENDIAN`/`BYTE_ORDER` after a sixth) are
 quiet enough to run on every build. `unsigned long` is not: GameSpy alone would bury it. Automate
 the first half; the second stays a human read.
 
