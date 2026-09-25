@@ -297,6 +297,17 @@ use, so programs are compiled ahead of need. Proven to *draw*, not only compile,
 `Tests/w3d_view` (screenshot: `d-spike-crusader-metal.png`); the 49 programs themselves are proven
 to compile and validate, not yet to draw. Evidence and tables: `tasks/D3-shader-generators-ir.md`.
 
+*Known risk, recorded 2026-09-26:* glslang has deprecated its HLSL front end (glslang issue #4210,
+opened 2026-04-06). It goes at the next major version, with at least 18 months' notice, so not before
+about October 2027. We vendor a pinned commit, and what it compiles is our own generated text, not
+untrusted input, so the stated security reason barely applies. What we lose is upstream fixes.
+**Exit, if we need one:** DXC through the same shadercross call, with `-fspv-preserve-bindings` as the
+first thing to measure against the 3 bumped-terrain programs (unmeasured: shadercross does not expose
+DXC's arguments today). Slang is the other named route, also unmeasured. Only one compile call is
+specific to glslang, and D3's ctest twin runs every generated program through whichever front end is
+in use, so a switch is caught by the tests rather than in the game. Revisit by 2027-04, or at the
+first glslang release that removes the front end, whichever comes first.
+
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
 Added 2026-09-22 after two Windows-only breaks in one afternoon, both with the same shape and
