@@ -39,8 +39,15 @@
 
 #include "always.h"
 #include "Lib/Clock.h"
+/*
+**	Nothing below uses either of these since B2 moved Get onto Lib/Clock.h.  They stay on Windows
+**	because every Windows includer of this header has had <windows.h> and <mmsystem.h> through it,
+**	and nobody here can check which of them depends on that.  B5.
+*/
+#if defined(_WIN32)
 #include <windows.h>
 #include "mmsys.h"
+#endif
 
 #define TIMEGETTIME SystemTime.Get
 #define MS_TIMER_SECOND 1000
@@ -78,14 +85,22 @@ class SysTimeClass
 	private:
 
 		/*
+		**	Both are unsigned int, not the unsigned long they were.  Lib/Clock.h's millisecond clock
+		**	wraps at 2^32 and says so, and `WrapAdd = 0 - StartTime` and `time + WrapAdd` are correct
+		**	only in 32-bit arithmetic.  unsigned long is 32 bits on Windows, so this is the same
+		**	arithmetic there; on LP64 it is 64 bits, and the wrapped branch of Get would return
+		**	2^64 - (StartTime - time) instead of the elapsed time.  B5.
+		*/
+
+		/*
 		** Time we were first called.
 		*/
-		unsigned long StartTime;
+		unsigned int StartTime;
 
 		/*
 		** Time to add after timer wraps.
 		*/
-		unsigned long WrapAdd;
+		unsigned int WrapAdd;
 
 };
 
@@ -119,7 +134,7 @@ WWINLINE unsigned long SysTimeClass::Get(void)
 		is_init = true;
 	}
 
-	unsigned long time = Clock_Milliseconds();
+	unsigned int time = Clock_Milliseconds();
 	if (time > StartTime) {
 		return(time - StartTime);
 	}
