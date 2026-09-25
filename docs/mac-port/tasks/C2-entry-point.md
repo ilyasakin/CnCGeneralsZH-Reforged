@@ -63,6 +63,21 @@ happens.
 Windows: `WinMain.cpp` behaviour unchanged. The refactor is a move, not a rewrite; if `generals.exe`
 starts differently than it did, the split went too far.
 
+## What B5 left for C2 to replace, 2026-09-26
+
+B5 made these compile off Windows with a stand-in, and C2 replaces each:
+
+- **The process command line.** `EarlyCommandLine.h`'s `findEarlyCommandLineOption`/`Value` read
+  `GetCommandLineW` on Windows. Off Windows every option reads as not given until C2 hands over
+  `argv`: `-jobthreads`, `-logPrefix` and **`-headless`**, which a headless run off Windows needs
+  first.
+- **The displays.** `Monitors.h` off Windows reports ONE primary monitor, 800x600, offering that
+  one mode: Windows' own no-desktop fallback, with the game's floor for a size. It is not empty on
+  purpose, because an empty rect would give borderless a 0x0 resolution. Replace it with SDL3's
+  display list and modes.
+- **The window title.** `GameText.cpp`'s `setApplicationWindowTitle()` does nothing off Windows.
+  It becomes `SDL_SetWindowTitle` once C2 owns the window.
+
 ## Do not
 
 - Do not create a window, a `NSApplication` or a run loop for M2. Headless means headless, and
