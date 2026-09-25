@@ -312,7 +312,7 @@ WindowMsgHandledType BuddyControlSystem( GameWindow *window, UnsignedInt msg,
 						// Send the message
 						BuddyRequest req;
 						req.buddyRequestType = BuddyRequest::BUDDYREQUEST_MESSAGE;
-						wcsncpy(req.arg.message.text, txtInput.str(), MAX_BUDDY_CHAT_LEN);
+						WideCharNCpy(req.arg.message.text, txtInput.str(), MAX_BUDDY_CHAT_LEN);
 						req.arg.message.text[MAX_BUDDY_CHAT_LEN-1] = 0;
 						req.arg.message.recipient = selectedProfile;
 						TheGameSpyBuddyMessageQueue->addRequest(req);
@@ -363,7 +363,7 @@ static void insertChat( BuddyMessage msg )
 		UnicodeString timeStr;
 		if (localSender /*&& recipientIt != m->end()*/)
 		{
-			s.format(L"[%hs -> %hs] %s", TheGameSpyInfo->getLocalBaseName().str(), msg.m_recipientNick.str(), msg.m_message.str());
+			s.format(u"[%hs -> %hs] %s", TheGameSpyInfo->getLocalBaseName().str(), msg.m_recipientNick.str(), msg.m_message.str());
 			Int index = GadgetListBoxAddEntryText( buddyControls.listboxChat, s, GameSpyColor[GSCOLOR_PLAYER_SELF], -1, -1 );
 			GadgetListBoxAddEntryText( buddyControls.listboxChat, timeStr, GameSpyColor[GSCOLOR_PLAYER_SELF], index, 1);
 		}
@@ -377,7 +377,7 @@ static void insertChat( BuddyMessage msg )
 			}
 			else
 			{
-				s.format(L"[%hs] %s", msg.m_senderNick.str(), msg.m_message.str());
+				s.format(u"[%hs] %s", msg.m_senderNick.str(), msg.m_message.str());
 				Int index = GadgetListBoxAddEntryText( buddyControls.listboxChat, s, GameSpyColor[GSCOLOR_PLAYER_BUDDY], -1, -1 );
 				GadgetListBoxAddEntryText( buddyControls.listboxChat, timeStr, GameSpyColor[GSCOLOR_PLAYER_BUDDY], index, 1);
 			}
@@ -425,22 +425,22 @@ void updateBuddyInfo( void )
 		// insert status into box
 		AsciiString marker;
 		marker.format("Buddy:%s", WideCharAsUtf8( info.m_statusString.str() ).str());
-		if (!info.m_statusString.compareNoCase(L"Offline") ||
-			!info.m_statusString.compareNoCase(L"Online") ||
-			!info.m_statusString.compareNoCase(L"Matching"))
+		if (!info.m_statusString.compareNoCase(u"Offline") ||
+			!info.m_statusString.compareNoCase(u"Online") ||
+			!info.m_statusString.compareNoCase(u"Matching"))
 		{
 			formatStr = TheGameText->fetch(marker);
 		}
-		else if (!info.m_statusString.compareNoCase(L"Staging") ||
-			!info.m_statusString.compareNoCase(L"Loading") ||
-			!info.m_statusString.compareNoCase(L"Playing"))
+		else if (!info.m_statusString.compareNoCase(u"Staging") ||
+			!info.m_statusString.compareNoCase(u"Loading") ||
+			!info.m_statusString.compareNoCase(u"Playing"))
 		{
 			formatStr.format(TheGameText->fetch(marker), info.m_locationString.str());
 		}
-		else if (!info.m_statusString.compareNoCase(L"Chatting"))
+		else if (!info.m_statusString.compareNoCase(u"Chatting"))
 		{
 			UnicodeString roomName;
-			GroupRoomMap::iterator gIt = TheGameSpyInfo->getGroupRoomList()->find( _wtoi(info.m_locationString.str()) );
+			GroupRoomMap::iterator gIt = TheGameSpyInfo->getGroupRoomList()->find( atoi( WideCharAsUtf8( info.m_locationString.str() ).str() ) );	// was _wtoi, MSVC-only; the same number for the ASCII digits a room id holds
 			if (gIt != TheGameSpyInfo->getGroupRoomList()->end())
 			{
 				AsciiString s;
@@ -517,7 +517,7 @@ void HandleBuddyResponses( void )
 				break;
 			case BuddyResponse::BUDDYRESPONSE_MESSAGE:
 				{
-					if ( !wcscmp(resp.arg.message.text, L"I have authorized your request to add me to your list") )
+					if ( !WideCharCmp(resp.arg.message.text, u"I have authorized your request to add me to your list") )
 						break;
 
 					if (TheGameSpyInfo->isSavedIgnored(resp.profile))
@@ -1195,7 +1195,7 @@ void RequestBuddyAdd(Int profileID, AsciiString nick)
 	req.arg.addbuddy.id = profileID;
 	UnicodeString buddyAddstr;
 	buddyAddstr = TheGameText->fetch("GUI:BuddyAddReq");
-	wcsncpy(req.arg.addbuddy.text, buddyAddstr.str(), MAX_BUDDY_CHAT_LEN);
+	WideCharNCpy(req.arg.addbuddy.text, buddyAddstr.str(), MAX_BUDDY_CHAT_LEN);
 	req.arg.addbuddy.text[MAX_BUDDY_CHAT_LEN-1] = 0;
 	TheGameSpyBuddyMessageQueue->addRequest(req);
 

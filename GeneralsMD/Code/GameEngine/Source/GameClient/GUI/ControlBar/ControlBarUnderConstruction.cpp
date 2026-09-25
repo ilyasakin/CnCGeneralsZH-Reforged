@@ -55,7 +55,7 @@ void ControlBar::updateConstructionTextDisplay( Object *obj )
 	DEBUG_ASSERTCRASH( descWindow, ("Under construction window not found\n") );
 
 	// format the message: seconds left rather than percent
-	text.format( L"%ds", obj->getConstructionSecondsRemaining() );
+	text.format( u"%ds", obj->getConstructionSecondsRemaining() );
 	GadgetStaticTextSetText( descWindow, text );
 
 	// record this as the last value displayed

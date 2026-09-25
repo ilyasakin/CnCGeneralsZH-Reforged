@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <string>
+
 #ifndef _WIDECHARFNS_H_
 #define _WIDECHARFNS_H_
 
@@ -52,6 +54,12 @@
 //-----------------------------------------------------------------------------------------------
 // Length, copy, concatenate
 //-----------------------------------------------------------------------------------------------
+
+/** A std::basic_string of WideChar, for code that wants the standard container's find/substr and a
+	  c_str() to hand straight to UnicodeString.  std::wstring used to be that type, while WideChar
+	  was wchar_t; it stopped being so when WideChar became char16_t (B1).  UnicodeString is still
+	  the engine's string - this is for the few places that already used the standard one. */
+typedef std::basic_string<WideChar> WideCharString;
 
 size_t    WideCharLen  ( const WideChar *s );
 WideChar *WideCharCpy  ( WideChar *dst, const WideChar *src );
@@ -133,10 +141,14 @@ Int  WideCharToUpper ( Int c );
 	 sites are written for.  It costs one character of the longest possible message and removes a
 	 buffer overread.
 
-	 Known limitation, and the reason docs/mac-port/B1-widechar-survey.md section 3.4 exists: a
-	 `%ls` or `%ws` inside `format` still means "this argument is a wchar_t*" to the C library.
-	 Forty-two wide formats in the engine carry one and pass a WideChar*.  Those arguments live
-	 in the va_list and no function here can reach them; they are a separate sweep. */
+	 The format's meaning is MSVC's LEGACY wide printf, on both platforms: %s, %ls and %ws are
+	 WideChar strings and %c a WideChar; %S and %hs are narrow strings and %C/%hc a narrow char.
+	 That is the opposite of C99's vswprintf for %s and %S, and it is what every wide format in
+	 this tree was written against.  Off Windows the funnel therefore formats strings and
+	 characters itself and hands the C library only the numeric conversions (WideCharFns.cpp
+	 explains), so a WideChar* argument is read correctly at any width.  %n is refused.
+	 Tests/test_widechar_format.cpp holds the expected output, and on Windows it checks the same
+	 expectations against the real _vsnwprintf. */
 Int WideCharFormatV ( WideChar *out, size_t outCount, const WideChar *format, va_list args );
 
 /** The variadic spelling of WideCharFormatV, with the same contract. */

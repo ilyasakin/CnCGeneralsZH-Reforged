@@ -970,19 +970,28 @@ target_link_libraries(gameengine PUBLIC
 # gameengine, so it runs on every platform today rather than when gameengine links.  The
 # -fshort-wchar twin gives wchar_t MSVC's two unsigned bytes, which is the Windows model on a
 # Mac or Linux box; see Tests/test_widechar_crc_gate.cpp for what the pair proves and does not.
-set(ZH_WIDECHAR_GATE_SOURCES
-  ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_crc_gate.cpp
+# The real sources both of B1's tests are built from, and the one stub file they share.
+set(ZH_WIDECHAR_TEST_SUPPORT
   ${GE}/Source/Common/System/Xfer.cpp ${GE}/Source/Common/System/XferCRC.cpp
   ${GE}/Source/Common/System/UnicodeString.cpp ${GE}/Source/Common/System/AsciiString.cpp
-  ${GE}/Source/Common/System/WideCharFns.cpp)
+  ${GE}/Source/Common/System/WideCharFns.cpp ${CMAKE_CURRENT_SOURCE_DIR}/Tests/widechar_test_stubs.cpp)
 function(zh_widechar_gate name)
-  add_executable(${name} ${ZH_WIDECHAR_GATE_SOURCES})
+  add_executable(${name} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_crc_gate.cpp ${ZH_WIDECHAR_TEST_SUPPORT})
   target_include_directories(${name} PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
   target_compile_definitions(${name} PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
   set_target_properties(${name} PROPERTIES CXX_STANDARD 17)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 zh_widechar_gate(widechar_crc_gate)
+# The wide-format funnel against MSVC's legacy wide printf: %s wide, %S narrow.  Off Windows it
+# checks the hand-written formatter; on Windows the same expected strings check the real
+# _vsnwprintf.  See Tests/test_widechar_format.cpp.
+add_executable(widechar_format_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_format.cpp
+  ${ZH_WIDECHAR_TEST_SUPPORT})
+target_include_directories(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+target_compile_definitions(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(widechar_format_selfcheck PROPERTIES CXX_STANDARD 17)
+add_test(NAME widechar_format_selfcheck COMMAND widechar_format_selfcheck)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   zh_widechar_gate(widechar_crc_gate_msvc_model)
   target_compile_options(widechar_crc_gate_msvc_model PRIVATE -fshort-wchar)
@@ -1398,6 +1407,15 @@ if(Python3_Interpreter_FOUND)
   # default macOS volume fold case and Linux does not, so a miscased include builds on the first two
   # and is a missing header on the third; the first Linux build found 298.  This catches them on a
   # Mac, from compile_commands.json, without Linux.  POSIX only: that is where the file is exported.
+  # Nothing the POSIX build compiles may carry text as wchar_t - four bytes here, two on Windows -
+  # and no literal anywhere in the engine may hold a raw non-ASCII byte, which MSVC and clang read as
+  # different characters.  WideChar is char16_t (B1); this finds what the compiler cannot, such as an
+  # L'x' that converts silently.  Exceptions, each with its reason, in Tools/widechar_check_allow.txt.
+  if(ZH_PLATFORM_POSIX)
+    add_test(NAME widechar_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/widechar_check.py
+                     ${CMAKE_BINARY_DIR}/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR})
+  endif()
   if(ZH_PLATFORM_POSIX)
     add_test(NAME include_case_check
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/include_case_check.py

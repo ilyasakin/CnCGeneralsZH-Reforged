@@ -181,7 +181,7 @@ void PopulateReplayFileListbox(GameWindow *listbox)
 				// was no way to tell last night's game from one in April. Date first, then the time,
 				// both in whatever format the player's own Region settings ask for.
 				UnicodeString displayTimeBuffer = getUnicodeDateBuffer(header.timeVal);
-				displayTimeBuffer.concat( L" " );
+				displayTimeBuffer.concat( u" " );
 				displayTimeBuffer.concat( getUnicodeTimeBuffer(header.timeVal) );
 
 				// version (no-op)
@@ -306,7 +306,7 @@ void ReplayMenuInit( WindowLayout *layout, void *userData )
 	instData.init();
 	BitSet( instData.m_style, GWS_PUSH_BUTTON | GWS_MOUSE_TRACK );
 	instData.m_textLabelString = "Debug: Analyze Replay";
-	instData.setTooltipText(UnicodeString(L"Only Used in Debug and Internal!"));
+	instData.setTooltipText(UnicodeString(u"Only Used in Debug and Internal!"));
 	buttonAnalyzeReplay = TheWindowManager->gogoGadgetPushButton( parentReplayMenu, 
 																									 WIN_STATUS_ENABLED | WIN_STATUS_IMAGE, 
 																									 4, 4, 
@@ -528,7 +528,7 @@ WindowMsgHandledType ReplayMenuSystem( GameWindow *window, UnsignedInt msg,
 					GadgetListBoxGetSelected( listboxReplayFiles,  &selected );
 					if(selected < 0)
 					{
-						MessageBoxOk(UnicodeString(L"Blah Blah"),UnicodeString(L"Please select something munkee boy"), NULL);
+						MessageBoxOk(UnicodeString(u"Blah Blah"),UnicodeString(u"Please select something munkee boy"), NULL);
 						break;
 					}
 
@@ -676,8 +676,12 @@ void copyReplay( void )
 	newFilename.concat(translate);
 	if(CopyFile(filename.str(),newFilename.str(), FALSE) == 0)
 	{
-		wchar_t buffer[1024];
-		FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, buffer, sizeof(buffer), NULL);
+		// Win32 only: WideChar and WCHAR are the same two bytes there, which is what makes the cast
+		// honest.  B5 replaces DeleteFile/CopyFile and this message off Windows.  The size is in
+		// characters, as FormatMessageW takes it; it used to be sizeof(buffer), twice that.
+		WideChar buffer[1024];
+		FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, reinterpret_cast<LPWSTR>( buffer ),
+			sizeof( buffer ) / sizeof( buffer[0] ), NULL );
 		UnicodeString errorStr;
 		errorStr.set(buffer);
 		errorStr.trim();

@@ -446,22 +446,22 @@ Bool IsValidTransferFileContent(const AsciiString &filePath, const UnsignedByte 
 
 static Bool isCharacterANameMayNotHold(const WideChar c)
 {
-	return c < L' '														// C0 controls
-		|| c == L',' || c == L':' || c == L';'							// the game state separators
-		|| (c >= L'\x007f' && c <= L'\x009f')							// DEL and the C1 controls
-		|| c == L'\x2028' || c == L'\x2029'								// line and paragraph separators
-		|| (c >= L'\xd800' && c <= L'\xdfff');							// lone surrogates
+	return c < u' '														// C0 controls
+		|| c == u',' || c == u':' || c == u';'							// the game state separators
+		|| (c >= u'\x007f' && c <= u'\x009f')							// DEL and the C1 controls
+		|| c == u'\x2028' || c == u'\x2029'								// line and paragraph separators
+		|| (c >= u'\xd800' && c <= u'\xdfff');							// lone surrogates
 }
 
 static Bool isSpaceCharacter(const WideChar c)
 {
-	return c == L' '
-		|| c == L'\xa0'													// no-break space
-		|| c == L'\x1680'												// ogham space mark
-		|| (c >= L'\x2000' && c <= L'\x200a')							// en/em, figure, thin, hair
-		|| c == L'\x202f'												// narrow no-break space
-		|| c == L'\x205f'												// medium mathematical space
-		|| c == L'\x3000';												// ideographic space
+	return c == u' '
+		|| c == u'\xa0'													// no-break space
+		|| c == u'\x1680'												// ogham space mark
+		|| (c >= u'\x2000' && c <= u'\x200a')							// en/em, figure, thin, hair
+		|| c == u'\x202f'												// narrow no-break space
+		|| c == u'\x205f'												// medium mathematical space
+		|| c == u'\x3000';												// ideographic space
 }
 
 Bool IsUsablePlayerName(const WideChar *playerName)

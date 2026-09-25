@@ -42,6 +42,7 @@
 #ifndef RENDER2D_H
 #define RENDER2D_H
 
+#include "Lib/WideChar.h"	// WideChar, the engine's text type (B1); its own header, so WW3D2 needs no BaseType.h
 #include "always.h"
 //#include "simplevec.h"
 #include "vector.h"
@@ -220,7 +221,7 @@ public:
 	void	Enable_Clipping( bool onoff )						{ IsClippedEnabled = onoff; }
 
 	void	Draw_Text( const char * text, unsigned long color = 0xFFFFFFFF );
-	void	Draw_Text( const WCHAR * text, unsigned long color = 0xFFFFFFFF );
+	void	Draw_Text( const WideChar * text, unsigned long color = 0xFFFFFFFF );
 
 	void	Draw_Block( const RectClass & screen, unsigned long color = 0xFFFFFFFF );
 
@@ -228,7 +229,7 @@ public:
 	const RectClass & Get_Total_Extents( void )			{ return TotalExtents; }
 	const Vector2 & Get_Cursor( void )						{ return Cursor; }
 
-	Vector2	Get_Text_Extents( const WCHAR * text );
+	Vector2	Get_Text_Extents( const WideChar * text );
 
 private:
 	Font3DInstanceClass* Font;
@@ -241,7 +242,7 @@ private:
 	RectClass				ClipRect;
 	bool						IsClippedEnabled;
 
-	void	Draw_Char( WCHAR ch, unsigned long color );
+	void	Draw_Char( WideChar ch, unsigned long color );
 };
 
 #endif	// RENDER2D_H
