@@ -3315,7 +3315,7 @@ void *operator new[](size_t size)
 /**
 	overload for global operator delete; send requests to TheDynamicMemoryAllocator.
 */
-void operator delete(void *p)
+void operator delete(void *p) WW_NOEXCEPT_DELETE
 {
 	++theLinkTester;
 	preMainInitMemoryManager();
@@ -3327,7 +3327,7 @@ void operator delete(void *p)
 /**
 	overload for global operator delete[]; send requests to TheDynamicMemoryAllocator.
 */
-void operator delete[](void *p)
+void operator delete[](void *p) WW_NOEXCEPT_DELETE
 {
 	++theLinkTester;
 	preMainInitMemoryManager();
