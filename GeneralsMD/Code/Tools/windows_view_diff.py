@@ -48,6 +48,10 @@ POSIX_VIEW = ['-U_MSC_VER', '-U_WIN32', '-UWIN32', '-U_WIN64', '-U_M_X64', '-U_M
 
 SOURCE = re.compile(r'\.(h|hpp|hh|inl|c|cc|cpp|cxx)$', re.I)
 INCLUDE = re.compile(r'\s*#\s*include\b')
+# A diagnostic's text is prose, and unifdef reads an apostrophe in it as an unterminated character
+# literal ("#error ... the engine's spelling").  Its quotes become backquotes on both sides, so the
+# message is still compared.
+DIAGNOSTIC = re.compile(r'^(\s*#\s*(?:error|warning)\b)(.*)$', re.M)
 
 
 def git(*args):
@@ -94,6 +98,7 @@ def strip_comments(text):
 
 def view(data, flags):
     text = strip_comments(data.decode('latin-1').replace('\r\n', '\n'))
+    text = DIAGNOSTIC.sub(lambda m: m.group(1) + m.group(2).replace("'", '`').replace('"', '`'), text)
     run = subprocess.run(['unifdef', *flags], input=text.encode('latin-1'), capture_output=True)
     if run.returncode not in (0, 1):            # 0 unchanged, 1 changed, 2 trouble
         raise RuntimeError(run.stderr.decode('utf-8', 'replace').strip() or 'unifdef failed')

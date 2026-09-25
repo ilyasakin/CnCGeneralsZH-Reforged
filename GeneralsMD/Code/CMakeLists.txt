@@ -1030,6 +1030,20 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 
 # ===========================================================================
+# PosixDevice - the POSIX platform layer beside Win32Device (C1), a file at a time
+# ===========================================================================
+# The Win32Device classes' POSIX counterparts, for macOS and Linux alike; what only macOS has goes
+# in MacDevice.  Out of the default build on macOS for as long as gameengine is (ZH_NOT_YET_PORTABLE),
+# so drive it with --target.
+if(ZH_PLATFORM_POSIX)
+  file(GLOB_RECURSE POSIXDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/*.cpp)
+  add_library(posixdevice STATIC ${ZH_NOT_YET_PORTABLE} ${POSIXDEVICE_SOURCES})
+  target_include_directories(posixdevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+  set_target_properties(posixdevice PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(posixdevice PUBLIC gameengine)
+endif()
+
+# ===========================================================================
 # Phase 4 - GameEngineDevice + Main -> generals.exe
 # ===========================================================================
 # All of Phase 4 is Windows: Win32Device is the platform layer, the audio and video backends are
@@ -1046,6 +1060,8 @@ file(GLOB_RECURSE GAMEENGINEDEVICE_SOURCES ${GED}/Source/*.cpp)
 # shipping build uses the Win32 message mouse instead).
 list(REMOVE_ITEM GAMEENGINEDEVICE_SOURCES
   ${GED}/Source/Win32Device/GameClient/Win32DIMouse.cpp)
+# PosixDevice is the POSIX platform layer (C1), built below as posixdevice, never on Windows.
+list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/Source/PosixDevice/")
 # Sound and video are the game's own.  Miles and Bink were binary-only, and the DLLs the retail
 # game ships are 32-bit, so there is nothing for a 64-bit exe to bind to: what it links instead is
 # those two APIs written over XAudio2 and FFmpeg.  FFmpeg decodes binkvideo and binkaudio natively,
@@ -1406,6 +1422,12 @@ if(ZH_PLATFORM_POSIX)
 # exFAT tells case apart.  Linux's runs are case-sensitive already.
 add_lib_test(test_posixpath wwlib wwdebug)
 target_include_directories(test_posixpath PRIVATE ${WW}/WWLib ${WW}/WWDebug)
+
+# The POSIX half of the Wine listing oracle (Tests/fs_oracle.cpp; its Windows half is built with
+# mingw-w64 and run under Wine, as C1's task file records).
+add_executable(fs_oracle ${TESTS}/fs_oracle.cpp)
+target_include_directories(fs_oracle PRIVATE ${WW}/WWLib)
+target_link_libraries(fs_oracle PRIVATE wwlib wwdebug)
 
 # The POSIX twin of test_ffshadercompile and test_ffvertexcompile: every generated program under the
 # SDL3 GPU target through glslang, spirv-val, SPIRV-Cross and, on macOS, the Metal driver (D3).

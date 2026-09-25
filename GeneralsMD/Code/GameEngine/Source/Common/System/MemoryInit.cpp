@@ -557,6 +557,9 @@ static PoolSizeRec sizes[] =
 	{ "AttackPriorityInfo", 32, 32 },
 	{ "SequentialScript", 32, 32 },
 	{ "Win32LocalFile", 1024, 256 },
+#if !defined(_WIN32)
+	{ "PosixLocalFile", 1024, 256 },		// Win32LocalFile's pool, under the POSIX class's name (C1)
+#endif
 	{ "RAMFile", 32, 32 },
 	{ "BattlePlanBonuses", 32, 32 },
 	{ "KindOfPercentProductionChange", 32, 32 },
