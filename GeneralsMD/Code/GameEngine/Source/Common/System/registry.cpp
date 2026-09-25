@@ -29,6 +29,11 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/Registry.h"
+#if !defined(_WIN32)
+#include "Common/EarlyOptions.h"	// findUserDataDirectory, findEarlyOptionValueIn
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -36,6 +41,7 @@
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
 #endif
 
+#if defined(_WIN32)
 /*
 	A 64-bit process reads HKLM\SOFTWARE natively, and the game's installers are 32-bit: what they
 	wrote is under HKLM\SOFTWARE\WOW6432Node, which the native view does not show.  So every read
@@ -179,6 +185,84 @@ Bool GetUnsignedIntFromRegistry(AsciiString path, AsciiString key, UnsignedInt& 
 
 	return getUnsignedIntFromRegistry(HKEY_LOCAL_MACHINE, fullPath.str(), key.str(), val);
 }
+
+#else
+/* Off Windows there is no registry.  The same three reads come from one file, Registry.ini in the user
+	 data directory, in Options.ini's "key = value" form and read by the same parser, EarlyOptions'
+	 findEarlyOptionValueIn: case-insensitive keys, the last one wins.  A Zero Hour value's key is its
+	 registry path below the game's key, then its name - "Language", or "ergc\\<name>" for the \\ergc
+	 subkey - and an original-Generals value's is the same under "Generals\\".  Windows' two hives, per
+	 user and per machine, are one file here.
+
+	 Nothing in the engine writes the file: on Windows the installer writes the registry, and here that
+	 is the future launcher's or installer's job (C1's task file says so).  Until C1 places the user data
+	 directory, findUserDataDirectory has none, no file is read, and every caller keeps its compiled-in
+	 default - GetRegistryLanguage's "english", GetRegistryVersion's 65536. */
+
+/** The value of one key in a Registry.ini file already chosen; FALSE if the file or the key is not there. */
+static Bool readRegistryFileAt( const char *file, const AsciiString &name, AsciiString &val )
+{
+	FILE *fp = fopen( file, "r" );
+	if (fp == NULL)
+		return FALSE;
+	char value[ 256 ];
+	const bool found = findEarlyOptionValueIn( fp, name.str(), value, sizeof( value ) );
+	fclose( fp );
+	if (found)
+		val = value;
+	return found ? TRUE : FALSE;
+}
+
+static Bool readRegistryFile( const AsciiString &name, AsciiString &val )
+{
+	char directory[ 1024 ];
+	if (!findUserDataDirectory( directory, sizeof( directory ) ))
+		return FALSE;
+	AsciiString file;
+	file.format( "%sRegistry.ini", directory );		// the directory ends in its separator, as on Windows
+	return readRegistryFileAt( file.str(), name, val );
+}
+
+/** "Generals\\" or "", then the path below the game's key without its leading backslashes, then the name. */
+static AsciiString registryFileKey( const char *tree, const AsciiString &path, const AsciiString &key )
+{
+	AsciiString name = tree;
+	const char *below = path.str();
+	while (*below == '\\')
+		++below;
+	if (*below != 0)
+	{
+		name.concat( below );
+		name.concat( '\\' );
+	}
+	name.concat( key );
+	return name;
+}
+
+Bool GetStringFromGeneralsRegistry(AsciiString path, AsciiString key, AsciiString& val)
+{
+	return readRegistryFile( registryFileKey( "Generals\\", path, key ), val );
+}
+
+Bool GetStringFromRegistry(AsciiString path, AsciiString key, AsciiString& val)
+{
+	return readRegistryFile( registryFileKey( "", path, key ), val );
+}
+
+/** A REG_DWORD on Windows; here decimal text.  Text that is not a whole decimal number reads as missing. */
+Bool GetUnsignedIntFromRegistry(AsciiString path, AsciiString key, UnsignedInt& val)
+{
+	AsciiString text;
+	if (!readRegistryFile( registryFileKey( "", path, key ), text ))
+		return FALSE;
+	char *end = NULL;
+	const unsigned long parsed = strtoul( text.str(), &end, 10 );
+	if (end == text.str() || *end != 0)
+		return FALSE;
+	val = (UnsignedInt)parsed;
+	return TRUE;
+}
+#endif
 
 AsciiString GetRegistryLanguage(void)
 {
