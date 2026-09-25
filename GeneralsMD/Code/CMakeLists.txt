@@ -906,14 +906,22 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 #    Nothing ever creates TheWebBrowser, on Windows either (Win32GameEngine::createWebBrowser has
 #    no caller), and every caller - INIWebpageURL, WOLLadderScreen, WOLLoginMenu - tests it for NULL
 #    first.  WebBrowserPosix.cpp is the same interface without COM, TheWebBrowser NULL.
+#  - DownloadManager.cpp: patch downloads over wwdownload (FTP over winsock; wwdownload itself is a
+#    Windows-only target above) from a dead service.  Only DownloadMenuInit creates the manager,
+#    and only on Windows; MainMenu and MainMenuUtils test TheDownloadManager for NULL first.
+#    DownloadManagerPosix.cpp defines it NULL.  DownloadMenu.cpp itself is built everywhere, because
+#    .wnd files bind its callbacks by name through FunctionLexicon, which must be the same on
+#    every platform.
 if(ZH_PLATFORM_WINDOWS)
   list(REMOVE_ITEM GAMEENGINE_SOURCES
     ${GE}/Source/Common/System/StackDumpPosix.cpp
-    ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp)
+    ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp
+    ${GE}/Source/GameNetwork/DownloadManagerPosix.cpp)
 else()
   list(REMOVE_ITEM GAMEENGINE_SOURCES
     ${GE}/Source/Common/System/StackDump.cpp
-    ${GE}/Source/GameNetwork/WOLBrowser/WebBrowser.cpp)
+    ${GE}/Source/GameNetwork/WOLBrowser/WebBrowser.cpp
+    ${GE}/Source/GameNetwork/DownloadManager.cpp)
 endif()
 
 # ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.

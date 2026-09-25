@@ -115,6 +115,13 @@ static void successNoQuitCallback( void )
 	closeDownloadWindow();
 }
 
+/* The downloader behind this menu is Windows-only (WWDownload, FTP over winsock), so its subclass
+	 is too.  The menu itself compiles everywhere: .wnd files bind its callbacks by name through
+	 FunctionLexicon, which has to be the same on every platform. */
+// Shared with DownloadMenuUpdate below, so outside the Windows-only block.
+static time_t lastUpdate = 0;
+static Int timeLeft = 0;
+#if defined(_WIN32)
 class DownloadManagerMunkee : public DownloadManager
 {
 public:
@@ -179,8 +186,6 @@ HRESULT DownloadManagerMunkee::OnEnd()
 	return ret;
 }
 
-static time_t lastUpdate = 0;
-static Int timeLeft = 0;
 HRESULT DownloadManagerMunkee::OnProgressUpdate( Int bytesread, Int totalsize, Int timetaken, Int timeleft )
 {
 	HRESULT ret = DownloadManager::OnProgressUpdate( bytesread, totalsize, timetaken, timeleft );
@@ -231,6 +236,7 @@ HRESULT DownloadManagerMunkee::OnStatusUpdate( Int status )
 	}
 	return ret;
 }
+#endif
 
 // PUBLIC FUNCTIONS ///////////////////////////////////////////////////////////////////////////////
 
@@ -263,7 +269,9 @@ void DownloadMenuInit( WindowLayout *layout, void *userData )
 	{
 		delete TheDownloadManager;
 	}
+#if defined(_WIN32)
 	TheDownloadManager = NEW DownloadManagerMunkee;
+#endif
 
 }  // end DownloadMenuInit
 
