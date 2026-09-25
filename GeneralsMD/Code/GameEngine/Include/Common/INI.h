@@ -42,7 +42,7 @@
 class INI;
 class Xfer;
 class File;
-enum ScienceType;
+enum ScienceType : Int;
 
 //-------------------------------------------------------------------------------------------------
 /** These control the behavior of loading the INI data into items */

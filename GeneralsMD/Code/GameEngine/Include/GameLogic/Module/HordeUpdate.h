@@ -46,7 +46,7 @@ class UpgradeTemplate;
 
 // the horde action picks which of the two bonus rules a horde module follows.  every horde module
 // the game ships names HORDE explicitly, so the default only affects new content.
-enum HordeActionType
+enum HordeActionType : Int
 {
 	HORDEACTION_HORDE = 0,	///< classic: nationalism and fanaticism are never taken away again once granted
 	HORDEACTION_HORDE_FIXED,	///< horde, nationalism and fanaticism all follow the horde status

@@ -58,7 +58,7 @@ class DebugWindowDialog;		// really ParticleEditorDialog
 class RenderInfoClass;			// ick
 class Shadow;
 
-enum ParticleSystemID
+enum ParticleSystemID : Int
 {
 	INVALID_PARTICLE_SYSTEM_ID = 0
 };
@@ -89,7 +89,7 @@ struct RGBColorKeyframe
 	UnsignedInt frame;
 };
 
-enum ParticlePriorityType
+enum ParticlePriorityType : Int
 {
 	INVALID_PRIORITY = 0, 
 	PARTICLE_PRIORITY_LOWEST = 1,
