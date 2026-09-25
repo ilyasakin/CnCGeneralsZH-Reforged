@@ -36,7 +36,10 @@
 	 architecture so a change is noticed; whether any NaN's bits reach a CRC or a save is a separate
 	 question (docs/mac-port/tasks/B5-win32-types.md). */
 
-#include "PreRTS.h"
+/* FPUControl.h alone, not PreRTS.h: the engine headers carry inline virtual destructors, and GCC
+	 emits their vtables in every TU that sees them, which then need the engine's out-of-line pieces
+	 (AudioEventRTS, MemoryPool) that this self-check does not link.  Clang is lazier, which is why
+	 macOS never noticed; Linux/gcc did. */
 #include "GameLogic/FPUControl.h"
 
 #include <fenv.h>
@@ -47,9 +50,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(DEBUG_CRASHING)
 /* FPUControl.cpp's debug assert calls this, and gameengine, which defines it, does not link here.
-	 A fired assert has to fail the test, so this prints and aborts. */
+	 A fired assert has to fail the test, so this prints and aborts.  Defined in every configuration:
+	 unused in Release, and required in Debug. */
 extern "C" char* TheCurrentIgnoreCrashPtr = NULL;		// Debug.cpp's, which does not link here either
 
 extern "C" void DebugCrash( const char *format, ... )
@@ -61,7 +64,6 @@ extern "C" void DebugCrash( const char *format, ... )
 	fprintf( stderr, "\n" );
 	abort();
 }
-#endif
 
 static uint32_t bitsOf( float f ) { uint32_t u; memcpy( &u, &f, sizeof( u ) ); return u; }
 static uint64_t bitsOf( double d ) { uint64_t u; memcpy( &u, &d, sizeof( u ) ); return u; }
