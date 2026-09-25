@@ -126,11 +126,26 @@ inline int mkdir(const char* path, int /* mode */) { return _mkdir(path); }
 #include <stdio.h>
 #include <stdlib.h>
 #include <alloca.h>    // alloca, which Microsoft spells _alloca and declares in <malloc.h>
+#include <ctype.h>     // tolower, toupper, for _strlwr and _strupr below
 
 // _alloca: two call sites, chunkio.h's read macro and ini.cpp's line buffer.
 #ifndef _alloca
 #define _alloca alloca
 #endif
+
+// _strlwr and _strupr, and the unprefixed strlwr and strupr: MSVC's in-place case conversion, which
+// neither POSIX nor C99 ever named, so unlike strcasecmp above there is no standard spelling to move
+// the call sites to.  24 sites across WWSaveLoad, WW3D2, W3DDevice, WWAudio and Wwutil, nearly all of
+// them lower-casing an asset or definition name into a hash key - so the answer has to be exactly
+// the one MSVC gives, or a lookup built on one platform misses on the other.  MSVC's is
+// locale-dependent; nothing in this tree or its vendored libraries calls setlocale, so both run in
+// the "C" locale, where the conversion is ASCII only and bytes above 0x7F are left alone.  tolower
+// and toupper on an unsigned char in the C locale are exactly that.  Each returns its argument, as
+// MSVC's do (font3d.cpp assigns the result).  Not in the macOS SDK under any of the four names.
+inline char* _strlwr(char* s) { for (char* p = s; *p; ++p) *p = (char)tolower((unsigned char)*p); return s; }
+inline char* _strupr(char* s) { for (char* p = s; *p; ++p) *p = (char)toupper((unsigned char)*p); return s; }
+inline char* strlwr(char* s) { return _strlwr(s); }
+inline char* strupr(char* s) { return _strupr(s); }
 
 // ---------------------------------------------------------------------------
 // TCHAR.
