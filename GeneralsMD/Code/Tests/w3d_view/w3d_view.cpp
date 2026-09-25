@@ -12,9 +12,12 @@
  *
  *   --data       a folder holding zerohour/ and generals/ (default: $ZH_DATA_DIR)
  *   --model      a W3D name without extension (default: avcrusader, the Crusader tank)
- *   --shaders    which of the three routes in shaders/build_shaders.sh draws: glsl (the default;
- *                GLSL compiled by glslang, MSL translated from that SPIR-V), hlsl (HLSL through
- *                glslang's HLSL front end, then the same) or hand (MSL written by hand; Metal only)
+ *   --shaders    which program draws: glsl (the default; GLSL compiled by glslang, MSL translated
+ *                from that SPIR-V), hlsl (HLSL through glslang's HLSL front end, then the same),
+ *                hand (MSL written by hand; Metal only) - the three routes in
+ *                shaders/build_shaders.sh - or generated: the game's own programs, written at run
+ *                time by ffvertex and ffshader for the SDL3 GPU target and compiled through
+ *                sdl3shadercompile, as the SDL3 backend will (D3)
  *   --depth      auto takes D24S8 and falls back to D32S8, as the game's backend will; the others
  *                force one, to exercise a path this machine would not choose
  *   --screenshot renders, saves the frame as PNG and exits (after --frames frames, default 3)
@@ -38,6 +41,10 @@
 #include "dds_image.h"
 #include "w3d_model.h"
 #include "shaders/model_shaders.h"
+
+#include "ffshader.h"
+#include "ffvertex.h"
+#include "sdl3shadercompile.h"
 
 namespace {
 
@@ -170,6 +177,112 @@ const float ALPHA_TEST_REFERENCE = (float)0x60 / 255.0f;
 // (W3DAssetManager::Recolor_Texture, a 16-step palette scale); the spike multiplies in the shader.
 const float HOUSE_TINT[4] = { 0.20f, 0.40f, 1.00f, 1.0f };
 
+// ---------------------------------------------------------------------------------------------
+// --shaders generated: the game's own programs.  What a W3D mesh draw sets in fixed-function state -
+// lit, one directional light, the material's colours, one texture stage modulating the lit colour
+// - handed to ffvertex and ffshader for the SDL3 GPU target, and compiled the way the SDL3 backend
+// will compile them (sdl3shadercompile.h).  The constant blocks are the generators' own, in the
+// order append_constants_d3d11 and ffshader declare them; every field a float4 or a row_major
+// float4x4, so the layout is the declaration order.
+// ---------------------------------------------------------------------------------------------
+struct GeneratedVertexConstants
+{
+	float WorldViewProjection[16];	// row_major: a column-major matrix's floats, as they are
+	float WorldView[16];
+	float NormalTransform[16];
+	float TextureMatrix[MAXIMUM_VERTEX_STAGES][16];
+	float MaterialAmbient[4];
+	float MaterialDiffuse[4];
+	float MaterialSpecular[4];
+	float MaterialEmissive[4];
+	float MaterialPower[4];
+	float GlobalAmbient[4];
+	float FogParameters[4];
+	float ViewportInverse[4];
+	float Light0Position[4];
+	float Light0Direction[4];
+	float Light0Diffuse[4];
+	float Light0Specular[4];
+	float Light0Attenuation[4];
+	float Light0Spot[4];
+};
+
+struct GeneratedPixelConstants
+{
+	float TextureFactor[4];
+	float FogColour[4];
+	float AlphaReference[4];	// x: the reference in whole levels, as ffshader compares it
+};
+
+// The vertex attributes by semantic, as sdl3target.h numbers them: POSITION 0, NORMAL 1, TEXCOORD0 4.
+const Uint32 GENERATED_LOCATIONS[3] = { 0, 1, 4 };
+const Uint32 SPIKE_LOCATIONS[3] = { 0, 1, 2 };
+
+SDL_GPUShader *generatedShader(SDL_GPUDevice *device, const std::string &hlsl, bool vertexStage, const char *what,
+	unsigned *samplerSlots)
+{
+	std::vector<unsigned char> spirv;
+	std::string log;
+	if (!SDL3_Compile_HLSL_To_SPIRV(hlsl, vertexStage, spirv, log)) {
+		fprintf(stderr, "w3d_view: %s: HLSL -> SPIR-V failed:\n%s\n", what, log.c_str());
+		return NULL;
+	}
+	SDL_GPUShader *shader = SDL3_Create_Shader(device, spirv, vertexStage, log);
+	if (shader == NULL) {
+		fprintf(stderr, "w3d_view: %s: the device refused it: %s\n", what, log.c_str());
+		return NULL;
+	}
+	unsigned samplers = 0, uniformBuffers = 0;
+	SDL3_Shader_Slots(spirv, vertexStage, samplers, uniformBuffers);
+	if (samplerSlots != NULL && samplers > *samplerSlots) *samplerSlots = samplers;
+	printf("generated %s: %zu bytes of HLSL, %zu of SPIR-V, %u sampler slot(s), %u constant buffer(s)\n", what,
+		hlsl.size(), spirv.size(), samplers, uniformBuffers);
+	return shader;
+}
+
+// The mesh draw's fixed-function state, as W3D sets it for a lit, textured, uncoloured mesh.
+VertexPipelineDescription meshVertexState()
+{
+	VertexPipelineDescription description;
+	memset(&description, 0, sizeof(description));
+	description.FVF = FF_FVF_XYZ | FF_FVF_NORMAL | FF_FVF_TEX1;
+	description.LightingEnabled = true;
+	description.LightCount = 1;
+	description.Lights[0].Type = FF_LIGHT_DIRECTIONAL;
+	description.DiffuseMaterialSource = FF_MCS_MATERIAL;
+	description.AmbientMaterialSource = FF_MCS_MATERIAL;
+	description.EmissiveMaterialSource = FF_MCS_MATERIAL;
+	description.SpecularMaterialSource = FF_MCS_MATERIAL;
+	description.StageCount = 1;
+	description.Stages[0].TextureCoordinateIndex = FF_TSS_TCI_PASSTHRU;
+	description.Stages[0].TextureTransformFlags = FF_TTFF_DISABLE;
+	description.FogVertexMode = FF_FOG_NONE;
+	return description;
+}
+
+// Stage 0 modulating the texture by the lit colour, colour and alpha both.  With the alpha test the
+// way shader.cpp sets it for an alpha-tested W3D shader: GREATEREQUAL against 0x60.
+CombinerDescription meshPixelState(bool alphaTest)
+{
+	CombinerDescription description;
+	memset(&description.Stages, 0, sizeof(description.Stages));
+	description.StageCount = 1;
+	description.Stages[0].ColourOperation = FF_TOP_MODULATE;
+	description.Stages[0].ColourArgument1 = FF_TA_TEXTURE;
+	description.Stages[0].ColourArgument2 = FF_TA_DIFFUSE;
+	description.Stages[0].AlphaOperation = FF_TOP_MODULATE;
+	description.Stages[0].AlphaArgument1 = FF_TA_TEXTURE;
+	description.Stages[0].AlphaArgument2 = FF_TA_DIFFUSE;
+	description.Stages[0].TextureCoordinateIndex = 0;
+	description.Stages[0].TextureBound = true;
+	memset(&description.PixelPipeline, 0, sizeof(description.PixelPipeline));
+	description.PixelPipeline.AlphaTestEnabled = alphaTest;
+	description.PixelPipeline.AlphaFunction = FF_CMP_GREATEREQUAL;
+	description.NormalMapped = false;
+	description.ShadowReceiving = false;
+	return description;
+}
+
 struct Options
 {
 	std::string dataDir;
@@ -218,7 +331,8 @@ bool parseOptions(int argc, char **argv, Options *options)
 		else if (arg == "--offscreen") options->offscreen = true;
 		else return false;
 	}
-	if (options->shaders != "glsl" && options->shaders != "hlsl" && options->shaders != "hand") return false;
+	if (options->shaders != "glsl" && options->shaders != "hlsl" && options->shaders != "hand"
+		&& options->shaders != "generated") return false;
 	if (options->depth != "auto" && options->depth != "d24s8" && options->depth != "d32s8") return false;
 	if (options->offscreen && options->screenshot.empty()) return false;
 	return true;
@@ -371,7 +485,7 @@ SDL_GPUBuffer *uploadBuffer(SDL_GPUDevice *device, SDL_GPUBufferUsageFlags usage
 }
 
 SDL_GPUGraphicsPipeline *createPipeline(SDL_GPUDevice *device, SDL_GPUShader *vertexShader, SDL_GPUShader *fragmentShader,
-	SDL_GPUTextureFormat colorFormat, SDL_GPUTextureFormat depthFormat, const DrawState &state)
+	SDL_GPUTextureFormat colorFormat, SDL_GPUTextureFormat depthFormat, const DrawState &state, const Uint32 locations[3])
 {
 	SDL_GPUVertexBufferDescription buffer;
 	SDL_zero(buffer);
@@ -381,13 +495,13 @@ SDL_GPUGraphicsPipeline *createPipeline(SDL_GPUDevice *device, SDL_GPUShader *ve
 
 	SDL_GPUVertexAttribute attributes[3];
 	SDL_zeroa(attributes);
-	attributes[0].location = 0;
+	attributes[0].location = locations[0];
 	attributes[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
 	attributes[0].offset = offsetof(ModelVertex, position);
-	attributes[1].location = 1;
+	attributes[1].location = locations[1];
 	attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
 	attributes[1].offset = offsetof(ModelVertex, normal);
-	attributes[2].location = 2;
+	attributes[2].location = locations[2];
 	attributes[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
 	attributes[2].offset = offsetof(ModelVertex, texCoord);
 
@@ -489,7 +603,7 @@ int main(int argc, char **argv)
 {
 	Options options;
 	if (!parseOptions(argc, argv, &options)) {
-		fprintf(stderr, "usage: w3d_view [--data DIR] [--model NAME] [--shaders glsl|hlsl|hand] [--depth auto|d24s8|d32s8]\n"
+		fprintf(stderr, "usage: w3d_view [--data DIR] [--model NAME] [--shaders glsl|hlsl|hand|generated] [--depth auto|d24s8|d32s8]\n"
 			"                [--size WxH] [--yaw DEG] [--pitch DEG] [--zoom F]\n"
 			"                [--screenshot FILE.png] [--offscreen] [--frames N]\n"
 			"  --offscreen needs --screenshot\n");
@@ -540,7 +654,9 @@ int main(int argc, char **argv)
 	}
 	const SDL_GPUShaderFormat formats = SDL_GetGPUShaderFormats(device);
 	const bool useMsl = (formats & SDL_GPU_SHADERFORMAT_MSL) != 0;
-	const char *route = options.shaders == "hand" ? "MSL written by hand"
+	const bool generated = options.shaders == "generated";
+	const char *route = generated ? (useMsl ? "the game's, generated: ffvertex/ffshader -> HLSL -> SPIR-V -> MSL" : "the game's, generated: ffvertex/ffshader -> HLSL -> SPIR-V")
+		: options.shaders == "hand" ? "MSL written by hand"
 		: (options.shaders == "hlsl" ? (useMsl ? "HLSL -> SPIR-V -> MSL" : "HLSL -> SPIR-V") : (useMsl ? "GLSL -> SPIR-V -> MSL" : "GLSL -> SPIR-V"));
 	printf("device    %s, shaders %s\n", SDL_GetGPUDeviceDriver(device), route);
 	if (!useMsl && options.shaders == "hand") {
@@ -566,8 +682,26 @@ int main(int argc, char **argv)
 	const SDL_GPUTextureFormat colorFormat = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
 
 	// ---- shaders ----
-	SDL_GPUShader *vertexShader, *fragmentShader;
-	if (!useMsl && options.shaders == "hlsl") {
+	SDL_GPUShader *vertexShader = NULL, *fragmentShader = NULL, *alphaTestShader = NULL;
+	// How many texture-sampler pairs a draw binds.  The generated pixel programs declare four stages
+	// whatever they read, and SDL binds slots 0 to n - 1, so every slot is bound: the draw's texture
+	// in 0, white in the rest (sdl3shadercompile.h, SDL3_Shader_Slots).
+	unsigned samplerSlots = 1;
+	if (generated) {
+		std::string hlsl;
+		const VertexPipelineDescription vertexState = meshVertexState();
+		if (VertexShader_Generate(vertexState, VERTEX_SHADER_TARGET_SDL3_GPU, hlsl)) {
+			vertexShader = generatedShader(device, hlsl, true, ("vertex " + VertexShader_Key(vertexState)).c_str(), NULL);
+		}
+		for (int alphaTest = 0; alphaTest < 2; ++alphaTest) {
+			const CombinerDescription pixelState = meshPixelState(alphaTest != 0);
+			if (CombinerShader_Generate(pixelState, COMBINER_SHADER_TARGET_SDL3_GPU, hlsl)) {
+				(alphaTest ? alphaTestShader : fragmentShader) =
+					generatedShader(device, hlsl, false, ("pixel " + CombinerShader_Key(pixelState)).c_str(), &samplerSlots);
+			}
+		}
+		if (alphaTestShader == NULL) return 1;
+	} else if (!useMsl && options.shaders == "hlsl") {
 		vertexShader = createShader(device, SDL_GPU_SHADERFORMAT_SPIRV, SDL_GPU_SHADERSTAGE_VERTEX, MODEL_HLSL_VS_SPIRV, sizeof(MODEL_HLSL_VS_SPIRV), "vsMain", 0, 1);
 		fragmentShader = createShader(device, SDL_GPU_SHADERFORMAT_SPIRV, SDL_GPU_SHADERSTAGE_FRAGMENT, MODEL_HLSL_PS_SPIRV, sizeof(MODEL_HLSL_PS_SPIRV), "psMain", 1, 1);
 	} else if (!useMsl) {
@@ -631,7 +765,8 @@ int main(int argc, char **argv)
 	for (size_t i = 0; i < model.draws.size(); ++i) {
 		const DrawState &state = model.draws[i].state;
 		if (pipelines.count(state) == 0) {
-			pipelines[state] = createPipeline(device, vertexShader, fragmentShader, colorFormat, depthFormat, state);
+			pipelines[state] = createPipeline(device, vertexShader, generated && state.alphaTest ? alphaTestShader : fragmentShader,
+				colorFormat, depthFormat, state, generated ? GENERATED_LOCATIONS : SPIKE_LOCATIONS);
 			if (pipelines[state] == NULL) return 1;
 		}
 	}
@@ -715,7 +850,8 @@ int main(int argc, char **argv)
 		};
 		const float up[3] = { 0.0f, 0.0f, 1.0f };
 		VertexUniforms vertexUniforms;
-		const Mat4 viewProjection = multiply(perspective(0.8f, (float)width / (float)height, distance * 0.05f, distance * 4.0f), lookAt(eye, centre, up));
+		const Mat4 view = lookAt(eye, centre, up);
+		const Mat4 viewProjection = multiply(perspective(0.8f, (float)width / (float)height, distance * 0.05f, distance * 4.0f), view);
 		memcpy(vertexUniforms.viewProjection, viewProjection.m, sizeof(viewProjection.m));
 
 		SDL_GPUCommandBuffer *commands = SDL_AcquireGPUCommandBuffer(device);
@@ -742,13 +878,17 @@ int main(int argc, char **argv)
 		SDL_GPUBufferBinding indexBinding = { indexBuffer, 0 };
 		SDL_BindGPUVertexBuffers(pass, 0, &vertexBinding, 1);
 		SDL_BindGPUIndexBuffer(pass, &indexBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-		SDL_PushGPUVertexUniformData(commands, 0, &vertexUniforms, sizeof(vertexUniforms));
+		if (!generated) SDL_PushGPUVertexUniformData(commands, 0, &vertexUniforms, sizeof(vertexUniforms));
 		for (size_t k = 0; k < order.size(); ++k) {
 			const ModelDraw &draw = model.draws[order[k]];
 			SDL_BindGPUGraphicsPipeline(pass, pipelines[draw.state]);
 			SDL_GPUTexture *texture = draw.textureName.empty() ? NULL : loaded[draw.textureName];
-			SDL_GPUTextureSamplerBinding binding = { texture != NULL ? texture : white, sampler };
-			SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
+			SDL_GPUTextureSamplerBinding bindings[16];
+			for (unsigned slot = 0; slot < samplerSlots && slot < 16; ++slot) {
+				bindings[slot].texture = slot == 0 && texture != NULL ? texture : white;
+				bindings[slot].sampler = sampler;
+			}
+			SDL_BindGPUFragmentSamplers(pass, 0, bindings, samplerSlots);
 			FragmentUniforms fragmentUniforms;
 			memcpy(fragmentUniforms.materialDiffuse, draw.diffuse, sizeof(draw.diffuse));
 			for (int c = 0; c < 4; ++c) fragmentUniforms.tint[c] = draw.houseColor ? HOUSE_TINT[c] : 1.0f;
@@ -762,7 +902,35 @@ int main(int argc, char **argv)
 			fragmentUniforms.lightDirection[3] = 0.0f;
 			fragmentUniforms.lightColor[0] = fragmentUniforms.lightColor[1] = fragmentUniforms.lightColor[2] = 0.85f;
 			fragmentUniforms.lightColor[3] = draw.state.alphaTest ? ALPHA_TEST_REFERENCE : 0.0f;
-			SDL_PushGPUFragmentUniformData(commands, 0, &fragmentUniforms, sizeof(fragmentUniforms));
+			if (generated) {
+				// The same scene through the generators' own constants.  A matrix they declare
+				// row_major and multiply as mul(v, M) is this column-major matrix's floats unchanged.
+				GeneratedVertexConstants vertexConstants;
+				memset(&vertexConstants, 0, sizeof(vertexConstants));
+				memcpy(vertexConstants.WorldViewProjection, viewProjection.m, sizeof(viewProjection.m));
+				memcpy(vertexConstants.WorldView, view.m, sizeof(view.m));
+				memcpy(vertexConstants.NormalTransform, view.m, sizeof(view.m));
+				for (int c = 0; c < 4; ++c) {
+					const float tint = draw.houseColor ? HOUSE_TINT[c] : 1.0f;
+					vertexConstants.MaterialDiffuse[c] = draw.diffuse[c] * (c < 3 ? tint : 1.0f);
+					vertexConstants.MaterialAmbient[c] = vertexConstants.MaterialDiffuse[c];
+					vertexConstants.GlobalAmbient[c] = c < 3 ? 0.35f : 1.0f;
+					vertexConstants.Light0Diffuse[c] = c < 3 ? 0.85f : 1.0f;
+				}
+				vertexConstants.MaterialPower[0] = 1.0f;
+				// The light's direction in camera space, where the program lights.
+				for (int r = 0; r < 3; ++r) {
+					vertexConstants.Light0Direction[r] = view.at(r, 0) * light[0] + view.at(r, 1) * light[1] + view.at(r, 2) * light[2];
+				}
+				GeneratedPixelConstants pixelConstants;
+				memset(&pixelConstants, 0, sizeof(pixelConstants));
+				pixelConstants.AlphaReference[0] = (float)0x60;
+				SDL_PushGPUVertexUniformData(commands, 0, &vertexConstants, sizeof(vertexConstants));
+				SDL_PushGPUFragmentUniformData(commands, 0, &pixelConstants, sizeof(pixelConstants));
+			}
+			else {
+				SDL_PushGPUFragmentUniformData(commands, 0, &fragmentUniforms, sizeof(fragmentUniforms));
+			}
 			SDL_DrawGPUIndexedPrimitives(pass, draw.indexCount, 1, draw.firstIndex, 0, 0);
 		}
 		SDL_EndGPURenderPass(pass);
@@ -808,6 +976,7 @@ int main(int argc, char **argv)
 	SDL_ReleaseGPUBuffer(device, indexBuffer);
 	SDL_ReleaseGPUShader(device, vertexShader);
 	SDL_ReleaseGPUShader(device, fragmentShader);
+	if (alphaTestShader != NULL) SDL_ReleaseGPUShader(device, alphaTestShader);
 	if (window != NULL) {
 		SDL_ReleaseWindowFromGPUDevice(device, window);
 		SDL_DestroyWindow(window);

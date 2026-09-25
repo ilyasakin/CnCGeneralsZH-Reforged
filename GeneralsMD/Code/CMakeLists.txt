@@ -856,7 +856,10 @@ if(ZH_PLATFORM_POSIX)
     ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_view
     ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
     ${WW}/WW3D2 ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
-  target_link_libraries(w3d_view PRIVATE SDL3::SDL3-static wwmath wwlib wwsaveload wwdebug)
+  # --shaders generated draws with the game's own generated programs, compiled as the SDL3 backend
+  # will compile them (D3).
+  target_link_libraries(w3d_view PRIVATE SDL3::SDL3-static wwmath wwlib wwsaveload wwdebug
+    ffvertex engineshader sdl3shadercompile)
 endif()
 
 # d3d8to9 is no longer built.  It was a d3d8.dll next to generals.exe that translated
