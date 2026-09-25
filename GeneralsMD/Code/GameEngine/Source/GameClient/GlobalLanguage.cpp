@@ -51,6 +51,7 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"
+#include "Platform/IsWindows9x.h"
 
 #include "Common/INI.h"
 #include "Common/Registry.h"
@@ -128,18 +129,6 @@ static void removeLocalFont( const AsciiString &font )
 	RemoveFontResource(font.str());
 #else
 	(void)font;
-#endif
-}
-
-/* Whether this is Windows 95, 98 or Me, which Language9x.ini's fonts are for.  Nothing else is. */
-static Bool isWindows9x( void )
-{
-#if defined(_WIN32)
-	OSVERSIONINFO	osvi;
-	osvi.dwOSVersionInfoSize=sizeof(OSVERSIONINFO);
-	return GetVersionEx(&osvi)  &&  osvi.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS;
-#else
-	return FALSE;
 #endif
 }
 
