@@ -279,6 +279,28 @@ install_gamespy() {
   step "GamespySDK -> Libraries/Source/GameSpy"
 }
 
+# --- The fork's one change to the GameSpy SDK, Libraries/Source/gamespy-strlwr-c-only.patch.
+# gsplatform.h declares _strlwr and _strupr with C linkage for every non-Windows compiler, C++ included.
+# Engine C++ already has MSVCCompat.h's inline _strlwr, and a second declaration of the same name
+# with a different linkage is ill-formed, so 34 engine files stopped on it.  The patch keeps the
+# declarations for GameSpy's own C, which is what gsplatformutil.c defines them for.  Only the
+# !_WIN32 half of the header changes, so vendor.ps1 has nothing to apply.
+# Checked by the marker, not git apply's exit status, for the reason install_litehtml_patch gives.
+install_gamespy_patch() {
+  local destination="$libraries/Source/GameSpy"
+  local header="$destination/include/gamespy/gsplatform.h"
+  if grep -q 'Zero Hour Reforged: C only' "$header" 2>/dev/null; then return 0; fi
+  local patch="$libraries/Source/gamespy-strlwr-c-only.patch"
+  GIT_CEILING_DIRECTORIES="$libraries/Source" \
+    git -C "$destination" -c core.autocrlf=false apply "$patch" || true
+  if ! grep -q 'Zero Hour Reforged: C only' "$header" 2>/dev/null; then
+    echo "[vendor] gamespy-strlwr-c-only.patch did not apply to Libraries/Source/GameSpy" >&2
+    echo "[vendor] ($header still lacks its marker)" >&2
+    exit 1
+  fi
+  step "gamespy-strlwr-c-only.patch -> Libraries/Source/GameSpy"
+}
+
 # --- FFmpeg. Not fetched by either script: Libraries/Source/FFmpeg/dist is committed, and it is a
 # Windows distribution - .lib import libraries and avcodec-62.dll and friends. A Mac build needs a
 # different FFmpeg entirely, and whether that is Homebrew, a vendored dylib or a static build is
@@ -504,6 +526,7 @@ install_zlib
 install_lzhl
 report_directx
 install_gamespy
+install_gamespy_patch
 install_litehtml
 install_litehtml_patch
 install_nanosvg

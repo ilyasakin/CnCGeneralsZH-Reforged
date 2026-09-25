@@ -210,6 +210,39 @@ GameState::SnapshotBlock *GameState::findBlockInfoByToken( AsciiString token, Sn
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+#if !defined(_WIN32)
+#include "Lib/WideCharFns.h"
+
+/* Off Windows the same two strings come from strftime, in whatever LC_TIME the process has - the
+	 user's, once the platform layer calls setlocale(LC_TIME, "") at startup, and "C" until then.
+	 strftime writes LC_TIME's codeset, which is UTF-8 in practice, while LC_CTYPE stays "C" on
+	 purpose (the plan's rules say why), so the bytes are decoded as UTF-8 explicitly: mbstowcs would
+	 decode them by LC_CTYPE and mangle every non-ASCII month name.  Display only; nothing here
+	 reaches the simulation. */
+static UnicodeString formatWallClock( const WallClockTime &timeVal, const char *format )
+{
+	struct tm when;
+	memset( &when, 0, sizeof( when ) );
+	when.tm_year = timeVal.wYear - 1900;
+	when.tm_mon = timeVal.wMonth - 1;
+	when.tm_mday = timeVal.wDay;
+	when.tm_wday = timeVal.wDayOfWeek;
+	when.tm_hour = timeVal.wHour;
+	when.tm_min = timeVal.wMinute;
+	when.tm_sec = timeVal.wSecond;
+	when.tm_isdst = -1;
+
+	char bytes[ 256 ];
+	if (strftime( bytes, sizeof( bytes ), format, &when ) == 0)
+		bytes[ 0 ] = 0;
+	WideChar text[ 256 ];
+	WideCharFromUtf8( bytes, text, sizeof( text ) / sizeof( text[ 0 ] ) );
+	UnicodeString result;
+	result.set( text );
+	return result;
+}
+#endif
+
 /* LOCALE_USER_DEFAULT, not LOCALE_SYSTEM_DEFAULT, in both of these: the system locale is the one
 	 the machine was installed with and is what non-Unicode programs get, while the user locale is the
 	 one the person sitting there picked in Region settings. On a machine set up in one country and
@@ -217,6 +250,9 @@ GameState::SnapshotBlock *GameState::findBlockInfoByToken( AsciiString token, Sn
 	 save lists came out in a format the owner never chose. */
 UnicodeString getUnicodeDateBuffer(WallClockTime timeVal)
 {
+#if !defined(_WIN32)
+	return formatWallClock( timeVal, "%x" );	// the locale's short date, as DATE_SHORTDATE
+#else
 	// setup date buffer for local region date format
 	#define DATE_BUFFER_SIZE 256
 	OSVERSIONINFO	osvi;
@@ -245,10 +281,16 @@ UnicodeString getUnicodeDateBuffer(WallClockTime timeVal)
 	displayDateBuffer.set(dateBuffer);
 	return displayDateBuffer;
 	//displayDateBuffer.format( L"%ls", dateBuffer );
+#endif
 }															
 
 UnicodeString getUnicodeTimeBuffer(WallClockTime timeVal) 
 {
+#if !defined(_WIN32)
+	// The locale's own time format.  Unlike TIME_NOSECONDS below it shows seconds: strftime has no
+	// "this locale's format without the seconds".
+	return formatWallClock( timeVal, "%X" );
+#else
 	// setup time buffer for local region time format
 	UnicodeString displayTimeBuffer;
 	OSVERSIONINFO	osvi;
@@ -278,6 +320,7 @@ UnicodeString getUnicodeTimeBuffer(WallClockTime timeVal)
 								 sizeof(timeBuffer) );
 	displayTimeBuffer.set(timeBuffer);
 	return displayTimeBuffer;
+#endif
 }
 
 

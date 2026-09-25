@@ -195,6 +195,17 @@ Int WideCharFileWrite ( FILE *f, const WideChar *s );
 	  text model - nothing round-trips through here. */
 size_t WideCharToUtf8 ( const WideChar *s, char *out, size_t outBytes );
 
+/** The other direction: UTF-8 bytes into `out` as WideChar, always terminated, truncated at a
+	  whole character if it does not fit.  Returns the number of WideChar units written, not counting
+	  the terminator.
+
+	  At a 2-byte WideChar a character outside the BMP becomes a surrogate pair; at 4 bytes it is one
+	  unit - the mirror of WideCharToUtf8.  Anything that is not well-formed UTF-8 (a stray
+	  continuation byte, a truncated or overlong sequence, an encoded surrogate, a value above
+	  U+10FFFF) becomes one U+FFFD per bad byte.  For text the platform hands back as UTF-8 - a
+	  strftime in the user's LC_TIME - where mbstowcs would decode by LC_CTYPE, which stays "C". */
+size_t WideCharFromUtf8 ( const char *in, WideChar *out, size_t outUnits );
+
 /** The same conversion with storage attached, for use as a printf argument:
 
 			DEBUG_LOG(( "player %s joined", WideCharAsUtf8( name.str() ).str() ));
