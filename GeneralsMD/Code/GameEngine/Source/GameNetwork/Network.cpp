@@ -212,9 +212,9 @@ protected:
 	Int m_lastExecutionFrame;																	///< The highest frame number that a command could have been executed on.
 	Int m_lastFrameCompleted;
 	Bool m_didSelfSlug;
-	__int64 m_perfCountFreq;														///< The frequency of the performance counter.
+	Int64 m_perfCountFreq;														///< The frequency of the performance counter.
 
-	__int64 m_nextFrameTime;														///< When did we execute the last frame?  For slugging the GameLogic...
+	Int64 m_nextFrameTime;														///< When did we execute the last frame?  For slugging the GameLogic...
 
 	Bool m_frameDataReady;																		///< Is the frame data for the next frame ready to be executed by TheGameLogic?
 
@@ -791,9 +791,9 @@ void Network::endOfGameCheck() {
 }
 
 Bool Network::timeForNewFrame() {
-	__int64 curTime;
+	Int64 curTime;
 	curTime = Clock_Ticks();
-	__int64 frameDelay = m_perfCountFreq / m_frameRate;
+	Int64 frameDelay = m_perfCountFreq / m_frameRate;
 
 	/*
 	 * If we're pushing up against the edge of our run ahead, we should slow the framerate down a bit
