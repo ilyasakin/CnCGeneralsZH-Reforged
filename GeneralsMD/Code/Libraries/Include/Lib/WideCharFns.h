@@ -158,21 +158,32 @@ Int WideCharFormat ( WideChar *out, size_t outCount, const WideChar *format, ...
 	  direct-connect IP address out of a combo box (NetworkDirectConnect.cpp). */
 Int WideCharScan ( const WideChar *in, const WideChar *format, ... );
 
-/** Write a WideChar string to a FILE*, with no terminator and no newline, exactly as
-	  `fwprintf(f, L"%ws", s)` does today.  Returns the number of code units written, or a negative
-	  value on error.
+/** The replay header's strings (Recorder.cpp), as MSVC's fwprintf, fputwc and fgetwc wrote and read
+	  them on a FILE* opened "wb"/"rb": in binary mode those convert nothing, so each code unit is its
+	  two bytes, low byte first, and a string ends with a 0 unit.  These write and read the same bytes
+	  with fputc and fgetc.
 
-	  Used by the replay header (Recorder.cpp), which writes each string with this and then a
-	  `fputwc(0, ...)`, and reads it back one `fgetwc` at a time.  The bytes that reach the disk
-	  are whatever the C library's wide-to-multibyte conversion produces for the stream, and they
-	  must not change: a replay written by one build has to be readable by the other.  On Windows
-	  this is byte-for-byte the call it replaces.
+	  Why not the wide calls themselves: Recorder.cpp mixes them with fwrite and fread on one
+	  FILE*.  That is undefined.  MSVC writes the units raw.  macOS's libc (measured) lets the calls
+	  through but converts each unit to the locale's multibyte form - one byte for ASCII - so a Mac
+	  replay would have read back on the Mac and nowhere else; a C library may also fail the calls
+	  (C1, PR (g)).  The format does not change. */
 
-	  See docs/mac-port/WINDOWS-DEBT.md: mixing fwrite and fwprintf on one FILE* is undefined, and
-	  Recorder.cpp does it heavily.  MSVC tolerates it.  A POSIX C library sets the stream's
-	  orientation on first use and then fails every call of the other kind, so the replay writer
-	  needs a byte-oriented rewrite before it runs on a Mac.  That is C1/M2 work, not B1's, and
-	  this funnel is where it will be done when it is. */
+/** What fgetwc returns at the end of a binary stream under MSVC: WEOF, which is 0xFFFF there.
+	  Not EOF (-1) - so Recorder.cpp's `c == EOF` tests never fire on a truncated header, on
+	  Windows or here (docs/mac-port/README.md, defect 13). */
+enum { WIDECHAR_FILE_EOF = 0xFFFF };
+
+/** fputwc(c, f) on a binary stream: two bytes, low first.  Returns the unit written, or
+	  WIDECHAR_FILE_EOF if either byte could not be. */
+Int WideCharFilePut ( FILE *f, WideChar c );
+
+/** fgetwc(f) on a binary stream: the next two bytes as a unit, low first, or WIDECHAR_FILE_EOF if
+	  the file ends before both are read. */
+Int WideCharFileGet ( FILE *f );
+
+/** fwprintf(f, L"%ls", s) on a binary stream: every code unit of s, without its terminator.
+	  Returns the number of units written, or a negative value on error. */
 Int WideCharFileWrite ( FILE *f, const WideChar *s );
 
 //-----------------------------------------------------------------------------------------------
