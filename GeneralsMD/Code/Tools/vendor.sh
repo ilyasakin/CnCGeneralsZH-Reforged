@@ -44,12 +44,24 @@ step() { echo "[vendor] $1" >&2; }
 
 # --- the same three helpers vendor.ps1 has, in the same order ------------------------------------
 
+# Both of these run inside $( ), where bash does not carry set -e, so a failed curl or unzip used to
+# be ignored: the function printed its result anyway, the caller copied an empty folder over the
+# library and the run ended with "everything the build needs is in place" (measured with a bogus
+# commit, 2026-09-25). They return failure explicitly now, which the caller's assignment turns into
+# an exit under set -e - the way vendor.ps1's $ErrorActionPreference = 'Stop' already behaved.
+# The download goes to a .part file and is renamed only once complete, because an existing file is
+# taken as already downloaded, and an interrupted transfer would otherwise be reused on every run.
 get_file() { # url destination -> prints destination
   local url="$1" destination="$2"
   if [ -e "$destination" ]; then printf '%s\n' "$destination"; return 0; fi
   mkdir -p "$(dirname "$destination")"
   step "downloading $(basename "$destination")"
-  curl -fsSL "$url" -o "$destination"
+  if ! curl -fsSL "$url" -o "$destination.part"; then
+    rm -f "$destination.part"
+    echo "[vendor] ERROR: could not download $url" >&2
+    return 1
+  fi
+  mv -f "$destination.part" "$destination"
   printf '%s\n' "$destination"
 }
 
@@ -61,8 +73,8 @@ expand_source() { # archive name -> prints the unpacked root
   mkdir -p "$target"
   step "unpacking $name"
   case "$archive" in
-    *.tar.gz) tar -xf "$archive" -C "$target" ;;
-    *)        unzip -qo "$archive" -d "$target" ;;
+    *.tar.gz) tar -xf "$archive" -C "$target" || { echo "[vendor] ERROR: could not unpack $archive" >&2; return 1; } ;;
+    *)        unzip -qo "$archive" -d "$target" || { echo "[vendor] ERROR: could not unpack $archive" >&2; return 1; } ;;
   esac
   local entry count=0 only=
   for entry in "$target"/*; do
