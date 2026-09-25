@@ -698,10 +698,21 @@ target_compile_definitions(gameengine PUBLIC
 # C++17 for the std::hash_map -> unordered_map alias and string_view hashing in
 # STLTypedefs.h.
 set_target_properties(gameengine PROPERTIES CXX_STANDARD 17)
+# Two names on this line are Windows-only, and expand to nothing elsewhere - in the same positions,
+# so the Windows list is the same items in the same order it always was.  B6's first two drops:
+#  - debuglib: no live GameEngine code calls it (every Debug::/DLOG/DASSERT hit is commented out).
+#    It still reaches Windows through profile, which does call it.
+#  - dinput8: GameEngine uses the 107 DIK_ key-code constants from <dinput.h> and no DirectInput
+#    function.  It is load-bearing on Windows all the same: Win32DIKeyboard.cpp and Win32DIMouse.cpp
+#    in gameenginedevice call DirectInput8Create and get dinput8 only through this PUBLIC line.
+if(ZH_PLATFORM_WINDOWS)
+  set(ZH_GAMEENGINE_DEBUGLIB debuglib)
+  set(ZH_GAMEENGINE_DINPUT8 dinput8)
+endif()
 target_link_libraries(gameengine PUBLIC
-  ww3d2 wwlib wwmath wwsaveload wwdebug wwutil compression debuglib wwdownload
+  ww3d2 wwlib wwmath wwsaveload wwdebug wwutil compression ${ZH_GAMEENGINE_DEBUGLIB} wwdownload
   benchmark eabrowserdispatch profile gamespy
-  dinput8 wininet imagehlp imm32)
+  ${ZH_GAMEENGINE_DINPUT8} wininet imagehlp imm32)
 
 # ===========================================================================
 # Phase 4 - GameEngineDevice + Main -> generals.exe
