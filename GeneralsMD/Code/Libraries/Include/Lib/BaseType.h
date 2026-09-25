@@ -97,6 +97,35 @@
 //#define abs(x) (((x) < 0) ? -(x) : (x))
 //#endif
 
+// The min and max macros below are function-like, so every later declaration or call spelled
+// `max(` expands through them - including the C++ library's own std::min/std::max and the headers
+// that call them.  MSVC's library and libc++ guard against that; libstdc++ does not, and the first
+// engine source built against it (on Linux) stopped in <bits/algorithmfwd.h> with "macro max passed
+// 3 arguments".  So off MSVC, the standard headers this tree's headers include are parsed here,
+// before the macros exist, and their include guards keep them from being parsed again under them.
+// A header this list misses fails loudly the same way, never silently.
+#if !defined(_MSC_VER) && defined(__cplusplus)
+#include <algorithm>
+#include <atomic>
+#include <bitset>
+#include <chrono>
+#include <deque>
+#include <functional>
+#include <list>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <set>
+#include <stack>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#endif
+
 #ifndef min
 #define min(x,y) (((x)<(y)) ? (x) : (y))
 #endif
