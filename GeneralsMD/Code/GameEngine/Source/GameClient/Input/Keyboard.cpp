@@ -28,6 +28,20 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+
+/* The language of the active keyboard layout, the low word of its HKL: Keyboard::initKeyNames names
+	 the numpad keys the French way on a French layout.  Windows asks GetKeyboardLayout, as always (the
+	 HKL is a handle, so it goes through uintptr_t on its way to an integer).  Elsewhere the layout is
+	 C3's to read; until then this is 0, no layout language, and the game's own language decides. */
+static Int keyboardLayoutLanguage( void )
+{
+#if defined(_WIN32)
+	HKL kLayout = GetKeyboardLayout(0);
+	return (Int)((uintptr_t)kLayout & 0xFFFF);
+#else
+	return 0;
+#endif
+}
 #include "Lib/Clock.h"
 
 #include "Common/Language.h"
@@ -346,9 +360,7 @@ void Keyboard::initKeyNames( void )
 
 	_set_keyname_(u' ',		u' ',		u'\0',	KEY_SPACE  );
 
-	HKL kLayout = GetKeyboardLayout(0);
-
-	Int low = (UnsignedInt)kLayout & 0xFFFF;
+	Int low = keyboardLayoutLanguage();
 	LanguageID currentLanguage = OurLanguage;
 	if(low == 0x040c
 		 || low == 0x080c

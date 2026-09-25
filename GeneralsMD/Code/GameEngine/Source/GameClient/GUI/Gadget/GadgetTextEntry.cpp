@@ -103,7 +103,7 @@ WindowMsgHandledType GadgetTextEntryInput( GameWindow *window, UnsignedInt msg,
 			WideChar ch = (WideChar) mData1;
 
 			// --------------------------------------------------------------------
-			if ( ch == VK_RETURN )
+			if ( ch == L'\r' )		// VK_RETURN: the same 13, as the character it arrives as
 			{
 				// Done with this edit
 			 		TheWindowManager->winSendSystemMsg( window->winGetOwner(), 
