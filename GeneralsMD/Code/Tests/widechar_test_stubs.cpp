@@ -72,3 +72,21 @@ void MemoryPool::freeBlock( void * ) { notOnThisPath( "MemoryPool::freeBlock" );
 MemoryPool *MemoryPoolFactory::createMemoryPool( const char *, Int, Int, Int ) { notOnThisPath( "MemoryPoolFactory" ); return NULL; }
 AudioEventRTS::~AudioEventRTS() { notOnThisPath( "AudioEventRTS" ); }
 
+
+// Debug builds only, each under the same macro as its declaration, so it exists exactly when a build
+// can name it.  Neither is code under test.  The log goes to stderr instead of the engine's log file,
+// because a Debug build logs on ordinary paths and a stub that stopped the program there would fail
+// the test for a message, not for a wrong byte.  The leak bookkeeping has nothing to keep here.
+#ifdef DEBUG_LOGGING
+#include <stdarg.h>
+DEBUG_EXTERN_C void DebugLog( const char *format, ... )
+{
+	va_list args;
+	va_start( args, format );
+	vfprintf( stderr, format, args );
+	va_end( args );
+}
+#endif
+#ifdef MEMORYPOOL_DEBUG
+void DynamicMemoryAllocator::debugIgnoreLeaksForThisBlock( void * ) {}
+#endif
