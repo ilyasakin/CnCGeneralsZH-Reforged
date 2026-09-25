@@ -57,6 +57,7 @@
 #include "Common/Debug.h"
 #include "Common/EarlyCommandLine.h"
 #include "Common/ExecutableDirectory.h"
+#include "Platform/BreakIntoDebugger.h"
 #include "stringex.h"
 #include "Common/SystemInfo.h"
 #include "Common/UnicodeString.h"
@@ -269,7 +270,12 @@ static void doLogOutput(const char *buffer)
 	// log message to dev studio output window
 	if (theDebugFlags & DEBUG_FLAG_LOG_TO_CONSOLE)
 	{
+#if defined(_WIN32)
 		::OutputDebugString(buffer);
+#else
+		// The debugger's output channel on Windows; stderr is the one a debugger shows elsewhere.
+		fputs(buffer, stderr);
+#endif
 	}
 }
 #endif
@@ -308,7 +314,7 @@ static int doCrashBox(const char *buffer, Bool logResult)
 			if (logResult)
 				DebugLog("[Retry]\n");
 #endif
-			::DebugBreak();
+			breakIntoDebugger();
 			break;
 		case IDIGNORE:
 #ifdef DEBUG_LOGGING
