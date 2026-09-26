@@ -21,8 +21,9 @@
  * hosts of a real network.  The real Transport and UDP classes:
  *
  *   lan_broadcast_probe listen <this host's LAN address> <port> <seconds>
- *       holds a lobby socket on <address>:<port> (shared, as LANAPI's) and the broadcast listener on the
- *       wildcard address, and prints one line per message heard, saying which socket heard it:
+ *       holds a lobby socket on <address>:<port> (as LANAPI's) and the broadcast listener (UDP::BindForBroadcasts:
+ *       the wildcard address, or 255.255.255.255 on Linux), and prints one line per message heard, saying
+ *       which socket heard it:
  *       HEARD socket=unicast|listener from=<a.b.c.d> text=<text>
  *   lan_broadcast_probe send <this host's LAN address> <port> <text> [<to address>]
  *       sends <text> from a lobby socket on <address> to 255.255.255.255 (as LANAPI announces a game), or
@@ -122,10 +123,10 @@ int main( int argc, char **argv )
 	Transport listener;
 	if (!listener.initBroadcastListener( port ))
 	{
-		printf( "FAILED cannot bind the broadcast listener *:%u\n", (unsigned)port );
+		printf( "FAILED cannot bind the broadcast listener on port %u\n", (unsigned)port );
 		return 1;
 	}
-	printf( "LISTENING unicast=%s:%u listener=*:%u\n", argv[2], (unsigned)port, (unsigned)port );
+	printf( "LISTENING unicast=%s:%u listener=broadcasts:%u\n", argv[2], (unsigned)port, (unsigned)port );
 	fflush( stdout );
 	const double end = now() + atof( argv[4] );
 	struct timespec pause = { 0, 20 * 1000 * 1000 };
