@@ -50,6 +50,7 @@
 #include <gcd_lcm.h>
 #include "texture.h"
 #include "part_ldr.h"
+#include "Platform/MsvcFloatCasts.h"
 
 
 // Global variable which is only used to communicate the worldspace emitter
@@ -116,7 +117,9 @@ ParticleEmitterClass::ParticleEmitterClass(float emit_rate, unsigned int burst_s
 	// The maximum number of particles is determined by the emission rate, burst size and lifetime.
 	// However, it is capped both by the particle cap and by the maximum buffer size, if these are
 	// active.
-	int max_num = BurstSize * emit_rate * (max_age + 1);
+	// converted as Windows converts it: past the int range (W3D data) that is INT_MIN, which MAX below
+	// makes 2, where ARM64 saturated to INT_MAX and, with no cap in effect, asked for a buffer that size
+	int max_num = floatToIntAsMsvc(BurstSize * emit_rate * (max_age + 1));
 	if (max_particles > 0) max_num = MIN(max_num, max_particles);
 	if (max_buffer_size > 0) max_num = MIN(max_num, max_buffer_size);
 	max_num = MAX(max_num, 2);	// max_num of 1 causes problems
