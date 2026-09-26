@@ -154,7 +154,9 @@ VOut processVertex( const Context &ctx, const Vertex &v )
 		// A3e: the declaration's elements into v0-v15, (0, 0, 0, 1) where a stream stops short ("Input
 		// Register - vs"); the program's outputs out (oPos as the clip position, oTn for stage n)
 		double inputs[ 16 ][ 4 ];
-		for (int k = 0; k < 16; ++k)
+		for (int k = 0; k < 16 && s.programInputsGiven; ++k)
+			memcpy( inputs[k], v.programInput[k], sizeof( inputs[k] ) );
+		for (int k = 0; k < 16 && !s.programInputsGiven; ++k)
 		{
 			static const double partial[ 4 ] = { 0, 0, 0, 1 };
 			double element[ 4 ] = { 0, 0, 0, 1 };
@@ -1230,6 +1232,14 @@ void validatePrograms( const DrawState &s, Report &report )
 			refuse( report, "a vertex program outside the census: "
 				+ (s.vertexProgram->refusals.empty() ? std::string( "not a vertex program" ) : s.vertexProgram->refusals[0]) );
 		if (s.pretransformed) refuse( report, "a vertex program with pretransformed vertices" );
+		if (s.programInputsGiven)
+			for (size_t i = 0; i < s.vertexProgram->code.size(); ++i)
+				for (int k = 0; k < s.vertexProgram->code[i].sources; ++k)
+				{
+					const Operand &o = s.vertexProgram->code[i].src[k];
+					if (o.type == Token::REG_INPUT && !(s.programInputPresent & (1u << o.index)))
+						refuse( report, "a vertex program reads an input no declaration element feeds" );
+				}
 		if (rs[RS_FOGENABLE]) refuse( report, "fog with a vertex program (oFog is not in the census)" );
 		for (int st = 0; st < MAX_STAGES; ++st)
 			if (s.stageState[st][TSS_TEXTURETRANSFORMFLAGS] != 0 || (s.stageState[st][TSS_TEXCOORDINDEX] & 0xFFFF0000u) != 0)
