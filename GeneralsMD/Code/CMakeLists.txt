@@ -123,6 +123,17 @@ foreach(vendored ${VENDORED})
     message(FATAL_ERROR "${vendored} is missing. ${VENDOR_HINT}")
   endif()
 endforeach()
+# SDL3's one patch (Libraries/Source/sdl3-metal-windowless.patch, decision 10).  A tree fetched before
+# it and never given a vendor.sh run since still builds, and -offscreen then fails on a host with no
+# window server with SDL's own "no supported SDL_GPU backend", which names nothing.  Said here instead.
+# Apple only: the patch is to the Metal backend.
+if(APPLE)
+  file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/SDL3/src/gpu/metal/SDL_gpu_metal.m _zh_sdl3_patched
+       REGEX "ZH_SDL_GPU_METAL_WINDOWLESS")
+  if(NOT _zh_sdl3_patched)
+    message(FATAL_ERROR "Libraries/Source/SDL3 lacks sdl3-metal-windowless.patch. ${VENDOR_HINT}")
+  endif()
+endif()
 
 # The _CRT_ pair only tells MSVC's own headers to stop deprecating the C library this code is
 # written against.  They mean nothing to any other compiler and cost nothing there, so they stay
