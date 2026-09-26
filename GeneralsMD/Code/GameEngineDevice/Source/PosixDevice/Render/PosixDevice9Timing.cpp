@@ -38,6 +38,12 @@
 
 #include <SDL3/SDL.h>
 
+#include <cxxabi.h>
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <mutex>
+#include <string>
+
 #include <algorithm>
 #include <stdio.h>
 #include <stdlib.h>
@@ -174,13 +180,104 @@ double Sdl_Now_Ms()
 	return (double)SDL_GetTicksNS() / 1.0e6;
 }
 
+namespace {
+struct CreationLogBuffer
+{
+	std::mutex Lock;		// the lines: appended from any thread
+	std::mutex Writing;		// one writer at a time: Present, and the exit handler
+	std::string Lines;
+	std::string Spare;		// what a flush writes, outside Lock; its capacity is kept for the next
+	bool AtExit = false;
+};
+/// Never destroyed: the exit handler that flushes it can run after static destructors.
+CreationLogBuffer &creation_log_buffer()
+{
+	static CreationLogBuffer *buffer = new CreationLogBuffer;
+	return *buffer;
+}
+/// A megabyte kept is written at once, for a run that stops presenting.
+const size_t CREATION_LOG_KEPT_MAX = 1u << 20;
+
+void flush_at_exit()
+{
+	Sdl_Creation_Log_Flush();
+}
+}
+
+void Sdl_Creation_Log_Line(const char *line)
+{
+	CreationLogBuffer &buffer = creation_log_buffer();
+	bool full;
+	{
+		std::lock_guard<std::mutex> guard(buffer.Lock);
+		if (!buffer.AtExit) {
+			buffer.AtExit = true;
+			atexit(flush_at_exit);
+		}
+		buffer.Lines += line;
+		buffer.Lines += '\n';
+		full = buffer.Lines.size() > CREATION_LOG_KEPT_MAX;
+	}
+	if (full) {
+		Sdl_Creation_Log_Flush();
+	}
+}
+
 void Sdl_Creation_Log(const char *what, double started_ms, double took_ms, const char *detail)
 {
+	char line[256];
+	snprintf(line, sizeof(line), "PosixDevice9 create: t %10.1f ms  %-9s %8.2f ms  %s", started_ms, what, took_ms, detail);
+	Sdl_Creation_Log_Line(line);
+}
+
+void Sdl_Creation_Log_Trace(const char *what)
+{
+	void *frames[12];
+	const int count = backtrace(frames, 12);
+	std::string line = std::string("PosixDevice9 create: trace ") + what + ":";
+	for (int i = 1; i < count; ++i) {
+		Dl_info info;
+		const char *name = "?";
+		char *demangled = NULL;
+		if (dladdr(frames[i], &info) != 0 && info.dli_sname != NULL) {
+			int status = 0;
+			demangled = abi::__cxa_demangle(info.dli_sname, NULL, NULL, &status);
+			name = (demangled != NULL && status == 0) ? demangled : info.dli_sname;
+		}
+		// The function's name without its parameters: the line is for reading.
+		std::string shown(name);
+		const size_t parameters = shown.find('(');
+		if (parameters != std::string::npos) {
+			shown.erase(parameters);
+		}
+		line += (i == 1) ? " " : " <- ";
+		line += shown;
+		free(demangled);
+	}
+	Sdl_Creation_Log_Line(line.c_str());
+}
+
+void Sdl_Creation_Log_Flush()
+{
+	CreationLogBuffer &buffer = creation_log_buffer();
+	std::lock_guard<std::mutex> writing_guard(buffer.Writing);
+	{
+		std::lock_guard<std::mutex> guard(buffer.Lock);
+		buffer.Spare.swap(buffer.Lines);
+	}
+	if (buffer.Spare.empty()) {
+		return;
+	}
 	const double writing = Sdl_Now_Ms();
-	fprintf(stderr, "PosixDevice9 create: t %10.1f ms  %-9s %8.2f ms  %s\n", started_ms, what, took_ms, detail);
+	fwrite(buffer.Spare.data(), 1, buffer.Spare.size(), stderr);
+	fflush(stderr);
 	const double wrote = Sdl_Now_Ms() - writing;
+	const size_t bytes = buffer.Spare.size();
+	buffer.Spare.clear();
 	if (wrote > 5.0) {
-		// PERF1's hitch hunt: the log's own write, unbuffered, to wherever stderr goes.
-		fprintf(stderr, "PosixDevice9 create: t %10.1f ms  logwrite  %8.2f ms  (the line above)\n", writing, wrote);
+		// The write can still block (PERF1): now once a present, and said, so a long frame can be read.
+		char line[128];
+		snprintf(line, sizeof(line), "PosixDevice9 create: t %10.1f ms  logflush  %8.2f ms  (%zu bytes)", writing, wrote, bytes);
+		Sdl_Creation_Log_Line(line);
 	}
 }

@@ -739,11 +739,18 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		}
 		~PhaseClock()
 		{
-			if (!On || Sdl_Now_Ms() - Start <= 20.0) return;
-			fprintf(stderr, "PosixDevice9 create: t %10.1f ms  SLOW DRAW %8.2f ms:", Start, Sdl_Now_Ms() - Start);
-			for (int i = 0; i < Count; ++i) fprintf(stderr, " %s %.2f", Names[i], Took[i]);
-			fprintf(stderr, " rest %.2f (copies: textures %.2f samplers %.2f buffers %.2f rounds %d)\n", Sdl_Now_Ms() - Last,
-				Parts[0], Parts[1], Parts[2], Rounds);
+			const double now = Sdl_Now_Ms();
+			if (!On || now - Start <= 20.0) return;
+			char line[512];
+			int used = snprintf(line, sizeof(line), "PosixDevice9 create: t %10.1f ms  SLOW DRAW %8.2f ms:", Start, now - Start);
+			for (int i = 0; i < Count && used > 0 && (size_t)used < sizeof(line); ++i) {
+				used += snprintf(line + used, sizeof(line) - used, " %s %.2f", Names[i], Took[i]);
+			}
+			if (used > 0 && (size_t)used < sizeof(line)) {
+				snprintf(line + used, sizeof(line) - used, " rest %.2f (copies: textures %.2f samplers %.2f buffers %.2f rounds %d)",
+					now - Last, Parts[0], Parts[1], Parts[2], Rounds);
+			}
+			Sdl_Creation_Log_Line(line);
 		}
 	} phases(Sdl_Creation_Log_Asked());
 

@@ -180,6 +180,9 @@ PosixDevice9::~PosixDevice9()
 	Posix_Bind(PixelShader, (IDirect3DPixelShader9 *)NULL);
 	// With a GPU, what the draws came to: the count, and each refusal's reason once with its count.
 	if (Gpu != NULL) {
+		if (Sdl_Creation_Log_Asked()) {
+			Sdl_Creation_Log_Flush();
+		}
 		fprintf(stderr, "PosixDevice9: %u draws recorded, %u presents\n", DrawsRecorded, PresentCount);
 		for (std::map<std::string, unsigned int>::const_iterator it = DrawRefusals.begin(); it != DrawRefusals.end(); ++it) {
 			fprintf(stderr, "PosixDevice9:   refused %u: %s\n", it->second, it->first.c_str());
@@ -518,10 +521,14 @@ RenderResult PosixDevice9::Present(const RenderRect *, const RenderRect *, Rende
 		static double last_present = 0.0;
 		const double now = Sdl_Now_Ms();
 		if (last_present != 0.0 && now - last_present > 50.0) {
-			fprintf(stderr, "PosixDevice9 create: t %10.1f ms  LONG FRAME %8.2f ms  (present %u, %u draws recorded so far)\n",
+			char line[160];
+			snprintf(line, sizeof(line), "PosixDevice9 create: t %10.1f ms  LONG FRAME %8.2f ms  (present %u, %u draws recorded so far)",
 				last_present, now - last_present, PresentCount, DrawsRecorded);
+			Sdl_Creation_Log_Line(line);
 		}
 		last_present = now;
+		// The frame's lines, written here outside the draws and the present that are timed.
+		Sdl_Creation_Log_Flush();
 	}
 	const bool timing = Timing_Is_Asked();
 	const Uint64 present_start = timing ? SDL_GetTicksNS() : 0;

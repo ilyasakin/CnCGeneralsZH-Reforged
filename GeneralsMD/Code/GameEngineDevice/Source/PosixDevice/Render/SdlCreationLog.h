@@ -21,6 +21,10 @@
 // its levels converted and queued - each with the time since SDL started and how long it took, and every
 // frame longer than 50 ms, so a long frame can be set beside what was made in it.  Off unless asked: a
 // site then costs one cached check.
+//
+// The lines are kept in memory and written once a present, and at exit: PERF1 found the log's own
+// unbuffered writes to stderr blocking for up to 115 ms under memory pressure, inside the draws it timed.
+// A crash loses at most the lines since the last present.
 
 #pragma once
 
@@ -33,5 +37,11 @@ bool Sdl_Creation_Log_Asked();
 double Sdl_Now_Ms();
 /// One line: what was made, when it started (Sdl_Now_Ms), how long it took, and what it was.
 void Sdl_Creation_Log(const char *what, double started_ms, double took_ms, const char *detail);
+/// One line as it is, without its newline.
+void Sdl_Creation_Log_Line(const char *line);
+/// One line naming who called: `what`, then the calling functions, innermost first.
+void Sdl_Creation_Log_Trace(const char *what);
+/// Writes the lines kept so far to stderr; a write over 5 ms says so in the next.
+void Sdl_Creation_Log_Flush();
 
 #endif // SDLCREATIONLOG_H
