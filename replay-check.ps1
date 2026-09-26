@@ -34,8 +34,10 @@ param(
 	# how long each match runs. Long enough to build and fight; a divergence in movement code needs
 	# units on the move, and the first thousand frames are two workers walking to a supply dock
 	[int] $MaxFrames = 12000,
-	# playable cells a side of the generated map
-	[int] $MapCells = 128,
+	# playable cells a side of the generated map; 0 lets the generator size it for the player count.
+	# 128 used to be the default, below even the generator's small size for two players: seed 1 put
+	# the two starts 124 units apart, neither AI could build, and the match stayed idle
+	[int] $MapCells = 0,
 	# where the game is
 	[string] $RunDir = "$PSScriptRoot\GeneralsMD\Run",
 	[string] $Exe = "generals.exe",
@@ -85,9 +87,10 @@ foreach ($seed in $Seeds)
 	if (Test-Path $lastReplay) { Remove-Item $lastReplay -Force }
 
 	# -observer, so both sides are AI and the command stream is entirely the AI's own decisions
-	$live = Invoke-Run @("-randommap", $seed, $Players, $MapCells,
-											 "-autoskirmish", $Players, "-aidiff", $Difficulty,
-											 "-seed", $seed, "-observer") "det$($seed)_live"
+	$mapArgs = @("-randommap", $seed, $Players)
+	if ($MapCells -gt 0) { $mapArgs += $MapCells }
+	$live = Invoke-Run ($mapArgs + @("-autoskirmish", $Players, "-aidiff", $Difficulty,
+											 "-seed", $seed, "-observer")) "det$($seed)_live"
 	if ($null -eq $live) { Write-Host "no result from the live run"; $failures++; continue }
 	if (-not (Test-Path $lastReplay)) { Write-Host "the live run wrote no replay"; $failures++; continue }
 

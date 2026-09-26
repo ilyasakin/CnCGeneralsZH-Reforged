@@ -4325,7 +4325,13 @@ void Object::xfer( Xfer *xfer )
 	{
 		Matrix3D mtx = *getTransformMatrix();
 		xfer->xferMatrix3D(&mtx);
-		setTransformMatrix(&mtx);
+		/* Only when loading.  Setting the matrix it was just read from is not a no-op: Thing's setter
+			 recomputes the cached angle from the matrix (Get_Z_Rotation), which is not the angle the logic
+			 set, so every save nudged every object's heading by an ULP or two.  Harmless while a save
+			 ended the game; the replay viewer saves a checkpoint every 900 frames, and a checkpointed
+			 playback then parted from its recording (defect #20). */
+		if (xfer->getXferMode() == XFER_LOAD)
+			setTransformMatrix(&mtx);
 	}
 	else
 	{
