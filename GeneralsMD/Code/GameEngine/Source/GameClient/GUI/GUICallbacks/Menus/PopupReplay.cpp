@@ -286,22 +286,20 @@ void reallySaveReplay(void)
 
 	if (TheLocalFileSystem->doesFileExist(filename.str()))
 	{
-#if defined(_WIN32)
-		if(DeleteFile(filename.str()) == 0)
+		if(!TheLocalFileSystem->deleteFile(filename.str()))
 		{
+#if defined(_WIN32)
 			// Win32 only: WideChar and WCHAR are the same two bytes there, which is what makes the cast
-			// honest.  B5 replaces DeleteFile/CopyFile and this message off Windows.  The size is in
-			// characters, as FormatMessageW takes it; it used to be sizeof(buffer), twice that.
+			// honest.  The size is in characters, as FormatMessageW takes it; it used to be
+			// sizeof(buffer), twice that.
 			WideChar buffer[1024];
 			FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, reinterpret_cast<LPWSTR>( buffer ),
 				sizeof( buffer ) / sizeof( buffer[0] ), NULL );
 			UnicodeString errorStr;
 			errorStr.set(buffer);
 #else
-		// The system's reason, as the Windows branch shows it.  strerror is ASCII in the "C" locale
-		// the game keeps (see the plan's locale rule), so translate() is exact here.
-		if(remove(filename.str()) != 0)
-		{
+			// The system's reason, as the Windows branch shows it.  strerror is ASCII in the "C" locale
+			// the game keeps (see the plan's locale rule), so translate() is exact here.
 			UnicodeString errorStr;
 			errorStr.translate(AsciiString(strerror(errno)));
 #endif
@@ -324,16 +322,21 @@ void reallySaveReplay(void)
 	}
 
 	// copy the replay to the right place
-	if(CopyFile(oldFilename.str(),filename.str(), FALSE) == 0)
+	if(!TheLocalFileSystem->copyFile(oldFilename.str(),filename.str(), FALSE))
 	{
+#if defined(_WIN32)
 		// Win32 only: WideChar and WCHAR are the same two bytes there, which is what makes the cast
-		// honest.  B5 replaces DeleteFile/CopyFile and this message off Windows.  The size is in
-		// characters, as FormatMessageW takes it; it used to be sizeof(buffer), twice that.
+		// honest.  The size is in characters, as FormatMessageW takes it; it used to be
+		// sizeof(buffer), twice that.
 		WideChar buffer[1024];
 		FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, reinterpret_cast<LPWSTR>( buffer ),
 			sizeof( buffer ) / sizeof( buffer[0] ), NULL );
 		UnicodeString errorStr;
 		errorStr.set(buffer);
+#else
+		UnicodeString errorStr;
+		errorStr.translate(AsciiString(strerror(errno)));		// as the delete above
+#endif
 		errorStr.trim();
 		if(messageBoxWin)
 		{

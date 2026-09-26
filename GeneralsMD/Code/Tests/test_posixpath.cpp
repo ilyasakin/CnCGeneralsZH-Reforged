@@ -89,6 +89,12 @@ void build_fixture(const std::string & root)
 	write_file(root + "/gensecZH.big", "gensec");
 }
 
+bool is_directory_here(const std::string & path)
+{
+	struct stat status;
+	return stat(path.c_str(), &status) == 0 && S_ISDIR(status.st_mode);
+}
+
 // Whether names in this directory differ by case: create one spelling, look for the other.
 bool is_case_sensitive(const std::string & directory)
 {
@@ -263,6 +269,13 @@ unsigned run_suite(const std::string & root, const char * where)
 	CHECK(zh_access("Data\\Scripts\\New.txt", F_OK) != 0);
 	CHECK_EQ(zh_remove("data\\SCRIPTS\\renamed.TXT"), 0);
 	CHECK(zh_access("Data\\Scripts\\Renamed.txt", F_OK) != 0);
+	write_file(root + "/Data/Scripts/Unlinked.txt", "x");
+	CHECK_EQ(zh_unlink("DATA\\scripts\\unlinked.TXT"), 0);
+	CHECK(zh_access("Data\\Scripts\\Unlinked.txt", F_OK) != 0);
+	make_directory(root + "/Data/Scripts/EmptyDir");
+	CHECK(zh_unlink("Data\\Scripts\\EmptyDir") != 0);		// unlike zh_remove, never a directory
+	CHECK(is_directory_here(root + "/Data/Scripts/EmptyDir"));
+	CHECK(zh_unlink("Data\\Scripts\\Absent.txt") != 0 && errno == ENOENT);
 	CHECK_EQ(zh_mkdir("SAVE\\Replays"), 0);
 	struct stat status;
 	CHECK(stat((root + "/Save/Replays").c_str(), &status) == 0 && S_ISDIR(status.st_mode));

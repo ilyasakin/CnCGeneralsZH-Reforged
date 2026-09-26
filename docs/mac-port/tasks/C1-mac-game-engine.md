@@ -136,7 +136,10 @@ Windows too (`File::open` defaults to `BINARY`), so their parser already copes w
   asset test. **Requirement:** an archive the listing finds that does not start `BIGF` is skipped
   quietly, with a log line once per file, not mounted and not fatal. That covers macOS's AppleDouble
   `._*.big` companions (see "Found for (f)" below) and whatever else a copy from another file system
-  leaves behind. A name rule would catch only the first.
+  leaves behind. A name rule would catch only the first. **And:** `GameEngine::init` deletes
+  `Data\INI\INIZH.big` (patch 1.01's cleanup), and the Steam install on this machine has that
+  file. On Windows the game does the same. No test may start the engine with the Steam install as
+  its root: use a copy, or a read-only mount of it (C1 (c) found this).
 
 Linux is a constraint on how the code is written, kept POSIX-generic, not a gate on each piece (the
 user's macOS-first direction, plan `74750f5a`).
@@ -255,6 +258,87 @@ unreachable ones abort if reached.
 **Tooling.** `windows_view_diff.py` now turns quotes in `#error`/`#warning` text into backquotes on
 both sides, because unifdef read the apostrophe in `posixpath.h`'s `#error` as an unterminated
 character literal and refused the file.
+
+## PR (c): the file operations behind LocalFileSystem (2026-09-26)
+
+**The calls (decision D3).** `LocalFileSystem` gains five calls.
+
+| Call | Windows (`Win32LocalFileSystem`) | POSIX (`PosixLocalFileSystem`) |
+|:--|:--|:--|
+| `copyFile(from, to, failIfExists)` | `CopyFileA` | a copy that keeps the last write time, as CopyFile does, and never copies a file onto itself |
+| `deleteFile(path)` | `DeleteFileA` | `zh_unlink` (new in WWLib): a file, never a directory, as DeleteFile does |
+| `moveFileReplacing(from, to)` | `MoveFileExA(..., MOVEFILE_REPLACE_EXISTING)` | `zh_rename` |
+| `getFilesInDirectory(dir, pattern, names)` | `FindFirstFileA(dir\pattern)`, files only, in the order found | the listing of PR (b), without recursion, in byte order |
+| `getCurrentDirectory()` | `GetCurrentDirectoryA` | `getcwd` |
+
+The ANSI build's `CopyFile`, `DeleteFile` and the rest already were the `A` functions. Nothing runs
+between a failing call and the caller's `GetLastError`.
+
+**The sites.** -18's worklist in B5's task file is done:
+
+- `GameState` makes the save folder, and lists saves by path. Its menu callback now opens
+  `getFilePathInSaveDirectory(leaf)`; it used to open the bare leaf, which worked only because of
+  the `chdir`.
+- `GameStateMap`'s scratch-map cleanup lists first, then deletes, by path.
+- `Recorder`'s three copies.
+- `GameEngine.cpp`:
+  - the checksum cache's replace;
+  - the "not in <dir>" message;
+  - patch 1.01's `INIZH.big` delete. It moved from just after `createFileSystem` to just after
+    `TheLocalFileSystem` starts, because it now goes through it. Nothing between the two places
+    touches the file, and the archives still mount after.
+- `InGameUI`'s checkpoint folders and cleanup.
+- `Image.cpp`'s mapped-images probe (defect 11 fixed).
+- `PopupReplay` and `ReplayMenu`'s delete and copy. Their POSIX error text is `strerror`, as B5's
+  was.
+- `PeerDefs`' three folders.
+
+**Not on the list after all:**
+- `Directory.cpp` and `Directory.h` are whole-file `#if (0)`; nothing includes them.
+- `EarlyOptions.h` has no live site any more.
+
+**Still failing on macOS, and not (c)'s:**
+- `ReplayMenu.cpp`'s `SHGetSpecialFolderLocation` for the Desktop. That is a user-folder question,
+  for (e).
+- The `'\'` joins after `getExecutableDirectory`, which are (d)'s.
+
+**The condition: the Windows listing before and after, under Wine.** `fs_oracle dir-before` is the
+old code: remember the directory, change in, search, change back. `fs_oracle dir-after` is
+`Win32LocalFileSystem::getFilesInDirectory`. Both are verbatim but for `std::string`, built with
+mingw-w64 and run in `zh-e4`.
+- **12 cases, byte-identical, including order.** They covered:
+  - the real install's `Data\INI` (with and without a trailing `'\'`, and `data\ini` with
+    `*.big`), `Data`, the install root (99 files) and an empty directory argument;
+  - on the case-sensitive image, a save-folder fixture: saves in both cases, a scratch `.map`, a
+    directory named `dir.sav`, and the checkpoint folder with `*.sav`;
+  - a wrong-case `FIXTURE\save`;
+  - the quirk fixture's `Data\INI` with `*.ini`.
+- **2 cases differ, by design:** a missing directory, run from a folder that has files. Before, the
+  failed `SetCurrentDirectory` was ignored and the search listed the current folder (6 files, among
+  them `Map Scratch.map`, which `clearScratchPadMaps` would have deleted). After, it lists nothing.
+  That is defect 16, fixed.
+- `PosixLocalFileSystem`'s listing found the same set in all 14 cases.
+- The Win32 bodies were also compiled, verbatim, against mingw-w64's `<windows.h>` (`-Wall
+  -Wextra`, clean). As always, the Wine and mingw pieces are not Microsoft's.
+
+**Tests.**
+- `test_posixlocalfilesystem`: 151 checks on both volumes. They cover:
+  - `copyFile`'s bytes and kept write time, `failIfExists`, replacing, copying onto itself, a
+    missing source, a directory as source;
+  - `deleteFile` on a file, on a missing one, and on an empty directory it must leave;
+  - `moveFileReplacing` over an existing file;
+  - `getFilesInDirectory`'s pattern, files only, a missing directory, no trailing separator;
+  - `getCurrentDirectory`.
+- `test_posixpath`: `zh_unlink`, 138 checks.
+
+**Windows-visible changes, beyond the calls moving:**
+- defect 16's fix;
+- `Image.cpp` counts files, so a directory named `*.ini` no longer triggers a load that found
+  nothing anyway;
+- the three `CreateDirectory` sites now pass `Win32LocalFileSystem::createDirectory`'s `_MAX_DIR`
+  (256) check, where `CreateDirectory` took up to `MAX_PATH` (260).
+
+WINDOWS-DEBT has the rows.
 
 ## Why
 

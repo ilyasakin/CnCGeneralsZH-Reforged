@@ -212,3 +212,52 @@ Bool Win32LocalFileSystem::createDirectory(AsciiString directory)
 	}
 	return FALSE;
 }
+
+// The calls engine code made directly until C1 (decision D3), made here exactly as the sites made
+// them.  Nothing runs between a call and the return, so GetLastError still holds its reason for the
+// callers that show it.
+
+Bool Win32LocalFileSystem::copyFile(const Char *from, const Char *to, Bool failIfExists)
+{
+	return CopyFileA(from, to, failIfExists) != 0;
+}
+
+Bool Win32LocalFileSystem::deleteFile(const Char *path)
+{
+	return DeleteFileA(path) != 0;
+}
+
+Bool Win32LocalFileSystem::moveFileReplacing(const Char *from, const Char *to)
+{
+	return MoveFileExA(from, to, MOVEFILE_REPLACE_EXISTING) != 0;
+}
+
+// FindFirstFile on directory\searchName, where the sites changed into the directory and searched
+// searchName: the same entries in the same order, and the current directory is left alone.
+void Win32LocalFileSystem::getFilesInDirectory(const AsciiString& directory, const AsciiString& searchName, std::vector<AsciiString> &names) const
+{
+	AsciiString search = directory;
+	if (!search.isEmpty() && !search.endsWith("\\") && !search.endsWith("/")) {
+		search.concat('\\');
+	}
+	search.concat(searchName);
+
+	WIN32_FIND_DATAA item;
+	HANDLE handle = FindFirstFileA(search.str(), &item);
+	if (handle == INVALID_HANDLE_VALUE) {
+		return;
+	}
+	do {
+		if (!(item.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+			names.push_back(AsciiString(item.cFileName));
+		}
+	} while (FindNextFileA(handle, &item) != 0);
+	FindClose(handle);
+}
+
+AsciiString Win32LocalFileSystem::getCurrentDirectory() const
+{
+	Char directory[_MAX_PATH];
+	GetCurrentDirectoryA(_MAX_PATH, directory);
+	return AsciiString(directory);
+}

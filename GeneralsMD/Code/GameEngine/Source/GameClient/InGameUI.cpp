@@ -36,6 +36,7 @@
 
 #define DEFINE_SHADOW_NAMES
 
+#include "Common/LocalFileSystem.h"
 #include "Common/ActionManager.h"
 #include "Common/DrawnPath.h"
 #include "Common/GameAudio.h"
@@ -2311,19 +2312,13 @@ static AsciiString replayCheckpointFolder( void )
 static void forgetReplayCheckpoints( void )
 {
 	const AsciiString folder = replayCheckpointFolder();
-	AsciiString pattern;
-	pattern.format( "%s\\*.sav", folder.str() );
-	WIN32_FIND_DATAA found;
-	HANDLE search = FindFirstFileA( pattern.str(), &found );
-	if( search != INVALID_HANDLE_VALUE )
+	std::vector< AsciiString > files;
+	TheLocalFileSystem->getFilesInDirectory( folder, AsciiString( "*.sav" ), files );
+	for( size_t i = 0; i < files.size(); ++i )
 	{
-		do
-		{
-			AsciiString path;
-			path.format( "%s\\%s", folder.str(), found.cFileName );
-			DeleteFileA( path.str() );
-		} while( FindNextFileA( search, &found ) );
-		FindClose( search );
+		AsciiString path;
+		path.format( "%s\\%s", folder.str(), files[ i ].str() );
+		TheLocalFileSystem->deleteFile( path.str() );
 	}
 	TheReplayCheckpoints.clear();
 }
@@ -2338,10 +2333,10 @@ static void collectPostedCRCs( GameMessageList *list, std::vector< std::pair< In
 static void takeReplayCheckpoint( UnsignedInt frame )
 {
 	const UnsignedInt startMs = Clock_Milliseconds();
-	CreateDirectoryA( TheGameState->getSaveDirectory().str(), NULL );
-	CreateDirectoryA( TheGameState->getFilePathInSaveDirectory( REPLAY_CHECKPOINT_FOLDER ).str(), NULL );
+	TheLocalFileSystem->createDirectory( TheGameState->getSaveDirectory() );
+	TheLocalFileSystem->createDirectory( TheGameState->getFilePathInSaveDirectory( REPLAY_CHECKPOINT_FOLDER ) );
 	const AsciiString folder = replayCheckpointFolder();
-	CreateDirectoryA( folder.str(), NULL );
+	TheLocalFileSystem->createDirectory( folder );
 
 	ReplayCheckpoint &checkpoint = TheReplayCheckpoints[ frame ];
 	checkpoint.path.format( "%s\\%u.sav", folder.str(), frame );

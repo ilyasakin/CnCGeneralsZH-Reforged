@@ -26,6 +26,7 @@
 
 #include "Lib/WideCharFns.h"
 #include "Common/Recorder.h"
+#include "Common/LocalFileSystem.h"
 #include "Common/FileSystem.h"
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
@@ -298,7 +299,7 @@ void RecorderClass::cleanUpReplayFile( void )
 		DEBUG_LOG(("Saving replay to %s\n", fname));
 		AsciiString oldFname;
 		oldFname.format("%s%s", getReplayDir().str(), m_fileName.str());
-		CopyFile(oldFname.str(), fname, TRUE);
+		TheLocalFileSystem->copyFile(oldFname.str(), fname, TRUE);
 #ifdef DEBUG_FILE_NAME
 		AsciiString debugFname = fname;
 		debugFname.removeLastChar();
@@ -320,7 +321,7 @@ void RecorderClass::cleanUpReplayFile( void )
 		if (fileSize <= MAX_DEBUG_SIZE || TheGlobalData->m_saveAllStats)
 		{
 			DEBUG_LOG(("Using CopyFile to copy %s\n", DEBUG_FILE_NAME));
-			CopyFile(DEBUG_FILE_NAME, debugFname.str(), TRUE);
+			TheLocalFileSystem->copyFile(DEBUG_FILE_NAME, debugFname.str(), TRUE);
 		}
 		else
 		{
@@ -765,7 +766,7 @@ void RecorderClass::archiveReplay(const AsciiString& fileName)
 	destPath.concat(stamp);
 	destPath.concat(getReplayExtention());
 
-	if (!CopyFile(sourcePath.str(), destPath.str(), FALSE))
+	if (!TheLocalFileSystem->copyFile(sourcePath.str(), destPath.str(), FALSE))
 		DEBUG_LOG(("RecorderClass::archiveReplay - failed to copy %s to %s\n", sourcePath.str(), destPath.str()));
 }
 

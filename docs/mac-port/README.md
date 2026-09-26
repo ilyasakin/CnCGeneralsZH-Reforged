@@ -723,12 +723,13 @@ by B5 (`sizeof(buffer)/sizeof(buffer[0])`); any message that fits is unchanged.
 stores are commented out, so `GadgetButtonGetData` returns NULL and `playerID` is 0. Dead GameSpy
 service; recorded, not fixed.
 
-**11. A find handle is opened to ask a yes/no question and never closed.**
+**11. A find handle is opened to ask a yes/no question and never closed - fixed.**
 `Image.cpp:272` (`ImageCollection::load`) tests `FindFirstFile(...) != INVALID_HANDLE_VALUE` to
 see whether the user has any `INI\MappedImages\*.ini`, and drops the handle without `FindClose`.
 It runs once, from `GameClient.cpp:339`, so it leaks one handle per run, and only for a player who
-has user mapped images. Harmless in practice; recorded, not fixed. Found listing C1's file
-operations (B5's task file).
+has user mapped images. Harmless in practice. Found listing C1's file operations (B5's task file).
+Fixed by C1 (c): the question now goes through `LocalFileSystem::getFilesInDirectory`, which
+closes what it opens.
 
 **12. Writing a file whose last name component has no `'.'` spins until AsciiString throws.**
 `Win32LocalFileSystem::openFile`, for any `WRITE`, first creates the directories along the path. It
@@ -789,6 +790,18 @@ stores 0xFFFF until it reaches its 1023-unit bound, and every string read after 
 Only a damaged `.rep` reaches it. **Kept as it is
 on every platform**: `WideCharFileGet`, which replaced `fgetwc` in PR (g), returns 0xFFFF at the end
 exactly as `fgetwc` did (checked under Wine's msvcrt), so the check still never fires. Found by C1.
+
+**16. With the save folder missing, the save list reads the game folder, and the scratch-map
+cleanup deletes the game folder's `.map` files - fixed.**
+`GameState::iterateSaveFiles` and `GameStateMap::clearScratchPadMaps` changed into the save folder
+with `SetCurrentDirectory`, ignored its result, and searched `"*"`. If the folder did not exist, the
+search ran in the current directory, which is the game folder. The first then offered any `.sav`
+there as a save. The second deleted every `.map` file there, and the Zero Hour folder is where a
+player's loose maps may sit. Both also returned without changing back if the search found nothing.
+`GameState::init` creates the save folder first, so this needs the creation to have failed (an
+unwritable or redirected Documents folder). Shown under Wine by `fs_oracle dir-before` with a
+missing folder: it listed the current directory's six files, `Map Scratch.map` among them. Fixed by
+C1 (c): both list the save folder by its path, and a missing folder lists nothing.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 

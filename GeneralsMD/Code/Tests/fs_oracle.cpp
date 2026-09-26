@@ -12,8 +12,17 @@
  *
  *   fs_oracle list <root> <originalDirectory> <searchName> <0|1 subdirectories>
  *   fs_oracle text <root> <originalDirectory> <searchName> <0|1 subdirectories>
+ *   fs_oracle dir-before <root> <directory> <searchName>      (Windows only)
+ *   fs_oracle dir-after <root> <directory> <searchName>
  *
  * <root> becomes the current directory first, as the install root is the game's.
+ *
+ * dir-before and dir-after are C1 (c)'s condition (decision D3): the files GameState,
+ * GameStateMap and InGameUI list, before and after they stopped changing directory to do it.
+ * dir-before is their old code - remember the current directory, change into <directory>, search
+ * <searchName>, change back - and dir-after is Win32LocalFileSystem::getFilesInDirectory, which
+ * searches <directory>\<searchName> in place.  Both print each file's name in the order found, then
+ * the current directory afterwards, relative to <root>.  Run under Wine, the two must match.
  */
 #include <fcntl.h>
 #include <stdio.h>
@@ -89,6 +98,63 @@ void getFileListInDirectory(const std::string & currentDirectory, const std::str
 	}
 }
 
+// GameState::iterateSaveFiles and GameStateMap::clearScratchPadMaps before C1, with std::string for
+// AsciiString and printing for the callback: the files (not directories) FindFirstFile finds.
+void directory_before(const std::string & directory, const std::string & searchName, std::vector<std::string> & names)
+{
+	char currentDirectory[_MAX_PATH];
+	GetCurrentDirectoryA(_MAX_PATH, currentDirectory);
+	SetCurrentDirectoryA(directory.c_str());
+
+	WIN32_FIND_DATAA item;
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	bool done = false;
+	bool first = true;
+	while (!done) {
+		if (first) {
+			hFile = FindFirstFileA(searchName.c_str(), &item);
+			if (hFile == INVALID_HANDLE_VALUE)
+				return;
+			first = false;
+		}
+		if (!(item.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+			names.push_back(item.cFileName);
+		if (FindNextFileA(hFile, &item) == 0)
+			done = true;
+	}
+	FindClose(hFile);
+	SetCurrentDirectoryA(currentDirectory);
+}
+
+// Win32LocalFileSystem::getFilesInDirectory, with std::string for AsciiString.
+void directory_after(const std::string & directory, const std::string & searchName, std::vector<std::string> & names)
+{
+	std::string search = directory;
+	if (!search.empty() && search[search.size() - 1] != '\\' && search[search.size() - 1] != '/') {
+		search += '\\';
+	}
+	search += searchName;
+
+	WIN32_FIND_DATAA item;
+	HANDLE handle = FindFirstFileA(search.c_str(), &item);
+	if (handle == INVALID_HANDLE_VALUE) {
+		return;
+	}
+	do {
+		if (!(item.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+			names.push_back(item.cFileName);
+		}
+	} while (FindNextFileA(handle, &item) != 0);
+	FindClose(handle);
+}
+
+std::string current_directory()
+{
+	char directory[_MAX_PATH];
+	GetCurrentDirectoryA(_MAX_PATH, directory);
+	return directory;
+}
+
 bool enter(const char * root) { return SetCurrentDirectoryA(root) != 0; }
 int open_text(const char * path) { return _open(path, _O_RDONLY | _O_TEXT); }
 int read_text(int handle, char * buffer, unsigned bytes) { return _read(handle, buffer, bytes); }
@@ -107,6 +173,26 @@ void getFileListInDirectory(const std::string & currentDirectory, const std::str
 			filenameList.insert(found[i]);
 		}
 	}
+}
+
+// PosixLocalFileSystem::getFilesInDirectory.
+void directory_after(const std::string & directory, const std::string & searchName, std::vector<std::string> & names)
+{
+	std::string original = directory;
+	if (!original.empty() && original[original.size() - 1] != '\\' && original[original.size() - 1] != '/') {
+		original += '\\';
+	}
+	std::vector<std::string> found;
+	PosixPath_List_Like_Win32("", original, searchName, false, found);
+	for (size_t i = 0; i < found.size(); ++i) {
+		names.push_back(found[i].substr(original.size()));
+	}
+}
+
+std::string current_directory()
+{
+	char directory[4096];
+	return getcwd(directory, sizeof(directory)) != NULL ? directory : "";
 }
 
 bool enter(const char * root) { return chdir(root) == 0; }
@@ -151,8 +237,10 @@ void print_text_reads(const std::string & path)
 
 int main(int argc, char ** argv)
 {
-	if (argc != 6 || (strcmp(argv[1], "list") != 0 && strcmp(argv[1], "text") != 0)) {
-		fprintf(stderr, "usage: fs_oracle list|text <root> <originalDirectory> <searchName> <0|1 subdirectories>\n");
+	const bool directoryMode = argc == 5 && (strcmp(argv[1], "dir-before") == 0 || strcmp(argv[1], "dir-after") == 0);
+	if (!directoryMode && (argc != 6 || (strcmp(argv[1], "list") != 0 && strcmp(argv[1], "text") != 0))) {
+		fprintf(stderr, "usage: fs_oracle list|text <root> <originalDirectory> <searchName> <0|1 subdirectories>\n"
+			"       fs_oracle dir-before|dir-after <root> <directory> <searchName>\n");
 		return 2;
 	}
 #if defined(_WIN32)
@@ -161,6 +249,24 @@ int main(int argc, char ** argv)
 	if (!enter(argv[2])) {
 		fprintf(stderr, "could not enter %s\n", argv[2]);
 		return 1;
+	}
+	if (directoryMode) {
+		const std::string root = current_directory();
+		std::vector<std::string> names;
+		if (strcmp(argv[1], "dir-before") == 0) {
+#if defined(_WIN32)
+			directory_before(argv[3], argv[4], names);
+#else
+			fprintf(stderr, "dir-before is the Windows code; run the Windows build\n");
+			return 2;
+#endif
+		} else {
+			directory_after(argv[3], argv[4], names);
+		}
+		for (size_t i = 0; i < names.size(); ++i) printf("%s\n", names[i].c_str());
+		const std::string after = current_directory();
+		printf("[current directory afterwards: %s]\n", after == root ? "unchanged" : after.substr(0, root.size()) == root ? after.substr(root.size()).c_str() : after.c_str());
+		return 0;
 	}
 	FilenameList list;
 	getFileListInDirectory("", argv[3], argv[4], list, atoi(argv[5]) != 0);
