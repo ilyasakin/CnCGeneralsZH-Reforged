@@ -1278,6 +1278,11 @@ hunting a crash or corruption that only one platform shows, look here first.**
   - The bit is now `(UnsignedInt)1 << ((dt - 1) & 31)`, which is exactly Windows' value for every
     input and defined everywhere. Found by -18's float sweep, chasing why `SlowDeathBehavior.cpp:189`
     never ran.
+- **A zero rope wobble length (mod data; fixed).** `W3DRopeDraw::buildSegments` computes
+  `ceil(maxLen / wobbleLen)`, with the wobble length from ChinookAIUpdate's `RopeWobbleLen` (shipped: 10).
+  A mod's 0 makes it 1/0. Windows converts the infinity to INT_MIN and draws no rope; ARM64 saturated to
+  INT_MAX and allocated 2^31 segments (out of memory, or a hang). `floatToIntAsMsvc` gives Windows' answer.
+  Found by -18's sample of the client float-to-signed sites.
 - **Float-to-integer conversions out of range or NaN, in the simulation (-18's float sweep; partly fixed).**
   The census (every conversion the sanitizer instruments in the arm64 binary) found 1,444 sites, 318 of
   them in the simulation. C leaves an out-of-range or NaN conversion undefined. MSVC and x86 give INT_MIN;
