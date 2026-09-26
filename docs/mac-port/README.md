@@ -804,6 +804,25 @@ unwritable or redirected Documents folder). Shown under Wine by `fs_oracle dir-b
 missing folder: it listed the current directory's six files, `Map Scratch.map` among them. Fixed by
 C1 (c): both list the save folder by its path, and a missing folder lists nothing.
 
+**17. Fork-introduced: the logic catch-up lets the water grid, which the simulation reads, fall
+behind by the number of catch-up frames.** Not fixed yet (T1c). A code-path argument, not yet shown
+to desync in a match. `TerrainLogic::isUnderwater` (`TerrainLogic.cpp:2218, 2276`) reads
+`TheTerrainVisual->getWaterGridHeight` whenever a script has enabled the water grid, and its
+callers are simulation: pathfinding (`AIPathfind.cpp:5918`), `Locomotor`, `PartitionManager`,
+`FloatUpdate`, `ParachuteContain`, `ObjectCreationList`, `GenerateMinefieldBehavior`. The grid's
+mesh moves in `WaterRenderObjClass::update` (`W3DWater.cpp:1343`), on the CLIENT pass, gated by a
+static `lastLogicFrame != currLogicFrame`: at most one step per client pass. EA's loop ran one
+client pass per logic frame, so that was exactly one step per frame, deterministic. This fork's
+catch-up (`GameEngine.cpp:2468-2496`) runs several logic frames with no client pass in front of
+them, in network games and whenever `m_maxFPS > 0`. A machine that catches up k frames advances the
+grid once, so grid heights at frame N depend on that machine's frame-rate history. Two machines in
+one match can then disagree about `isUnderwater`, and a replay played at a different speed from its
+recording can too. The loop's authors guarded the same class for the camera freeze
+(`GameEngine.cpp:2546`), but not for the water grid. It affects only maps whose scripts call
+`enableWaterGrid` (likely the campaign dam and flood missions). Fix direction: step the grid once
+per LOGIC frame, which restores EA's count on Windows. That is a rule 3 change needing a replay check.
+Found by T1's recon (-47), read-only.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
