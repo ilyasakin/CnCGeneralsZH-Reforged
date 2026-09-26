@@ -558,11 +558,17 @@ the gamma ramp by the `ZH_GPU_DUMP_FRAMES` aid.
 It took one fix outside the renderer first: particle orientation was an undefined float→byte cast,
 which ARM64 turned into a read 190 GB past the table. See the latent-UB list in the README.
 
+**The picture was replaced after defect #27.** The first dump had the trees as black silhouettes.
+`ZH_GPU_TRACE` showed their shroud stage (stage 1, camera-space texgen, set 0) sampling with stage 0's
+coordinates. That was a generator mismatch, which D3D11 and D3D9's combiner shaders have too (README
+#27). The picture above is the same run after the fix, where the pale patches are the blossom trees,
+textured and shrouded. The run: exit 0, 2,440 presents, 1,633,250 draws, and the same single refusal
+reason (20,281 render-target draws).
+
 **Known wrong in this picture:**
-- **Terrain blend tiles** are blotchy. The terrain atlas itself uploads correct (dumped with
-  `ZH_GPU_DUMP_TEXTURES`), so the fault is in the draw.
-- **Trees** draw as black silhouettes.
+- **Terrain blend tiles** still look noisy at their edges. The terrain atlas uploads correct (dumped
+  with `ZH_GPU_DUMP_TEXTURES`), so the fault is in a draw; the terrain shaders' texgen stages were one
+  suspect, and #27 softened them.
 - **The radar** is empty. It is a render target, which is A3d.
 
-The first two are A3c's; the plan is to capture the failing draws and reproduce each as a harness
-scenario.
+The terrain is A3c's; the plan is to trace its draws and reproduce the shape as a harness scenario.
