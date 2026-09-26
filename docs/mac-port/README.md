@@ -711,6 +711,20 @@ it a *macro*, so a TU reaching `windef.h` preprocesses to `typedef unsigned int 
 also buys nothing there, because the header's guard is `#ifndef UINT32` and a typedef does not
 satisfy it. Guarded to non-Windows at merge.
 
+### Rule: match Windows' answer, never its undefined behaviour
+
+Added 2026-09-26 from -18's trace of 131 client float-to-int sites. For an out-of-range float → int
+conversion, `floatToIntAsMsvc` gives Windows' answer, and that's the default wherever the result
+only feeds values. But in six root causes, MSVC's INT_MIN is what indexed out of bounds, and arm64's
+saturation was the safe answer.
+- **Where Windows' result leads to an out-of-bounds access, a hang or a huge allocation, GUARD
+  instead** (a clamp, a range check, a NaN-safe comparison). Don't reproduce the access.
+- **The guard changes Windows' output only where Windows read or wrote out of bounds.** Say so in the
+  `WINDOWS-DEBT.md` row.
+- **Numbering:** such an access in the shipping Windows game gets a defect number only when SHIPPED
+  data, or REMOTE data (another player's record, a transferred map), can reach it. Otherwise it goes
+  in the latent list below, unnumbered.
+
 ### Defects found in the shipping Windows game
 
 Not port artefacts. These were found by porting, because porting means reading code with a compiler
