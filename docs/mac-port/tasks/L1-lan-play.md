@@ -234,6 +234,40 @@ ctest `net_check` (TIMEOUT 900, in the `zh_install` lock with the other farm tes
 | 1. seed 3, two AIs, Golden Oasis, 1800 frames, 127.0.0.1 and 192.168.1.103 | both 0x3453DF90 at frame 1800, 0 mismatches, 5 AI structures; both replays play back to 0x3453DF90 |
 | 2. the control: the second copy on seed 4 | FAILED through the game's own "CRC Mismatch", stopped after 6 s of match; exit 1 |
 
+### One net-check on the whole machine, and a descriptor guard (-47, 2026-09-26)
+
+**The incident.** Two `net_check`s from two worktrees ran at once; ctest's `RESOURCE_LOCK` holds only
+within one ctest. The copy that could not bind 8088 spun in `Transport::init`'s one-second bind retry,
+and `UDP::Bind` leaked a socket per try. Two peers held 188k sockets, the machine's file table filled,
+and every other process failed with "too many open files in system". -18 is fixing the leak in shared
+code.
+
+The harness now guards against it in three ways:
+- **A machine-wide lock.** Before its probe it takes `flock(2)` on `/tmp/zhr-net-check.lock`
+  (`NET_CHECK_LOCK_FILE`), waiting up to `NET_CHECK_LOCK_WAIT` (900 s) and then skipping with the holder
+  named. The lock is taken through python3's `fcntl`, since macOS has no `flock(1)`, on descriptor 9,
+  which the harness and both copies inherit. The kernel therefore holds the lock until every one of
+  them has exited, a copy outliving a killed harness included, and releases it however they end. No
+  PID file, nothing to go stale.
+  - It protects only against harnesses that take it: an older checkout's `net-check.sh` does not.
+- **A cap per copy.** Each copy runs under `ulimit -n` of `NET_CHECK_FD_LIMIT` (4096), so a leak ends
+  in EMFILE for that copy, not in ENFILE for the machine. A polling watchdog alone could not stop it:
+  the leak ran at about 94,000 sockets a second.
+- **A watchdog.** Once either copy holds three quarters of the limit, both copies are stopped and the
+  run fails with "DESCRIPTOR LEAK: process … held N descriptors".
+
+**Checked** (`net_check` gains two checks):
+- The lock:
+  - held elsewhere past a 3 s wait, the harness skips, naming the holder, and starts no copy;
+  - held for 6 s, it waits and then goes ahead.
+- The guard: a stand-in second copy that opens sockets until refused.
+  - It stopped at 4,092 ("Too many open files").
+  - The machine's peak was 14,535 of 276,480.
+  - The run stopped within 2 s with "DESCRIPTOR LEAK: process … held 4100 descriptors", and the
+    stand-in was gone.
+  - The stand-in's first version died on EMFILE opening its own report and looked inert. It now gives
+    one descriptor back first, and holds the rest as a real leak would.
+
 ## Step 3 result: F1 fixed, defect #29 (-47, 2026-09-26)
 
 README defect #29 has the full entry. In short:
