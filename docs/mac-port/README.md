@@ -196,7 +196,7 @@ you start. That commit is the lock.
 | T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | done: T1a (height data and maths in gameengine, three-way golden) and T1c (defect 17 fixed) merged; T1b and T1d dropped by decision 8 | -47 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | done: path resolver, POSIX local and BIG file systems, file operations, user-data dir, replay stream, PosixGameEngine (abstract until T1); `test_bigfilesystem` byte-identical over 25,293 files | -a9 |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | claimed | -18 |
-| C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | C3a merged (SDL3 keyboard, mouse, IME, .ANI cursors, decision 3); C3b (W3DGameClient's factory lines, W3DMouse's base) unblocked by A1 | -47 |
+| C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | C3a merged; C3b (the game makes the SDL input via W3DGameClient) on its branch | -47 |
 | C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | done on macOS: lower half (the Miles API on miniaudio, -a9) and upper half (MilesAudioManager, -47) merged; not yet heard by a person | -a9, -47 |
 | C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | done: merged; macOS arm64 measured, x86_64 and Linux written but unexecuted | -18 |
 | D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | in progress: recon and PR1 merged; PRs 2-8 need Windows (was -8d) | |
