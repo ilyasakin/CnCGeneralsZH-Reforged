@@ -79,11 +79,10 @@ struct Known
 	const char *Finding;
 };
 static const Known KNOWN[] = {
-	// C5: the trees' shadow pass (Trees.vso with a texture-factor, alpha-tested pixel stage): 6 to 8 pixels
-	// of 90,000 up to 4/255 past the envelope, all in the alpha-test and texel zones; the lit tree pass
-	// passes.  Put to a contributor: N30's hull on the vertex program path, or a defect.
-	{ "engine:engine:trees | 1:2,1,3,0,4,1,2,3,0,1:A1,7,F0 | pipeline 7b358c91cde37ffd", "C5" },
-	{ "engine:engine:trees | 1:2,35,3,0,4,1,2,3,0,1:A1,7,F0 | pipeline 7b358c91cde37ffd", "C5" },
+	// C5 was C1 too: the trees' shadow pass, whose cards are indexed quads minified to level 5; drawn a
+	// triangle per call (FFREF_SPLIT) it passes outright.
+	{ "engine:engine:trees | 1:2,1,3,0,4,1,2,3,0,1:A1,7,F0 | pipeline 7b358c91cde37ffd", "C1 (C5)" },
+	{ "engine:engine:trees | 1:2,35,3,0,4,1,2,3,0,1:A1,7,F0 | pipeline 7b358c91cde37ffd", "C1 (C5)" },
 	// C1: small, minified models - a known Mac-against-Windows difference, not a defect.  Metal on Apple
 	// silicon forms a 2x2 quad across an edge that an index buffer shares, so a pixel beside it takes its
 	// neighbour's derivatives and level of detail; D3D9-era hardware formed quads per primitive.  The same
@@ -655,7 +654,7 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	const bool drawn = input_error.empty() && FFRef::draw(state, (int)header.Primitive, &reference_vertices[0], (int)reference_vertices.size(),
 		indices, indices != NULL ? (int)header.IndexCount : (int)header.VertexCount, target, &report, mutations);
 
-	std::vector<uint8_t> bgra;
+	std::vector<uint8_t> bgra, split_picture;
 	SdlGpuFrame *gpu = device->Get_Gpu();
 	const bool read = gpu->Read_Back(gpu->Back_Buffer(), width, height, bgra);
 	if (read && indices != NULL && header.Primitive == D3DPT_TRIANGLELIST && getenv("FFREF_SPLIT") != NULL) {
@@ -697,6 +696,7 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 			}
 			printf("  split %s: the device's one call and %s differ at %d pixels, worst %d/255\n",
 				file.c_str(), unshared ? "one unindexed call" : "one call per triangle", differ, worst);
+			split_picture = split;
 			if (const char *dump = getenv("FFREF_SPLIT_DUMP")) {
 				// Both pictures, raw BGRA, for looking at where they differ.
 				const std::string stem = std::string(dump) + "/" + file.substr(0, file.size() - 4);
@@ -749,6 +749,20 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 		*picture = rgba;
 	}
 	const FFRef::Comparison comparison = FFRef::compare(target, &rgba[0], width * 4);
+	if (!split_picture.empty()) {
+		// The per-primitive picture against the same reference: what the draw comes to on a GPU that forms
+		// its quads per primitive, as D3D9-era hardware did (C1).
+		std::vector<uint8_t> split_rgba(split_picture.size());
+		for (size_t i = 0; i < split_picture.size(); i += 4) {
+			split_rgba[i] = split_picture[i + 2];
+			split_rgba[i + 1] = split_picture[i + 1];
+			split_rgba[i + 2] = split_picture[i];
+			split_rgba[i + 3] = split_picture[i + 3];
+		}
+		const FFRef::Comparison split_comparison = FFRef::compare(target, &split_rgba[0], width * 4);
+		printf("  split %s: per primitive, %ld outside (one call: %ld)\n", file.c_str(), split_comparison.outside,
+			comparison.outside);
+	}
 	if (mutations != 0) {
 		// An armed control: the reference drawn with a deliberate departure must be found outside.
 		if (comparison.passed()) {
