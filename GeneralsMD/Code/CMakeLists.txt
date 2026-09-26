@@ -2128,9 +2128,17 @@ target_link_libraries(ffshader_dump PRIVATE ffvertex engineshader)
 # A3b: FFReference, D3D9's fixed-function pipeline in double precision from Microsoft's documentation
 # alone - the oracle A3's harness compares the GPU's fixed-function draws against.  Independent of
 # ffshader/ffvertex by construction: it shares no code or headers with them (see ffreference.h).
-add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp)
+add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp ${TESTS}/ffreference/ffprogram.cpp)
 target_include_directories(ffreference PUBLIC ${TESTS})
 add_lib_test(test_ffreference ffreference)
+add_lib_test(test_ffprogram ffreference)
+if(ZH_GAME_DATA)
+  set_tests_properties(test_ffprogram PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+endif()
+# A3e: the programmable stages' token values against MinGW-w64's d3d8types.h and d3d9types.h (a second
+# source for the numbers the reference pages leave out).  Skipped without x86_64-w64-mingw32-g++.
+add_test(NAME ffprogram_values_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffprogram-values-check.sh)
+set_tests_properties(ffprogram_values_check PROPERTIES SKIP_RETURN_CODE 77)
 
 # V1's check: every movie of the install through the Bink API, against its header and a golden
 # middle frame, and one movie's sound through C4's mix on the null backend.  Needs ZH_GAME_DATA.
