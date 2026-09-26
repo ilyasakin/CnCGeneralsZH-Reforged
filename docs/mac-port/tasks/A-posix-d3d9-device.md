@@ -565,10 +565,11 @@ coordinates. That was a generator mismatch, which D3D11 and D3D9's combiner shad
 textured and shrouded. The run: exit 0, 2,440 presents, 1,633,250 draws, and the same single refusal
 reason (20,281 render-target draws).
 
-**Known wrong in this picture:**
-- **Terrain blend tiles** still look noisy at their edges. The terrain atlas uploads correct (dumped
-  with `ZH_GPU_DUMP_TEXTURES`), so the fault is in a draw; the terrain shaders' texgen stages were one
-  suspect, and #27 softened them.
-- **The radar** is empty. It is a render target, which is A3d.
+**#27 was the terrain's fault too.** The trace of the terrain draws shows the blend-tile pass using
+stage 0 with `TEXCOORDINDEX` 1 (the blend tile's own set) and alpha blending on. Before #27 its pixel
+program sampled `TexCoord[1]`, which is stage 1's slot. Stage 1 is disabled there, so that slot held
+(0, 0), and every blend tile was one texel of the atlas: the blotchy, blocky patches. In the picture
+above the tiles blend with soft edges. It has not been compared with a Windows frame; that needs E4's
+CrossOver run.
 
-The terrain is A3c's; the plan is to trace its draws and reproduce the shape as a harness scenario.
+**Known wrong in this picture:** the radar is empty. It is a render target, which is A3d.
