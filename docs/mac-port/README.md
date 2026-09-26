@@ -807,7 +807,7 @@ C1 (c): both list the save folder by its path, and a missing folder lists nothin
 **17. Fork-introduced: the logic catch-up lets the water grid, which the simulation reads, fall
 behind by the number of catch-up frames.** Not fixed yet (T1c). A code-path argument, not yet shown
 to desync in a match. `TerrainLogic::isUnderwater` (`TerrainLogic.cpp:2218, 2276`) reads
-`TheTerrainVisual->getWaterGridHeight` whenever a script has enabled the water grid, and its
+`TheTerrainVisual->getWaterGridHeight` whenever the map has enabled the water grid, and its
 callers are simulation: pathfinding (`AIPathfind.cpp:5918`), `Locomotor`, `PartitionManager`,
 `FloatUpdate`, `ParachuteContain`, `ObjectCreationList`, `GenerateMinefieldBehavior`. The grid's
 mesh moves in `WaterRenderObjClass::update` (`W3DWater.cpp:1343`), on the CLIENT pass, gated by a
@@ -818,10 +818,15 @@ them, in network games and whenever `m_maxFPS > 0`. A machine that catches up k 
 grid once, so grid heights at frame N depend on that machine's frame-rate history. Two machines in
 one match can then disagree about `isUnderwater`, and a replay played at a different speed from its
 recording can too. The loop's authors guarded the same class for the camera freeze
-(`GameEngine.cpp:2546`), but not for the water grid. It affects only maps whose scripts call
-`enableWaterGrid` (likely the campaign dam and flood missions). Fix direction: step the grid once
-per LOGIC frame, which restores EA's count on Windows. That is a rule 3 change needing a replay check.
-Found by T1's recon (-47), read-only.
+(`GameEngine.cpp:2546`), but not for the water grid. **Which maps:** the grid is not a script
+action; `TerrainLogic::newMap` (`TerrainLogic.cpp:1143`) turns it on when the map has a waypoint
+named `WaveGuide1`. Every shipped map was searched for that name (read-only from the archives, each
+decompressed from RefPack or zlib and checked to be a whole `CkMp` file): it is in three, all
+original-Generals campaign maps in `maps.big` - `CHI03` (the dam), `GLA01` and `USA06`. **None of Zero
+Hour's 116 maps has it, so no shipped multiplayer or skirmish map runs the grid**; where it bites a
+player is a custom map with a `WaveGuide1`, and replays of those three campaign missions played back
+at a different speed. Fix direction: step the grid once per LOGIC frame, which restores EA's count on
+Windows. That is a rule 3 change needing a replay check. Found by T1's recon (-47), read-only.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
