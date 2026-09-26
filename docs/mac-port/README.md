@@ -213,7 +213,7 @@ you start. That commit is the lock.
 | D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | D6a merged; D6b (FontCharsClass on FreeType) on its branch | -47 |
 | D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done — merged; the Crusader on Metal and on Vulkan (lavapipe); D3's route taken as decision 4 | -a9 |
 | V1 | [Video playback off Windows](tasks/V1-video-playback.md) | M4 | A1 | not started | |
-| E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | not started | |
+| E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`) and a first Mac baseline; the skirmish AI does not build yet, so the baseline covers a nearly idle match | -18 |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
@@ -241,6 +241,17 @@ Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, 
       when movies play.
     - An INI `ChipsetType` of 6 or more builds shaders on the NULL device (W3DTreeBuffer).
     - W3DRadar is avoided: `-nodevice` takes HeadlessRadar (Win32GameEngine.h:107-114).
+- **Map paths are lowercased whole, user-data prefix included (C2's first headless run, 2026-09-26).**
+  A Linux-constraint item: on macOS it is harmless, because APFS is case-insensitive by default.
+  - **What happens:** the random map's path is built from `TheGlobalData->getPath_UserData()` and then
+    lowercased entirely (RandomMapGenerator.cpp:4867, in `generatedMapPathsFor`), so the log shows
+    `/private/tmp/.../-users-ilyasakin-...`. MapUtil lowercases map directories and names the same way
+    (MapUtil.cpp:432, 533, 626, 724, 922).
+  - **Why it matters:** on a case-sensitive volume (Linux's default, or a case-sensitive APFS), a user
+    data folder with a capital letter in its path gives a map path that does not exist.
+  - **Not yet measured:** whether a run on a case-sensitive volume then fails to load the map or merely
+    fails to cache it. PosixLocalFileSystem's case-insensitive lookup (C1) may or may not cover the
+    prefix.
 
 ### Decisions taken, 2026-09-25
 

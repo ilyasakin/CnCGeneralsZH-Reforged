@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** B6
 - **Blocks:** E2
-- **Status:** not started
+- **Status:** in progress: the POSIX harness and a first Mac baseline (below); the skirmish AI does not build yet
 - **Size:** a test and a script; the change it forces could be anywhere
 
 ## Why
@@ -121,3 +121,42 @@ that can be replayed or played over a network. No defect.**
 So E1's `-autoskirmish` runs are unaffected by the POSIX device's DC_UNKNOWN preset. What this does
 NOT cover: other client-only settings read by logic that nobody was looking for. It is a trace of
 these three, not a general audit.
+
+## The POSIX harness, 2026-09-26 (-18)
+
+`GeneralsMD/Code/Tools/replay-check.sh` is `replay-check.ps1`'s POSIX twin. For each seed it runs the
+`-randommap`/`-autoskirmish -observer` match headless, moves the replay aside, plays it back with
+`-replay`, then runs the same seed a second time, and compares the three runs' last
+`HEADLESS CRC: 0x... at frame N`.
+- **Rule 9:** it roots every run at its own farm of the install in `$TMPDIR`, with the fork's
+  `Code/Data` overlay (decision 9, until packaging carries the overlay). Each run's log has its own
+  `-logPrefix`, and everything is removed afterwards.
+- **`--control` edits the kept replay's game seed** before the playback. The harness must then report
+  DIVERGED, on the playback and not on the second run.
+- **`replay_check`** (ctest, Skipped without data) runs seed 0 for 1,200 frames and the control for 600.
+  With data it passes in about 30 s: 0xEB822AF0 at frame 1,200. The control gives the playback
+  0xFF469310 against the live 0xE21F0AC9 at frame 600.
+
+**What it proves:** same-machine determinism only. A recording, its playback and a second run from
+one seed agree on this machine and this build. It says nothing about agreement with a Windows build,
+which needs a replay recorded on Windows.
+
+**The first Mac baseline**, macOS 27 arm64, M3 Pro, Release, at feature/mac-port d71941d3 plus this
+harness. Default arguments: 2 players, brutal, 128 cells, 12,000 frames. The install listing is
+identical before and after.
+
+| name | seed | frame | HEADLESS CRC |
+|:--|:--|:--|:--|
+| `mac_baseline_seed0` | 0 | 12000 | 0xAC31075F |
+| `mac_baseline_seed1` | 1 | 12000 | 0xEE8A5309 |
+
+**Read these with the finding below.** They are self-consistent, but the match they cover barely
+moves.
+
+**Finding: the skirmish AI does not build.** Over 12,000 frames (6.7 minutes of game time), seed 1's
+two brutal AIs trained 5 and 2 units, spent 4,500 each, and never placed a second structure. The log has
+the frame-0 command centres (`AI BUILT frame 0`) and then no `AI ECONOMY`, `AI WAVE` or `AI TACTICS`
+line at all, so the AI's economy never acts. The runs reach 2,000-5,000 logic fps, where the README's
+Windows figure (a 23-minute skirmish in 38 s) is about 1,100 with a real fight. Until this is
+explained, a CRC here covers a nearly idle world, and a divergence in movement, combat or the AI could
+not show up in it. Not yet diagnosed.
