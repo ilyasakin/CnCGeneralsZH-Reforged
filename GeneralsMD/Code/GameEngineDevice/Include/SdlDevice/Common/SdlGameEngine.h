@@ -32,8 +32,8 @@
 // Nothing draws into the window until A3; the device is decision 7's, made with no window under
 // -headless (decision 8, refined).
 //
-// The factories are Win32GameEngine's, the same W3D classes (decision 8), with PosixW3DGameClient for
-// the one W3DGameClient leaves to the platform (the video player, until V1).  Audio is
+// The factories are Win32GameEngine's, the same W3D classes (decision 8), W3DGameClient's Bink video
+// player included since V1.  Audio is
 // MilesAudioManager, over the Miles surface on miniaudio (C4).
 
 #pragma once

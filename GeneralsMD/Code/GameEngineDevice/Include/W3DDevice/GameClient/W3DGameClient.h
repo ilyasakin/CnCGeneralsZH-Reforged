@@ -48,9 +48,7 @@
 #include "W3DDevice/GameClient/W3DGameWindowManager.h"
 #include "W3DDevice/GameClient/W3DGameFont.h"
 #include "W3DDevice/GameClient/W3DDisplayStringManager.h"
-#if defined(_WIN32)
 #include "VideoDevice/Bink/BinkVideoPlayer.h"
-#endif
 #if defined(_WIN32)
 // The keyboard and mouse are Win32Device's here.  Off Windows the keyboard is SDL3's and W3DMouse sits on
 // SDL3's mouse (C3b): the same two factories, below, and the same W3DMouse on both.
@@ -123,9 +121,7 @@ protected:
   /// Manager for display strings
 	virtual DisplayStringManager *createDisplayStringManager( void ) { return NEW W3DDisplayStringManager; }
 
-#if defined(_WIN32)	// Bink on FFmpeg; off Windows the video player, like the keyboard and mouse, is the platform's
-	virtual VideoPlayerInterface *createVideoPlayer( void ) { return NEW BinkVideoPlayer; }
-#endif
+	virtual VideoPlayerInterface *createVideoPlayer( void ) { return NEW BinkVideoPlayer; }	///< Bink on FFmpeg, on every platform (V1)
 	/// factory for creating the TerrainVisual
 	virtual TerrainVisual *createTerrainVisual( void ) { return NEW W3DTerrainVisual; }
 
