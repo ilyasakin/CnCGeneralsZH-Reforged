@@ -90,6 +90,34 @@ Wine (CrossOver, a private bottle); native arm64; x86_64 under Rosetta. The gold
 original C++ under GCC's code generation (single precision, no contraction, no FMA); nothing here
 has run on Windows.
 
+## T1a's move and its golden, 2026-09-26
+
+- `GameLogic/WorldHeightMapData.{h,cpp}`: the height map's data half - its members in their original
+  order, and 17 of `WorldHeightMap`'s functions verbatim (`ParseHeightMapData`, `ParseSizeOnly`,
+  `ParseObjectData`, `ParseWorldDictDataChunk`, the cliff, flip and seismic-flag functions,
+  `freeListOfMapObjects`), plus `parseBlendTileCells`, the first half of `ParseBlendTileData`.
+  `WorldHeightMap` derives from it after `RefCountClass` and `WorldHeightMapInterfaceClass`.
+  `parseHeightsAndCells` and `parseLogicalMap` load a map into it alone, with callbacks of its own
+  (the `void*` DataChunkInput hands back must be cast to the type that was passed).
+- `GameLogic/TerrainHeightSampling.{h,cpp}`: `getHeightMapHeight`, `isClearLineOfSight`,
+  `getMaxCellHeight`, `isCliffCell`, `getClipHeight` and `initHeightData`'s min/max pass, verbatim but
+  for `m_map` and `getMaxHeight()` becoming parameters. The render object calls them.
+- **Verbatim check** (a script against the pre-move commit, in the scratch record): every moved
+  function identical, after the listed substitutions. It caught a `getMaxHeight()` left in
+  `isClearLineOfSight`'s inactive `#else` branch.
+- **`test_terrain_golden`** (ctest, needs `ZH_GAME_DATA`): the nine maps out of the install, through the
+  engine's own decompression and `DataChunkInput`, parsed by `parseHeightsAndCells` and sampled by
+  `TerrainHeightSampling` over the oracle's grid (`Tests/terrain_grid.h`, shared, so the two cannot
+  drift). **All nine identical to the golden, on arm64 and on x86_64 under Rosetta.** Red once: with the
+  triangle test changed from `fy > fx` to `fy >= fx`, seven of the nine maps fail.
+- The x86_64 leg found a B1 bug on the way: the wide formatter did not compile for x86_64 (a `va_list`
+  parameter bound to `va_list&`). Fixed separately.
+- Windows: `WINDOWS-DEBT.md`'s T1a row.
+
+**Still to do in T1a:** the portable terrain logic that owns a `WorldHeightMapData` and answers
+`getGroundHeight`, `getLayerHeight`, `isCliffCell`, `isClearLineOfSight` and the extents through
+`TerrainHeightSampling`, for C1 (f)'s engine; and a headless `setRawMapHeight`/`getRawMapHeight`.
+
 ## Also
 
 W3DModuleFactory registers 19 draw modules by name, and object INIs name them. A headless module
