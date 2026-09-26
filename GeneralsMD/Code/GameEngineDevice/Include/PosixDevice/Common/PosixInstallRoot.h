@@ -1,0 +1,98 @@
+/*
+**	Command & Conquer Generals Zero Hour(tm)
+**	Copyright 2025 Electronic Arts Inc.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+// PosixInstallRoot.h: where the player's Zero Hour is (P1 step 4).
+
+/* The game's data is the player's own install (Steam, CD, First Decade, a copy from a PC), anywhere
+	 on disk; off Windows no path can be assumed.  PosixMain asks here, before the engine exists:
+
+	   1. "-root <dir>": used as given, never validated (harnesses root at farms and test folders);
+	   2. Registry.ini's Zero Hour InstallPath, if it still validates (an install can move);
+	   3. inside an app bundle only: the known places (~/Games, /Applications, CrossOver and Whisky
+	      bottles), the first that validates;
+	   4. inside an app bundle only: the player's own choice, through the chooser PosixMain passes
+	      (SDL's native folder dialog).  An invalid choice is said why and asked again; cancelling ends
+	      the start.  The chosen folder is the one thing written: Registry.ini's InstallPath, so the
+	      chooser runs once;
+	   5. outside a bundle: the executable's directory, as always.
+
+	 Validation: Zero Hour's INIZH.big at the folder's top level, and the base game's Textures.big found
+	 where Win32BIGFileSystem::init will look for it (the folder itself, ZH_Generals/, the two sibling
+	 folder names, or Registry.ini's Generals InstallPath and its First Decade subfolder); and not a
+	 folder inside the app bundle or an overlay.  Everything here is plain logic over the file system,
+	 so every path but the dialog itself is tested (test_install_root). */
+
+#pragma once
+
+#if defined(_WIN32)
+#error "PosixInstallRoot.h is the POSIX start-up's; WinMain roots the game at its own directory"
+#endif
+
+#include <string>
+#include <vector>
+
+enum PosixInstallCheck
+{
+	INSTALL_OK,
+	INSTALL_NOT_A_FOLDER,
+	INSTALL_NO_ZERO_HOUR,		///< no INIZH.big at its top level
+	INSTALL_NO_BASE_GAME,		///< Zero Hour, but Generals' Textures.big nowhere the game looks
+	INSTALL_INSIDE_THE_APP		///< a folder inside the app bundle or an overlay
+};
+
+/// Validates `folder`.  `forbidden` holds folders the install may not be in or under.  The base game is
+/// also looked for through Registry.ini's Generals InstallPath when `registryFile` names one.
+PosixInstallCheck PosixCheckInstallFolder( const std::string &folder, const std::vector<std::string> &forbidden );
+PosixInstallCheck PosixCheckInstallFolderWith( const std::string &folder, const std::vector<std::string> &forbidden,
+	const std::string &registryFile );
+
+/// The sentence a player reads for a check that failed, naming the folder.
+std::string PosixInstallCheckMessage( PosixInstallCheck check, const std::string &folder );
+
+/// The known places, in the order they are tried, below `home`.  Candidates only: nothing checked.
+std::vector<std::string> PosixKnownInstallPlaces( const std::string &home );
+
+enum PosixInstallSource { ROOT_FROM_ARGUMENT, ROOT_FROM_REGISTRY, ROOT_FROM_KNOWN_PLACE, ROOT_FROM_CHOOSER,
+	ROOT_FROM_EXECUTABLE };
+
+/** The player's choice: TRUE with a real folder, FALSE when they cancelled.  `why` is empty the first
+	* time, and the reason the last choice was refused after that. */
+typedef bool (*PosixInstallChooser)( const std::string &why, std::string &chosen, void *context );
+
+struct PosixInstallRequest
+{
+	std::vector<std::string> arguments;		///< argv[1..]
+	bool insideAppBundle;
+	std::string executableDirectory;
+	std::string home;						///< for the known places
+	std::vector<std::string> forbidden;		///< the bundle and the overlays
+	std::string registryFile;				///< Registry.ini's path, or "" for none
+	PosixInstallChooser chooser;			///< NULL: no chooser (headless, tests of the other paths)
+	void *chooserContext;
+};
+
+struct PosixInstallChoice
+{
+	std::string root;
+	PosixInstallSource source;
+	bool writeInstallPath;		///< the player chose it: PosixMain writes Registry.ini's InstallPath
+	std::string problem;		///< why there is no root, when the answer is FALSE
+};
+
+/// Steps 1-5 above.  FALSE when there is no root to use (a cancelled chooser, or a bundle with none).
+bool PosixChooseInstallRoot( const PosixInstallRequest &request, PosixInstallChoice &choice );
