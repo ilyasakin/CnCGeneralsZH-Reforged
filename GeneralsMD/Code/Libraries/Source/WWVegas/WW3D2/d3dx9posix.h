@@ -27,6 +27,8 @@
 
 #include "d3dx9runtime.h"
 
+#include <string>
+
 RenderResult D3DX9Posix_Create_Texture(LPDIRECT3DDEVICE9 device, unsigned int width, unsigned int height,
 	unsigned int mip_levels, RenderUInt32 usage, D3DFORMAT format, D3DPOOL pool, LPDIRECT3DTEXTURE9 * texture);
 RenderResult D3DX9Posix_Create_Cube_Texture(LPDIRECT3DDEVICE9 device, unsigned int edge_length,
@@ -43,5 +45,9 @@ RenderResult D3DX9Posix_Filter_Texture(LPDIRECT3DBASETEXTURE9 texture, const voi
 RenderResult D3DX9Posix_Load_Surface_From_Surface(LPDIRECT3DSURFACE9 destination, const void * destination_palette,
 	const RenderRect * destination_rect, LPDIRECT3DSURFACE9 source, const void * source_palette,
 	const RenderRect * source_rect, RenderUInt32 filter, D3DCOLOR colour_key);
+
+/// The source text a POSIX D3DXAssembleShader wrapped in its stub token stream (d3dx9posix.cpp says
+/// what the stub is and is not); false for a stream that is not one.
+bool D3DX9Posix_Stub_Shader_Source(const RenderUInt32 * tokens, std::string & source);
 
 #endif // D3DX9POSIX_H

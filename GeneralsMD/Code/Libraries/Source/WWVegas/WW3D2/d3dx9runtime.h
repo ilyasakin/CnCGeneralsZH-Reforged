@@ -157,8 +157,11 @@ UINT Get_FVF_Vertex_Size(DWORD fvf);
 //   - the matrix functions (d3dx9math.h) compute;
 //   - the texture functions fail with D3DERR_NOTAVAILABLE, logged once each, until the device holds
 //     resources (A2), and with D3DERR_INVALIDCALL on a null device, as D3DX does;
-//   - the shader assembler, compiler and disassembler fail with D3DERR_NOTAVAILABLE for good: the
-//     SDL3 GPU draw (A3) takes generated HLSL, not D3D9 shader assembly.
+//   - the shader compiler and disassembler fail with D3DERR_NOTAVAILABLE for good: the SDL3 GPU draw
+//     (A3) takes generated HLSL, not D3D9 bytecode;
+//   - the shader "assembler" is not one: it wraps the source text in a comment token of an otherwise
+//     empty token stream, so the water's run-time programs reach CreatePixelShader and are registered
+//     by name, which is all the POSIX device reads (A3e; d3dx9posix.cpp).
 // A palette is never passed (every call site gives NULL), so it is an untyped pointer rather than
 // wingdi's PALETTEENTRY.
 

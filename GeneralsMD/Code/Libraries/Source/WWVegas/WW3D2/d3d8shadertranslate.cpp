@@ -142,12 +142,24 @@ RenderResult Create_Translated_Pixel_Shader(IDirect3DDevice9 * device, const Ren
 	}
 	*shader = NULL;
 
+#if defined(_WIN32)
 	if (D3DXDisassembleShader == NULL || D3DXAssembleShader == NULL) {
 		return D3DERR_INVALIDCALL;
 	}
+#endif
 	if (*function < D3DPS_VERSION(1, 0) || *function > D3DPS_VERSION(1, 4)) {
 		return D3DERR_INVALIDCALL;
 	}
+#if !defined(_WIN32)
+	// Off Windows (A3e) the device never runs D3D bytecode: it draws the engine's programs from D3's
+	// transcriptions (engineshader.cpp), recognised by the name each is registered under, as the
+	// Direct3D 11 backend does.  There is no D3DX to translate with either, so the shipped D3D8 tokens go
+	// to the device as they are.
+	if (translated_source != NULL) {
+		translated_source->clear();
+	}
+	return device->CreatePixelShader(function, shader);
+#endif
 
 	ID3DXBuffer * disassembly = NULL;
 	RenderResult result = D3DXDisassembleShader(function, false, NULL, &disassembly);
@@ -208,9 +220,11 @@ RenderResult Create_Translated_Vertex_Shader(IDirect3DDevice9 * device, const Re
 	*shader = NULL;
 	*vertex_declaration = NULL;
 
+#if defined(_WIN32)
 	if (D3DXDisassembleShader == NULL || D3DXAssembleShader == NULL) {
 		return D3DERR_INVALIDCALL;
 	}
+#endif
 	if (*function < D3DVS_VERSION(1, 0) || *function > D3DVS_VERSION(1, 1)) {
 		return D3DERR_INVALIDCALL;
 	}
@@ -263,6 +277,24 @@ RenderResult Create_Translated_Vertex_Shader(IDirect3DDevice9 * device, const Re
 
 	const D3DVERTEXELEMENT9 terminator = D3DDECL_END();
 	elements[element_count] = terminator;
+
+#if !defined(_WIN32)
+	// Off Windows (A3e): the shipped tokens as they are, for the reason Create_Translated_Pixel_Shader
+	// gives, and the declaration decoded above, which the device does read.
+	if (translated_source != NULL) {
+		translated_source->clear();
+	}
+	RenderResult created = device->CreateVertexShader(function, shader);
+	if (Render_Failed(created)) {
+		return created;
+	}
+	created = device->CreateVertexDeclaration(elements, vertex_declaration);
+	if (Render_Failed(created)) {
+		(*shader)->Release();
+		*shader = NULL;
+	}
+	return created;
+#endif
 
 	ID3DXBuffer * disassembly = NULL;
 	RenderResult result = D3DXDisassembleShader(function, false, NULL, &disassembly);

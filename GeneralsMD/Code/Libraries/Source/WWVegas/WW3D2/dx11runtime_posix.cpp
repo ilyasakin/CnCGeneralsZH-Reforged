@@ -26,6 +26,7 @@
 
 #include "dx11runtime.h"
 #include "dx11twin.h"
+#include "Platform/EngineShaderName.h"
 
 #include <stddef.h>
 
@@ -103,7 +104,9 @@ void Direct3D11_Mirror_Indices(DX11BufferTwinClass *) {}
 void Direct3D11_Mirror_Vertex_Format(unsigned) {}
 void Direct3D11_Mirror_Pixel_Shader(const void *) {}
 void Direct3D11_Mirror_Vertex_Shader(const void *) {}
-void Direct3D11_Register_Engine_Shader(const void *, const char *) {}
+// Not a Direct3D 11 call off Windows but the POSIX device's: it draws the engine's shaders from D3's
+// transcriptions by the name they were registered under, as the Direct3D 11 backend does (A3e).
+void Direct3D11_Register_Engine_Shader(const void * shader, const char * name) { PosixDevice_Name_Shader(shader, name); }
 void Direct3D11_Mirror_Vertex_Shader_Constant(unsigned, const float *, unsigned) {}
 bool Direct3D11_Draw_Indexed_Triangles(unsigned, unsigned, unsigned) { return false; }
 bool Direct3D11_Draw_Indexed_Strip(unsigned, unsigned, unsigned) { return false; }
