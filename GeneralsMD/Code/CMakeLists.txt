@@ -1380,6 +1380,15 @@ if(ZH_PLATFORM_POSIX)
   if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
     set(FFMPEG_POSIX_CFLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()
+  # The SDK CMake gives our own targets.  Only /usr/bin/cc, the xcrun shim, finds one by itself; CMake may
+  # choose the toolchain's own cc (/Library/Developer/CommandLineTools/usr/bin/cc, as on the finer worker),
+  # and FFmpeg's configure then cannot link its test program ("library 'System' not found") nor compile its
+  # host tools ("ctype.h not found").  SDKROOT reaches every compiler call configure makes - target and
+  # host alike - where an -isysroot flag would reach only the target's (and -arch must not reach the host).
+  set(FFMPEG_POSIX_ENV "")
+  if(APPLE AND CMAKE_OSX_SYSROOT)
+    set(FFMPEG_POSIX_ENV "SDKROOT=${CMAKE_OSX_SYSROOT}")
+  endif()
   # FFmpeg's own configure picks the host's architecture, so a build for another one (x86_64 on Apple
   # Silicon, run under Rosetta: E1's architecture axis) names it.  One at a time: configure builds one.
   set(FFMPEG_POSIX_ARCH "")
@@ -1397,7 +1406,8 @@ if(ZH_PLATFORM_POSIX)
   endif()
   add_custom_command(
     OUTPUT ${FFMPEG_POSIX_LIBS} ${FFMPEG_POSIX}/include/libavcodec/avcodec.h
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh ${FFMPEG_TARBALL}
+    COMMAND ${CMAKE_COMMAND} -E env ${FFMPEG_POSIX_ENV}
+            ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh ${FFMPEG_TARBALL}
             ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-work ${FFMPEG_POSIX} ${CMAKE_C_COMPILER} "${FFMPEG_POSIX_CFLAGS}"
             "${FFMPEG_POSIX_ARCH}"
     DEPENDS ${FFMPEG_TARBALL} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh
