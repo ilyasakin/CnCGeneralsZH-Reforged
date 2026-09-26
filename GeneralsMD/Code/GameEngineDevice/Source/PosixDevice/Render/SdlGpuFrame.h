@@ -152,7 +152,7 @@ public:
 	/// serialized run is a measurement, not a frame rate).  Take_Timing hands over, and zeroes, what was
 	/// spent since the last call: in mid-frame flushes, the fence waits, and how many flushes there were.
 	void Serialize_Submits(bool serialize) { SerializeSubmits = serialize; }
-	void Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes);
+	void Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms);
 
 	/// Present into a texture of the caller's, of Target_Format(), instead of the window: the test's
 	/// window.  The back buffer's size must be the target's.
@@ -181,6 +181,7 @@ private:
 	double FlushMs;
 	double FenceMs;
 	unsigned int Flushes;
+	double AcquireMs;		///< waiting in SDL_WaitAndAcquireGPUSwapchainTexture: the display's pacing, not work
 
 	SdlGpuFrame();
 	bool Create_Targets(unsigned int width, unsigned int height);

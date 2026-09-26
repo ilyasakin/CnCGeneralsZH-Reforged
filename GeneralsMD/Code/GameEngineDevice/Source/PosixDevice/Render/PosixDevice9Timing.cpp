@@ -23,7 +23,10 @@
 //   - draws: the draws recorded in it;
 //   - device draw: the CPU time inside Gpu_Draw, recording those draws (state, programs, copies, staging);
 //   - device flush: mid-frame flushes (a full batch, a read-back) recording and submitting the batch;
-//   - device present: Present recording and submitting the frame's last batch, and the gamma pass;
+//   - device present: Present recording and submitting the frame's last batch, and the gamma pass,
+//     including the swapchain wait;
+//   - swapchain wait: SDL_WaitAndAcquireGPUSwapchainTexture's, which is the display's pacing (a hidden
+//     window still waits for vsync), and work: the frame without it - what the frame costs;
 //   - GPU (ZH_GPU_TIMING_SYNC=1 only): every submit waits for its fence, and the waits add up.  That
 //     serialises CPU and GPU, so a SYNC run's frame times are not the game's: it measures the GPU.
 // What is left of the frame after the device's parts is the engine's own CPU time (and, unsynced, any
@@ -50,7 +53,7 @@ struct TimingState
 	Uint64 FirstPresent;
 	Uint64 LastPresent;
 	bool Reported;
-	std::vector<double> Frame, DrawMs, FlushMs, PresentMs, FenceMs, Draws, Flushes;
+	std::vector<double> Frame, Work, DrawMs, FlushMs, PresentMs, AcquireMs, FenceMs, Draws, Flushes;
 };
 
 TimingState &timing_state()
@@ -102,15 +105,18 @@ void PosixDevice9::Timing_Present(double present_ms, unsigned int draws)
 {
 	TimingState &state = timing_state();
 	const Uint64 now = SDL_GetTicksNS();
-	double flush_ms = 0.0, fence_ms = 0.0;
+	double flush_ms = 0.0, fence_ms = 0.0, acquire_ms = 0.0;
 	unsigned int flushes = 0;
-	Gpu->Take_Timing(flush_ms, fence_ms, flushes);
+	Gpu->Take_Timing(flush_ms, fence_ms, flushes, acquire_ms);
 	if (state.FirstPresent == 0) {
 		state.FirstPresent = now;
 	}
 	const bool measuring = (double)(now - state.FirstPresent) / 1.0e9 >= state.Delay && state.Frame.size() < state.Count;
 	if (measuring && state.LastPresent != 0) {
-		state.Frame.push_back((double)(now - state.LastPresent) / 1.0e6);
+		const double frame_ms = (double)(now - state.LastPresent) / 1.0e6;
+		state.Frame.push_back(frame_ms);
+		state.Work.push_back(frame_ms - acquire_ms);
+		state.AcquireMs.push_back(acquire_ms);
 		state.Draws.push_back((double)draws);
 		state.DrawMs.push_back(TimingDrawMs);
 		state.FlushMs.push_back(flush_ms);
@@ -136,6 +142,8 @@ void PosixDevice9::Timing_Report()
 		state.Delay, state.Frame.size() < state.Count ? " (the run ended before the window filled)" : "",
 		state.Sync ? ", SERIALISED (every submit waits for its fence: GPU time, not frame rate)" : "");
 	report("frame", state.Frame, "ms");
+	report("work (no vsync)", state.Work, "ms");
+	report("swapchain wait", state.AcquireMs, "ms");
 	report("draws", state.Draws, "");
 	report("device draw", state.DrawMs, "ms");
 	report("device flush", state.FlushMs, "ms");
