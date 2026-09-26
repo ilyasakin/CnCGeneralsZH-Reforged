@@ -603,7 +603,8 @@ target_link_libraries(dx11backend PUBLIC dx11device dx11state dx11layout dx11res
 # ---- ww3d2 (renderer core) ------------------------------------------------
 # wwshade is header-only here on purpose: no .dsp links wwshade.lib and its
 # shd*bump* sources need shdpp/NVASM-generated headers.  Revisit at exe link.
-# dx8webbrowser.cpp stays inert (ENABLE_EMBEDDED_BROWSER unset).
+# dx8webbrowser.cpp is the embedded browser: its header sets ENABLE_EMBEDDED_BROWSER to 1, so it is
+# live on Windows (the POSIX build leaves it out).
 add_library(ww3d2 STATIC
   ${WW}/WW3D2/FramGrab.cpp ${WW}/WW3D2/dx8webbrowser.cpp ${WW}/WW3D2/dx11runtime.cpp
   ${ZH_WW3D2_SOURCES}
