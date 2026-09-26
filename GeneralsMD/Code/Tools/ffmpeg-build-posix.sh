@@ -42,7 +42,7 @@ tarball="$1" work="$2" prefix="$3" cc="$4" extra_cflags="${5:-}" target_arch="${
 # configure's own link tests build for the host.
 cross=()
 if [ -n "$target_arch" ]; then
-  cross=(--arch="$target_arch" --enable-cross-compile ${extra_cflags:+--extra-ldflags="$extra_cflags"})
+  cross=(--arch="$target_arch" --enable-cross-compile)
 fi
 version=8.1.2
 
@@ -60,6 +60,7 @@ if ! "$source/configure" \
     --prefix="$prefix" \
     --cc="$cc" \
     ${extra_cflags:+--extra-cflags="$extra_cflags"} \
+    ${extra_cflags:+--extra-ldflags="$extra_cflags"} \
     ${cross[@]+"${cross[@]}"} \
     --enable-static \
     --disable-shared \
