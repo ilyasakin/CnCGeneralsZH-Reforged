@@ -281,7 +281,9 @@ bool SdlGpuFrame::Submit(SDL_GPUCommandBuffer * commands)
 void SdlGpuFrame::Set_Offscreen_Presents(unsigned int hz)
 {
 	OffscreenPresents = true;
-	OffscreenHz = hz;
+	// 1 to 1000 a second; anything else (ZH_OFFSCREEN_HZ=-1 reads as 4294967295) is unpaced, never a
+	// period of zero.
+	OffscreenHz = hz <= 1000 ? hz : 0;
 }
 
 // -offscreen's submit: a fence for this frame, a wait for the one two frames back, then the pacer.
