@@ -106,7 +106,7 @@ Bool ApplicationIsBorderless = FALSE;
 static CriticalSection critSec2, critSec3, critSec4, critSec5;
 
 // WinMain's pre-parse: how the window starts, settled before the engine exists.
-static SdlGameEngine::WindowRequest s_windowRequest = { FALSE, FALSE, FALSE };
+static SdlGameEngine::WindowRequest s_windowRequest = { FALSE, FALSE, FALSE, FALSE };
 
 // WinMain's GENERALS_GUID, the name of its one-copy mutex; here the name of a lock file.
 #define GENERALS_GUID "685EAFF2-3216-4265-B047-251C5F4B82F3"
@@ -343,6 +343,24 @@ int main( int argc, char *argv[] )
 			{
 				s_windowRequest.windowed = TRUE;
 				s_windowRequest.headless = TRUE;
+			}
+			if (strcasecmp( argv[i], "-hiddenwindow" ) == 0)
+			{
+				s_windowRequest.windowed = TRUE;
+				s_windowRequest.hidden = TRUE;
+			}
+		}
+		/* -hiddenwindow, or ZH_HIDDEN_WINDOW=1: the game draws exactly as it does in a window - the device
+			 renders into its own back buffer, which -screenshot, -video and the frame dumps read - but the
+			 window is never shown.  It is for harnesses and agent runs, so they do not put windows in front
+			 of the person using the machine.  A window means windowed: a hidden one never takes the display
+			 fullscreen.  -headless, which draws nothing, is unaffected. */
+		{
+			const char *hidden = getenv( "ZH_HIDDEN_WINDOW" );
+			if (hidden != NULL && hidden[0] != '\0' && strcmp( hidden, "0" ) != 0)
+			{
+				s_windowRequest.windowed = TRUE;
+				s_windowRequest.hidden = TRUE;
 			}
 		}
 

@@ -223,6 +223,11 @@ Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, 
 
 ### Known gaps, not on a milestone's critical path
 
+- **Upstream: retail replay headers (-18's LP64 audit, 2026-09-26).** Retail (VC6, 4-byte `time_t`)
+  `.rep` headers are probably offset after `GENREP` in both of the fork's 64-bit builds. `Recorder.cpp`
+  writes and reads the header's `time_t` fields raw with `sizeof(time_t)`, which is 8 bytes on Windows
+  x64 and on macOS alike. Unverified against a real retail replay. It is not a port item: Windows x64 and
+  macOS agree with each other.
 - **The app icon needs a 1024 px master (P1, 2026-09-26).** `Main/Generals.ico` tops out at 48 px, and
   a Retina Dock icon is built from 1024 px. Until someone who owns the fork's artwork supplies one, the
   `.icns` comes from the 48 px image and looks soft. Owner: the fork's art, not a port task.
@@ -1345,6 +1350,24 @@ The pattern worth carrying into M2–M5: **the dangerous findings were all in th
 safe.** `uint32` that is not 32 bits. `#pragma pack` that covers the wrong formats. A "type leak"
 task that was really a threading task. None was found by reading the plan; all were found by
 someone measuring what the plan asserted.
+
+### Reports that turned out to be the game as designed
+
+Kept so nobody investigates them again.
+
+- **"Enemy infantry spawn instantly near the player base"** (the user, 2026-09-26, watching the
+  agents' windowed demo, `-randommap 1234 2 small -autoskirmish 2 -seed 1234`). It's the GLA Stealth
+  General's `Slth_GLAInfantryRebel`: `InnateStealth = Yes`, `StealthForbiddenConditions = ATTACKING
+  ...`. -18 measured it headless:
+  - The start positions were ~1,380 units apart.
+  - All 46 enemy infantry were born at their own producers, none within 400 units of the player.
+  - No unit moved more than 60 units in 15 frames.
+  - Rebel id 63 walked stealthed from its barracks to 92 units from the player's command centre and
+    became visible only when it opened fire (~frame 4410).
+  - The stock map Tournament Desert on the same seed behaves the same.
+
+  Not a defect, so no number. Not checked: that the client draws a stealthed enemy exactly as
+  Windows does. Demo runs meant to be watched should pass `-observer`, or avoid a stealth enemy.
 
 ## Rules for anyone working this plan
 

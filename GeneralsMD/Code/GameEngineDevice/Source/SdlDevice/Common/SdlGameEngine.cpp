@@ -165,6 +165,8 @@ void SdlGameEngine::createWindow( void )
 	SDL_WindowFlags flags = 0;
 	if (!m_request.windowed)
 		flags |= SDL_WINDOW_FULLSCREEN;
+	if (m_request.hidden)
+		flags |= SDL_WINDOW_HIDDEN;		// -hiddenwindow: drawn, never shown (PosixMain.cpp)
 	int width = INITIAL_WINDOW_WIDTH;
 	int height = INITIAL_WINDOW_HEIGHT;
 	SDL_Rect bounds;
@@ -184,8 +186,9 @@ void SdlGameEngine::createWindow( void )
 		RELEASE_CRASH( why );
 		return;
 	}
-	DEBUG_LOG(( "SdlGameEngine: window %dx%d, %s%s\n", width, height,
-		m_request.windowed ? "windowed" : "fullscreen", m_request.borderless ? ", borderless" : "" ));
+	DEBUG_LOG(( "SdlGameEngine: window %dx%d, %s%s%s\n", width, height,
+		m_request.windowed ? "windowed" : "fullscreen", m_request.borderless ? ", borderless" : "",
+		m_request.hidden ? ", hidden" : "" ));
 
 	s_titledWindow = m_window;
 	TheApplicationWindowTitleHook = setTitleOfWindow;

@@ -901,3 +901,68 @@ answered `DC_UNKNOWN`:
     the merge changed what `-quickstart` shows.
 - **The user closes game windows.** Several windowed runs today ended early, and the likeliest cause is the
   user closing them. Evidence runs now use a hidden window (the item raised with the PM).
+||||||| f76ffaf3
+
+## A3e: the independent shader oracle (-47, 2026-09-26)
+
+The game's own vs_1_1/ps_1_1 programs are run on the CPU from their **original tokens**, inside
+FFReference as its programmable stages, so that -a9's recognised-and-substituted HLSL can be compared
+against them. The code is `Tests/ffreference/ffprogram.{h,cpp}`. It is written from Microsoft's
+reference pages only, one page cited per instruction. The numbers the pages leave out (opcodes,
+register types, modifiers, version tokens) come from Microsoft's d3d8types.h (PM's ruling). They are
+written as the file's own constants, and `ffprogram_values_check` static_asserts them against
+MinGW-w64's d3d8types.h and d3d9types.h, with an armed control. Independence: it never read
+engineshader, ffshader, ffvertex, dx11backend or -a9's shader substitution. -a9's capture replay was
+read once, for C1/C2, before this task.
+
+**The census.** The install's archives hold 16 programs, byte-identical across ShadersZH.big,
+ZH_Generals/shaders.big and generals/shaders.big: ps_1_1 ×13 and vs_1_1 ×3 (Trees, MotionBlur, wave).
+W3DWater.cpp adds 4 ps.1.1 texts (river, environment, trapezoid, and the fork's mirror).
+- ps_1_1 uses tex, texbem, mov, mul, mad, add, dp3, lrp and def. It also uses complement, _x2, the
+  .rgb/.a masks, the .a replicate and co-issue.
+- vs_1_1 uses mov, add, mad, mul, dp4, m4x4 and rcp, with negate, arbitrary swizzles, a0-relative
+  constants, and the outputs oPos, oD and oT.
+Exactly that is implemented. Everything else is refused by name, and so are the pages' own
+validation rules: read-after-write, texbem's no-reread rule and m > n, m4x4's and rcp's restrictions,
+a0 loaded before relative use, and r0 fully written.
+
+**Named choices** (the pages are silent or contradict themselves):
+
+| | Choice | Why |
+| --- | --- | --- |
+| P1 | `mov a0` rounds to nearest, ties away from zero, from the swizzle's x component. A vertex whose .x and .w differ is REPORTED. | The page's pseudocode rounds `src.w`. |
+| P2 | `rcp(0)` gives FLT_MAX, and the vertex is REPORTED. | The pseudocode says FLT_MAX; the text says infinity. |
+| P3 | Reading a vertex output that was never written is refused. | Its default is "None". |
+| P4 | The ps range cap is at least 1. The nominal value clamps at 1; the envelope's interval covers every cap. | D3DCAPS9 requires data *within* the cap to pass unclamped, and says nothing beyond it. |
+| P5 | Each new pixel value widens the interval by ±1/256. | The pages allow "approximately eight bits". |
+| P6 | dp3 writes all four channels. | The pseudocode says so, and monochrome.pso reads a full-mask dp3's alpha and passed validation. |
+| P7 | A co-issued pair where one half reads a channel the other writes is refused. | No page defines it, and no shipped pair does it. |
+| P8 | texbem's du/dv are signed. | texbem's own page. |
+| P9 | "ps.1.1" is accepted as well as ps_1_1. | The game uses it, and the runtime accepted it. |
+
+**In the draw.** A vertex program replaces the fixed-function vertex stage, and a pixel program
+replaces the texture cascade. Sampling, LOD, raster, fog, alpha test, blend, depth and stencil stay
+FFReference's, so the LOD and texel freedoms apply unchanged. A pixel program's interval enters the
+envelope as ZONE_PROGRAM.
+
+Not in the census, so refused: a vertex program without a pixel program, fog or texture transforms
+with a vertex program, and pretransformed input.
+
+**Tests.**
+- `test_ffprogram`: 11 tests, 165 checks.
+  - All 16 shipped programs decode, and all 4 water texts assemble and decode.
+  - Every instruction is checked against values computed by hand from the pseudocode.
+  - A vs+ps pair draws exactly what its fixed-function twin draws.
+  - Twelve mutations each fail the tests.
+- `ffprogram_values_check`: the constants against MinGW-w64's headers.
+- Not yet: a Metal-vs-oracle replay. That needs -a9's capture v2, whose format is to come as a
+  written description.
+
+**Finding for a decision (PM): the mirror water depends on the range cap.** The fork's mirror program
+does `add r1, r1, r1` twice, and its comment says "four times and clamped". The clamp is P4's cap.
+Over a mid-grey object the water comes out 0.750 with a cap of 1, and 0.49 on a device that does not
+clamp at 1; the oracle's envelope holds both.
+- What Windows reference hardware reports for PixelShader1xMaxValue could not be established: there
+  is no Windows machine, and no citable per-vendor value was found. The documented floor is 1.0 for
+  ps 1.0-1.3.
+- Our device's value: asked of -a9.
