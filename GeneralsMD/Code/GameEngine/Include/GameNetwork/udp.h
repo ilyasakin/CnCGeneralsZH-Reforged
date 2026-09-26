@@ -133,7 +133,9 @@ class UDP
 
      ShareAddress(TRUE) before Bind sets SO_REUSEADDR, which lets a socket bound to one address share
      its port with such a wildcard listener - the lobby socket needs it once another copy on the host
-     is listening.  It does not let two sockets share one address and port: that bind still fails.
+     is listening.  On BSD it does not let two sockets share one address and port: that bind still fails.
+     Linux's SO_REUSEADDR would allow exactly that, so there the listener binds 255.255.255.255 instead
+     of the wildcard, and the lobby socket shares nothing (udp.cpp, Bind).
 
      BindForBroadcasts binds the wildcard address with SO_REUSEADDR and SO_REUSEPORT (every copy on the
      host has one, and each gets its own copy of a broadcast) and asks for each datagram's destination.
