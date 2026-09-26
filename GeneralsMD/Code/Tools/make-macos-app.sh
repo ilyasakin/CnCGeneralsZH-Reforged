@@ -12,7 +12,10 @@
 # Refused, before anything is written:
 #   - a static library on generals' link line (build.ninja) that macos-app-licenses.txt does not name;
 #   - a file in the overlay that turns the HUD overlay off (ShowHudOverlay = No: the user's directive,
-#     as Tools/stage-overlay.sh enforces), checked again over the finished bundle.
+#     as Tools/stage-overlay.sh enforces), checked again over the finished bundle;
+#   - an object in any static library on the link line, or a Mach-O in the bundle, built for a newer
+#     macOS than --min-macos (P2): the final executable's own stamp would hide a vendored library built
+#     for the build machine's version, and the player's Mac would find it at the first call.
 # Last, an ad-hoc signature (codesign --sign - --timestamp=none) over the final contents, and
 # codesign --verify --deep --strict of it.  Anything written into the bundle afterwards breaks that seal.
 #
@@ -22,13 +25,16 @@
 # out (a local bundle; the game then looks as ClassicGraphics does).
 #
 # Usage: make-macos-app.sh --generals <exe> --overlay <staged overlay> --build <build dir>
-#          --out <.../Zero Hour Reforged.app> --bundle-id <id> [--no-art] [--link-ninja <build.ninja>]
+#          --out <.../Zero Hour Reforged.app> --bundle-id <id> --min-macos <version> [--no-art]
+#          [--link-ninja <build.ninja>]
+#   --min-macos   LSMinimumSystemVersion, and the newest minimum any shipped object may carry (the build's
+#                 CMAKE_OSX_DEPLOYMENT_TARGET)
 #   --link-ninja  the build.ninja whose generals link line is checked (default <build>/build.ninja)
 # Exit status: 0 built, signed and verified; 1 refused or failed (the partial bundle is removed).
 
 set -u
 
-GENERALS="" OVERLAY="" BUILD="" OUT="" BUNDLE_ID="" ART=1 NINJA=""
+GENERALS="" OVERLAY="" BUILD="" OUT="" BUNDLE_ID="" ART=1 NINJA="" MIN_MACOS=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
@@ -36,13 +42,14 @@ while [ $# -gt 0 ]; do
 		--build) BUILD="$2"; shift 2;;
 		--out) OUT="$2"; shift 2;;
 		--bundle-id) BUNDLE_ID="$2"; shift 2;;
+		--min-macos) MIN_MACOS="$2"; shift 2;;
 		--no-art) ART=0; shift;;
 		--link-ninja) NINJA="$2"; shift 2;;
 		*) echo "make-macos-app: unknown argument $1" >&2; exit 2;;
 	esac
 done
 fail() { echo "make-macos-app: $*" >&2; [ -n "${STARTED:-}" ] && rm -rf -- "${OUT:?}"; exit 1; }
-[ -x "$GENERALS" ] && [ -d "$OVERLAY" ] && [ -d "$BUILD" ] && [ -n "$BUNDLE_ID" ] || fail "--generals, --overlay, --build and --bundle-id are required"
+[ -x "$GENERALS" ] && [ -d "$OVERLAY" ] && [ -d "$BUILD" ] && [ -n "$BUNDLE_ID" ] && [ -n "$MIN_MACOS" ] || fail "--generals, --overlay, --build, --bundle-id and --min-macos are required"
 case "$OUT" in *.app) ;; *) fail "--out must name a .app";; esac
 [ -n "$NINJA" ] || NINJA="$BUILD/build.ninja"
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -50,7 +57,9 @@ REPO="$(cd "$CODE/../.." && pwd)"
 TABLE="$CODE/Tools/macos-app-licenses.txt"
 
 # ---- the link line against the licence table ----------------------------------------------------------
-linked="$(python3 - "$NINJA" <<'LINK_EOF'
+LIBPATHS="$(mktemp "${TMPDIR:-/tmp}/zh-link-libs.XXXXXX")"
+trap 'rm -f -- "$LIBPATHS"' EXIT
+linked="$(python3 - "$NINJA" "$LIBPATHS" <<'LINK_EOF'
 import re, sys
 text = open(sys.argv[1]).read()
 m = re.search(r"^build generals: CXX_EXECUTABLE_LINKER.*?\n  LINK_LIBRARIES = (.*?)\n", text, re.S | re.M)
@@ -58,6 +67,8 @@ if not m:
     sys.exit("no generals link line in " + sys.argv[1])
 names = sorted(set(re.findall(r"(?:^|[\s/])lib([\w\-+]+)\.a(?=\s|$)", m.group(1))))
 print("\n".join(names))
+with open(sys.argv[2], "w") as paths:		# the libraries themselves, for the minimum-macOS check
+    paths.write("\n".join(sorted(set(t for t in m.group(1).split() if t.endswith(".a")))) + "\n")
 LINK_EOF
 )" || fail "cannot read generals' link line from $NINJA"
 [ -n "$linked" ] || fail "generals' link line in $NINJA names no static library"
@@ -79,6 +90,42 @@ hud_check() {	# hud_check <dir>: fails naming the files that turn the HUD overla
 }
 hud_check "$OVERLAY"
 
+# ---- the oldest macOS, over everything that ships ----------------------------------------------------------
+minos_check() {	# minos_check <what> <files...>: fails naming every object built for a newer macOS than MIN_MACOS
+	local what="$1"; shift
+	local newer
+	newer="$(for f in "$@"; do printf '== %s\n' "$f"; otool -l "$f" 2>/dev/null; done | python3 -c '
+import re, sys
+limit = tuple(int(x) for x in sys.argv[1].split("."))
+current, member, pending, bad = None, None, None, {}
+for line in sys.stdin:
+    if line.startswith("== "):
+        current = line[3:].strip(); continue
+    m = re.match(r"^(\S.*\.a)\((.*)\):$", line.strip())
+    if m:
+        member = m.group(2); continue
+    t = line.split()
+    if not t: continue
+    if t[0] == "cmd": pending = t[1]
+    elif (pending == "LC_BUILD_VERSION" and t[0] == "minos") or (pending == "LC_VERSION_MIN_MACOSX" and t[0] == "version"):
+        v = tuple(int(x) for x in t[1].split("."))
+        if v > limit:
+            bad.setdefault("%s: minimum macOS %s" % (current, t[1]), []).append(member or "")
+for k, members in sorted(bad.items()):
+    print("%s (%d object%s%s)" % (k, len(members), "" if len(members) == 1 else "s",
+        ": " + ", ".join(sorted(set(x for x in members if x))[:3]) if any(members) else ""))
+' "$MIN_MACOS")"
+	[ -z "$newer" ] || fail "refused: $what built for a newer macOS than $MIN_MACOS:
+$newer"
+}
+# every static library on generals' link line, object by object (build.ninja names them relative to the build)
+libs=()
+while IFS= read -r a; do
+	[ -n "$a" ] || continue
+	case "$a" in /*) libs+=("$a");; *) libs+=("$BUILD/$a");; esac
+done < "$LIBPATHS"
+minos_check "linked libraries" "${libs[@]}"
+
 # ---- the bundle ---------------------------------------------------------------------------------------------
 rm -rf -- "${OUT:?}"
 STARTED=1
@@ -92,8 +139,8 @@ cp "$GENERALS" "$C/MacOS/generals" && strip -S -x "$C/MacOS/generals" || fail "c
 
 # Info.plist, from the build's version header and the executable's own minimum macOS
 version="$(awk '/#define VERSION_MAJOR/ {a=$3} /#define VERSION_MINOR/ {b=$3} /#define VERSION_BUILDNUM/ {c=$3} END {print a"."b"."c}' "$BUILD/generated/BuildVersion.h")"
-minos="$(otool -l "$GENERALS" | awk '/LC_BUILD_VERSION/ {f=1} f && $1 == "minos" {print $2; exit}')"
-[ -n "$minos" ] && [ "$version" != ".." ] || fail "cannot read the version ($version) or the minimum macOS ($minos)"
+minos="$MIN_MACOS"
+[ "$version" != ".." ] || fail "cannot read the version from $BUILD/generated/BuildVersion.h"
 cat > "$C/Info.plist" <<PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -180,6 +227,11 @@ done
 
 # the directive once more, over the finished contents (the clones included)
 hud_check "$C"
+# and the oldest macOS, over every Mach-O the bundle holds
+machos=()
+while IFS= read -r f; do machos+=("$f"); done < <(find "$C" -type f -exec sh -c 'file -b "$1" | grep -q "^Mach-O" && echo "$1"' _ {} \;)
+[ "${#machos[@]}" -gt 0 ] || fail "no Mach-O in the bundle"
+minos_check "the bundle's executables" "${machos[@]}"
 
 # ---- the signature, last, over the final contents ------------------------------------------------------------
 codesign --force --sign - --timestamp=none "$OUT" 2>/dev/null || fail "codesign failed"
