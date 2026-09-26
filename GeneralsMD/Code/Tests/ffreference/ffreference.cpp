@@ -92,6 +92,7 @@ struct VOut
 	Color diffuse, specular;
 	double fog;
 	double tex[MAX_STAGES][4];	///< per stage, after TCI and the texture transform (before any divide)
+	bool programReported;		///< a vertex program ran through ffprogram.h's P1 or P2
 };
 
 VOut lerpVOut( const VOut &a, const VOut &b, double t )
@@ -147,6 +148,45 @@ VOut processVertex( const Context &ctx, const Vertex &v )
 	const Color vSpecular = s.hasSpecular ? v.specular : white;
 	VOut o;
 	memset( &o, 0, sizeof( o ) );
+
+	if (s.vertexProgram != NULL)
+	{
+		// A3e: the declaration's elements into v0-v15, (0, 0, 0, 1) where a stream stops short ("Input
+		// Register - vs"); the program's outputs out (oPos as the clip position, oTn for stage n)
+		double inputs[ 16 ][ 4 ];
+		for (int k = 0; k < 16; ++k)
+		{
+			static const double partial[ 4 ] = { 0, 0, 0, 1 };
+			double element[ 4 ] = { 0, 0, 0, 1 };
+			const int what = s.vertexInput[k];
+			if (what == INPUT_POSITION)
+				memcpy( element, v.position, sizeof( element ) );
+			else if (what == INPUT_NORMAL)
+				memcpy( element, v.normal, 3 * sizeof( double ) );
+			else if (what == INPUT_DIFFUSE || what == INPUT_SPECULAR)
+			{
+				const Color &c = what == INPUT_DIFFUSE ? v.diffuse : v.specular;		// D3DCOLOR as (R, G, B, A)
+				element[0] = c.r; element[1] = c.g; element[2] = c.b; element[3] = c.a;
+			}
+			else if (what >= INPUT_TEXCOORD0 && what < INPUT_TEXCOORD0 + MAX_STAGES)
+				memcpy( element, v.tex[what - INPUT_TEXCOORD0], sizeof( element ) );
+			for (int i = 0; i < 4; ++i)
+				inputs[k][i] = what != INPUT_NONE && i < s.vertexInputSize[k] ? element[i] : partial[i];
+		}
+		VertexRun run;
+		runVertexProgram( *s.vertexProgram, s.vertexConstants, 96, inputs, run );
+		for (int i = 0; i < 4; ++i)
+			o.clip[i] = run.position[i];
+		const Color d = { run.colour[0][0], run.colour[0][1], run.colour[0][2], run.colour[0][3] };
+		const Color sp = { run.colour[1][0], run.colour[1][1], run.colour[1][2], run.colour[1][3] };
+		o.diffuse = d;
+		o.specular = sp;
+		o.fog = 1.0;
+		for (int st = 0; st < MAX_STAGES; ++st)
+			memcpy( o.tex[st], run.texture[st], sizeof( o.tex[st] ) );
+		o.programReported = run.addressAmbiguous || run.reciprocalOfZero;
+		return o;
+	}
 
 	if (s.pretransformed)
 	{
@@ -522,7 +562,12 @@ double blendAlphaFor( int op, const Color &diffuse, const Color &texel, const Co
 	return 0.0;
 }
 
-struct ShadeOut { Color color; double lod[MAX_STAGES]; bool sampled[MAX_STAGES]; };
+/// A pixel program's result also carries the interval its range cap and precision allow (ffprogram.h)
+struct ShadeOut { Color color; double lod[MAX_STAGES]; bool sampled[MAX_STAGES]; bool programInterval; Color programLo, programHi; };
+
+/// The sampler a pixel program's tex and texbem call: the stage's own coordinates, moved by texbem's
+/// (du, dv), sampled as the cascade samples (the LOD from the unmoved coordinates, N19), under the variant
+struct ProgramSampling { const Context *ctx; const PixelIn *in; const Perturb *p; ShadeOut *out; };
 
 Color cascade( const Context &ctx, const PixelIn &in, const Perturb &p, ShadeOut &out )
 {
@@ -638,11 +683,113 @@ Color cascade( const Context &ctx, const PixelIn &in, const Perturb &p, ShadeOut
 	return current;
 }
 
+/// The fog factor shade() blends by (1: no fog)
+double fogFactorOf( const Context &ctx, const PixelIn &in )
+{
+	const uint32_t *rs = ctx.rs;
+	if (!rs[RS_FOGENABLE])
+		return 1.0;
+	double f = in.fog;
+	const int table = (int)rs[RS_FOGTABLEMODE];
+	if (table != FOG_NONE)
+	{
+		const Matrix &pr = ctx.state.projection;
+		const bool affine = pr.m[0][3] == 0.0 && pr.m[1][3] == 0.0 && pr.m[2][3] == 0.0 && pr.m[3][3] == 1.0;
+		f = fogFactor( table, affine ? in.zNdc : in.eyeW, stateFloat( rs[RS_FOGSTART] ),
+				stateFloat( rs[RS_FOGEND] ), stateFloat( rs[RS_FOGDENSITY] ) );
+	}
+	f = clamp01( f );
+	return (ctx.mutations & MUTATE_FOG_REVERSED) ? 1.0 - f : f;
+}
+
+void programSample( void *context, int stage, double du, double dv, double rgba[4] )
+{
+	const ProgramSampling &ps = *(const ProgramSampling *)context;
+	const DrawState &s = ps.ctx->state;
+	const Texture *tex = s.textures[stage];
+	Color texel = { 0, 0, 0, 1 };
+	if (tex != NULL)
+	{
+		const double lambda = lodOf( *tex, ps.in->dx[stage], ps.in->dy[stage] ) + ps.p->lod;
+		texel = sampleImpl( *tex, s.samplerState[stage], ps.in->uv[stage][0] + du, ps.in->uv[stage][1] + dv, lambda,
+			ps.p->du, ps.p->dv, ps.ctx->freedoms, ps.ctx->mutations );
+		ps.out->lod[stage] = lambda + stateFloat( s.samplerState[stage][SAMP_MIPMAPLODBIAS] );
+		ps.out->sampled[stage] = true;
+	}
+	rgba[0] = texel.r; rgba[1] = texel.g; rgba[2] = texel.b; rgba[3] = texel.a;
+}
+
+/// A pixel program in the texture cascade's place: no specular add (the program is the colour), then fog;
+/// the output saturated as the frame buffer takes it, and its interval with it (ZONE_PROGRAM)
+Color shadeProgram( const Context &ctx, const PixelIn &in, const Perturb &p, ShadeOut &out )
+{
+	const DrawState &s = ctx.state;
+	ProgramSampling sampling = { &ctx, &in, &p, &out };
+	PixelInputs pin;
+	memset( &pin, 0, sizeof( pin ) );
+	const Color *colours[ 2 ] = { &in.diffuse, &in.specular };
+	for (int k = 0; k < 2; ++k)
+	{
+		pin.colour[k][0] = colours[k]->r; pin.colour[k][1] = colours[k]->g;
+		pin.colour[k][2] = colours[k]->b; pin.colour[k][3] = colours[k]->a;
+	}
+	memcpy( pin.constants, s.pixelConstants, sizeof( pin.constants ) );
+	for (int st = 0; st < 4 && st < MAX_STAGES; ++st)
+	{
+		pin.bumpMatrix[st][0] = stateFloat( s.stageState[st][TSS_BUMPENVMAT00] );
+		pin.bumpMatrix[st][1] = stateFloat( s.stageState[st][TSS_BUMPENVMAT01] );
+		pin.bumpMatrix[st][2] = stateFloat( s.stageState[st][TSS_BUMPENVMAT10] );
+		pin.bumpMatrix[st][3] = stateFloat( s.stageState[st][TSS_BUMPENVMAT11] );
+	}
+	pin.sample = programSample;
+	pin.context = &sampling;
+	Interval4 r;
+	runPixelProgram( *s.pixelProgram, pin, r );
+	const double f = fogFactorOf( ctx, in );
+	const Color fog = colorFromD3D( ctx.rs[RS_FOGCOLOR] );
+	Color c, lo, hi;
+	for (int ch = 0; ch < 4; ++ch)
+	{
+		const double fogChannel = ch == 3 ? 1.0 : channel( fog, ch );
+		const double ff = ch == 3 ? 1.0 : f;		// fog blends the colour, not the alpha
+		setChannel( c, ch, ff * clamp01( r.nominal[ch] ) + (1 - ff) * fogChannel );
+		setChannel( lo, ch, ff * clamp01( r.lo[ch] ) + (1 - ff) * fogChannel );
+		setChannel( hi, ch, ff * clamp01( r.hi[ch] ) + (1 - ff) * fogChannel );
+	}
+	out.programInterval = true;
+	out.programLo = lo;
+	out.programHi = hi;
+	out.color = c;
+	return c;
+}
+
+bool differs( const Color &a, const Color &b );
+
+/// A pixel program's interval, as the four colours at its corners: the blend is linear in the colour and
+/// in the alpha separately, so those four bound what any value inside gives (ZONE_PROGRAM)
+void addProgramCorners( const ShadeOut &o, const Color &src, std::vector<Color> &others, unsigned &zones )
+{
+	if (!o.programInterval)
+		return;
+	for (int k = 0; k < 4; ++k)
+	{
+		Color c = (k & 1) ? o.programHi : o.programLo;
+		c.a = (k & 2) ? o.programHi.a : o.programLo.a;
+		if (differs( c, src ))
+		{
+			zones |= ZONE_PROGRAM;
+			others.push_back( c );
+		}
+	}
+}
+
 /// The pixel's colour before the frame buffer: the cascade, specular add, fog
 Color shade( const Context &ctx, const PixelIn &in, const Perturb &p, ShadeOut &out )
 {
 	const uint32_t *rs = ctx.rs;
 	memset( &out, 0, sizeof( out ) );
+	if (ctx.state.pixelProgram != NULL)
+		return shadeProgram( ctx, in, p, out );
 	Color c = cascade( ctx, in, p, out );
 	if (rs[RS_SPECULARENABLE] && !(ctx.mutations & MUTATE_NO_SPECULAR_ADD))
 	{
@@ -853,7 +1000,9 @@ void rasterTriangle( Raster &r, Triangle t )
 							zones |= (l != 0 ? ZONE_LOD : 0) | (t != 0 ? ZONE_TEXEL : 0) | (u != 0 ? ZONE_UNDEFINED : 0);
 							others.push_back( c );
 						}
+						addProgramCorners( o, src, others, zones );
 					}
+			addProgramCorners( nominalOut, src, others, zones );
 			for (int st = 0; st < MAX_STAGES; ++st)
 				if (inside && nominalOut.sampled[st] && s.stageState[st][TSS_COLOROP] != TOP_DISABLE)
 				{
@@ -1067,12 +1216,66 @@ std::string stageText( int st, const char *what )
 	return buf;
 }
 
+void validateSampling( const DrawState &s, int st, Report &report );
+
+/// A3e: the programs, and what they need of the rest of the state
+void validatePrograms( const DrawState &s, Report &report )
+{
+	const uint32_t *rs = s.renderState;
+	if (s.vertexShaderBound && s.vertexProgram == NULL) refuse( report, "a vertex shader is bound" );
+	if (s.pixelShaderBound && s.pixelProgram == NULL) refuse( report, "a pixel shader is bound" );
+	if (s.vertexProgram != NULL)
+	{
+		if (!s.vertexProgram->refusals.empty() || s.vertexProgram->kind != PROGRAM_VERTEX)
+			refuse( report, "a vertex program outside the census: "
+				+ (s.vertexProgram->refusals.empty() ? std::string( "not a vertex program" ) : s.vertexProgram->refusals[0]) );
+		if (s.pixelProgram == NULL) refuse( report, "a vertex program with the fixed-function pixel stage (not in the census)" );
+		if (s.pretransformed) refuse( report, "a vertex program with pretransformed vertices" );
+		if (rs[RS_FOGENABLE]) refuse( report, "fog with a vertex program (oFog is not in the census)" );
+		for (int st = 0; st < MAX_STAGES; ++st)
+			if (s.stageState[st][TSS_TEXTURETRANSFORMFLAGS] != 0 || (s.stageState[st][TSS_TEXCOORDINDEX] & 0xFFFF0000u) != 0)
+				refuse( report, stageText( st, "a texture transform or generation with a vertex program (not in the census)" ) );
+	}
+	if (s.pixelProgram != NULL)
+	{
+		const Program &pp = *s.pixelProgram;
+		if (!pp.refusals.empty() || pp.kind != PROGRAM_PIXEL)
+			refuse( report, "a pixel program outside the census: "
+				+ (pp.refusals.empty() ? std::string( "not a pixel program" ) : pp.refusals[0]) );
+		// what the vertex program wrote (P3: an unwritten output has no value)
+		unsigned colours = 0x3, coordinates = 0xFF;
+		if (s.vertexProgram != NULL)
+		{
+			colours = coordinates = 0;
+			for (size_t i = 0; i < s.vertexProgram->code.size(); ++i)
+			{
+				const Operand &d = s.vertexProgram->code[i].dst;
+				if (d.type == Token::REG_ATTROUT) colours |= 1u << d.index;
+				if (d.type == Token::REG_TEXCRDOUT) coordinates |= 1u << d.index;
+			}
+		}
+		for (size_t i = 0; i < pp.code.size(); ++i)
+		{
+			const Instruction &in = pp.code[i];
+			if (in.opcode == Token::OP_TEX || in.opcode == Token::OP_TEXBEM)
+			{
+				const int st = in.dst.index;
+				if (s.textures[st] == NULL) refuse( report, stageText( st, "a pixel program samples a stage with no texture" ) );
+				else validateSampling( s, st, report );
+				if (!(coordinates & (1u << st))) refuse( report, stageText( st, "sampled at coordinates the vertex program never wrote" ) );
+			}
+			for (int k = 0; k < in.sources; ++k)
+				if (in.src[k].type == Token::REG_INPUT && !(colours & (1u << in.src[k].index)))
+					refuse( report, "a pixel program reads a colour the vertex program never wrote" );
+		}
+	}
+}
+
 /// Everything draw() refuses, checked before anything is drawn
 void validate( const DrawState &s, int primitiveType, Report &report )
 {
 	const uint32_t *rs = s.renderState;
-	if (s.vertexShaderBound) refuse( report, "a vertex shader is bound" );
-	if (s.pixelShaderBound) refuse( report, "a pixel shader is bound" );
+	validatePrograms( s, report );
 	if (primitiveType < PT_TRIANGLELIST || primitiveType > PT_TRIANGLEFAN) refuse( report, "points and lines are not drawn" );
 	if (rs[RS_FILLMODE] != FILL_SOLID) refuse( report, "FILLMODE other than solid" );
 	if (rs[RS_SHADEMODE] != SHADE_FLAT && rs[RS_SHADEMODE] != SHADE_GOURAUD) refuse( report, "SHADEMODE other than flat or Gouraud" );
@@ -1088,7 +1291,7 @@ void validate( const DrawState &s, int primitiveType, Report &report )
 				&& (s.lights[l].type < LIGHT_POINT || s.lights[l].type > LIGHT_DIRECTIONAL))
 			refuse( report, "a light of no documented type" );
 
-	for (int st = 0; st < MAX_STAGES; ++st)
+	for (int st = 0; st < MAX_STAGES && s.pixelProgram == NULL; ++st)
 	{
 		const uint32_t *ts = s.stageState[st];
 		const int cop = (int)ts[TSS_COLOROP], aop = (int)ts[TSS_ALPHAOP];
@@ -1125,6 +1328,16 @@ void validate( const DrawState &s, int primitiveType, Report &report )
 				|| aop == TOP_BLENDTEXTUREALPHA || aop == TOP_BLENDTEXTUREALPHAPM))
 			refuse( report, stageText( st, "a texture-alpha blend with no texture bound" ) );
 
+		validateSampling( s, st, report );
+	}
+}
+
+/// A stage's texture, sampler and coordinate states (the fixed-function cascade's and a pixel program's)
+void validateSampling( const DrawState &s, int st, Report &report )
+{
+	const uint32_t *ts = s.stageState[st];
+	const Texture *tex = s.textures[st];
+	{
 		const uint32_t tci = ts[TSS_TEXCOORDINDEX], gen = tci & 0xFFFF0000u;
 		if (tex != NULL)
 		{
@@ -1278,7 +1491,7 @@ Freedoms::Freedoms()
 
 Report::Report()
 	: trianglesIn( 0 ), trianglesCulled( 0 ), trianglesClippedAway( 0 ), pixelsCovered( 0 ),
-	  pixelsAmbiguous( 0 ), pixelsWritten( 0 ), zonesSeen( 0 ), minLod( 1e30 ), maxLod( -1e30 )
+	  pixelsAmbiguous( 0 ), pixelsWritten( 0 ), zonesSeen( 0 ), minLod( 1e30 ), maxLod( -1e30 ), programVerticesReported( 0 )
 {
 }
 
@@ -1547,7 +1760,10 @@ bool draw( const DrawState &state, int primitiveType, const Vertex *vertices, in
 	const uint32_t *rs = state.renderState;
 	std::vector<VOut> processed( (size_t)vertexCount );
 	for (int i = 0; i < vertexCount; ++i)
+	{
 		processed[i] = processVertex( ctx, vertices[i] );
+		report.programVerticesReported += processed[i].programReported ? 1 : 0;
+	}
 
 	Raster r = { ctx, target, report, 0, 0, target.width, target.height };
 	const Viewport &vp = state.viewport;
@@ -1616,7 +1832,7 @@ Comparison compare( const Target &reference, const uint8_t *gpu, int rowBytes, d
 			else if (outside <= 1e-9)
 			{
 				++c.inFreedom;
-				for (int z = 0; z < 7; ++z)
+				for (int z = 0; z < 8; ++z)
 					if (reference.zones[i] & (1u << z))
 						++c.zoneCounts[z];
 			}
@@ -1636,13 +1852,13 @@ Comparison compare( const Target &reference, const uint8_t *gpu, int rowBytes, d
 
 void print( const Comparison &c, FILE *out, const char *label )
 {
-	static const char *zoneNames[7] = { "edge", "texel", "lod", "alpha-test", "depth", "stencil", "undefined" };
+	static const char *zoneNames[8] = { "edge", "texel", "lod", "alpha-test", "depth", "stencil", "undefined", "program" };
 	fprintf( out, "  %s: %ld pixels, %ld exact, %ld in a documented freedom, %ld outside", label, c.pixels,
 			c.exact, c.inFreedom, c.outside );
 	if (c.outside)
 		fprintf( out, " (worst %.1f/255 past the envelope at %d,%d)", c.worst * 255.0, c.worstX, c.worstY );
 	fprintf( out, "\n    freedoms:" );
-	for (int z = 0; z < 7; ++z)
+	for (int z = 0; z < 8; ++z)
 		fprintf( out, " %s %ld", zoneNames[z], c.zoneCounts[z] );
 	fprintf( out, "\n    |gpu - nominal| in 1/255:" );
 	for (int b = 0; b < 256; ++b)
