@@ -1240,12 +1240,48 @@ if(ZH_PLATFORM_POSIX)
   # W3DWebBrowser is the embedded browser as a COM object, which only Win32GameEngine makes; GameEngine
   # has its own WebBrowser off Windows (B5).
   list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DWebBrowser\\.cpp$")
+
+  # ---- the movies (V1): Windows' Bink player and its Bink API on FFmpeg, the same two files -------------
+  # FFmpeg is built from the tarball Tools/vendor.sh keeps, into the build tree, with the Bink demuxer
+  # and decoders only; the script deletes its 110MB of unpacked source afterwards (it says why).  It
+  # reruns when the tarball or the script changes, and takes ~30s.
+  set(FFMPEG_TARBALL ${LIBSRC}/FFmpeg/ffmpeg-8.1.2.tar.xz)
+  if(NOT EXISTS ${FFMPEG_TARBALL})
+    message(FATAL_ERROR "The FFmpeg source tarball is missing from Libraries/Source/FFmpeg - run Tools/vendor.sh.")
+  endif()
+  set(FFMPEG_POSIX ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg)
+  # Link order: each before what it uses
+  set(FFMPEG_POSIX_LIBS ${FFMPEG_POSIX}/lib/libavformat.a ${FFMPEG_POSIX}/lib/libavcodec.a
+    ${FFMPEG_POSIX}/lib/libswscale.a ${FFMPEG_POSIX}/lib/libswresample.a ${FFMPEG_POSIX}/lib/libavutil.a)
+  set(FFMPEG_POSIX_CFLAGS "")
+  if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(FFMPEG_POSIX_CFLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  endif()
+  add_custom_command(
+    OUTPUT ${FFMPEG_POSIX_LIBS} ${FFMPEG_POSIX}/include/libavcodec/avcodec.h
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh ${FFMPEG_TARBALL}
+            ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-work ${FFMPEG_POSIX} ${CMAKE_C_COMPILER} "${FFMPEG_POSIX_CFLAGS}"
+    DEPENDS ${FFMPEG_TARBALL} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh
+    COMMENT "Building FFmpeg 8.1.2's Bink decoders for the movies (V1)"
+    VERBATIM)
+  add_custom_target(ffmpeg_posix DEPENDS ${FFMPEG_POSIX_LIBS} ${FFMPEG_POSIX}/include/libavcodec/avcodec.h)
+
+  # bink_ffmpeg.cpp: the XAudio2 half is Windows'; off Windows the sound is a voice in C4's mix
+  # (miles_miniaudio's mss_ex_pcm.h), so this links milesaudio where Windows links xaudio2.
+  add_library(binkvideo STATIC ${WW}/Bink/ffmpeg/bink_ffmpeg.cpp)
+  add_dependencies(binkvideo ffmpeg_posix)
+  target_include_directories(binkvideo PUBLIC ${WW}/Bink/include
+    PRIVATE ${FFMPEG_POSIX}/include ${WW}/Miles6/include ${WW}/WWLib)
+  target_link_libraries(binkvideo PRIVATE ${FFMPEG_POSIX_LIBS} milesaudio wwlib m Threads::Threads)
+
+  # BinkVideoPlayer.cpp, unchanged: W3DGameClient makes it on every platform, so it lives with w3ddevice
+  list(APPEND W3DDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/VideoDevice/Bink/BinkVideoPlayer.cpp)
   add_library(w3ddevice STATIC ${W3DDEVICE_SOURCES})
   set_target_properties(w3ddevice PROPERTIES CXX_STANDARD 17)
   target_include_directories(w3ddevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs ${CMAKE_CURRENT_SOURCE_DIR}/Main
             ${WW}/Miles6/include ${WW}/Bink/include)
-  target_link_libraries(w3ddevice PUBLIC gameengine ww3d2 sdlinput)
+  target_link_libraries(w3ddevice PUBLIC gameengine ww3d2 sdlinput binkvideo)
 
   # A1's link checkpoint: all of w3ddevice and ww3d2, whole archive, against what the POSIX game links.
   add_executable(w3d_link_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_link_probe.cpp)
@@ -1945,6 +1981,17 @@ target_link_libraries(ffshader_dump PRIVATE ffvertex engineshader)
 add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp)
 target_include_directories(ffreference PUBLIC ${TESTS})
 add_lib_test(test_ffreference ffreference)
+
+# V1's check: every movie of the install through the Bink API, against its header and a golden
+# middle frame, and one movie's sound through C4's mix on the null backend.  Needs ZH_GAME_DATA.
+add_lib_test(test_binkvideo binkvideo milesaudio)
+target_include_directories(test_binkvideo PRIVATE ${WW}/Miles6/include ${TESTS})
+set_tests_properties(test_binkvideo PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
+if(ZH_GAME_DATA)
+  set_tests_properties(test_binkvideo PROPERTIES ENVIRONMENT "ZH_AUDIO_BACKEND=null;ZH_DATA_DIR=${ZH_GAME_DATA}")
+else()
+  set_tests_properties(test_binkvideo PROPERTIES ENVIRONMENT "ZH_AUDIO_BACKEND=null")
+endif()
 endif()  # ZH_PLATFORM_POSIX - shader generator checks
 
 # Tools/bigfile.py reads and writes the game's BIG archives (that is how the shipped INIs
