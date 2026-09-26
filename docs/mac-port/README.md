@@ -930,6 +930,21 @@ writer A1 wrote, which reads exactly the image and pads each row, is the one wri
 (checked on a 5x3 image under AddressSanitizer and by macOS's own decoder). `WINDOWS-DEBT.md` has the
 row.
 
+**21. Fork-introduced: under Direct3D 11 a scrolling texture does not scroll - fixed.** W3D's 2D texture
+mappers set a stage to `D3DTTFF_COUNT2` and put their translation in the texture matrix's `_31` and
+`_32` (`mapper.cpp`: linear offset at :183, "According to the docs this should work since its 2D"; grid at
+:263; sine, step and zig-zag offsets at :445, :529, :608; random at :1026). That is right for Direct3D 9, which pads a two-element coordinate set to
+(u, v, 1, 0) before the matrix, so the third row translates. The fork's generated vertex programs
+(`ffvertex.cpp`, which the **Direct3D 11 renderer** and the SDL3 GPU device both run) padded it
+(u, v, 0, 1), so the scroll read the fourth row, which is zero. A player on Direct3D 11 saw every texture those
+mappers move standing still: scrolling surfaces did not scroll, and a grid mapper's animated texture stayed
+on its first frame. Which models use them is data (a W3D material's mapper arguments), not surveyed here.
+Direct3D 9 is untouched: its fixed function pads correctly, and the generated vertex programs are not used
+there. Found by A3b's harness against FFReference (N13). **Fixed:** a passthrough set under an enabled
+transform is padded (u, v, 1, 0). The shader dump shows exactly one program changing, in one line
+(`vs_extra_passthrough_count2`, the new case); every other program and every key is byte-identical. The
+harness's scrolled-transform scenario now matches FFReference. `WINDOWS-DEBT.md` has the row.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
