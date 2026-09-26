@@ -1596,6 +1596,7 @@ Libraries/Include/Platform/D3D9PosixMath.h
 Libraries/Include/Platform/DoubleClickTime.h
 Libraries/Include/Platform/EngineShaderName.h
 Libraries/Include/Platform/IsWindows9x.h
+Libraries/Include/Platform/LoadTiming.h
 Libraries/Include/Platform/MSVCCompat.h
 Libraries/Include/Platform/MsvcFloatCasts.h
 Libraries/Include/Platform/PosixD3D9/d3d9.h
