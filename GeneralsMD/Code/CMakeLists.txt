@@ -2012,6 +2012,9 @@ if(ZH_PLATFORM_POSIX)
   # the exe's names and the device layer, as test_terrain_golden links them
   target_sources(test_lan_broadcast PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
   target_link_libraries(test_lan_broadcast PRIVATE posixdevice w3ddevice)
+  # W1: the same sockets between two hosts, driven by hand from each (a tool, not a test: it needs a peer)
+  add_executable(lan_broadcast_probe ${TESTS}/lan_broadcast_probe.cpp ${TESTS}/test_gameengine_stubs.cpp)
+  target_link_libraries(lan_broadcast_probe PRIVATE gameengine posixdevice w3ddevice)
 endif()
 add_lib_test(test_terrain_golden gameengine)
 target_compile_definitions(test_terrain_golden PRIVATE
