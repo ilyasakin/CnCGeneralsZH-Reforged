@@ -986,6 +986,10 @@ endif()
 # ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.
 # The link list below is left exactly as it is on purpose - B6 owns it.
 add_library(gameengine STATIC ${ZH_NOT_YET_PORTABLE} ${GAMEENGINE_SOURCES})
+if(ZH_PLATFORM_POSIX)
+  # GlobalLanguage registers Language.ini's LocalFontFile with the glyph rasteriser (D6b)
+  target_link_libraries(gameengine PUBLIC glyphrasteriser)
+endif()
 target_include_directories(gameengine PUBLIC
   ${GE}/Include ${GE}/Include/Precompiled
   ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
@@ -1217,6 +1221,8 @@ if(ZH_PLATFORM_POSIX)
   # ---- ww3d2 -----------------------------------------------------------------------------------------
   add_library(ww3d2 STATIC ${ZH_WW3D2_SOURCES} ${WW}/WW3D2/dx11runtime_posix.cpp)
   set_target_properties(ww3d2 PROPERTIES CXX_STANDARD 17)
+  # FontCharsClass draws its glyphs with FreeType through it (D6b)
+  target_link_libraries(ww3d2 PRIVATE glyphrasteriser)
   target_include_directories(ww3d2
     PUBLIC ${WW}/WW3D2 ${ZH_POSIX_D3D9_INCLUDE}
     PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/WWSaveLoad ${WW}/Wwutil
@@ -1889,6 +1895,9 @@ endif()
 # D6a: the glyph rasteriser against the font files' own hdmx, VDMX and gasp, read by the test's own
 # parser, plus a regression golden keyed to the files' versions.  macOS's fonts; Linux later.
 add_lib_test(test_glyph_rasteriser glyphrasteriser)
+# D6b: FontCharsClass, the game's own, drawing with FreeType off Windows: GDI's arithmetic around the
+# rasteriser, through the class's public face.
+add_lib_test(test_fontchars ww3d2 glyphrasteriser wwsaveload wwlib wwmath wwdebug)
 
 # The golden dump behind D3's byte-identical proof: every program in Tests/shader_cases.h, every
 # target, one file each.  A tool, not a test: two runs are compared with diff -r.
