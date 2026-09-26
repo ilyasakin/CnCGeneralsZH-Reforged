@@ -48,6 +48,9 @@
 #include "GameNetwork/IPEnumeration.h"
 #include "GameNetwork/NetworkDefs.h"
 #include "GameNetwork/Transport.h"
+#include "GameNetwork/udp.h"
+
+#include <dirent.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -57,7 +60,7 @@
 
 namespace {
 
-enum { PORT = 28190, PORT_ALONE = 28191, PORT_CONTROL = 28192 };
+enum { PORT = 28190, PORT_ALONE = 28191, PORT_CONTROL = 28192, PORT_HELD = 28193, PORT_FIRST = 28194, PORT_SECOND = 28195 };
 const UnsignedInt LOOPBACK = 0x7F000001;
 
 /// The first up, non-loopback IPv4 address, host order; 0 when there is none
@@ -117,6 +120,21 @@ void sendAndPump( Transport &from, UnsignedInt addr, UnsignedShort port, const c
 			receivers[i]->update();
 		nanosleep( &pause, NULL );
 	}
+}
+
+/// How many descriptors this process has open, from /dev/fd (Linux: /proc/self/fd); the listing's own
+/// descriptor is not counted
+Int openDescriptors( void )
+{
+	DIR *dir = opendir( "/dev/fd" );
+	if (dir == NULL)
+		return -1;
+	Int n = 0;
+	for (struct dirent *e = readdir( dir ); e != NULL; e = readdir( dir ))
+		if (e->d_name[0] != '.')
+			++n;
+	closedir( dir );
+	return n - 1;
 }
 
 struct Globals
@@ -220,6 +238,36 @@ TEST(lan_received_messages_move_into_the_inbox_once)
 	listener.m_inBuffer[0].length = 5;
 	listener.moveReceivedInto( inbox );
 	CHECK_EQ( listener.m_inBuffer[0].length, 5 );
+}
+
+/* A bind that fails leaves no socket open.  Transport::init retries UDP::Bind for up to a second while the
+   port is taken, and each try made a socket that a failed bind never closed: about 100,000 per call, on
+   every platform, which on a Mac filled the whole system's file table (two copies of net_check at once).
+   The failed init here runs that whole second of retries. */
+TEST(udp_a_bind_that_fails_leaves_no_socket_open)
+{
+	Globals globals;
+	Transport holder, second;
+	CHECK( holder.init( LOOPBACK, PORT_HELD ) );
+	const Int before = openDescriptors();
+	CHECK( before > 0 );
+	CHECK( !second.init( LOOPBACK, PORT_HELD ) );		// the port is taken: every retry fails
+	const Int after = openDescriptors();
+	printf( "  descriptors open: %d before the failed init, %d after\n", before, after );
+	CHECK_EQ( after, before );
+}
+
+/// A UDP bound again drops the socket it had: one socket, not two
+TEST(udp_bound_twice_holds_one_socket)
+{
+	const Int before = openDescriptors();
+	{
+		UDP udp;
+		CHECK_EQ( udp.Bind( LOOPBACK, PORT_FIRST ), (Int)UDP::OK );
+		CHECK_EQ( udp.Bind( LOOPBACK, PORT_SECOND ), (Int)UDP::OK );
+		CHECK_EQ( openDescriptors(), before + 1 );
+	}
+	CHECK_EQ( openDescriptors(), before );		// and the destructor closes that one
 }
 
 #endif	// !_WIN32

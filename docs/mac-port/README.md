@@ -1304,6 +1304,22 @@ Linux - fixed.**
   `_strdup` itself, so nothing changes there. The per-site classification is in
   `docs/mac-port/tasks/strdup-sweep.md`.
 
+**Latent, not numbered: a bind that fails leaks its socket - every platform, environment-triggered; fixed.**
+- **Where:** `UDP::Bind` made a new socket on every call and never closed one whose bind failed.
+  `Transport::init` retries `Bind` in a tight loop for up to a second while the port is taken, so a single
+  failed init left about 100,000 sockets open. `FirewallHelperClass::openSpareSocket` kept one per failure.
+- **When it shows:** whenever the game's port is already in use, on Windows as elsewhere (shared code).
+  Nothing in data reaches it, so no number. On 2026-09-26 two `net_check` runs from different worktrees
+  collided on the same address and port. Two orphaned peers held 127,052 and 61,370 sockets, the Mac's
+  system-wide file table (276,480) came within reach of full, and every other process's tests failed with
+  "too many open files in system".
+- **Fixed:** `Bind` closes the socket it had before making a new one, and closes the new one when its bind
+  fails. "No socket" is now -1 throughout; it was 0, a valid descriptor off Windows, while a failed
+  `socket()` left -1.
+- **Tested:** `test_lan_broadcast` holds a port, and a `Transport::init` on it fails with the process's
+  descriptor count unchanged (9 and 9). A `UDP` bound twice holds one socket. **Armed:** on the old
+  `udp.cpp` one failed init leaked 54,141 descriptors, and both tests fail.
+
 **Latent, not numbered: a missing coordinate set under a texture transform.**
 - **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
   D3D9 documents (0,0) ("the system defaults to the u and v coordinates (0,0)"). FFReference's N28 pads
