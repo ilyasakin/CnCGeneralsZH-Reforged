@@ -37,7 +37,11 @@
 LogClass::LogClass(const char *fname)
 {
 	char buffer[ _MAX_PATH ];
+#if defined(_WIN32)
 	getExecutableDirectory( buffer, sizeof( buffer ), FALSE );
+#else
+	getLogDirectory( buffer, sizeof( buffer ), FALSE );	// outside an app bundle (P1)
+#endif
 	AsciiString fullPath;
 	fullPath.format("%s\\%s", buffer, fname);
 	m_fp = zh_fopen(fullPath.str(), "wt");

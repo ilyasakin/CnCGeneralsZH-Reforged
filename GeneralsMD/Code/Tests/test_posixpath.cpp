@@ -536,3 +536,72 @@ TEST(overlay_reads_first_writes_never_lists_as_one_folder)
 	CHECK_EQ(chdir(previous), 0);
 	remove_tree(base);
 }
+
+// P1 step 2: with the roots read-only, every zh_* write of a RELATIVE path is refused with EROFS, and
+// the install is left as it was; absolute paths and reads are untouched.  The control: the same calls
+// with read-only off do write.
+TEST(read_only_root_refuses_relative_writes_only)
+{
+	const std::string base = temp_root("test_posixpath_readonly");
+	const std::string install = base + "/install", elsewhere = base + "/userdata";
+	make_directory(base);
+	make_directory(install);
+	make_directory(install + "/Data");
+	make_directory(install + "/Data/INI");
+	make_directory(elsewhere);
+	write_file(install + "/Data/INI/INIZH.big", "stray");
+	write_file(install + "/Keep.txt", "keep");
+
+	char previous[4096];
+	CHECK(getcwd(previous, sizeof(previous)) != NULL);
+	CHECK_EQ(chdir(install.c_str()), 0);
+	PosixPath_Forget_All();
+	PosixPath_Set_Root_Read_Only(true);
+	CHECK(PosixPath_Root_Read_Only());
+
+	errno = 0;
+	CHECK(zh_unlink("Data\\INI\\INIZH.big") != 0);			// GameEngine::init's deletion
+	CHECK_EQ(errno, EROFS);
+	CHECK(zh_remove("Keep.txt") != 0);
+	CHECK(zh_fopen("New.txt", "wb") == NULL);
+	CHECK_EQ(errno, EROFS);
+	CHECK(zh_fopen("Keep.txt", "r+b") == NULL);
+	CHECK(zh_fopen("Keep.txt", "ab") == NULL);
+	CHECK(zh_open("Keep.txt", O_WRONLY | O_TRUNC, 0) < 0);
+	CHECK(zh_open("PatchAccessTest.txt", O_CREAT | O_RDWR, 0600) < 0);	// the patch check's probe
+	CHECK(zh_mkdir("Stats") != 0);
+	CHECK(zh_rename("Keep.txt", "Moved.txt") != 0);
+	CHECK_STR(read_file(install + "/Data/INI/INIZH.big").c_str(), "stray");
+	CHECK_STR(read_file(install + "/Keep.txt").c_str(), "keep");
+	CHECK(!is_directory_here(install + "/Stats"));
+	struct stat status;
+	CHECK(stat((install + "/New.txt").c_str(), &status) != 0);
+	CHECK(stat((install + "/PatchAccessTest.txt").c_str(), &status) != 0);
+
+	// reads go on as before
+	FILE * read = zh_fopen("Keep.txt", "rb");
+	CHECK(read != NULL);
+	if (read != NULL) fclose(read);
+	CHECK_EQ(zh_access("Data\\INI\\INIZH.big", F_OK), 0);
+
+	// absolute paths - the user data directory - are the engine's deliberate destinations
+	FILE * absolute = zh_fopen((elsewhere + "/Options.ini").c_str(), "wb");
+	CHECK(absolute != NULL);
+	if (absolute != NULL) { fputs("x", absolute); fclose(absolute); }
+	CHECK_EQ(zh_mkdir((elsewhere + "/Replays").c_str()), 0);
+	CHECK_EQ(zh_unlink((elsewhere + "/Options.ini").c_str()), 0);
+
+	// the control: read-only off, the same relative calls write
+	PosixPath_Set_Root_Read_Only(false);
+	CHECK_EQ(zh_unlink("Data\\INI\\INIZH.big"), 0);
+	FILE * made = zh_fopen("New.txt", "wb");
+	CHECK(made != NULL);
+	if (made != NULL) fclose(made);
+	CHECK_EQ(zh_mkdir("Stats"), 0);
+	CHECK(stat((install + "/Data/INI/INIZH.big").c_str(), &status) != 0);
+	CHECK(is_directory_here(install + "/Stats"));
+
+	PosixPath_Forget_All();
+	CHECK_EQ(chdir(previous), 0);
+	remove_tree(base);
+}

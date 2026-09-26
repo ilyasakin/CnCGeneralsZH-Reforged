@@ -1619,6 +1619,15 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(overlay_crc_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # P1 step 2: the roots are read-only - GameEngine::init's INIZH.big delete is refused, the farm and the
+  # install are unchanged after a skirmish; -writableRoot in a root with no links does delete; and a run
+  # from inside an app bundle logs to the user data's Logs, not into the bundle.
+  add_test(NAME root_readonly_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/root-readonly-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(root_readonly_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(root_readonly_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
 endif()
 
 # ===========================================================================
