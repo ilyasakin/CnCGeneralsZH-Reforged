@@ -21,6 +21,7 @@
 // PosixD3D9Caps.cpp).  See PosixDevice9.h for who owns what and how a device without a window behaves.
 
 #include "PosixDevice9.h"
+#include "SdlCreationLog.h"
 #include "Platform/EngineShaderName.h"
 #include "Platform/RendererName.h"
 #include "PosixImageOps.h"
@@ -512,6 +513,16 @@ RenderResult PosixDevice9::Present(const RenderRect *, const RenderRect *, Rende
 		"D3DGAMMARAMP is the three ramps back to back, as SdlGpuFrame::Present reads it");
 	++PresentCount;
 	Dump_Frame_If_Asked();
+	if (Sdl_Creation_Log_Asked()) {
+		// Every frame over 50 ms, beside the creation log's lines, to line them up.
+		static double last_present = 0.0;
+		const double now = Sdl_Now_Ms();
+		if (last_present != 0.0 && now - last_present > 50.0) {
+			fprintf(stderr, "PosixDevice9 create: t %10.1f ms  LONG FRAME %8.2f ms  (present %u, %u draws recorded so far)\n",
+				last_present, now - last_present, PresentCount, DrawsRecorded);
+		}
+		last_present = now;
+	}
 	const bool timing = Timing_Is_Asked();
 	const Uint64 present_start = timing ? SDL_GetTicksNS() : 0;
 	const bool presented = Gpu->Present(reinterpret_cast<const uint16_t (*)[256]>(&GammaRamp));

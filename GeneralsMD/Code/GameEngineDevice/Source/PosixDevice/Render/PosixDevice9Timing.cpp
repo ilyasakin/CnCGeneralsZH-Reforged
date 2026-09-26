@@ -33,6 +33,7 @@
 // wait for the GPU inside SDL's swapchain acquire).
 
 #include "PosixDevice9.h"
+#include "SdlCreationLog.h"
 #include "SdlGpuFrame.h"
 
 #include <SDL3/SDL.h>
@@ -111,6 +112,14 @@ void PosixDevice9::Timing_Present(double present_ms, unsigned int draws)
 	if (state.FirstPresent == 0) {
 		state.FirstPresent = now;
 	}
+	if (state.LastPresent != 0 && (double)(now - state.LastPresent) / 1.0e6 > 50.0) {
+		// A long frame, split into the device's parts: what is left is the engine's.
+		const double frame_ms = (double)(now - state.LastPresent) / 1.0e6;
+		fprintf(stderr, "PosixDevice9 timing: LONG FRAME %.1f ms at %.1f s: device draw %.2f, flushes %u (%.2f ms), present %.2f"
+			" (swapchain wait %.2f), %u draws; the engine's own %.1f ms\n", frame_ms,
+			(double)(state.LastPresent - state.FirstPresent) / 1.0e9, TimingDrawMs, flushes, flush_ms, present_ms, acquire_ms,
+			draws, frame_ms - TimingDrawMs - flush_ms - present_ms);
+	}
 	const bool measuring = (double)(now - state.FirstPresent) / 1.0e9 >= state.Delay && state.Frame.size() < state.Count;
 	if (measuring && state.LastPresent != 0) {
 		const double frame_ms = (double)(now - state.LastPresent) / 1.0e6;
@@ -152,4 +161,20 @@ void PosixDevice9::Timing_Report()
 	if (state.Sync) {
 		report("GPU (fences)", state.FenceMs, "ms");
 	}
+}
+
+bool Sdl_Creation_Log_Asked()
+{
+	static const bool asked = getenv("ZH_GPU_CREATION_LOG") != NULL;
+	return asked;
+}
+
+double Sdl_Now_Ms()
+{
+	return (double)SDL_GetTicksNS() / 1.0e6;
+}
+
+void Sdl_Creation_Log(const char *what, double started_ms, double took_ms, const char *detail)
+{
+	fprintf(stderr, "PosixDevice9 create: t %10.1f ms  %-9s %8.2f ms  %s\n", started_ms, what, took_ms, detail);
 }
