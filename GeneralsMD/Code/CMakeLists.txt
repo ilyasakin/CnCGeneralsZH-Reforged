@@ -2488,6 +2488,19 @@ if(ZH_PLATFORM_POSIX)
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
     endif()
   endforeach()
+
+  # The SDL3 GPU selfchecks draw offscreen only.  On Apple they take SDL's dummy video driver and the
+  # windowless Metal hint (decision 10), so a host with no window server (a worker over ssh) runs them
+  # where it used to skip them, and every Mac takes the one path.  Linux keeps its own video driver: the
+  # patch is Metal's.
+  if(APPLE)
+    foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
+                     posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck)
+      if(TEST ${_zh_test})
+        set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=dummy" "ZH_SDL_GPU_METAL_WINDOWLESS=1")
+      endif()
+    endforeach()
+  endif()
 endif()
 
 # P2: on macOS our own code may not call an API newer than the deployment target without guarding it
