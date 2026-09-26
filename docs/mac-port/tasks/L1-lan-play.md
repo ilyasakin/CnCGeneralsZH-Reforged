@@ -4,8 +4,8 @@
 - **Depends on:** B1 B4 B5 (the wire formats, done), N1 (the compatibility CRC, done), E1 E3 (the
   determinism gate and the architecture axis, done)
 - **Blocks:** nothing in M5 but its own "it is a game"
-- **Status:** recon done, and one measured two-peer match (-47, 2026-09-26). Build steps below,
-  not started.
+- **Status:** recon done (-47, 2026-09-26). The PM's order: 1, 3 (F1, defect #29), 2 (F2), 4, 5; 6
+  deferred until E2 needs it. Step 1 done (below).
 
 ## Why
 
@@ -174,7 +174,7 @@ and the final world CRCs, not from the playback's in-sync line.
   disconnect keepalive, on Windows; that isn't chased here.
 - **The lobby's GUI flow, map transfer and chat.** None is exercised by `-netgame`.
 
-## Build steps (proposed; nothing built yet)
+## Build steps
 
 1. **`Tools/net-check.sh`, a POSIX twin of `net_check.py` and a ctest.**
    - It uses replay-check's farm, overlay, install guard and user folders.
@@ -200,6 +200,31 @@ and the final world CRCs, not from the playback's in-sync line.
    the build.
 6. Only if E2's runners have no second address: `-netgame ip:port` and the local slot from
    `-netslot`.
+
+## Step 1 result: `Tools/net-check.sh` and ctest `net_check` (-47, 2026-09-26)
+
+The harness is as step 1 describes, with the PM's constraints.
+- **The second address** is found by a probe, never written in: the first up, non-loopback IPv4
+  address (`ifconfig`, else `ip`) that delivers a datagram to and from 127.0.0.1. With none, it
+  skips (77). Both game ports must be free on both addresses, or it skips and names them.
+- **The firewall gate** comes first, before the probe listens. On macOS it reads socketfilterfw's
+  global state, stealth mode and block-all, and skips (77) unless all three are off. Its own control
+  uses fakes reporting each of the three on; each must skip before any copy starts.
+  - It cannot see third-party filters (Little Snitch, LuLu), pf rules, or a firewall switched on
+    after the check. The script's header says so.
+- **A mismatch ends the match at once.** After "CRC Mismatch" a copy waits on its disconnect screen
+  for good, so the harness stops both copies when either log shows one. Without that, the control
+  ran into the time limit in every phase, about 15 minutes; with it, the control takes 30 s.
+- **The replays** are played back only after a match that kept one world. F2's message is printed
+  but does not fail the run until step 2 settles it.
+
+ctest `net_check` (TIMEOUT 900, in the `zh_install` lock with the other farm tests), `-V`, 138 s:
+
+| check | result |
+|:--|:--|
+| 0. the firewall gate's control: fakes reporting on, stealth and block-all | each skips (77) before any copy starts |
+| 1. seed 3, two AIs, Golden Oasis, 1800 frames, 127.0.0.1 and 192.168.1.103 | both 0x3453DF90 at frame 1800, 0 mismatches, 5 AI structures; both replays play back to 0x3453DF90 |
+| 2. the control: the second copy on seed 4 | FAILED through the game's own "CRC Mismatch", stopped after 6 s of match; exit 1 |
 
 ## Do not
 
