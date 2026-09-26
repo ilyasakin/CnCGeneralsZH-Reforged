@@ -108,7 +108,10 @@ with no `<stddef.h>` and spells `__cdecl` 13 times; `compression` hits `__int64`
 `<emmintrin.h>` (SSE2 on arm64). So the real order is **A1 → B3 + B5 + B9 → the four libraries and
 the two self-checks**, and that last step is a follow-up rather than part of A1.
 
-**M1 — headless Mac build.** No renderer, no window, no sound. `gameengine` and the portable
+**M1 — headless Mac build. REACHED 2026-09-26** (`81abdf13`): all 606 `gameengine` sources compile
+under clang on arm64, and `test_gameengine` passes under ctest on macOS (443 tests, 521,945 checks),
+beside every portable library's suite. Not verified: Windows (never compiled by MSVC; see
+`WINDOWS-DEBT.md`) and Linux (the milestone-boundary `linux-check.sh` run is still owed). No renderer, no window, no sound. `gameengine` and the portable
 libraries compile under clang on arm64, and the test suites that do not need a device run green.
 This is where the toolchain, `WideChar`, the shims and the link-surface trimming all get proved, and
 it is the milestone that tells you whether determinism survives clang before anyone writes a line
@@ -191,7 +194,7 @@ you start. That commit is the lock.
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | done: merged (was -21) | |
 | E4 | [Windows under CrossOver](tasks/E4-windows-under-crossover.md) | M1 | — | blocked: no game executable for stage 1 (release channel unpublished); stage 2 needs the user to accept Microsoft's licence | -a9 |
 | T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | claimed | -47 |
-| C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | in progress: path-resolution design proposed, awaiting decisions D1-D7 (the `mixfile.cpp` piece is done) | -a9 |
+| C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | done: path resolver, POSIX local and BIG file systems, file operations, user-data dir, replay stream, PosixGameEngine (abstract until T1); `test_bigfilesystem` byte-identical over 25,293 files | -a9 |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | not started | |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
 | C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | in progress: lower half (the Miles API on miniaudio) in review; upper half open | -a9 |
