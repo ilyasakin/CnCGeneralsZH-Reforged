@@ -605,11 +605,108 @@ Without `-quickstart` the intro movie plays through V1's Bink path.
 
 ![The Zero Hour shell map on Metal, present 900](../a3d-shell-map-metal.png)
 
+The diagnostic overlay is not drawn in the shell by design; see the in-game pictures for the renderer and frame.
+
 **Known gap, deferred with -18:** a partial *writing* `LockRect` of a GPU-owned render target keeps the
 CPU image, and the upload its version bump causes overwrites the GPU's pixels outside the locked rectangle.
 The engine does not lock render targets anywhere known (screenshots and smudges read through
 `GetRenderTargetData` into SYSTEMMEM). If a path turns up, the fix is a hook at the surface or texture
 `LockRect` (which knows its owner) that downloads first.
 
-The skirmish's empty radar is not the renderer's. Its draw callback, `W3DLeftHUDDraw`, is never called
-(lldb), so the question is the fork's HTML control bar and GUI. The PM has given it to -47.
+The skirmish's empty radar is not the renderer's, and not a bug. An earlier version of this record said
+its draw callback, `W3DLeftHUDDraw`, is never called; that came from lldb breakpoint commands that printed
+nothing, with no control breakpoint to show they could. -47's probe inside the function fires every frame.
+Seed 1234 makes the player GLA, whose Command Center gives no radar; with `-side 0 FactionAmerica` the radar
+shows.
+
+## The capture layer: the game's draws against FFReference (2026-09-26)
+
+**What it is.** `ZH_GPU_CAPTURE=<dir>` makes the device write the first draw of each *signature*:
+- **The signature:** the vertex program's key, the pixel program's key, and a hash of the pipeline key with
+  its shader addresses left out, so the same draw has the same signature in every run.
+- **What a capture holds:**
+  - the state as set: every render, stage and sampler state, the transforms, material, lights and
+    viewport;
+  - the target's size and format, and whether a depth surface was bound;
+  - the vertices and indices the draw reads, rebased;
+  - its textures, one file per content.
+- **The format** is `Render/DrawCapture.h`. It is the raw structs of the build that writes them, not an
+  interchange format.
+- **Which draw is taken:** the first on-screen draw of the signature, with a vertex in the view volume. A
+  signature with no on-screen draw in 64 tries is taken anyway, and counted.
+- **Size:** `ZH_GPU_CAPTURE_MB` caps what is written (64 MB by default).
+- **At teardown,** the device reports how many signatures it captured, and which it did not and why.
+- **What is not captured (version 1):** draws that sample a render target, whose texels are the GPU's.
+
+`ffref_capture_selfcheck` replays each capture alone:
+- **How:** through the device on the GPU and through `FFReference`, into a target of the capture's size and
+  format, cleared to one colour, depth 1 and stencil 0. It compares them the way the A3b harness does.
+- **Its input:** the captures come from the user's install. They live in a scratch directory named by
+  `ZH_FFREF_CAPTURE_DIR`, and are never committed.
+- **One substitution,** made on both sides and counted: ANISOTROPIC is replayed as LINEAR. The game asks
+  for MAXANISOTROPY 16 on nearly every draw, and FFReference refuses anisotropy above 1. What goes
+  unchecked is the device's anisotropic sampler.
+- **A triage aid:** `FFREF_CAPTURE_NO_MIPS=1` replays with mipmapping off on both sides.
+
+**Without captures it runs a round trip,** so it checks something on every machine with a GPU:
+- **The draws:** three draws of its own, captured by the same writer:
+  - a quad from the caller's memory;
+  - a lit, DXT1-textured grid, drawn indexed. Its base vertex is 4, its start index is past junk, and its
+    indices start at 2.
+  - a blended fan from the middle of a buffer.
+- **The checks:**
+  - each replay's picture is **byte-identical** to the draw's;
+  - each replay agrees with FFReference;
+  - an armed control (D3D10's pixel centres) is found outside.
+- **Mutations of the writer, both caught:**
+  - no index rebasing: the replay's picture differs, and the reference refuses an index past the vertices;
+  - no lights: the replay's picture differs.
+  The first version of the grid drew with indices starting at 0, where rebasing cancels out, and the
+  rebasing mutation passed. The indices were moved to start at 2.
+
+**Different from the design above,** which had `-drawcapture N` and a ctest that runs the engine on the
+farm. Capturing is an environment variable, like the other dev aids (`ZH_GPU_TRACE`, `ZH_GPU_DUMP_FRAMES`).
+Running the engine inside a ctest would carry rule 9's farm, the install snapshot and several minutes into
+every test run. Instead the captures are made by a run by hand, and the test replays whatever directory it
+is given.
+
+**Two replay bugs found on the way, both in the test:**
+- **Two devices alive at once.** The replay first kept one device per target size alive together. GPU
+  copies are dropped through the one `posixResourceDestroyed` hook, which the newest device's table holds.
+  So the older device kept stale copies, and handed them to new buffers made at the same address. The
+  results changed from run to run. Now one device lives at a time, as in the game.
+- **Unstable signatures.** The first signature hashed the shader addresses, so it differed between runs.
+
+**Results, 2026-09-26** (Metal, arm64, on this build):
+
+| Run | Draws recorded | Signatures captured | Compared | Drew something | Pass | Known |
+|---|---|---|---|---|---|---|
+| Skirmish, seed 1234, 600 frames | 1,977,780 | 49 (4 off screen) | 46 | 36 | 43 | 3 |
+| Shell map, `-quickstart`, 200 s | 32,631,851 | 67 (12 off screen) | 65 | 42 | 60 | 5 |
+
+- **Stable across runs:** two skirmish captures run the same way gave the same 49 signatures.
+- **"Drew nothing"** means the reference wrote no pixel, and the GPU agreed. These draws are either
+  everything culled, a stencil or EQUAL depth test against the clear, or a triangle smaller than a pixel.
+  They are compared, but they prove little.
+- **Refusals:** none, in either run.
+
+**Findings, waiting on a ruling** (the test's KNOWN list, by signature):
+- **C1: small, minified models, level of detail.** Five signatures, among them lit, textured units in the
+  shell map. One to twenty pixels are up to 51/255 past the envelope, all in the texel and LOD zones.
+  - With mipmapping off, all five pass, three of them with every pixel exact. So the GPU picks a different
+    mip level than the ±0.6 LOD freedom (N15) allows, on triangles a few pixels across.
+  - It is for -47: either a freedom for derivatives on small triangles, where the GPU works in 2x2 quads
+    and FFReference differentiates analytically, or a device defect.
+- **C2: alpha-tested foliage with the cloud shadow.** One pipeline, three captures. Stage 1 takes
+  camera-space position coordinates through a texture transform (`TCI 0x20000`, TTFF 2).
+  - 7 to 10 pixels of the 25,000 to 36,000 written are up to 8/255 past the envelope, in the alpha-test and texel zones.
+  - With mipmapping off it is worse (unmipped foliage aliases), so it is not C1. Unclassified.
+- **C3: `ALPHAOP DISABLE` under an enabled `COLOROP`.** Three signatures in the skirmish and one in the
+  shell map. FFReference refuses them: D3DTEXTUREOP calls it undefined. The game does it, and the device
+  draws something. What that something should be is a ruling.
+- **C4: a `TEXCOORDINDEX` naming a set the vertices lack.** One signature in the shell map, refused by
+  FFReference.
+
+**A3 is not done.** Both runs draw with no refusals. But "every key checked" still waits on C1 to C4, and
+on the draws that drew nothing. Those need a capture of the pixels, depth and stencil under the draw, which
+version 1 does not have.
