@@ -277,4 +277,16 @@ inline int listDisplayModes( const char *device, DisplayModeEntry *entries, int 
 	entries[0].height = MIN_DISPLAY_MODE_HEIGHT;
 	return 1;
 }
+
+/** The resolution a first run starts at, when Options.ini names none: the monitor's own size, in pixels.
+	* Windows starts at GameData's 800x600, and its fullscreen sets the monitor to that size.  Fullscreen
+	* here is the desktop at its own size, so 800x600 would be stretched over it, and a window would be
+	* a small box in the middle.  With no platform table (headless, the tests) this is the floor-sized
+	* monitor's 800x600, as before. */
+inline void firstRunResolution( const char *device, int *width, int *height )
+{
+	const MonitorEntry monitor = findMonitor( device );
+	*width = (int)(monitor.rect.right - monitor.rect.left);
+	*height = (int)(monitor.rect.bottom - monitor.rect.top);
+}
 #endif
