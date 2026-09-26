@@ -1436,6 +1436,7 @@ GameEngineDevice/Source/PosixDevice/Render/PosixDevice9.h
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Capture.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Draw.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Resources.cpp
+GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Timing.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDirect3D9.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixImageOps.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixImageOps.h
