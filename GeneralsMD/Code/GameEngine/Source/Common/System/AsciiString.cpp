@@ -126,10 +126,17 @@ void AsciiString::ensureUniqueBufferOfSize(int numCharsNeeded, Bool preserveData
 			m_data->m_numCharsAllocated >= numCharsNeeded)
 	{
 		// no buffer manhandling is needed (it's already large enough, and unique to us)
+		// memmove, not strcpy or strcat: the source can be this string's own text - nextToken sets the
+		// string to the rest of itself, and a string can be concatenated onto itself - and an
+		// overlapping strcpy or strcat is undefined.  MSVC's copies forward and got away with it;
+		// macOS's x86_64 strcpy did not, and the archive directory lost a random subset of its paths.
 		if (strToCopy)
-			strcpy(m_data->peek(), strToCopy);
+			memmove(m_data->peek(), strToCopy, strlen(strToCopy) + 1);
 		if (strToCat)
-			strcat(m_data->peek(), strToCat);
+		{
+			char *end = m_data->peek() + strlen(m_data->peek());
+			memmove(end, strToCat, strlen(strToCat) + 1);
+		}
 		return;
 	}
 

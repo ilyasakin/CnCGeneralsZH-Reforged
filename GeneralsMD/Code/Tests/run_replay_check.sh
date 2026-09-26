@@ -51,4 +51,11 @@ status=$?
 printf '%s\n' "$out"
 check '[ $status -eq 0 ]' "seed 1 at 12000 frames: fourteen checkpoint saves leave the playback on the recording's world (exit $status)"
 
+# 5. The install check's control: with its snapshot spoiled (the install itself untouched), the harness
+#    must report the install changed and exit 99.
+out="$(REPLAY_CHECK_CONTROL_INSTALL=1 bash "$HARNESS" --generals "$GENERALS" --seeds "0" --maxframes 30 2>&1)"
+status=$?
+printf '%s\n' "$out"
+check '[ $status -eq 99 ] && printf "%s" "$out" | grep -q "INSTALL CHANGED"' "a changed install fails the run (exit $status)"
+
 exit $failed

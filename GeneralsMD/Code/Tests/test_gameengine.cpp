@@ -12799,6 +12799,56 @@ TEST(asciistring_nextToken_empties_the_token_when_the_source_runs_out)
 	CHECK_STR( self.str(), "a\\b" );
 }
 
+/* A string set to part of itself, or concatenated onto itself.  nextToken sets the source to the rest
+	 of itself, and the in-place path copied that tail over the front with strcpy: overlapping, so
+	 undefined.  MSVC's forward copy and ARM64 macOS's both happened to get it right; macOS x86_64's did
+	 not, and the archive directory lost a random subset of its paths (the x86_64 test_bigfilesystem is
+	 the measured case).  On ARM64 this test could not fail the old code - it pins the answers, over
+	 every tail length and start offset a path walk produces, and self-concatenation, which the old
+	 strcat and the wide loop could overrun. */
+TEST(strings_set_from_their_own_text_copy_it_whole)
+{
+	for( Int depth = 1; depth <= 40; ++depth )
+	{
+		AsciiString path;
+		std::string expected;
+		for( Int i = 0; i < depth; ++i )
+		{
+			char part[32];
+			snprintf( part, sizeof(part), "%s%d", ( i % 3 ) ? "dir" : "a_longer_directory_", i );
+			path.concat( part );
+			path.concat( '\\' );
+			expected += part;
+			expected += '|';
+		}
+		AsciiString tok;
+		std::string walked;
+		while( path.nextToken( &tok, "\\" ) )
+		{
+			walked += tok.str();
+			walked += '|';
+		}
+		CHECK( walked == expected );
+	}
+
+	AsciiString twice( "abcdefghij" );
+	twice.concat( twice.str() );
+	CHECK_STR( twice.str(), "abcdefghijabcdefghij" );
+
+	UnicodeString wide( u"one\\two\\three" );
+	UnicodeString wideTok;
+	CHECK( wide.nextToken( &wideTok, UnicodeString( u"\\" ) ) );
+	CHECK( WideCharCmp( wideTok.str(), u"one" ) == 0 );
+	CHECK( wide.nextToken( &wideTok, UnicodeString( u"\\" ) ) );
+	CHECK( WideCharCmp( wideTok.str(), u"two" ) == 0 );
+	CHECK( wide.nextToken( &wideTok, UnicodeString( u"\\" ) ) );
+	CHECK( WideCharCmp( wideTok.str(), u"three" ) == 0 );
+
+	UnicodeString wideTwice( u"abcdefghij" );
+	wideTwice.concat( wideTwice.str() );
+	CHECK( WideCharCmp( wideTwice.str(), u"abcdefghijabcdefghij" ) == 0 );
+}
+
 /* -map "Maps\Twilight Flame\Twilight Flame.map" loses its quotes to WinMain's tokenizer and
 	 reaches this function as "Maps\Twilight".  With no .map to stop on it grew a string one token
 	 at a time until AsciiString's 32767-byte ceiling threw ERROR_OUT_OF_MEMORY out of
