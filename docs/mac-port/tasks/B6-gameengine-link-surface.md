@@ -165,6 +165,39 @@ on a first and a later launch, chooses the same preset and the same shell-map se
 the D track: with the chipset `DC_UNKNOWN`, GameLOD presumes a TNT2, below every shipped preset's GF3,
 so every POSIX machine gets the Low preset until a renderer reports a chipset.
 
+**`test_gameengine` compiles on POSIX, 2026-09-26, and links but for 29 owed symbols.** What it took:
+- A POSIX shim block at the top of `test_gameengine.cpp` (`#if !defined(_WIN32)`), so each test's text
+  is the same on both platforms: `_controlfp`'s rounding field over `<cfenv>`, with MSVC's names and
+  bit values (the precision field accepted and ignored, as x64 Windows has none), and
+  `GetSystemMetrics`' primary-display size answering `Monitors.h`'s documented off-Windows fallback,
+  the 800x600 floor, which is what borderless mode sizes itself to until C2.
+- The two `setfpmode_*` tests are `_WIN32`-only: they compare `getFPMode()` with MSVC's word layout
+  and the exception masks. `fpucontrol_selfcheck` is POSIX's.
+- `scanTreeForRuntimeMath` - behind `simulation_uses_no_runtime_trig` - walks with `readdir` off
+  Windows, turning the roots' `\` into `/`. The test's own "scanned more than 500 files" guard caught
+  the first version, which looked nowhere.
+- Four colour literals cast to `Color`: clang rejects the narrowing MSVC warns about; same values.
+- `test_gameengine_stubs.cpp`: `<windows.h>`, `ApplicationHWnd`, `WinMain` and the device stand-ins
+  are `_WIN32`-only; off Windows the test links `posixdevice`, which has the real ones. `gAppPrefix`,
+  `g_strFile` and `g_csfFile` stay on both: the exe's names, C2's for real.
+
+Linked with scratch stand-ins for the 29 still owed (-18's Winsock and B6's registry writers, each
+aborting if reached; not committed) and run: **443 tests, 521,945 checks, 0 failed**, with
+`simulation_uses_no_runtime_trig` among them. The run needed one more scratch-only thing, below.
+
+**Finding: `LogClass` statics build an `AsciiString` before the memory manager exists.**
+`WOLLobbyMenu.cpp:84`, `WOLQuickMatchMenu.cpp:81` and two in `PeerThread.cpp` define a
+`static LogClass` under `DEBUG_LOGGING` (so in `RELEASE_DEBUG_LOGGING` builds too), and its
+constructor formats a path into an `AsciiString`. `AsciiString` asks `TheDynamicMemoryAllocator`
+directly; only the global `operator new` runs `preMainInitMemoryManager` on first use. So the
+constructor dereferences NULL unless something has called `new` earlier in static initialisation. On
+macOS nothing had: the test died before `main`. Windows evidently survives on its static-init order,
+which nobody here can observe. The scratch run worked around it with an `init_priority(101)` object
+calling `::operator new(1)` (and `delete new char` first, which clang elided - the same elision as
+`initMemoryManager`'s link test). **Not fixed; a fix touches the memory manager or `LogClass` and is
+the PM's to route** - candidates: `LogClass` opens its file on first `log()`, or the string classes
+call the pre-main initializer when the allocator is still NULL.
+
 **Stale below, corrected:**
 - *`ww3d2` is "real, and the hard one" (`D3DXVec4Transform`).* No longer: B17 made the D3DX maths
   portable (`d3dxportable.h`) and not one D3DX symbol is undefined. The only WW3D2 symbol left is
