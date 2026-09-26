@@ -42,8 +42,10 @@
 #include "dx8wrapper.h"
 #include "formconv.h"
 #pragma warning (disable : 4201)		// nonstandard extension - nameless struct
+#if defined(_WIN32)
 #include <windows.h>
 #include <mmsystem.h>
+#endif
 
 static StringClass CapsWorkString;
 
@@ -521,7 +523,7 @@ void DX8Caps::Init_Caps(IDirect3DDevice9* D3DDevice)
 	// came out false and the device stayed in software vertex processing, at half the
 	// frame rate and with the wrong filter caps behind it.  The device runs in hardware
 	// mode, so that is the mode its caps are read in.
-	D3DDevice->SetSoftwareVertexProcessing(FALSE);
+	D3DDevice->SetSoftwareVertexProcessing(false);
 	DX8CALL(GetDeviceCaps(&Caps));
 
 	SupportTnL=(Caps.DevCaps&D3DDEVCAPS_HWTRANSFORMANDLIGHT)==D3DDEVCAPS_HWTRANSFORMANDLIGHT;

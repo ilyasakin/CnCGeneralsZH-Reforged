@@ -56,6 +56,7 @@
 #include "colorspace.h"
 #include "bound.h"
 #include "d3dx9runtime.h"
+#include <string.h>	// memset, strcpy, strlen
 
 /***********************************************************************************************
  * PixelSize -- Helper Function to find the size in bytes of a pixel                           *
@@ -251,7 +252,7 @@ SurfaceClass::~SurfaceClass(void)
 void SurfaceClass::Get_Description(SurfaceDescription &surface_desc)
 {
 	D3DSURFACE_DESC d3d_desc;
-	::ZeroMemory(&d3d_desc, sizeof(D3DSURFACE_DESC));
+	memset(&d3d_desc,0, sizeof(D3DSURFACE_DESC));
 	DX8_ErrorCode(D3DSurface->GetDesc(&d3d_desc));
 	surface_desc.Format = D3DFormat_To_WW3DFormat(d3d_desc.Format);
 	surface_desc.Height = d3d_desc.Height;
@@ -261,7 +262,7 @@ void SurfaceClass::Get_Description(SurfaceDescription &surface_desc)
 void * SurfaceClass::Lock(int * pitch)
 {
 	D3DLOCKED_RECT lock_rect;	
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect, 0, 0));
 	*pitch = lock_rect.Pitch;
 	return (void *)lock_rect.pBits;
@@ -297,7 +298,7 @@ void SurfaceClass::Clear()
 	unsigned int size=PixelSize(sd);
 
 	D3DLOCKED_RECT lock_rect;	
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect,0,0));
 	unsigned int i;
 	unsigned char *mem=(unsigned char *) lock_rect.pBits;
@@ -336,7 +337,7 @@ void SurfaceClass::Copy(const unsigned char *other)
 	unsigned int size=PixelSize(sd);
 
 	D3DLOCKED_RECT lock_rect;	
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect,0,0));
 	unsigned int i;
 	unsigned char *mem=(unsigned char *) lock_rect.pBits;
@@ -375,7 +376,7 @@ void SurfaceClass::Copy(Vector2i &min,Vector2i &max, const unsigned char *other)
 	unsigned int size=PixelSize(sd);
 
 	D3DLOCKED_RECT lock_rect;	
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	RenderRect rect;
 	rect.left=min.I;
 	rect.right=max.I;
@@ -426,7 +427,7 @@ unsigned char *SurfaceClass::CreateCopy(int *width,int *height,int*size,bool fli
 	unsigned char *other=W3DNEWARRAY unsigned char [sd.Height*sd.Width*mysize];
 
 	D3DLOCKED_RECT lock_rect;	
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect,0,D3DLOCK_READONLY));
 	unsigned int i;
 	unsigned char *mem=(unsigned char *) lock_rect.pBits;
@@ -585,9 +586,9 @@ void SurfaceClass::FindBB(Vector2i *min,Vector2i*max)
 	}
 
 	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	RenderRect rect;
-	::ZeroMemory(&rect, sizeof(RenderRect));
+	memset(&rect,0, sizeof(RenderRect));
 
 	rect.bottom=max->J;
 	rect.top=min->J;
@@ -606,7 +607,7 @@ void SurfaceClass::FindBB(Vector2i *min,Vector2i*max)
 		for (x = min->I; x < max->I; x++) {
 
 			// HY - this is not endian safe
-			unsigned char *alpha=(unsigned char*) ((unsigned int)lock_rect.pBits+(y-min->J)*lock_rect.Pitch+(x-min->I)*size);
+			unsigned char *alpha=(unsigned char*)lock_rect.pBits+(y-min->J)*lock_rect.Pitch+(x-min->I)*size;	// was through an unsigned int, which truncates a 64-bit pointer
 			unsigned char myalpha=alpha[size-1];
 			myalpha=(myalpha>>(8-alphabits)) & mask;
 			if (myalpha) {
@@ -663,9 +664,9 @@ bool SurfaceClass::Is_Transparent_Column(unsigned int column)
 	unsigned int size=PixelSize(sd);
 
 	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	RenderRect rect;
-	::ZeroMemory(&rect, sizeof(RenderRect));
+	memset(&rect,0, sizeof(RenderRect));
 
 	rect.bottom=sd.Height;
 	rect.top=0;
@@ -680,7 +681,7 @@ bool SurfaceClass::Is_Transparent_Column(unsigned int column)
 	for (y = 0; y < (int) sd.Height; y++)
 	{
 		// HY - this is not endian safe
-		unsigned char *alpha=(unsigned char*) ((unsigned int)lock_rect.pBits+y*lock_rect.Pitch);		
+		unsigned char *alpha=(unsigned char*)lock_rect.pBits+y*lock_rect.Pitch;	// was through an unsigned int, which truncates a 64-bit pointer		
 		unsigned char myalpha=alpha[size-1];		
 		myalpha=(myalpha>>(8-alphabits)) & mask;		
 		if (myalpha) {
@@ -717,9 +718,9 @@ void SurfaceClass::Get_Pixel(Vector3 &rgb, int x,int y)
 	y = min(y,(int)sd.Height - 1);
 
 	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	RenderRect rect;
-	::ZeroMemory(&rect, sizeof(RenderRect));
+	memset(&rect,0, sizeof(RenderRect));
 
 	rect.bottom=y+1;
 	rect.top=y;
@@ -813,9 +814,9 @@ void SurfaceClass::DrawPixel(const unsigned int x,const unsigned int y, unsigned
 	unsigned int size=PixelSize(sd);
 
 	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	RenderRect rect;
-	::ZeroMemory(&rect, sizeof(RenderRect));
+	memset(&rect,0, sizeof(RenderRect));
 
 	rect.bottom=y+1;
 	rect.top=y;
@@ -910,9 +911,9 @@ void SurfaceClass::DrawHLine(const unsigned int y,const unsigned int x1, const u
 	unsigned int size=PixelSize(sd);
 
 	D3DLOCKED_RECT lock_rect;
-	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
+	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
 	RenderRect rect;
-	::ZeroMemory(&rect, sizeof(RenderRect));
+	memset(&rect,0, sizeof(RenderRect));
 
 	rect.bottom=y+1;
 	rect.top=y;

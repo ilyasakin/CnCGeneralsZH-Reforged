@@ -43,7 +43,11 @@
 #include "texture.h"
 #include "wwstring.h"
 
+#if defined(_WIN32)
 #include <windows.h>
+#endif
+#include <stdio.h>	// snprintf
+#include <string.h>	// memset, strcpy, strlen
 
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -256,7 +260,7 @@ AggregateDefClass::Find_Subobject
 				
 				// Is this the subobject we were looking for?
 				RenderObjClass *ptemp_obj = parent_model->Get_Sub_Object_On_Bone (subobj_index, bone_index);
-				if (::lstrcmpi (ptemp_obj->Get_Name (), mesh_path[index]) == 0) {
+				if (strcasecmp (ptemp_obj->Get_Name (), mesh_path[index]) == 0) {
 					sub_obj = ptemp_obj;
 				} else {
 					REF_PTR_RELEASE (ptemp_obj);
@@ -353,7 +357,7 @@ AggregateDefClass::Load_Assets (const char *passet_name)
 		::GetCurrentDirectory (sizeof (path), path);
 
 		// Ensure the path is directory delimited
-		if (path[::lstrlen(path)-1] != '\\') {
+		if (path[strlen(path)-1] != '\\') {
 			::lstrcat (path, "\\");
 		}
 
@@ -387,7 +391,7 @@ AggregateDefClass::Initialize (RenderObjClass &base_model)
 	orig_model_name = (orig_model_name == NULL) ? base_model.Get_Name () : orig_model_name;
 
 	// Record information about this base model
-	::lstrcpy (m_Info.BaseModelName, orig_model_name);
+	strcpy (m_Info.BaseModelName, orig_model_name);
 	m_Info.SubobjectCount = 0;
 	m_MiscInfo.OriginalClassID = base_model.Class_ID ();
 	m_MiscInfo.Flags = 0;	
@@ -467,8 +471,8 @@ AggregateDefClass::Build_Subobject_List
 					 (Is_Object_In_List (prototype_name, orig_node_list) == false)) {
 					
 					// Add this subobject to our list
-					::lstrcpy (subobj_info.SubobjectName, prototype_name);
-					::lstrcpy (subobj_info.BoneName, pbone_name);
+					strcpy (subobj_info.SubobjectName, prototype_name);
+					strcpy (subobj_info.BoneName, pbone_name);
 					Add_Subobject (subobj_info);
 					m_Info.SubobjectCount ++;
 
@@ -519,7 +523,7 @@ AggregateDefClass::Is_Object_In_List
 		
 		// Is this the render object we were looking for?
 		if (prender_obj != NULL &&
-		    ::lstrcmpi (prender_obj->Get_Name (), passet_name) == 0) {
+		    strcasecmp (prender_obj->Get_Name (), passet_name) == 0) {
 			retval = true;
 		}
 	}	
@@ -672,8 +676,8 @@ AggregateDefClass::Add_Subobject (const W3dAggregateSubobjectStruct &subobj_info
 {
 	// Create a new structure and copy the contents of the src
 	W3dAggregateSubobjectStruct *pnew_entry = W3DNEW W3dAggregateSubobjectStruct;
-	::lstrcpy (pnew_entry->SubobjectName, subobj_info.SubobjectName);
-	::lstrcpy (pnew_entry->BoneName, subobj_info.BoneName);
+	strcpy (pnew_entry->SubobjectName, subobj_info.SubobjectName);
+	strcpy (pnew_entry->BoneName, subobj_info.BoneName);
 
 	// Add this new entry to the list
 	m_SubobjectList.Add (pnew_entry);
@@ -715,7 +719,7 @@ AggregateDefClass::Save_W3D (ChunkSaveClass &chunk_save)
 	WW3DErrorType ret_val = WW3D_ERROR_SAVE_FAILED;
 
 	// Begin a chunk that identifies an aggregate
-	if (chunk_save.Begin_Chunk (W3D_CHUNK_AGGREGATE) == TRUE) {
+	if (chunk_save.Begin_Chunk (W3D_CHUNK_AGGREGATE) == true) {
 		
 		// Attempt to save the different sections of the aggregate definition
 		if ((Save_Header (chunk_save) == WW3D_ERROR_OK) &&
@@ -746,12 +750,12 @@ AggregateDefClass::Save_Header (ChunkSaveClass &chunk_save)
 	WW3DErrorType ret_val = WW3D_ERROR_SAVE_FAILED;
 
 	// Begin a chunk that identifies the aggregate
-	if (chunk_save.Begin_Chunk (W3D_CHUNK_AGGREGATE_HEADER) == TRUE) {
+	if (chunk_save.Begin_Chunk (W3D_CHUNK_AGGREGATE_HEADER) == true) {
 		
 		// Fill the header structure
 		W3dAggregateHeaderStruct header = { 0 };
 		header.Version = W3D_CURRENT_AGGREGATE_VERSION;
-		::lstrcpyn (header.Name, m_pName, sizeof (header.Name));
+		snprintf (header.Name, sizeof (header.Name), "%s", m_pName);
 		header.Name[sizeof (header.Name) - 1] = 0;
 
 		// Write the header out to the chunk
@@ -780,7 +784,7 @@ AggregateDefClass::Save_Info (ChunkSaveClass &chunk_save)
 	WW3DErrorType ret_val = WW3D_ERROR_SAVE_FAILED;
 
 	// Begin a chunk that identifies the aggregate settings
-	if (chunk_save.Begin_Chunk (W3D_CHUNK_AGGREGATE_INFO) == TRUE) {
+	if (chunk_save.Begin_Chunk (W3D_CHUNK_AGGREGATE_INFO) == true) {
 		
 		// Write the settings structure out to the chunk
 		if (chunk_save.Write (&m_Info, sizeof (m_Info)) == sizeof (m_Info)) {
@@ -843,7 +847,7 @@ AggregateDefClass::Save_Class_Info (ChunkSaveClass &chunk_save)
 	WW3DErrorType ret_val = WW3D_ERROR_SAVE_FAILED;
 
 	// Begin a chunk that identifies the texture replacer header
-	if (chunk_save.Begin_Chunk (W3D_CHUNK_AGGREGATE_CLASS_INFO) == TRUE) {
+	if (chunk_save.Begin_Chunk (W3D_CHUNK_AGGREGATE_CLASS_INFO) == true) {
 		
 		// Write the class information structure out to the chunk
 		if (chunk_save.Write (&m_MiscInfo, sizeof (m_MiscInfo)) == sizeof (m_MiscInfo)) {

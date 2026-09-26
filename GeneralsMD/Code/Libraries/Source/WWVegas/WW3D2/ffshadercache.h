@@ -33,6 +33,7 @@
 #define FFSHADERCACHE_H
 
 #include "ffshader.h"
+#include <d3d9.h>			// IDirect3DDevice9
 
 // The description the device is currently configured for, read back off it.  StageCount is zero
 // when stage 0's colour operation is D3DTOP_DISABLE, which is the device drawing untextured.
