@@ -1611,6 +1611,25 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # P1 step 3: the staged overlay, <build>/overlay - what the app bundle will copy verbatim and what the
+  # harnesses pass with -overlay - and <build>/overlay-dev, the -scenario and -cinema folders that never
+  # ship.  Tools/stage-overlay.sh is the one place the list lives.  Small (10 MB; the art is linked).
+  file(GLOB_RECURSE ZH_OVERLAY_INPUTS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Data/*)
+  add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/overlay.staged
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/stage-overlay.sh ${CMAKE_CURRENT_SOURCE_DIR}/Data
+            ${CMAKE_CURRENT_SOURCE_DIR}/../Run ${CMAKE_BINARY_DIR}/overlay
+    DEPENDS ${ZH_OVERLAY_INPUTS} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/stage-overlay.sh
+    COMMENT "Staging the fork's overlay (P1)" VERBATIM)
+  add_custom_target(zh_overlay ALL DEPENDS ${CMAKE_BINARY_DIR}/overlay.staged)
+  add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/overlay-dev.staged
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/stage-overlay.sh ${CMAKE_CURRENT_SOURCE_DIR}/Data ""
+            ${CMAKE_BINARY_DIR}/overlay-dev --dev
+    DEPENDS ${ZH_OVERLAY_INPUTS} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/stage-overlay.sh
+    COMMENT "Staging the development-only overlay (P1)" VERBATIM)
+  add_custom_target(zh_overlay_dev ALL DEPENDS ${CMAKE_BINARY_DIR}/overlay-dev.staged)
+
   # P1 step 1: the fork's overlay as a read root gives the game what Windows' one folder gives it - the
   # EXE CRC, the INI CRC and the world state agree between the two layouts - with two armed controls.
   add_test(NAME overlay_crc_check
@@ -1622,6 +1641,14 @@ if(ZH_PLATFORM_POSIX)
   # P1 step 2: the roots are read-only - GameEngine::init's INIZH.big delete is refused, the farm and the
   # install are unchanged after a skirmish; -writableRoot in a root with no links does delete; and a run
   # from inside an app bundle logs to the user data's Logs, not into the bundle.
+  # P1 step 3: every path the game can open resolves the same in Windows' one-folder shape and in the
+  # package's root plus -overlay (the staged overlay), path by path, with an archive-order control.
+  add_test(NAME packaging_resolution_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/packaging-resolution-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(packaging_resolution_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(packaging_resolution_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   add_test(NAME root_readonly_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/root-readonly-check.sh --generals $<TARGET_FILE:generals>)
   set_tests_properties(root_readonly_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)

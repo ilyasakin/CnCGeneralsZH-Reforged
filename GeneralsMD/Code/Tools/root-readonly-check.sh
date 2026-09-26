@@ -80,20 +80,8 @@ plant() {
 	fi
 }
 
-stage_overlay() {	# the shipped overlay, as overlay-crc-check.sh stages it
-	local to="$1" item src dst
-	for item in "INI Data/INI" "Patch.str Data/Patch.str" "Scripts Data/Scripts" "Turkish Data/Turkish" \
-			"Install_Final.bmp Install_Final.bmp" "Art/Textures Art/Textures" "Window Window"; do
-		src="$CODE/Data/${item%% *}"; dst="$to/${item#* }"
-		if [ -d "$src" ]; then
-			( cd "$src" && find . -type f ) | while IFS= read -r f; do mkdir -p "$(dirname "$dst/$f")"; cp -- "$src/$f" "$dst/$f"; done
-		elif [ -f "$src" ]; then
-			mkdir -p "$(dirname "$dst")"; cp -- "$src" "$dst"
-		fi
-	done
-	if [ -n "$RUNDIR" ]; then
-		for big in "$RUNDIR"/Reforged*.big; do [ -f "$big" ] && ln -sf "$big" "$to/$(basename "$big")"; done
-	fi
+stage_overlay() {	# stage_overlay <folder>: the shipped overlay, by the zh_overlay target's own script
+	"$CODE/Tools/stage-overlay.sh" "$CODE/Data" "$RUNDIR" "$1"
 }
 
 # snapshot <dir> <out> [hash]: every entry, with a link's target or a file's size and mtime; with

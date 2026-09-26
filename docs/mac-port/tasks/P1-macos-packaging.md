@@ -3,7 +3,7 @@
 - **Milestone:** M5
 - **Depends on:** C1 (file systems), C2 (entry point), V1 (FFmpeg's licence); E1 for the convergence step
 - **Blocks:** anything a player runs; E2's notarisation question
-- **Status:** design approved (2026-09-26); step 1 merged; step 2 on its branch; step 5 (the `.app`) held until the PM says (disk)
+- **Status:** design approved (2026-09-26); steps 1 and 2 merged; step 3 on its branch; step 5 (the `.app`) held until the PM says (disk)
 - **Owner:** -47
 
 ## Why
@@ -349,3 +349,48 @@ install's `Data/INI/INIZH.big` was overwritten with 31 bytes, twice, by the harn
 **What these cannot see.** A raw writer in a library not swept (the audit covered GameEngine,
 GameEngineDevice, Main and WWVegas); a debug build's dumps (not built here); a real signed bundle
 (the hard link stands in for its path, not its signature).
+
+## Step 3: one staged overlay, the resolution proof, E1 on the shipped layout (-47, 2026-09-26)
+
+**One staging script.** `Tools/stage-overlay.sh <Code/Data> <Run> <out> [--dev]` is the only place the
+shipped overlay list lives (the list above, still inferred). It removes `<out>` and writes every file
+into a fresh folder, never through a link. The art archives are linked; the bundle step will copy
+through the links. Its stamp is `<out>.staged`, beside the folder, because a file inside it would be a
+loose file to the game.
+- `zh_overlay` (in ALL) stages `<build>/overlay`, 9.8 MB. That is what the bundle will copy verbatim.
+- `zh_overlay_dev` stages `<build>/overlay-dev` with `Scenarios/` and `Cinema/`, which never ship.
+- `replay-check.sh` (E1), `overlay-crc-check.sh` and `root-readonly-check.sh` all stage through it.
+  A harness that needs the one-folder shape lays the staged overlay over its farm, removing each link
+  before the copy.
+
+**E1 runs the shipped resolution.** `replay-check.sh` no longer copies `Code/Data` into its farm. It
+passes `-overlay <staged>`, the code path the bundle takes, and writes nothing into the farm. It also
+hashes the install before and after its runs. That ends E1's known limit that it ran without the
+fork's `Reforged*.big`: they are in the staged overlay. The seeds' CRCs are unchanged, and
+`replay_check` passes.
+
+**`-dumpFileResolution <file>`** (POSIX, `PosixFileResolutionDump.cpp`, called from
+`SdlGameEngine::init` after `GameEngine::init`, which then exits). For every path the game can open
+(the loose files under its roots, through the union, and every file in the mounted archives) it
+writes:
+- for a loose file: "loose", its size and the FNV-1a hash of its bytes; an archive's own `.big` gets
+  the size only;
+- otherwise: the archive that won the path and the member's size;
+- then the INI and EXE CRCs.
+
+**`packaging_resolution_check`** (`Tools/packaging-resolution-check.sh`, ctest, needs `ZH_GAME_DATA`):
+- W is the install farm with the staged overlay laid over it; P is the install farm plus
+  `-overlay`. Their dumps are identical: 31,667 lines (551 loose paths, 31,114 archived), INI CRC
+  `0x1E635A82`, EXE CRC `0x0D56B480`.
+- The armed control renames the overlay's `ReforgedTextures.big` to `ZReforgedTextures.big`, so it
+  mounts after `TexturesZH.big`. That moves 2,681 paths to another archive. The check requires paths
+  that change archive, not merely a renamed archive, so it sees order.
+- The install is hashed before and after: unchanged.
+- What it does not hash: an archive member's bytes. Both layouts read the same `.big` files, so the
+  winning archive and the member's size are the question, and the bytes follow from them.
+
+**Checks.** Full ctest, 67: all pass except `d3dx_oracle`, which skips as before. The three P1
+harnesses pass on the shared stager, and replay_check passes with `-overlay`.
+
+**What it cannot see.** The bundle itself: step 5 copies the staged folder, and `replay-check.sh
+--app` waits for a bundle. The inferred list: see "What Windows does".
