@@ -290,6 +290,14 @@ inline std::vector<ShaderCase> Shader_Cases()
 		description.Lights[0].Type = FF_LIGHT_DIRECTIONAL;
 		cases.push_back(vertex("vs_extra_lit_no_colour", false, description));
 	}
+	{
+		// A scrolling texture as W3D's mappers set one up: the vertex's own set through a COUNT2
+		// transform whose translation is in _31 and _32 (mapper.cpp).
+		VertexPipelineDescription description = plain_vertex();
+		description.Stages[0].TextureCoordinateIndex = FF_TSS_TCI_PASSTHRU;
+		description.Stages[0].TextureTransformFlags = FF_TTFF_COUNT2;
+		cases.push_back(vertex("vs_extra_passthrough_count2", false, description));
+	}
 
 	// ---- engineshader.cpp: every program, pixel and vertex, bumped where it can be ----
 	for (int program = ENGINE_SHADER_TREES; program <= ENGINE_SHADER_MONOCHROME; ++program) {

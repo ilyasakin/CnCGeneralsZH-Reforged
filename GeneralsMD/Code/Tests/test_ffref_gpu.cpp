@@ -525,7 +525,7 @@ static void scenarios_textures(Harness &h)
 		h.rs(D3DRS_LIGHTING, 0);
 		set_camera(h);
 		h.draw(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1, D3DPT_TRIANGLELIST, grid(3, -2, 2, -2, 2, 3, 6, 0));
-		if (translate) h.check("texture transform, count 2, scrolled", false, "F4: 2D texture translation row");
+		if (translate) h.check("texture transform, count 2, scrolled");
 		else h.check("texture transform, count 2, scale");
 	}
 }

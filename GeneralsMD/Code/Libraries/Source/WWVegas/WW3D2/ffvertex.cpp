@@ -182,6 +182,15 @@ static bool append_texture_coordinates(std::string & body,
 				snprintf(line, sizeof(line),
 					"    float4 generated%u = float4(0.0, 0.0, 0.0, 1.0);\n", stage);
 			}
+			else if ((source.TextureTransformFlags & TEXTURE_TRANSFORM_COUNT_MASK) != FF_TTFF_DISABLE) {
+				// Through a texture transform D3D9 pads a two-element set as (u, v, 1, 0), so the
+				// matrix's third row is the one that translates it ("Texture Coordinate Formats"), and
+				// W3D's scrolling mappers put their scroll there (mapper.cpp: "According to the docs
+				// this should work since its 2D").  Padded (u, v, 0, 1), the scroll read the fourth
+				// row, which is zero, and every scrolling texture stood still.
+				snprintf(line, sizeof(line),
+					"    float4 generated%u = float4(input.TexCoord%u, 1.0, 0.0);\n", stage, set);
+			}
 			else {
 				snprintf(line, sizeof(line),
 					"    float4 generated%u = float4(input.TexCoord%u, 0.0, 1.0);\n", stage, set);
