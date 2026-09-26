@@ -119,6 +119,12 @@ of Metal.
 → A1 A2 A3 B1 B2 B3 B4 B5 B6 E1
 
 **M2 — headless Mac game.** `MacGameEngine` boots, mounts `.big` files, runs a skirmish under
+*First slice REACHED 2026-09-26 (C2, `feature/mac-port-C2-w3d`):* `generals -headless` on macOS arm64,
+rooted at a read-only symlink farm of the install (rule 9), mounted every archive, generated a random
+map, played a two-slot skirmish to 600 frames at 9.5x real time, wrote a replay and exited 0. A second
+run with the same seed gave the same HEADLESS CRC (0x78BEA937). Still open for M2: E1's harness,
+which checks record/playback, and any comparison with a Windows-recorded replay, which needs a Windows
+build (E4).
 `-headless`, and its replay checksum matches the Windows build's on the same seed. Playable by a
 machine, not by a person.
 → C1 C2 C5
@@ -206,8 +212,9 @@ you start. That commit is the lock.
 | D5 | [Texture formats](tasks/D5-texture-formats.md) | M4 | D4 | not started | |
 | D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | D6a merged; D6b (FontCharsClass on FreeType) on its branch | -47 |
 | D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done — merged; the Crusader on Metal and on Vulkan (lavapipe); D3's route taken as decision 4 | -a9 |
-| V1 | [Video playback off Windows](tasks/V1-video-playback.md) | M4 | A1 | not started | |
-| E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | not started | |
+| V1 | [Video playback off Windows](tasks/V1-video-playback.md) | M4 | A1 | done on macOS: the Bink player and FFmpeg 8.1.2 (built from its tarball, static, LGPL) decode all 70 install movies against their headers and a golden; sound through C4's mix; not yet on screen (A3) | -47 |
+| A3b | [FFReference](tasks/A-posix-d3d9-device.md) (the renderer's phase A3b, not the build.sh A3 above) | M4 | A3a | done: FFReference, independent, 29 tests / 280 checks; harness is -a9's | -47 |
+| E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`) and a first Mac baseline; the skirmish AI does not build yet, so the baseline covers a nearly idle match | -18 |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
@@ -235,6 +242,17 @@ Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, 
       when movies play.
     - An INI `ChipsetType` of 6 or more builds shaders on the NULL device (W3DTreeBuffer).
     - W3DRadar is avoided: `-nodevice` takes HeadlessRadar (Win32GameEngine.h:107-114).
+- **Map paths are lowercased whole, user-data prefix included (C2's first headless run, 2026-09-26).**
+  A Linux-constraint item: on macOS it is harmless, because APFS is case-insensitive by default.
+  - **What happens:** the random map's path is built from `TheGlobalData->getPath_UserData()` and then
+    lowercased entirely (RandomMapGenerator.cpp:4867, in `generatedMapPathsFor`), so the log shows
+    `/private/tmp/.../-users-ilyasakin-...`. MapUtil lowercases map directories and names the same way
+    (MapUtil.cpp:432, 533, 626, 724, 922).
+  - **Why it matters:** on a case-sensitive volume (Linux's default, or a case-sensitive APFS), a user
+    data folder with a capital letter in its path gives a map path that does not exist.
+  - **Not yet measured:** whether a run on a case-sensitive volume then fails to load the map or merely
+    fails to cache it. PosixLocalFileSystem's case-insensitive lookup (C1) may or may not cover the
+    prefix.
 
 ### Decisions taken, 2026-09-25
 
@@ -436,6 +454,18 @@ draw. The W3D classes then see a device, exactly as under Windows' `-headless`, 
 Windows mode nobody records replays in; and a hidden SDL window with a GPU device, which contradicts
 "headless needs no display" and waits on D4. Consequence: M2's gate is A1 (W3DDevice links) plus A2
 (CPU-backed resources), with no A3.
+
+**9. The fork's own data is an overlay the game mounts, never something written into the player's
+install (taken 2026-09-26).** On Windows the build copies `Code/Data`'s masters (the fork's INIs,
+`Patch.str`, scripts, textures, windows, the splash) into `Run/`, the game folder, and the game reads
+them from there. The first macOS headless run stopped at the fork's own `FXListReforged.ini` for want
+of that step. Off Windows the player's install is a folder the game must never write to (rule 9's
+reasoning, applied to shipping). Decided: the fork's data ships beside the executable (inside the app
+bundle on macOS, in the package on Linux), and the local file system searches it BEFORE the install
+root. This reproduces Windows' result (the fork's files win over the retail ones) without touching
+the install. Until packaging (M5) implements that search order, E1's harness assembles a symlink farm
+with the overlay copied over it, as C2's first run did. Owner of the implementation: packaging (E2/M5)
+with C1's file system.
 
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 

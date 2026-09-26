@@ -89,7 +89,11 @@
  *       LOCALVIEWER, else R = 2 Nz N - (0,0,1); the page's "world-space z of the vertex normal" is read
  *       as the camera-space normal's z, the formula's other N.  The normal is the one lighting uses.
  *   N15 LOD: lambda = log2(max(|d(uW,vH)/dx|, |d(uW,vH)/dy|)) + MIPMAPLODBIAS, from the exact screen
- *       derivatives (hardware takes 2x2 differences; that freedom is in the envelope, see compare()).
+ *       derivatives.  The pages define no LOD at all ("Texture Filtering with Mipmaps": "Direct3D can
+ *       assess which texture in a mipmap set is the closest resolution"), so this is the nominal only,
+ *       and the envelope allows +-0.6 (Freedoms::lodDelta, F11, 2026-09-26): any footprint norm from
+ *       L-infinity to L1 is within sqrt(2) of this L2 one, +-0.5 in log2, and 2x2 differencing adds
+ *       ~0.1.  Apple's GPU measured +0.10 mean, +0.58 worst on x-stretched footprints (-a9's probe).
  *       lambda <= 0 magnifies.  MIPFILTER NONE uses level MAXMIPLEVEL; POINT the nearest level
  *       (round half up); LINEAR blends floor and floor+1; all clamped to [MAXMIPLEVEL, levels-1].
  *       ANISOTROPIC with MAXANISOTROPY <= 1 filters as LINEAR.  Bump offsets do not enter the LOD.
@@ -311,7 +315,7 @@ struct Freedoms
 	double edgePixels;			///< 1/256: a centre this close to an edge may go either way
 	double pointTieTexels;		///< 1/512: point sampling within this of a texel boundary may go either way
 	double bilinearTexels;		///< 1/128: bilinear weight precision, as a coordinate shift
-	double lodDelta;			///< 0.2: hardware LOD approximation
+	double lodDelta;			///< 0.6: the undocumented LOD, footprint norm and differencing (N15)
 	double alphaRef;			///< 1.5/255: alpha within this of ALPHAREF may go either way
 	double depthTie;			///< 1e-6: depth within this of the buffer may go either way
 	Freedoms();

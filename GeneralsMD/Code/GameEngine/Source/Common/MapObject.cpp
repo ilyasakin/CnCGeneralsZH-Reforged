@@ -26,8 +26,7 @@
 	 every member below is as it was.
 
 	 The render half - setRenderObj, setBridgeRenderObject, getBridgeRenderObject, which hold a
-	 RenderObjClass reference - stays with the renderer: WorldHeightMap.cpp on Windows,
-	 MapObjectRenderPosix.cpp elsewhere.  The class is declared in Common/MapObject.h, unchanged, so
+	 RenderObjClass reference - stays with the renderer, in WorldHeightMap.cpp, on every platform.  The class is declared in Common/MapObject.h, unchanged, so
 	 its layout is what it was: the RenderObjClass pointers are still members, forward-declared. */
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine

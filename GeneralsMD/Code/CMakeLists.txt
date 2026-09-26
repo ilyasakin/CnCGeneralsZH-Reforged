@@ -955,9 +955,6 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 #    DownloadManagerPosix.cpp defines it NULL.  DownloadMenu.cpp itself is built everywhere, because
 #    .wnd files bind its callbacks by name through FunctionLexicon, which must be the same on
 #    every platform.
-#  - MapObjectRenderPosix.cpp: MapObject's three RenderObjClass members.  Windows has them beside the
-#    W3D terrain code in gameenginedevice (WorldHeightMap.cpp); the data half is Common/MapObject.cpp
-#    on both.  B6.
 #  - WWDownloadRegistryPosix.cpp: WWDownload's registry functions and FormatURLFromRegistry over
 #    Registry.ini.  On Windows they come from wwdownload itself.  B6.
 #  - IMEManager.cpp: the IMM32 input method editor (Chinese, Japanese and Korean text entry).  Its
@@ -973,7 +970,6 @@ if(ZH_PLATFORM_WINDOWS)
     ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp
     ${GE}/Source/GameNetwork/DownloadManagerPosix.cpp
     ${GE}/Source/GameClient/GUI/IMEManagerPosix.cpp
-    ${GE}/Source/Common/MapObjectRenderPosix.cpp
     ${GE}/Source/Common/System/WWDownloadRegistryPosix.cpp)
 else()
   list(REMOVE_ITEM GAMEENGINE_SOURCES
@@ -1166,21 +1162,6 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(posixdevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
   set_target_properties(posixdevice PROPERTIES CXX_STANDARD 17)
   target_link_libraries(posixdevice PUBLIC gameengine)
-  # PosixRenderHooks.cpp on its own, ahead of gameengine linking: decision 2 (B19 (c)) lives in its
-  # testMinimumRequirements, checked against the shipped GameLODPresets.ini when ZH_GAME_DATA is set.
-  # See Tests/test_posix_render_hooks.cpp.
-  add_executable(posix_render_hooks_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_render_hooks.cpp
-                 ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/GameClient/PosixRenderHooks.cpp)
-  target_include_directories(posix_render_hooks_selfcheck PRIVATE
-    $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
-    ${LIBSRC}/Benchmark)
-  target_compile_definitions(posix_render_hooks_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
-  set_target_properties(posix_render_hooks_selfcheck PROPERTIES CXX_STANDARD 17)
-  target_link_libraries(posix_render_hooks_selfcheck PRIVATE wwlib wwdebug benchmark)
-  add_test(NAME posix_render_hooks_selfcheck COMMAND posix_render_hooks_selfcheck)
-  if(ZH_GAME_DATA)
-    set_tests_properties(posix_render_hooks_selfcheck PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
-  endif()
 endif()
 
 # ===========================================================================
@@ -1306,12 +1287,48 @@ if(ZH_PLATFORM_POSIX)
   # W3DWebBrowser is the embedded browser as a COM object, which only Win32GameEngine makes; GameEngine
   # has its own WebBrowser off Windows (B5).
   list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DWebBrowser\\.cpp$")
+
+  # ---- the movies (V1): Windows' Bink player and its Bink API on FFmpeg, the same two files -------------
+  # FFmpeg is built from the tarball Tools/vendor.sh keeps, into the build tree, with the Bink demuxer
+  # and decoders only; the script deletes its 110MB of unpacked source afterwards (it says why).  It
+  # reruns when the tarball or the script changes, and takes ~30s.
+  set(FFMPEG_TARBALL ${LIBSRC}/FFmpeg/ffmpeg-8.1.2.tar.xz)
+  if(NOT EXISTS ${FFMPEG_TARBALL})
+    message(FATAL_ERROR "The FFmpeg source tarball is missing from Libraries/Source/FFmpeg - run Tools/vendor.sh.")
+  endif()
+  set(FFMPEG_POSIX ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg)
+  # Link order: each before what it uses
+  set(FFMPEG_POSIX_LIBS ${FFMPEG_POSIX}/lib/libavformat.a ${FFMPEG_POSIX}/lib/libavcodec.a
+    ${FFMPEG_POSIX}/lib/libswscale.a ${FFMPEG_POSIX}/lib/libswresample.a ${FFMPEG_POSIX}/lib/libavutil.a)
+  set(FFMPEG_POSIX_CFLAGS "")
+  if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(FFMPEG_POSIX_CFLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  endif()
+  add_custom_command(
+    OUTPUT ${FFMPEG_POSIX_LIBS} ${FFMPEG_POSIX}/include/libavcodec/avcodec.h
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh ${FFMPEG_TARBALL}
+            ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-work ${FFMPEG_POSIX} ${CMAKE_C_COMPILER} "${FFMPEG_POSIX_CFLAGS}"
+    DEPENDS ${FFMPEG_TARBALL} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh
+    COMMENT "Building FFmpeg 8.1.2's Bink decoders for the movies (V1)"
+    VERBATIM)
+  add_custom_target(ffmpeg_posix DEPENDS ${FFMPEG_POSIX_LIBS} ${FFMPEG_POSIX}/include/libavcodec/avcodec.h)
+
+  # bink_ffmpeg.cpp: the XAudio2 half is Windows'; off Windows the sound is a voice in C4's mix
+  # (miles_miniaudio's mss_ex_pcm.h), so this links milesaudio where Windows links xaudio2.
+  add_library(binkvideo STATIC ${WW}/Bink/ffmpeg/bink_ffmpeg.cpp)
+  add_dependencies(binkvideo ffmpeg_posix)
+  target_include_directories(binkvideo PUBLIC ${WW}/Bink/include
+    PRIVATE ${FFMPEG_POSIX}/include ${WW}/Miles6/include ${WW}/WWLib)
+  target_link_libraries(binkvideo PRIVATE ${FFMPEG_POSIX_LIBS} milesaudio wwlib m Threads::Threads)
+
+  # BinkVideoPlayer.cpp, unchanged: W3DGameClient makes it on every platform, so it lives with w3ddevice
+  list(APPEND W3DDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/VideoDevice/Bink/BinkVideoPlayer.cpp)
   add_library(w3ddevice STATIC ${W3DDEVICE_SOURCES})
   set_target_properties(w3ddevice PROPERTIES CXX_STANDARD 17)
   target_include_directories(w3ddevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs ${CMAKE_CURRENT_SOURCE_DIR}/Main
             ${WW}/Miles6/include ${WW}/Bink/include)
-  target_link_libraries(w3ddevice PUBLIC gameengine ww3d2 sdlinput)
+  target_link_libraries(w3ddevice PUBLIC gameengine ww3d2 sdlinput binkvideo)
 
   # A1's link checkpoint: all of w3ddevice and ww3d2, whole archive, against what the POSIX game links.
   add_executable(w3d_link_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_link_probe.cpp)
@@ -1329,6 +1346,17 @@ if(ZH_PLATFORM_POSIX)
   set_tests_properties(test_install_textures PROPERTIES SKIP_RETURN_CODE 77)
   if(ZH_GAME_DATA)
     set_tests_properties(test_install_textures PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+
+  # The renderer's hooks gameengine calls, W3DDevice's own off Windows as on it, and decision 2 (B19 (c))
+  # in W3DShaderManager's testMinimumRequirements, checked against the shipped GameLODPresets.ini when
+  # ZH_GAME_DATA is set.  See Tests/test_render_hooks.cpp.
+  add_executable(test_render_hooks ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_render_hooks.cpp)
+  set_target_properties(test_render_hooks PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_render_hooks PRIVATE w3ddevice ww3d2 posixdevice gameengine)
+  add_test(NAME test_render_hooks COMMAND test_render_hooks)
+  if(ZH_GAME_DATA)
+    set_tests_properties(test_render_hooks PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
 endif()
 
@@ -1498,8 +1526,8 @@ endif()  # ZH_PLATFORM_WINDOWS - GameEngineDevice, the backends and generals.exe
 # The game off Windows (C2): SdlDevice and the POSIX entry point
 # ===========================================================================
 # SdlGameEngine is PosixGameEngine (C1) with SDL3's window and events under it; Main/PosixMain.cpp is
-# WinMain's start-up sequence without the Windows.  Until T1 and D4 the engine stops at the first
-# factory only a renderer can answer, and says so (SdlGameEngine.h).
+# WinMain's start-up sequence without the Windows.  Its factories are Win32GameEngine's W3D classes
+# (decision 8), so sdldevice takes w3ddevice as gameenginedevice holds W3DDevice on Windows.
 if(ZH_PLATFORM_POSIX)
   # Windows' audio manager, unchanged but for its guarded non-AIL remainder, over the Miles surface on
   # miniaudio (C4's upper half): gameenginedevice's audio half, as A1's w3ddevice is its renderer half.
@@ -1525,7 +1553,7 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(sdldevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
-  target_link_libraries(sdldevice PUBLIC posixdevice SDL3::SDL3-static milesaudiomanager sdlinput)
+  target_link_libraries(sdldevice PUBLIC posixdevice w3ddevice SDL3::SDL3-static milesaudiomanager sdlinput)
 
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
@@ -1575,6 +1603,14 @@ if(ZH_PLATFORM_POSIX)
   # The entry sequence without game data: see the script.
   add_test(NAME generals_smoke
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_generals_smoke.sh $<TARGET_FILE:generals>)
+  # E1's POSIX harness on itself, with the game's data: a recording, its playback and a second run agree,
+  # and an edited replay is reported DIVERGED.  Same-machine determinism only: see the script.
+  add_test(NAME replay_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_replay_check.sh $<TARGET_FILE:generals>)
+  set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
 endif()
 
 # ===========================================================================
@@ -1716,10 +1752,10 @@ target_compile_definitions(test_terrain_golden PRIVATE
 set_target_properties(test_terrain_golden PROPERTIES CXX_STANDARD 17)
 set_tests_properties(test_terrain_golden PROPERTIES SKIP_RETURN_CODE 77)
 # test_gameengine's stubs: the exe's names everywhere, and on Windows the device layer's stand-ins,
-# which off Windows PosixDevice has for real.
+# which off Windows PosixDevice (the CD manager) and W3DDevice (the renderer's hooks) have for real.
 target_sources(test_terrain_golden PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
 if(ZH_PLATFORM_POSIX)
-  target_link_libraries(test_terrain_golden PRIVATE posixdevice)
+  target_link_libraries(test_terrain_golden PRIVATE posixdevice w3ddevice)
 endif()
 if(ZH_GAME_DATA)
   set_tests_properties(test_terrain_golden PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
@@ -1730,12 +1766,13 @@ add_lib_test(test_water_grid gameengine)
 target_sources(test_water_grid PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
 set_target_properties(test_water_grid PROPERTIES CXX_STANDARD 17)
 if(ZH_PLATFORM_POSIX)
-  target_link_libraries(test_water_grid PRIVATE posixdevice)
+  target_link_libraries(test_water_grid PRIVATE posixdevice w3ddevice)
 endif()
-# Off Windows the device layer's hooks (render stand-ins, the CD manager) are PosixDevice's, where on
-# Windows the test's own stubs stand in for gameenginedevice, which it does not link (B6).
+# Off Windows the device layer's hooks are the game's own: the renderer's from W3DDevice, the CD
+# manager from PosixDevice.  On Windows the test's own stubs stand in for gameenginedevice, which it
+# does not link (B6).
 if(ZH_PLATFORM_POSIX)
-  target_link_libraries(test_gameengine PRIVATE posixdevice)
+  target_link_libraries(test_gameengine PRIVATE posixdevice w3ddevice)
 endif()
 # the well-known Dict keys and a handful of device/exe entry points live in
 # GameEngineDevice, which Phase 4 ports; stand-ins until then.
@@ -1991,6 +2028,17 @@ target_link_libraries(ffshader_dump PRIVATE ffvertex engineshader)
 add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp)
 target_include_directories(ffreference PUBLIC ${TESTS})
 add_lib_test(test_ffreference ffreference)
+
+# V1's check: every movie of the install through the Bink API, against its header and a golden
+# middle frame, and one movie's sound through C4's mix on the null backend.  Needs ZH_GAME_DATA.
+add_lib_test(test_binkvideo binkvideo milesaudio)
+target_include_directories(test_binkvideo PRIVATE ${WW}/Miles6/include ${TESTS})
+set_tests_properties(test_binkvideo PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
+if(ZH_GAME_DATA)
+  set_tests_properties(test_binkvideo PROPERTIES ENVIRONMENT "ZH_AUDIO_BACKEND=null;ZH_DATA_DIR=${ZH_GAME_DATA}")
+else()
+  set_tests_properties(test_binkvideo PROPERTIES ENVIRONMENT "ZH_AUDIO_BACKEND=null")
+endif()
 endif()  # ZH_PLATFORM_POSIX - shader generator checks
 
 # Tools/bigfile.py reads and writes the game's BIG archives (that is how the shipped INIs

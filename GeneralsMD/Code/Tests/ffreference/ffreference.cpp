@@ -801,23 +801,40 @@ void rasterTriangle( Raster &r, Triangle t )
 			ShadeOut nominalOut;
 			Perturb p0 = { 0, 0, 0 };
 			const Color src = shade( ctx, in, p0, nominalOut );
-			static const Perturb variants[6] = {
-				{ 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 1 }, { 0, -1, -1 }, { 0, 1, -1 }, { 0, -1, 1 } };
-			Color others[6];
-			int otherCount = 0;
+			// The freedoms' variants (compare()'s envelope): the LOD at the window's ends and on both sides
+			// of every integer level inside it, since trilinear colour is piecewise linear in lambda with
+			// breakpoints at the integers and a level's colour need not be monotonic (N15, F11), and
+			// the magnify/minify switch at 0 is a step; each LOD alone and with each diagonal texel
+			// shift, because hardware has both freedoms at once.
+			std::vector<double> lodOffsets;
+			lodOffsets.push_back( 0.0 );
+			lodOffsets.push_back( -fr.lodDelta );
+			lodOffsets.push_back( fr.lodDelta );
+			for (int st = 0; st < MAX_STAGES; ++st)
+				if (nominalOut.sampled[st])
+					for (double k = ceil( nominalOut.lod[st] - fr.lodDelta ); k <= nominalOut.lod[st] + fr.lodDelta; k += 1.0)
+					{
+						lodOffsets.push_back( k - nominalOut.lod[st] - 1e-6 );
+						lodOffsets.push_back( k - nominalOut.lod[st] );
+						lodOffsets.push_back( k - nominalOut.lod[st] + 1e-6 );
+					}
+			static const double shifts[5][2] = { { 0, 0 }, { 1, 1 }, { -1, -1 }, { 1, -1 }, { -1, 1 } };
+			std::vector<Color> others;
 			unsigned zones = ambiguous ? ZONE_EDGE : 0;
-			for (int k = 0; k < 6; ++k)
-			{
-				Perturb p = variants[k];
-				p.lod *= fr.lodDelta;
-				ShadeOut o;
-				const Color c = shade( ctx, in, p, o );
-				if (differs( c, src ))
+			for (size_t l = 0; l < lodOffsets.size(); ++l)
+				for (int t = 0; t < 5; ++t)
 				{
-					zones |= k < 2 ? ZONE_LOD : ZONE_TEXEL;
-					others[otherCount++] = c;
+					if (l == 0 && t == 0)
+						continue;		// the nominal itself
+					const Perturb p = { lodOffsets[l], shifts[t][0], shifts[t][1] };
+					ShadeOut o;
+					const Color c = shade( ctx, in, p, o );
+					if (differs( c, src ))
+					{
+						zones |= (l != 0 ? ZONE_LOD : 0) | (t != 0 ? ZONE_TEXEL : 0);
+						others.push_back( c );
+					}
 				}
-			}
 			for (int st = 0; st < MAX_STAGES; ++st)
 				if (inside && nominalOut.sampled[st] && s.stageState[st][TSS_COLOROP] != TOP_DISABLE)
 				{
@@ -828,10 +845,10 @@ void rasterTriangle( Raster &r, Triangle t )
 			// Alpha test, nominal and possible
 			const bool alphaNominal = alphaPasses( rs, src.a );
 			bool alphaCanPass = alphaNominal, alphaCanFail = !alphaNominal;
-			const Color *all[7] = { &src };
-			int allCount = 1;
-			for (int k = 0; k < otherCount; ++k)
-				all[allCount++] = &others[k];
+			std::vector<const Color *> all( 1, &src );
+			for (size_t k = 0; k < others.size(); ++k)
+				all.push_back( &others[k] );
+			const int allCount = (int)all.size();
 			for (int k = 0; k < allCount; ++k)
 				for (int d = -1; d <= 1; ++d)
 				{
@@ -1237,7 +1254,7 @@ void Target::clear( Color c, double z, uint32_t s )
 
 Freedoms::Freedoms()
 	: edgePixels( 1.0 / 256.0 ), pointTieTexels( 1.0 / 512.0 ), bilinearTexels( 1.0 / 128.0 ),
-	  lodDelta( 0.2 ), alphaRef( 1.5 / 255.0 ), depthTie( 1e-6 )
+	  lodDelta( 0.6 ), alphaRef( 1.5 / 255.0 ), depthTie( 1e-6 )
 {
 }
 
