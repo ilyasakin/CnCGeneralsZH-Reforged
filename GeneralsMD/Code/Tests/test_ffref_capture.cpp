@@ -41,6 +41,7 @@
 // checked against the clear, and it may draw nothing.  Those draws are counted as "drew nothing".
 
 #include "DrawCapture.h"
+#include "Platform/EngineShaderName.h"
 #include "PosixDevice9.h"
 #include "PosixResources9.h"
 #include "SdlGpuFrame.h"
@@ -325,6 +326,10 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	}
 	DrawCaptureHeader header;
 	memcpy(&header, &bytes[0], sizeof(header));
+	if (memcmp(header.Magic, "ZHDC", 4) == 0 && header.Version == DRAW_CAPTURE_VERSION_PROGRAMMABLE) {
+		not_replayed_because(file, "a programmable draw (version 2): -47's vs_1_1/ps_1_1 interpreter replays it");
+		return;
+	}
 	if (memcmp(header.Magic, "ZHDC", 4) != 0 || header.Version != DRAW_CAPTURE_VERSION) {
 		not_replayed_because(file, "not a capture of this version");
 		return;
@@ -639,6 +644,11 @@ static void summary(size_t captures)
 
 static const int ROUND_TRIP_SIZE = 64;
 
+/// A pixel shader's tokens for the programmable round-trip draw: the device keeps them and never runs
+/// them (A3e), so any well-formed stream will do; this one is ps_1_1's version token, a comment, and the
+/// end token.
+static const RenderUInt32 ROUND_TRIP_PIXEL_TOKENS[] = { 0xFFFF0101, 0x0002FFFE, 0x12345678, 0x9ABCDEF0, 0x0000FFFF };
+
 static D3DMATRIX identity()
 {
 	D3DMATRIX m;
@@ -819,9 +829,88 @@ static void draw_round_trip(PosixDevice9 *device, std::vector<std::vector<uint8_
 	device->SetStreamSource(0, NULL, 0, 0);
 	vertex_buffer->Release();
 
+	// 4: a programmable draw, the pixel half one of the engine's (A3e): a pixel shader made from a token
+	// stream and registered as the river water, with the constant banks set to known values.  Capture
+	// version 2 writes its programs beside it (checked by check_programs).
 	device->SetTexture(0, NULL);
+	device->SetRenderState(D3DRS_ALPHABLENDENABLE, 0);
+	IDirect3DPixelShader9 *river = NULL;
+	device->CreatePixelShader(ROUND_TRIP_PIXEL_TOKENS, &river);
+	PosixDevice_Name_Shader(river, "river water ps.1.1");
+	for (unsigned i = 0; i < 96; ++i) {
+		const float value[4] = { (float)i, 0.5f, -1.0f, 2.0f };
+		device->SetVertexShaderConstantF(i, value, 1);
+	}
+	for (unsigned i = 0; i < 8; ++i) {
+		const float value[4] = { 0.25f * i, -0.5f, 1.0f, (float)(i * i) };
+		device->SetPixelShaderConstantF(i, value, 1);
+	}
+	device->SetPixelShader(river);
+	device->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, CLEAR, 1.0f, 0);
+	device->SetFVF(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1);
+	device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 2, quad, sizeof(Screen));
+	pictures.push_back(picture_of(device));
+	device->SetPixelShader(NULL);
+	river->Release();
+
 	gradient->Release();
 	blocks->Release();
+}
+
+/// The version 2 capture's programs file, field by field, against what draw 4 set.
+static void check_programs(const std::string &path)
+{
+	std::vector<uint8_t> bytes;
+	if (!read_file(path, bytes)) {
+		++failures;
+		printf("FAIL %s: no programs file\n", path.c_str());
+		return;
+	}
+	size_t at = 0;
+	bool ok = true;
+	struct In
+	{
+		static uint32_t u32(const std::vector<uint8_t> &b, size_t &at, bool &ok)
+		{
+			uint32_t v = 0;
+			if (at + 4 > b.size()) { ok = false; return 0; }
+			memcpy(&v, &b[at], 4);
+			at += 4;
+			return v;
+		}
+	};
+	ok = ok && bytes.size() >= 4 && memcmp(&bytes[0], "ZHPG", 4) == 0;
+	at = 4;
+	ok = ok && In::u32(bytes, at, ok) == 1;
+	ok = ok && In::u32(bytes, at, ok) == 0;					// no vertex shader
+	ok = ok && In::u32(bytes, at, ok) == 0;					// no declaration
+	ok = ok && In::u32(bytes, at, ok) == 1;					// the pixel shader
+	ok = ok && at + DRAW_CAPTURE_PROGRAM_NAME <= bytes.size()
+		&& strcmp((const char *)&bytes[at], "river water ps.1.1") == 0;
+	at += DRAW_CAPTURE_PROGRAM_NAME;
+	const uint32_t tokens = In::u32(bytes, at, ok);
+	const size_t expected_tokens = sizeof(ROUND_TRIP_PIXEL_TOKENS) / sizeof(ROUND_TRIP_PIXEL_TOKENS[0]);
+	ok = ok && tokens == expected_tokens && at + tokens * 4 <= bytes.size()
+		&& memcmp(&bytes[at], ROUND_TRIP_PIXEL_TOKENS, tokens * 4) == 0;
+	at += (size_t)tokens * 4;
+	ok = ok && at + (96 + 8) * 16 == bytes.size();
+	for (unsigned i = 0; ok && i < 96; ++i) {
+		float v[4];
+		memcpy(v, &bytes[at + i * 16], 16);
+		ok = v[0] == (float)i && v[1] == 0.5f && v[2] == -1.0f && v[3] == 2.0f;
+	}
+	for (unsigned i = 0; ok && i < 8; ++i) {
+		float v[4];
+		memcpy(v, &bytes[at + 96 * 16 + i * 16], 16);
+		ok = v[0] == 0.25f * i && v[1] == -0.5f && v[2] == 1.0f && v[3] == (float)(i * i);
+	}
+	if (!ok) {
+		++failures;
+		printf("FAIL %s: the programs file is not what the draw set\n", path.c_str());
+	}
+	else {
+		printf("ok   %s: the programs, tokens and constants as the draw set them\n", path.c_str());
+	}
 }
 
 static int round_trip()
@@ -839,7 +928,10 @@ static int round_trip()
 	if (DIR *listing = opendir(directory.c_str())) {
 		while (struct dirent *entry = readdir(listing)) {
 			const std::string name = entry->d_name;
-			if (name.size() > 4 && (name.compare(name.size() - 4, 4, ".cap") == 0 || name.compare(name.size() - 4, 4, ".tex") == 0)) {
+			const bool capture = name.size() > 4 && (name.compare(name.size() - 4, 4, ".cap") == 0
+				|| name.compare(name.size() - 4, 4, ".tex") == 0);
+			const bool programs = name.size() > 5 && name.compare(name.size() - 5, 5, ".prog") == 0;
+			if (capture || programs) {
 				remove((directory + "/" + name).c_str());
 			}
 		}
@@ -855,6 +947,11 @@ static int round_trip()
 	}
 	std::vector<std::vector<uint8_t> > drawn;
 	draw_round_trip(original.Device, drawn);
+	const std::map<std::string, unsigned int> &refused = original.Device->Draw_Refusals();
+	for (std::map<std::string, unsigned int>::const_iterator r = refused.begin(); r != refused.end(); ++r) {
+		++failures;
+		printf("FAIL the round trip's own device refused %u draws: %s\n", r->second, r->first.c_str());
+	}
 	original.Device->Release();		// before the replay's device: one table of GPU copies at a time
 	original.D3D->Release();
 
@@ -865,8 +962,11 @@ static int round_trip()
 	}
 	std::map<std::string, std::vector<uint8_t> > replayed;
 	replay_all(directory, files, &replayed);
+	// The last draw is the programmable one: version 2, not replayed here, and its programs file checked.
+	const size_t fixed_function = files.size() - 1;
+	check_programs(directory + "/" + files[fixed_function].substr(0, files[fixed_function].size() - 4) + ".prog");
 	// The replay is the draw: the same device on the same state and bytes draws the same picture.
-	for (size_t i = 0; i < files.size(); ++i) {
+	for (size_t i = 0; i < fixed_function; ++i) {
 		const std::vector<uint8_t> &before = drawn[i], &after = replayed[files[i]];
 		size_t differ = 0;
 		if (before.empty() || before.size() != after.size()) {
@@ -885,10 +985,10 @@ static int round_trip()
 			printf("ok   %s: the replay's picture is the draw's\n", files[i].c_str());
 		}
 	}
-	if (compared != (int)files.size() || drew_nothing != 0) {
+	if (compared != (int)fixed_function || drew_nothing != 0) {
 		++failures;
-		printf("FAIL every round-trip capture must be compared and draw: %d of %zu compared, %d drew nothing\n", compared,
-			files.size(), drew_nothing);
+		printf("FAIL every fixed-function round-trip capture must be compared and draw: %d of %zu compared, %d drew nothing\n",
+			compared, fixed_function, drew_nothing);
 	}
 	// The armed control: the first capture against a reference with D3D10's pixel centres must fail.
 	Replayer armed;

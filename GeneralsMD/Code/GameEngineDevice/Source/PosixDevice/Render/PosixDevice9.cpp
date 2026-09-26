@@ -58,6 +58,7 @@ class PosixShaderName
 {
 public:
 	std::string EngineName;
+	std::vector<RenderUInt32> Tokens;	///< as CreateVertexShader or CreatePixelShader received them, end token included
 };
 
 /// The shaders alive, by the interface pointer the engine holds, so a registration can find the object
@@ -75,7 +76,7 @@ public:
 	{
 		const RenderUInt32 END_TOKEN = 0x0000FFFF;
 		do {
-			Tokens.push_back(*function);
+			this->Tokens.push_back(*function);
 		} while (*function++ != END_TOKEN);
 		std::lock_guard<std::mutex> hold(LiveShadersLock);
 		LiveShaders[static_cast<Interface *>(this)] = this;
@@ -85,7 +86,6 @@ public:
 		std::lock_guard<std::mutex> hold(LiveShadersLock);
 		LiveShaders.erase(static_cast<Interface *>(this));
 	}
-	std::vector<RenderUInt32> Tokens;
 };
 
 class PosixVertexDeclaration9 : public PosixRefCounted<IDirect3DVertexDeclaration9>
@@ -124,6 +124,7 @@ PosixDevice9::PosixDevice9(PosixDirect3D9 *adapter, RenderWindow window, const D
 	InScene(false),
 	Indices(NULL),
 	Declaration(NULL),
+	DeclarationIsCurrent(false),
 	FVF(0),
 	VertexShader(NULL),
 	PixelShader(NULL)
@@ -778,12 +779,14 @@ RenderResult PosixDevice9::CreateVertexDeclaration(const D3DVERTEXELEMENT9 *elem
 RenderResult PosixDevice9::SetVertexDeclaration(IDirect3DVertexDeclaration9 *declaration)
 {
 	Posix_Bind(Declaration, declaration);
+	DeclarationIsCurrent = declaration != NULL;
 	return D3D_OK;
 }
 
 RenderResult PosixDevice9::SetFVF(RenderUInt32 fvf)
 {
 	FVF = fvf;
+	DeclarationIsCurrent = false;
 	return D3D_OK;
 }
 
@@ -793,6 +796,26 @@ void PosixDevice_Name_Shader(const void *shader, const char *name)
 	std::map<const void *, PosixShaderName *>::iterator found = LiveShaders.find(shader);
 	if (found != LiveShaders.end() && name != NULL) {
 		found->second->EngineName = name;
+	}
+}
+
+bool PosixDevice9::Shader_Tokens_Of(const void *shader, std::vector<RenderUInt32> &tokens)
+{
+	std::lock_guard<std::mutex> hold(LiveShadersLock);
+	std::map<const void *, PosixShaderName *>::const_iterator found = LiveShaders.find(shader);
+	if (found == LiveShaders.end()) {
+		return false;
+	}
+	tokens = found->second->Tokens;
+	return true;
+}
+
+void PosixDevice9::Declaration_Elements_Of(IDirect3DVertexDeclaration9 *declaration, std::vector<D3DVERTEXELEMENT9> &elements)
+{
+	elements.clear();
+	if (declaration != NULL) {
+		const std::vector<D3DVERTEXELEMENT9> &all = static_cast<PosixVertexDeclaration9 *>(declaration)->Elements;
+		elements.assign(all.begin(), all.end() - 1);	// without D3DDECL_END
 	}
 }
 
