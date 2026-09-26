@@ -439,6 +439,11 @@ Decided (PM, decision 4 of the B5 review): `CopyFile`, `CreateDirectory`, the cu
 `doesFileExist` two lines before its `CopyFile`). B5 does not wrap them one by one. **These sites
 are left failing on purpose**, and this list is C1's starting worklist.
 
+**Done by C1 (c), 2026-09-26.** Every live site below goes through `TheLocalFileSystem` now: see
+C1's task file, "PR (c)". Two notes. `Directory.cpp` turned out to be whole-file `#if (0)`, so it
+needed nothing. `ReplayMenu.cpp`'s Desktop lookup (`SHGetSpecialFolderLocation`, beside its
+`CopyFile`) is C1 (e)'s.
+
 How it was made: every `GameEngine` file naming one of those functions, then each file's POSIX view
 through `Tools/windows_view_diff.py`'s own `view()` (Windows macros unset, `__APPLE__` set), so a
 site already inside `#ifdef _WIN32` is not listed. 13 files matched and 11 have live sites. Not
