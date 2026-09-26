@@ -100,11 +100,11 @@ protected:
 		TextureClass	*waterTexture;
 		Int				waterRepeatCount;
 		Int				skyRepeatCount;
-		DWORD			vertex00Diffuse;		
-		DWORD			vertex10Diffuse;		
-		DWORD			vertex11Diffuse;		
-		DWORD			vertex01Diffuse;
-		DWORD			waterDiffuse;
+		UnsignedInt			vertex00Diffuse;		
+		UnsignedInt			vertex10Diffuse;		
+		UnsignedInt			vertex11Diffuse;		
+		UnsignedInt			vertex01Diffuse;
+		UnsignedInt			waterDiffuse;
 		Real			uScrollPerMs;		
 		Real			vScrollPerMs;
 	};

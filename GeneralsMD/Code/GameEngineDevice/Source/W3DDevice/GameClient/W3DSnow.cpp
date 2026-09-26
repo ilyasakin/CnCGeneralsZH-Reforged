@@ -25,6 +25,7 @@
 #include "WW3D2/rinfo.h"
 #include "WW3D2/camera.h"
 #include "WW3D2/assetmgr.h"
+#include "Platform/RenderTypes.h"
 
 
 #ifdef _INTERNAL
@@ -105,7 +106,7 @@ Bool W3DSnowManager::ReAcquireResources(void)
 		if (m_VertexBufferD3D == NULL)
 		{	// Create vertex buffer
 
-			if (FAILED(m_pDev->CreateVertexBuffer
+			if (Render_Failed(m_pDev->CreateVertexBuffer
 			(
 				SNOW_BUFFER_SIZE*sizeof(POINTVERTEX),
 				D3DUSAGE_WRITEONLY|D3DUSAGE_DYNAMIC|D3DUSAGE_POINTS, 
@@ -189,7 +190,7 @@ void W3DSnowManager::update(void)
 #define MODPOW2(x,y) ((x) & (y-1))		//mod '%' operator for powers of 2.
 
 // Helper function to stuff a FLOAT into a DWORD argument
-inline DWORD FtoDW( FLOAT f ) { return *((DWORD*)&f); }
+inline UnsignedInt FtoDW( float f ) { return *((UnsignedInt*)&f); }
 
 /*Recursively subdivide the large snow box enclosing the camera until we reach some predefined leaf size.  This
 method is used so that very few off-screen particles end up getting rendered.  Culling them individually would

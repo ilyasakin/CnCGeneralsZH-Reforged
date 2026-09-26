@@ -191,7 +191,7 @@ void W3DShroud::init(WorldHeightMap *pMap, Real worldCellSizeX, Real worldCellSi
 	D3DLOCKED_RECT rect;
 
 	//Get a pointer to source surface pixels.
-	HRESULT res = m_pSrcTexture->LockRect(&rect,NULL,D3DLOCK_NO_DIRTY_UPDATE);
+	RenderResult res = m_pSrcTexture->LockRect(&rect,NULL,D3DLOCK_NO_DIRTY_UPDATE);
 	m_pSrcTexture->UnlockRect();
 
 	DEBUG_ASSERTCRASH( res == D3D_OK, ("Failed to lock shroud src surface"));
@@ -488,7 +488,7 @@ void W3DShroud::fillBorderShroudData(W3DShroudLevel level, SurfaceClass* pDestSu
 
 	//Fill destination texture with border color
 
-	RECT	srcRect;
+	RenderRect	srcRect;
 
 	//create a rectangle enclosing bottom row of unused pixels long enough
 	//to cover destination width.
@@ -497,7 +497,7 @@ void W3DShroud::fillBorderShroudData(W3DShroudLevel level, SurfaceClass* pDestSu
 	srcRect.right= m_numCellsX;
 	srcRect.bottom= m_numCellsY+1;
 
-	POINT	dstPoint={0,0};
+	RenderPoint	dstPoint={0,0};
 
 	Int numFullCopies = m_dstTextureWidth/srcRect.right;
 	Int numExtraPixels = m_dstTextureWidth%srcRect.right;
@@ -722,8 +722,8 @@ void W3DShroud::render(CameraClass *cam)
 		pDestSurface=m_pDstTexture->Get_Surface_Level(0);
 	}
 
-	RECT	srcRect;
-	POINT	dstPoint={1,1};	//first row/column is reserved for border.
+	RenderRect	srcRect;
+	RenderPoint	dstPoint={1,1};	//first row/column is reserved for border.
 	
 	srcRect.left=visStartX;
 	srcRect.top=visStartY;
@@ -758,7 +758,7 @@ void W3DShroud::render(CameraClass *cam)
 
 #define FOG_INTERPOLATION_RATE	(255.0f/1000.0f)	//take one second to go from black to fully lit.
 //-----------------------------------------------------------------------------
-void W3DShroud::interpolateFogLevels(RECT *rect)
+void W3DShroud::interpolateFogLevels(RenderRect *rect)
 {
 	static UnsignedInt prevTime = Clock_Milliseconds();
 
