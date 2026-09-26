@@ -1197,6 +1197,9 @@ if(ZH_PLATFORM_POSIX)
   # W3DMouse is a Win32Mouse, the hardware cursor through the window procedure: the platform layer's
   # input (C3), not the renderer.  W3DGameClient leaves its keyboard and mouse to the subclass off Windows.
   list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DMouse\\.cpp$")
+  # W3DWebBrowser is the embedded browser as a COM object, which only Win32GameEngine makes; GameEngine
+  # has its own WebBrowser off Windows (B5).
+  list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DWebBrowser\\.cpp$")
   add_library(w3ddevice STATIC ${ZH_NOT_YET_PORTABLE} ${W3DDEVICE_SOURCES})
   set_target_properties(w3ddevice PROPERTIES CXX_STANDARD 17)
   target_include_directories(w3ddevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include

@@ -68,6 +68,8 @@ static void drawFramerateBar(void);
 #include "GameLogic/Module/PhysicsUpdate.h"
 
 #include "GameClient/Drawable.h"
+#include "GameClient/Keyboard.h"		// TheKeyboard; on Windows WinMain.h brought it too
+#include "Platform/SleepMilliseconds.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GameConsole.h"
 #include "GameClient/GraphDraw.h"
@@ -96,7 +98,9 @@ static void drawFramerateBar(void);
 #include "W3DDevice/GameClient/W3DProjectedShadow.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
 #include "WWMath/wwmath.h"
+#if defined(_WIN32)
 #include "WWLib/registry.h"
+#endif
 #include "WW3D2/ww3d.h"
 #include "WW3D2/predlod.h"
 #include "WW3D2/part_emt.h"
@@ -107,7 +111,9 @@ static void drawFramerateBar(void);
 #include "WW3D2/render2dsentence.h"
 #include "WW3D2/sortingrenderer.h"
 #include "WW3D2/textureloader.h"
+#if defined(_WIN32)
 #include "WW3D2/dx8webbrowser.h"
+#endif
 #include "WW3D2/mesh.h"
 #include "WW3D2/hlod.h"
 #include "WW3D2/meshmatdesc.h"
@@ -122,7 +128,14 @@ static void drawFramerateBar(void);
 #include "GameLogic/PartitionManager.h"
 #endif
 
+#if defined(_WIN32)
 #include "WinMain.h"
+#else
+// The window the device draws into: C2's, and null under -headless.  On Windows, WinMain's HWND, which
+// RenderWindow is there.
+extern RenderWindow ApplicationHWnd;
+#include "zhio.h"		// zh_fopen, zh_remove, zh_mkdir: the engine's Windows-spelled paths (C1)
+#endif
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -593,8 +606,10 @@ W3DDisplay::~W3DDisplay()
 	delete m_assetManager;
 	WW3D::Shutdown();
 	WWMath::Shutdown();
+#if defined(_WIN32)	// the embedded browser: Windows only
 	if( hadDevice )
 		DX8WebBrowser::Shutdown();
+#endif
 	delete TheW3DFileSystem;
 	TheW3DFileSystem = NULL;
 
@@ -636,6 +651,7 @@ void Reset_D3D_Device(bool active)
 		{	
 			//switch back to desired mode when user alt-tabs back into game
 			WW3D::Set_Render_Device( WW3D::Get_Render_Device(),TheDisplay->getWidth(),TheDisplay->getHeight(),TheDisplay->getBitDepth(),TheDisplay->getWindowed(),true, true);
+#if defined(_WIN32)	// Windows 9x's alt-tab; there is no counterpart anywhere else
 			OSVERSIONINFO	osvi;
 			osvi.dwOSVersionInfoSize=sizeof(OSVERSIONINFO);
 			if (GetVersionEx(&osvi))
@@ -646,6 +662,7 @@ void Reset_D3D_Device(bool active)
 						WW3D::_Invalidate_Textures();
 				}
 			}
+#endif
 		}
 		else
 		{
@@ -677,7 +694,8 @@ static MonitorEntry chosenMonitor( void )
 //=============================================================================
 static void applyWindowFrame( Int mode )
 {
-	extern HWND ApplicationHWnd;
+#if defined(_WIN32)
+	extern RenderWindow ApplicationHWnd;	// WinMain's HWND on Windows
 	extern Bool ApplicationIsBorderless;
 
 	// a headless run has no picture at all, so there is nothing for any of the three to mean
@@ -702,6 +720,9 @@ static void applyWindowFrame( Int mode )
 	::SetWindowPos( ApplicationHWnd,
 									( mode == WINDOW_MODE_WINDOWED ) ? HWND_TOP : HWND_TOPMOST,
 									screen.left, screen.top, 0, 0, SWP_NOSIZE | SWP_FRAMECHANGED | move );
+#else
+	(void)mode;		// the window is C2's off Windows, and it dresses and sizes itself
+#endif
 }
 
 //=============================================================================
@@ -711,7 +732,8 @@ static void applyWindowFrame( Int mode )
 //=============================================================================
 static void sizeWindowToClient( Int mode, Int width, Int height )
 {
-	extern HWND ApplicationHWnd;
+#if defined(_WIN32)
+	extern RenderWindow ApplicationHWnd;	// WinMain's HWND on Windows
 
 	if( ApplicationHWnd == NULL || ( TheGlobalData && TheGlobalData->m_headless ) )
 		return;
@@ -739,6 +761,9 @@ static void sizeWindowToClient( Int mode, Int width, Int height )
 	::SetWindowPos( ApplicationHWnd,
 									( mode == WINDOW_MODE_WINDOWED ) ? HWND_TOP : HWND_TOPMOST,
 									x, y, outerW, outerH, SWP_NOACTIVATE );
+#else
+	(void)mode; (void)width; (void)height;		// the window is C2's off Windows
+#endif
 }
 
 //=============================================================================
@@ -1114,9 +1139,13 @@ void W3DDisplay::init( void )
 	// now, so there is one answer here and no translating dll to name; -d3d12 was d3d8to9's opt-in
 	// and does nothing until something puts a real Direct3D 12 backend behind the same seam.
 	// Nothing plans to: the seam's second backend is Direct3D 11, and the third is Metal.
+#if defined(_WIN32)
 	DEBUG_LOG(("W3DDisplay::init - renderer runtime: %s\n",
 						 GetModuleHandleA("d3d9.dll") ? "Direct3D 9 (native)"
 						                              : "no Direct3D 9 runtime loaded"));
+#else
+	DEBUG_LOG(("W3DDisplay::init - renderer runtime: the POSIX Direct3D 9 device (posixd3d9)\n"));
+#endif
 	// multisampling is opt-in with "-msaa" / "-msaa N" and silently degrades to whatever the
 	// device supports, so log what was actually granted
 	DEBUG_LOG(("W3DDisplay::init - multisampling: %ux\n", DX8Wrapper::Get_MultiSample_Level()));
@@ -1188,7 +1217,9 @@ void W3DDisplay::init( void )
 		m_nativeDebugDisplay->setFontWidth( 9 );
 	}
 
+#if defined(_WIN32)	// the embedded browser: Windows only
 	DX8WebBrowser::Initialize();
+#endif
 
 	// we're now online
 	m_initialized = true;
@@ -1546,12 +1577,14 @@ void W3DDisplay::gatherDebugStats( void )
 #endif
 		// check for debug D3D
 		Bool debugD3D=false;
+#if defined(_WIN32)	// the Direct3D debug runtime is a registry switch, and Windows's
 		RegistryClass registry ("Software\\Microsoft\\Direct3d");
 		if (registry.Is_Valid ()) {
 			if (registry.Get_Int ("LoadDebugRuntime", 0) == 1) {
 				debugD3D = true;
 			}
 		}
+#endif
 		if (debugD3D) {
 			unibuffer.concat(u", DEBUG D3D");
 		}
@@ -1984,7 +2017,11 @@ void W3DDisplay::calculateTerrainLOD( void )
 			Int64 time64 = getPerformanceCounter();
 			timeForFrame = (float)((double)(time64-startTime64) / (double)(freq64));
 			sprintf(buf, "%.2fms ", timeForFrame*1000.0f);
+#if defined(_WIN32)
 			::OutputDebugString(buf);
+#else
+			DEBUG_LOG(("%s", buf));
+#endif
 			if (i>=NUM_TO_DISCARD) {
 				frameTime += timeForFrame;
 				if (i>NUM_TO_DISCARD+1 && 
@@ -1997,7 +2034,11 @@ void W3DDisplay::calculateTerrainLOD( void )
 		frameTime /= ((i)-NUM_TO_DISCARD);
 		count++;
 		sprintf(buf, "\n LOD %d, time %.2fms\n", curLOD, frameTime*1000.0f);
+#if defined(_WIN32)
 		::OutputDebugString(buf);
+#else
+		DEBUG_LOG(("%s", buf));
+#endif
 		if (frameTime<maxTimeLimit && goodLOD<curLOD) {
 			goodLOD = curLOD;
 		}
@@ -2059,10 +2100,12 @@ void W3DDisplay::draw( void )
 	USE_PERF_TIMER(W3DDisplay_draw)
 	static UnsignedInt syncTime = 0;
 
-	extern HWND ApplicationHWnd;
+	extern RenderWindow ApplicationHWnd;	// WinMain's HWND on Windows
+#if defined(_WIN32)	// off Windows a minimised window is C2's to report
 	if (ApplicationHWnd && ::IsIconic(ApplicationHWnd)) {
 		return;
 	}
+#endif
 
 	// -nodevice: there is no device to begin a scene on.  The load screen asks for a draw of its
 	// own while a map loads, so this is reached before the first frame and not only from the loop.
@@ -2263,7 +2306,7 @@ AGAIN:
 				//
 				while(loopForCameraMovement && (now - prevTime) < minTime-1)
 				{
-					::Sleep(1);	// was a pure spin; this loop can run for whole camera pans
+					sleepMilliseconds(1);	// ::Sleep on Windows; was a pure spin; this loop can run for whole camera pans
 					now = Clock_Milliseconds();
 				}
 				prevTime = now;
@@ -3536,8 +3579,9 @@ void W3DDisplay::setShroudLevel( Int x, Int y, CellShroudStatus setting )
 
 //=============================================================================
 ///Utility function to dump data into a .BMP file
-static void CreateBMPFile(LPTSTR pszFile, char *image, Int width, Int height)
+static void CreateBMPFile(char *pszFile, char *image, Int width, Int height)	// LPTSTR is char * here
 { 
+#if defined(_WIN32)
      HANDLE hf;                 // file handle 
     BITMAPFILEHEADER hdr;       // bitmap file-header 
     PBITMAPINFOHEADER pbih;     // bitmap info-header 
@@ -3607,6 +3651,40 @@ static void CreateBMPFile(LPTSTR pszFile, char *image, Int width, Int height)
 
     // Free memory. 
 	LocalFree( (HLOCAL) pbmi);
+#else
+	// A 24-bit bottom-up .bmp written by hand: the two headers are little-endian fields, put a byte at a
+	// time.  Unlike the Windows body, each row is padded to four bytes, as the format requires, and only
+	// the image's own 3 * width * height bytes are read.
+	FILE *fp = zh_fopen(pszFile, "wb");
+	if (fp == NULL)
+		return;
+	const UnsignedInt rowBytes = 3 * (UnsignedInt)width;
+	const UnsignedInt stride = (rowBytes + 3) & ~3u;
+	const UnsignedInt imageBytes = stride * (UnsignedInt)height;
+	unsigned char header[54];
+	memset(header, 0, sizeof(header));
+	struct Put
+	{
+		static void u16(unsigned char *at, UnsignedInt v) { at[0] = (unsigned char)v; at[1] = (unsigned char)(v >> 8); }
+		static void u32(unsigned char *at, UnsignedInt v) { u16(at, v & 0xFFFF); u16(at + 2, v >> 16); }
+	};
+	Put::u16(header + 0, 0x4d42);			// "BM"
+	Put::u32(header + 2, 54 + imageBytes);	// the file's size
+	Put::u32(header + 10, 54);				// where the pixels start
+	Put::u32(header + 14, 40);				// the info header's size
+	Put::u32(header + 18, (UnsignedInt)width);
+	Put::u32(header + 22, (UnsignedInt)height);
+	Put::u16(header + 26, 1);				// planes
+	Put::u16(header + 28, 24);				// bits per pixel
+	Put::u32(header + 34, imageBytes);
+	fwrite(header, 1, sizeof(header), fp);
+	static const unsigned char pad[3] = { 0, 0, 0 };
+	for (Int row = 0; row < height; ++row) {
+		fwrite(image + row * rowBytes, 1, rowBytes, fp);
+		fwrite(pad, 1, stride - rowBytes, fp);
+	}
+	fclose(fp);
+#endif
 }
 
 // A system-memory copy of the back buffer (32-bit, not multisampled), NULL when that is
@@ -3708,10 +3786,18 @@ static Bool writeFrameBMP(char *pathname)
 	{
 		D3DSURFACE_DESC desc;
 		fb->GetDesc(&desc);
+#if defined(_WIN32)
 		SetRect(&bounds, 0, 0, desc.Width, desc.Height);
+#else
+		bounds.left = 0;
+		bounds.top = 0;
+		bounds.right = (Int)desc.Width;
+		bounds.bottom = (Int)desc.Height;
+#endif
 	}
 	else
 	{
+#if defined(_WIN32)
 		// Lock front buffer and copy
 		fb=DX8Wrapper::_Get_DX8_Front_Buffer();
 
@@ -3723,6 +3809,10 @@ static Bool writeFrameBMP(char *pathname)
 		point.x=bounds.right; point.y=bounds.bottom;
 		ClientToScreen(ApplicationHWnd, &point);
 		bounds.right=point.x; bounds.bottom=point.y;
+#else
+		// The front buffer is a desktop capture, which only Windows has; the back buffer is all there is.
+		bounds.left = bounds.top = bounds.right = bounds.bottom = 0;
+#endif
 	}
 
 	// The front-buffer path above turns the window's client area into desktop coordinates, and a
@@ -3893,8 +3983,13 @@ static void deleteVideoFrames(void)
 	for (Int index = 0; ; ++index)
 	{
 		buildVideoFramePath(pathname, ARRAY_SIZE(pathname), index);
+#if defined(_WIN32)
 		if (!DeleteFileA(pathname))
 			return;
+#else
+		if (zh_remove(pathname) != 0)
+			return;
+#endif
 	}
 }
 
@@ -3909,6 +4004,11 @@ static void finishVideo(void)
 	if (s_videoFramesWritten == 0)
 		return;
 
+#if !defined(_WIN32)
+	// Off Windows the encoder is not started for you: the frames stay, and this is how to make the movie.
+	DEBUG_LOG(("VIDEO: encode with: ffmpeg -framerate %d -i \"%s%s\" -c:v libx264 -pix_fmt yuv420p out.mp4\n",
+		LOGICFRAMES_PER_SECOND, s_videoDirectory, VIDEO_FRAME_PATTERN));
+#else
 	char encoderPath[_MAX_PATH];
 	if (SearchPathA(NULL, VIDEO_ENCODER, NULL, ARRAY_SIZE(encoderPath), encoderPath, NULL) == 0)
 	{
@@ -3957,6 +4057,7 @@ static void finishVideo(void)
 	deleteVideoFrames();
 	RemoveDirectoryA(s_videoDirectory);
 	DEBUG_LOG(("VIDEO: wrote %s\n", moviePath));
+#endif
 }
 
 static void captureVideoFrame(void)
@@ -3980,10 +4081,18 @@ static void captureVideoFrame(void)
 		s_videoStarted = TRUE;
 		snprintf(s_videoDirectory, ARRAY_SIZE(s_videoDirectory), "%sVideos\\",
 			TheGlobalData->getPath_UserData().str());
+#if defined(_WIN32)
 		CreateDirectoryA(s_videoDirectory, NULL);
+#else
+		zh_mkdir(s_videoDirectory);
+#endif
 		strlcat(s_videoDirectory, TheGlobalData->m_videoName.str(), ARRAY_SIZE(s_videoDirectory));
 		strlcat(s_videoDirectory, "\\", ARRAY_SIZE(s_videoDirectory));
+#if defined(_WIN32)
 		CreateDirectoryA(s_videoDirectory, NULL);
+#else
+		zh_mkdir(s_videoDirectory);
+#endif
 
 		// a directory left over from an earlier run would hand ffmpeg its tail as well
 		deleteVideoFrames();

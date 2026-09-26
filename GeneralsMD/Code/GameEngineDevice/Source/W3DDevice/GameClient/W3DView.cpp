@@ -101,9 +101,11 @@
 
 #include "W3DDevice/GameClient/camerashakesystem.h"
 
+#if defined(_WIN32)
 #include "WinMain.h"  /** @todo Remove this, it's only here because we
 													are using timeGetTime, but we can remove that
 													when we have our own timer */
+#endif
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)

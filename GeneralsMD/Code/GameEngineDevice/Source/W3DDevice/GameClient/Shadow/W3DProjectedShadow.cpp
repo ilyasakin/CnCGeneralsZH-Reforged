@@ -547,7 +547,7 @@ Int W3DProjectedShadowManager::renderProjectedTerrainShadow(W3DProjectedShadow *
 		m_pDev->SetIndices(shadowIndexBufferD3D);
 		Direct3D11_Mirror_Indices(shadowIndexTwin);
 
-		m_pDev->SetTransform(D3DTS_WORLD,(_D3DMATRIX *)&mWorld);
+		m_pDev->SetTransform(D3DTS_WORLD,(D3DMATRIX *)&mWorld);
 		Direct3D11_Mirror_Transform(D3DTS_WORLD,(const float *)&mWorld);
 
 		m_pDev->SetStreamSource(0,shadowVertexBufferD3D,0,vertexStride);
@@ -800,7 +800,7 @@ void W3DProjectedShadowManager::flushDecals(W3DShadowTexture *texture, ShadowTyp
 	m_pDev->SetIndices(shadowDecalIndexBufferD3D);
 	Direct3D11_Mirror_Indices(shadowDecalIndexTwin);
 
-	m_pDev->SetTransform(D3DTS_WORLD,(_D3DMATRIX *)&mWorld);
+	m_pDev->SetTransform(D3DTS_WORLD,(D3DMATRIX *)&mWorld);
 	Direct3D11_Mirror_Transform(D3DTS_WORLD,(const float *)&mWorld);
 
 	m_pDev->SetStreamSource(0,shadowDecalVertexBufferD3D,0,sizeof(SHADOW_DECAL_VERTEX));
