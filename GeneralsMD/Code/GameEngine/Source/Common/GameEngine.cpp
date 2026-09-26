@@ -283,8 +283,8 @@ static void writeModelChecksumCache( const ModelChecksumMap &cache )
 			entry.source.timestampHigh, entry.source.timestampLow, it->first.c_str() );
 	}
 	fclose( cacheFile );
-	if (!MoveFileExA( scratchPath.str(), finalPath.str(), MOVEFILE_REPLACE_EXISTING ))
-		DeleteFileA( scratchPath.str() );		// another copy holds it open; its own write will do
+	if (!TheLocalFileSystem->moveFileReplacing( scratchPath.str(), finalPath.str() ))
+		TheLocalFileSystem->deleteFile( scratchPath.str() );		// another copy holds it open; its own write will do
 }
 
 static Bool isSameFile( const FileInfo &left, const FileInfo &right )
@@ -561,9 +561,8 @@ static void startPendingSaveGame( void )
 		return;
 	}
 
-	// getSaveGameInfoFromFile opens the name it is handed as-is - the menu path gets away with a
-	// leaf only because it is called from inside iterateSaveFiles, which has chdir'd into the save
-	// directory first. Give it the path.
+	// getSaveGameInfoFromFile opens the name it is handed as-is, so give it the path (the menu's
+	// iterateSaveFiles callback does the same).
 	TheGameState->getSaveGameInfoFromFile(
 		TheGameState->getFilePathInSaveDirectory( thePendingSaveFile ), &gameInfo.saveGameInfo );
 
@@ -887,12 +886,6 @@ void GameEngine::init( int argc, char *argv[] )
 		// Create the low-level file system interface
 		TheFileSystem = createFileSystem();
 
-		//Kris: Patch 1.01 - November 17, 2003
-		//I was unable to resolve the RTPatch method of deleting a shipped file. English, Chinese, and Korean
-		//SKU's shipped with two INIZH.big files. One properly in the Run directory and the other in Run\INI\Data.
-		//We need to toast the latter in order for the game to patch properly.
-		DeleteFile( "Data\\INI\\INIZH.big" );
-
 		// not part of the subsystem list, because it should normally never be reset!
 		TheNameKeyGenerator = MSGNEW("GameEngineSubsystem") NameKeyGenerator;
 		TheNameKeyGenerator->init();
@@ -924,6 +917,14 @@ void GameEngine::init( int argc, char *argv[] )
 
 		initSubsystem(TheLocalFileSystem, "TheLocalFileSystem", createLocalFileSystem(), NULL);
 
+		//Kris: Patch 1.01 - November 17, 2003
+		//I was unable to resolve the RTPatch method of deleting a shipped file. English, Chinese, and Korean
+		//SKU's shipped with two INIZH.big files. One properly in the Run directory and the other in Run\INI\Data.
+		//We need to toast the latter in order for the game to patch properly.
+		// (C1: moved here from just after createFileSystem, to go through TheLocalFileSystem; nothing
+		// between the two places touched the file, and the archives still mount after it is gone.)
+		TheLocalFileSystem->deleteFile( "Data\\INI\\INIZH.big" );
+
 
     	#ifdef DUMP_PERF_STATS///////////////////////////////////////////////////////////////////////////
 	GetPrecisionTimer(&endTime64);//////////////////////////////////////////////////////////////////
@@ -948,8 +949,8 @@ void GameEngine::init( int argc, char *argv[] )
 		// EA's "viruses, overheated hardware" box, which names nothing they can act on.
 		if (!TheFileSystem->doesFileExist("Data\\INI\\Default\\GameData.ini"))
 		{
-			Char gameDirectory[ _MAX_PATH ];
-			GetCurrentDirectory( ARRAY_SIZE(gameDirectory), gameDirectory );
+			const AsciiString currentDirectory = TheLocalFileSystem->getCurrentDirectory();
+			const Char *gameDirectory = currentDirectory.str();
 			DEBUG_LOG(("GameEngine::init - Data\\INI\\Default\\GameData.ini is in no archive under %s\n", gameDirectory));
 
 			AsciiString message;

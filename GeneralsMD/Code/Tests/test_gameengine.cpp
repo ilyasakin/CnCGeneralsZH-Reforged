@@ -192,6 +192,11 @@ public:
 																			 const AsciiString&, FilenameList&, Bool ) const {}
 	virtual Bool getFileInfo( const AsciiString&, FileInfo* ) const { return FALSE; }
 	virtual Bool createDirectory( AsciiString ) { return FALSE; }
+	virtual Bool copyFile( const Char *, const Char *, Bool ) { return FALSE; }
+	virtual Bool deleteFile( const Char * ) { return FALSE; }
+	virtual Bool moveFileReplacing( const Char *, const Char * ) { return FALSE; }
+	virtual void getFilesInDirectory( const AsciiString&, const AsciiString&, std::vector<AsciiString>& ) const {}
+	virtual AsciiString getCurrentDirectory() const { return AsciiString::TheEmptyString; }
 };
 
 /* The subsystems below are globals the engine owns; bring them up once and

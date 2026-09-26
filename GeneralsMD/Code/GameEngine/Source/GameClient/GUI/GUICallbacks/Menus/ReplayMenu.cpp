@@ -32,6 +32,7 @@
 
 
 #include "Lib/BaseType.h"
+#include "Common/LocalFileSystem.h"
 #include "Common/FileSystem.h"
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
@@ -636,12 +637,16 @@ void deleteReplay( void )
 	filename = TheRecorder->getReplayDir();
 	translate.translate(GetReplayFilenameFromListbox(listboxReplayFiles, selected));
 	filename.concat(translate);
-	if(DeleteFile(filename.str()) == 0)
+	if(!TheLocalFileSystem->deleteFile(filename.str()))
 	{
+#if defined(_WIN32)
 		char buffer[1024];
 		FormatMessage ( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, buffer, sizeof(buffer), NULL);
-		UnicodeString errorStr;
 		translate.set(buffer);
+#else
+		translate.set(strerror(errno));		// ASCII in the "C" locale the game keeps
+#endif
+		UnicodeString errorStr;
 		errorStr.translate(translate);
 		MessageBoxOk(TheGameText->fetch("GUI:Error"),errorStr, NULL);
 	}
@@ -674,16 +679,21 @@ void copyReplay( void )
 	newFilename.set(path);
 	newFilename.concat("\\");
 	newFilename.concat(translate);
-	if(CopyFile(filename.str(),newFilename.str(), FALSE) == 0)
+	if(!TheLocalFileSystem->copyFile(filename.str(),newFilename.str(), FALSE))
 	{
+#if defined(_WIN32)
 		// Win32 only: WideChar and WCHAR are the same two bytes there, which is what makes the cast
-		// honest.  B5 replaces DeleteFile/CopyFile and this message off Windows.  The size is in
-		// characters, as FormatMessageW takes it; it used to be sizeof(buffer), twice that.
+		// honest.  The size is in characters, as FormatMessageW takes it; it used to be
+		// sizeof(buffer), twice that.
 		WideChar buffer[1024];
 		FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), 0, reinterpret_cast<LPWSTR>( buffer ),
 			sizeof( buffer ) / sizeof( buffer[0] ), NULL );
 		UnicodeString errorStr;
 		errorStr.set(buffer);
+#else
+		UnicodeString errorStr;
+		errorStr.translate(AsciiString(strerror(errno)));		// ASCII in the "C" locale the game keeps
+#endif
 		errorStr.trim();
 		MessageBoxOk(TheGameText->fetch("GUI:Error"),errorStr, NULL);
 	}

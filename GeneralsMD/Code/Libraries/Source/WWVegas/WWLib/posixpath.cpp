@@ -441,6 +441,19 @@ int zh_remove(const char * path)
 	return result;
 }
 
+int zh_unlink(const char * path)
+{
+	std::string real;
+	if (!resolve_or_fail(path, POSIX_PATH_EXISTING, real)) {
+		return -1;
+	}
+	const int result = unlink(real.c_str());
+	if (result == 0) {
+		forget_parent(real);
+	}
+	return result;
+}
+
 int zh_rename(const char * from, const char * to)
 {
 	std::string real_from, real_to;
