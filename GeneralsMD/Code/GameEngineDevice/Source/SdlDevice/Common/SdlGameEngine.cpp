@@ -221,6 +221,8 @@ void SdlGameEngine::startOffscreen( void )
 {
 	SDL_SetHint( "ZH_OFFSCREEN_FRAMES", "1" );
 	SDL_SetHint( "ZH_SDL_GPU_METAL_WINDOWLESS", "1" );
+	// With a window server, the cocoa driver would make the process a Dock application with no window.
+	SDL_SetHint( SDL_HINT_MAC_BACKGROUND_APP, "1" );
 	const char *driver = "the display's";
 	if (!SDL_Init( SDL_INIT_VIDEO ))
 	{
