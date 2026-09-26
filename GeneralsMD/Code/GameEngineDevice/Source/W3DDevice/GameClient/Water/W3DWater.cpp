@@ -1406,93 +1406,21 @@ void WaterRenderObjClass::update( void )
 		}
 	}
 
-	static UnsignedInt lastLogicFrame = 0;
-	UnsignedInt currLogicFrame = 0;
-
-	if( TheGameLogic )
-		currLogicFrame = TheGameLogic->getFrame();
-
-	// the rest is gameplay-visible mesh motion and stays on the logic clock
-	if( lastLogicFrame != currLogicFrame )
-	{
-		// for vertex animated water we need to update the vector field
-		if( m_doWaterGrid && m_meshInMotion == TRUE )
-		{
-			const Real PREFERRED_HEIGHT_FUDGE = 1.0f;		///< this is close enough to at rest
-			const Real AT_REST_VELOCITY_FUDGE = 1.0f;		///< when we're close enought to at rest height and velocity we will stop
-			const Real WATER_DAMPENING = 0.93f;					///< use with up force of 15.0
-			Int i, j;
-			Int	mx = m_gridCellsX+1;
-			Int my = m_gridCellsY+1;
-			WaterMeshData *pData;
-
-			//
-			// we will mark the mesh as clean now ... if any of the fields are still in motion
-			// they will continue to mark the mesh as dirty so processing continues next frame
-			//
-			m_meshInMotion = FALSE;
-
-			// go through each mesh point and adjust the height according to the velocity
-			for( j = 0, pData = m_meshData; j < (my + 2); j++ )
-			{	
-
-				for( i = 0; i < (mx + 2); i++ )
-				{
-
-					// only pay attention to mesh points that are in motion
-					if( BitTest( pData->status, WaterRenderObjClass::IN_MOTION ) )
-					{
-
-						// DAMPENING to slow the changes down
-						pData->velocity *= WATER_DAMPENING;
-
-						// if the height here is below our preferred height, we want to add upward force to counteract it
-						if( pData->height < pData->preferredHeight )
-							pData->velocity -= TheGlobalData->m_gravity * 3.0f;
-						else				
-							pData->velocity += TheGlobalData->m_gravity * 3.0f;
-
-						// adjust the height at this grid location according to the current velocity		
-						pData->height = pData->height + pData->velocity;
-
-						//
-						// if we are close enough to our preferred height and our velocity is small enough
-						// this will be our resting location
-						//
-						if( fabs( pData->height - pData->preferredHeight ) < PREFERRED_HEIGHT_FUDGE &&
-								fabs( pData->velocity ) < AT_REST_VELOCITY_FUDGE )
-						{
-
-							BitClear( pData->status, WaterRenderObjClass::IN_MOTION );
-							pData->height = pData->preferredHeight;
-							pData->velocity = 0.0f;
-
-						}  // end if
-						else
-						{
-
-							// there is still motion in the mesh, we need to process next frame
-							m_meshInMotion = TRUE;
-
-						}  // end else
-
-					}  // end if
-
-					// on to the next one
-					pData++;
-
-				}  // end for i
-
-			}  // end for j
-
-		}  // end if
-
-		// mark the last logic frame we processed on
-		lastLogicFrame = currLogicFrame;
-
-	}  // end if, a logic frame has passed
+	/* The mesh motion that was here - the part of the water the simulation reads - is stepped by the
+	   logic now, once per logic frame: updateMeshMotion, from GameLogic::update (T1c, defect 17). */
 
 }  // end update
+
+// ------------------------------------------------------------------------------------------------
+/** The water grid's mesh motion for one logic frame.  GameLogic::update calls this, through
+	* TerrainVisual::updateWaterGrid, at the top of every logic frame: where EA's client pass stepped it,
+	* just ahead of the frame, but once per logic frame however many frames a pass runs.  The step, and
+	* the gate that makes a second call for the same frame do nothing, are WaterGridMotion's. */
+// ------------------------------------------------------------------------------------------------
+void WaterRenderObjClass::updateMeshMotion( UnsignedInt logicFrame )
+{
+	WaterGridMotion::updateForLogicFrame( logicFrame, m_doWaterGrid, m_meshInMotion, m_meshData, m_gridCellsX, m_gridCellsY );
+}
 
 
 //-------------------------------------------------------------------------------------------------

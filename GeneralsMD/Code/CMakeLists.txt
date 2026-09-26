@@ -843,6 +843,33 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(sdl3shadercompile PUBLIC SDL3::SDL3-static
     PRIVATE sdl3_shadercross glslang::glslang glslang::glslang-default-resource-limits)
 
+  # ---- Text off Windows (decision 6, D6) -----------------------------------------------------------
+  # FreeType 2.14.3, fetched and pinned by vendor.sh, with none of its optional dependencies: the game's
+  # fonts are plain TrueType files, and zlib, bzip2, PNG, HarfBuzz and Brotli only matter to compressed,
+  # colour or shaped fonts.  Its gzip module uses its own zlib copy.  EXCLUDE_FROM_ALL, like the shader
+  # compilers: what links it is what builds it.
+  function(zh_add_freetype)
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(BUILD_SHARED_LIBS OFF)
+    foreach(_ft_dep ZLIB BZIP2 PNG HARFBUZZ BROTLI)
+      set(FT_DISABLE_${_ft_dep} ON)
+    endforeach()
+    set(SKIP_INSTALL_ALL ON)
+    add_subdirectory(${LIBSRC}/freetype ${CMAKE_CURRENT_BINARY_DIR}/freetype EXCLUDE_FROM_ALL)
+  endfunction()
+  zh_add_freetype()
+
+  # What FontCharsClass asks GDI for, from FreeType: the fonts, their metrics, the glyphs.  Its own
+  # library, outside ww3d2's list, so it builds and is tested before WW3D2 does off Windows (D6a).
+  # Linux finds Liberation through fontconfig; macOS reads fixed files and needs nothing more.
+  add_library(glyphrasteriser STATIC ${WW}/WW3D2/glyphrasteriser.cpp)
+  target_include_directories(glyphrasteriser PUBLIC ${WW}/WW3D2)
+  target_link_libraries(glyphrasteriser PRIVATE freetype)
+  if(ZH_PLATFORM_LINUX)
+    find_package(Fontconfig REQUIRED)
+    target_link_libraries(glyphrasteriser PRIVATE Fontconfig::Fontconfig)
+  endif()
+
   # The Miles 6.5 surface on miniaudio (C4): the same library name as the XAudio2 one on Windows, so
   # that gameenginedevice, once it builds off Windows, links milesaudio on either and
   # MilesAudioManager.cpp compiles unchanged against it.  Today only the tests below link it here.
@@ -932,8 +959,9 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 #    Registry.ini.  On Windows they come from wwdownload itself.  B6.
 #  - IMEManager.cpp: the IMM32 input method editor (Chinese, Japanese and Korean text entry).  Its
 #    only exports are TheIMEManager and CreateIMEManagerInterface; GameClient::init handles a NULL
-#    manager and every other caller tests for one, and no test calls it.  IMEManagerPosix.cpp answers
-#    NULL.  IME text entry off Windows is C3's.  (IMECandidate.cpp, whose window callbacks .wnd files
+#    manager and every other caller tests for one, and no test calls it.  IMEManagerPosix.cpp is the
+#    manager off Windows, over the device's text events (C3): every typed character reaches a text
+#    field through the IME manager, on Windows too.  (IMECandidate.cpp, whose window callbacks .wnd files
 #    name through FunctionLexicon, is a different file and is built everywhere.)
 if(ZH_PLATFORM_WINDOWS)
   list(REMOVE_ITEM GAMEENGINE_SOURCES
@@ -1394,6 +1422,30 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
   set_target_properties(generals PROPERTIES CXX_STANDARD 17)
   target_link_libraries(generals PRIVATE sdldevice)
+  # C2's SDL side of Monitors.h and MessageBoxWrapper, on SDL's offscreen video driver.
+  add_executable(test_sdl_platform ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_platform.cpp)
+  target_include_directories(test_sdl_platform PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(test_sdl_platform PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+  set_target_properties(test_sdl_platform PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_sdl_platform PRIVATE sdldevice test_harness)
+  add_test(NAME test_sdl_platform COMMAND test_sdl_platform)
+
+  # C3a: input on SDL3's offscreen driver - the scancode table against DIKeyCodes.h, keys into the
+  # engine's key state, text into the IME manager, the mouse, and the install's .ANI cursors (read only,
+  # ZH_DATA_DIR; said when absent).
+  # test_gameengine_stubs.cpp: the names the executable supplies (gAppPrefix, the .csf/.str paths).
+  add_executable(test_sdl_input ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_input.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gameengine_stubs.cpp)
+  target_include_directories(test_sdl_input PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(test_sdl_input PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+    DIKEYCODES_H="${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include/GameClient/DIKeyCodes.h")
+  set_target_properties(test_sdl_input PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_sdl_input PRIVATE sdldevice test_harness)
+  add_test(NAME test_sdl_input COMMAND test_sdl_input)
+  if(ZH_GAME_DATA)
+    set_tests_properties(test_sdl_input PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+
   # The entry sequence without game data: see the script.
   add_test(NAME generals_smoke
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_generals_smoke.sh $<TARGET_FILE:generals>)
@@ -1410,6 +1462,14 @@ set(TESTS ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
 # binary links it instead of writing its own main().
 add_library(test_harness STATIC ${TESTS}/test_main.cpp)
 target_include_directories(test_harness PUBLIC ${TESTS})
+# Off Windows, every binary that links the harness - its own main() or the runner's - refuses to start
+# without ZH_USER_DATA_DIR, which otherwise leaves the engine to use this user's real data directory.
+# An INTERFACE source so it is compiled into each executable, where a static library's object would be
+# dropped by any binary that does not reference it.  ctest gives each test its folder at the end of
+# this file.
+if(ZH_PLATFORM_POSIX)
+  target_sources(test_harness INTERFACE ${TESTS}/test_user_data_guard.cpp)
+endif()
 
 # add_lib_test(<name> [PENDING_MACOS] <libs...>) -> Tests/<name>.cpp, built and registered.
 #
@@ -1521,15 +1581,35 @@ endif()  # ZH_PLATFORM_WINDOWS - Windows-only support library tests
 # Phase 3 checkpoint: boots the memory manager, name keys and file system, then
 # runs a real INI file through the parser.
 add_lib_test(test_gameengine gameengine)
+# T1's terrain golden against the moved code (GameLogic/WorldHeightMapData, TerrainHeightSampling):
+# nine shipped maps out of the install's archives, which must sample exactly as Tests/terrain_golden.txt
+# says the original W3D code did.  Needs ZH_GAME_DATA; Skipped (77) without it.
+add_lib_test(test_terrain_golden gameengine)
+target_compile_definitions(test_terrain_golden PRIVATE
+  TERRAIN_GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/Tests/terrain_golden.txt")
+set_target_properties(test_terrain_golden PROPERTIES CXX_STANDARD 17)
+set_tests_properties(test_terrain_golden PROPERTIES SKIP_RETURN_CODE 77)
+# test_gameengine's stubs: the exe's names everywhere, and on Windows the device layer's stand-ins,
+# which off Windows PosixDevice has for real.
+target_sources(test_terrain_golden PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
+if(ZH_PLATFORM_POSIX)
+  target_link_libraries(test_terrain_golden PRIVATE posixdevice)
+endif()
+if(ZH_GAME_DATA)
+  set_tests_properties(test_terrain_golden PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+endif()
+# T1c (defect 17): the water grid's step, moved to the top of each logic frame, against the original
+# code's output under EA's one-pass-per-frame loop (Tests/water_grid_oracle.cpp), under catch-up too.
+add_lib_test(test_water_grid gameengine)
+target_sources(test_water_grid PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
+set_target_properties(test_water_grid PROPERTIES CXX_STANDARD 17)
+if(ZH_PLATFORM_POSIX)
+  target_link_libraries(test_water_grid PRIVATE posixdevice)
+endif()
 # Off Windows the device layer's hooks (render stand-ins, the CD manager) are PosixDevice's, where on
 # Windows the test's own stubs stand in for gameenginedevice, which it does not link (B6).
 if(ZH_PLATFORM_POSIX)
   target_link_libraries(test_gameengine PRIVATE posixdevice)
-endif()
-# GlobalData asks for the user data directory, which off Windows is made on first use: keep it in
-# the build tree rather than the real one under the user's home (C1 (e)).
-if(ZH_PLATFORM_POSIX)
-  set_tests_properties(test_gameengine PROPERTIES ENVIRONMENT "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data")
 endif()
 # the well-known Dict keys and a handful of device/exe entry points live in
 # GameEngineDevice, which Phase 4 ports; stand-ins until then.
@@ -1690,8 +1770,6 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(test_wwdownload_registry PROPERTIES CXX_STANDARD 17)
   target_link_libraries(test_wwdownload_registry PRIVATE test_harness wwlib wwdebug)
   add_test(NAME test_wwdownload_registry COMMAND test_wwdownload_registry)
-  set_tests_properties(test_wwdownload_registry PROPERTIES
-    ENVIRONMENT "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-wwdownload-registry")
   if(ZH_PLATFORM_LINUX)
     set_target_properties(test_wwdownload_registry PROPERTIES EXCLUDE_FROM_ALL TRUE)
     set_tests_properties(test_wwdownload_registry PROPERTIES DISABLED TRUE)
@@ -1758,6 +1836,10 @@ add_lib_test(test_shader_sdl ffvertex engineshader sdl3shadercompile)
 if(ZH_SPIRV_VAL)
   set_tests_properties(test_shader_sdl PROPERTIES ENVIRONMENT "ZH_SPIRV_VAL=${ZH_SPIRV_VAL}")
 endif()
+
+# D6a: the glyph rasteriser against the font files' own hdmx, VDMX and gasp, read by the test's own
+# parser, plus a regression golden keyed to the files' versions.  macOS's fonts; Linux later.
+add_lib_test(test_glyph_rasteriser glyphrasteriser)
 
 # The golden dump behind D3's byte-identical proof: every program in Tests/shader_cases.h, every
 # target, one file each.  A tool, not a test: two runs are compared with diff -r.
@@ -1907,6 +1989,18 @@ if(PERF_TIMERS)
   else()
     message(STATUS "PERF_TIMERS ON - measurement build, timers cost real time")
   endif()
+endif()
+
+# Every test's own user data directory, in the build tree (the harness's guard, test_user_data_guard.cpp,
+# stops any test binary started without one).  Here, after the last add_test, so no test is missed and
+# no later set_tests_properties replaces it.  One folder per test so tests run in parallel do not share
+# an Options.ini or a Registry.ini.  Off Windows only: there the engine does not read the variable.
+if(ZH_PLATFORM_POSIX)
+  get_property(_zh_tests DIRECTORY PROPERTY TESTS)
+  foreach(_zh_test IN LISTS _zh_tests)
+    set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT
+      "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data/${_zh_test}")
+  endforeach()
 endif()
 
 # Say out loud which tests this configuration does not run.  A test that is

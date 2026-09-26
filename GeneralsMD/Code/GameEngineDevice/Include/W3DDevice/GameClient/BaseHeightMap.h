@@ -37,6 +37,7 @@
 #include "shader.h"
 #include "vertmaterial.h"
 #include "Lib/BaseType.h"
+#include "GameLogic/TerrainHeightSampling.h"
 #include "Common/GameType.h"
 #include "WorldHeightMap.h"
 
@@ -148,22 +149,10 @@ public:
   }
 
 
+	/// TerrainHeightSampling::getClipHeight on this object's map (the text was here; T1 moved it to gameengine).
 	inline UnsignedByte getClipHeight(Int x, Int y) const
 	{
-		Int xextent = m_map->getXExtent() - 1;
-		Int yextent = m_map->getYExtent() - 1;
-
-		if (x < 0) 
-			x = 0; 
-		else if (x > xextent) 
-			x = xextent;
-
-		if (y < 0) 
-			y = 0; 
-		else if (y > yextent) 
-			y = yextent;
-
-		return m_map->getDataPtr()[x + y*m_map->getXExtent()];
+		return TerrainHeightSampling::getClipHeight(m_map, x, y);
 	}
 
 	/// Update the macro texture (pass 3).

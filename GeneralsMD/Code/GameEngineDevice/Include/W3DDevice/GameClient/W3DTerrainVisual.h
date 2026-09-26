@@ -99,6 +99,7 @@ public:
 	virtual void addWaterVelocity( Real worldX, Real worldY, 
 																 Real velocity, Real preferredHeight );
 	virtual Bool getWaterGridHeight( Real worldX, Real worldY, Real *height);
+	virtual void updateWaterGrid( UnsignedInt logicFrame );
 
 	virtual void setTerrainTracksDetail(void);
 	virtual void setShoreLineDetail(void);

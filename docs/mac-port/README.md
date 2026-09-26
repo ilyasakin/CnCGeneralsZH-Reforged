@@ -193,24 +193,47 @@ you start. That commit is the lock.
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | done: `Float_To_Long` goes through `Lib/DetRound.h`, no SSE2 header left in WWMath (was -21) | |
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | done: merged (was -21) | |
 | E4 | [Windows under CrossOver](tasks/E4-windows-under-crossover.md) | M1 | — | blocked: no game executable for stage 1 (release channel unpublished); stage 2 needs the user to accept Microsoft's licence | -a9 |
-| T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | claimed | -47 |
+| T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | done: T1a merged, T1c (defect 17) on its branch; T1b and T1d dropped by decision 8 | -47 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | done: path resolver, POSIX local and BIG file systems, file operations, user-data dir, replay stream, PosixGameEngine (abstract until T1); `test_bigfilesystem` byte-identical over 25,293 files | -a9 |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | claimed | -18 |
-| C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
+| C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | C3a in progress (SDL3, decision 3); C3b with A1 | -47 |
 | C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | in progress: lower half (the Miles API on miniaudio) in review; upper half open | -a9 |
-| C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | not started | |
+| C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | claimed | -18 |
 | D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | in progress: recon and PR1 merged; PRs 2-8 need Windows (was -8d) | |
 | D2 | [Abstract the backend interface](tasks/D2-backend-interface.md) | M3 | D1 | not started | |
 | D3 | [Shader generators target SDL3 GPU](tasks/D3-shader-generators-ir.md) (decision 4) | M3 | — | done: SDL3 target, compile seam, POSIX twin test and D4's contract; 49/49 on Metal and Vulkan (-a9) | |
 | D4 | [SDL3 GPU backend](tasks/D4-metal-backend.md) (file keeps its old name) | M4 | D3 | not started | |
 | D5 | [Texture formats](tasks/D5-texture-formats.md) | M4 | D4 | not started | |
-| D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | not started | |
+| D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | D6a (rasteriser, FreeType, test) on its branch; D6b with or after A1 | -47 |
 | D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done — merged; the Crusader on Metal and on Vulkan (lavapipe); D3's route taken as decision 4 | -a9 |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | not started | |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
+
+### Known gaps, not on a milestone's critical path
+
+- **`-nodevice` (`m_noRenderDevice`) does not survive a map yet (C2's read, 2026-09-26).**
+  - **Why it is not M2's blocker:** it is the device-less path, which is not `-headless`. Windows'
+    `-headless` makes a real device and skips only the draw. POSIX `-headless` makes decision 7's
+    CPU-backed device with no window (decision 8, refined), so M2 does not run this path.
+  - **Background:** CommandLine.cpp:1859-1868 says a match "does not survive map load yet".
+    Under `-nodevice`, `DX8Wrapper::Compute_Caps` never runs, so `Get_Current_Caps()` is NULL, and
+    `_Get_D3D_Device()` is NULL (citations are GeneralsMD/Code on 2026-09-26's tip).
+  - **Crash sites a `-nodevice` run still reaches:**
+    - Sized textures (terrain at map load: WorldHeightMap.cpp:1939/1954/1961, BaseHeightMap.cpp:1913)
+      go through `_Create_DX8_Texture` into `D3DXCreateTexture` with a NULL device
+      (dx8wrapper.cpp:3070). Whether Microsoft's d3dx9_43 fails cleanly there is unverified.
+    - `_Create_DX8_ZTexture` calls the device directly (dx8wrapper.cpp:3211).
+    - TextureClass's bump-format constructor reads the caps (texture.cpp:1249-1256).
+    - `W3DSnowManager` reads the caps on a map that enables snow (W3DSnow.cpp:64).
+    - The dynamic vertex and index buffers read the caps, on the draw path only
+      (dx8vertexbuffer.cpp:867, dx8indexbuffer.cpp:577).
+    - `createVideoBuffer` (W3DDisplay.cpp:3411) is reached under `-nodevice` without `-headless`
+      when movies play.
+    - An INI `ChipsetType` of 6 or more builds shaders on the NULL device (W3DTreeBuffer).
+    - W3DRadar is avoided: `-nodevice` takes HeadlessRadar (Win32GameEngine.h:107-114).
 
 ### Decisions taken, 2026-09-25
 
@@ -385,6 +408,33 @@ the D3D9-shaped device itself, and D4 is A3.
   draw on the CPU against the fixed-function formulas, as D3's generator tests do. A visual reference
   can come later from the retail game under CrossOver, run on a COPY of the install (rule 9 applies
   there too: the INIZH.big delete is EA's code).
+
+**8. The POSIX engine uses the W3D factories, as Windows' own headless mode does (taken
+2026-09-26).** C2's first `generals -headless` run on macOS got through the file systems, the archive
+mount and the first INIs, then stopped at the first factory that only W3DDevice provides
+(FunctionLexicon, then ModuleFactory, ThingFactory, GameClient, ParticleSystemManager, Radar,
+GameLogic). On Windows, `-headless` does NOT swap those out: it keeps the W3D classes and skips only
+the frame. Decision 7 already builds WW3D2 and W3DDevice on POSIX (phase A1's checkpoint), so the POSIX
+engine's factories return the same W3D classes Windows uses, and a headless run has no video device
+under them. Rejected: a separate set of headless counterparts (null draw modules, a headless
+ThingFactory and so on). They would be a second copy of the INI-facing surface, and every difference
+from W3D's is a place for a replay to diverge. This supersedes C1's proposed "headless module factory"
+piece: W3DModuleFactory registers its own 19 draw modules. T1 is unaffected, because its extraction
+and height golden make the simulation's terrain independent of the render object on every platform,
+which is worth having whichever class answers. M2's first slice therefore waits on A1 (W3DDevice
+links) as well as on T1.
+
+*Refined 2026-09-26: what `-headless` means off Windows.* On Windows, `-headless` is NOT device-less.
+`W3DDisplay` still creates a real D3D9 device on a hidden 100x100 window, and only drawing is skipped.
+The device-less path is a separate flag, `-nodevice`, which its own comment says "does not survive map
+load yet" (`CommandLine.cpp:1859`). Decided: **POSIX `-headless` creates decision 7's device with no
+window and no GPU**. Its resources are CPU-backed (phase A2), so it needs neither a display nor D4's
+draw. The W3D classes then see a device, exactly as under Windows' `-headless`, which is what
+`replay-check.ps1` runs, so E1 compares like with like. Rejected: making POSIX `-headless` mean
+`-nodevice`, which would put that flag's unfinished map-load path on M2's critical path, and match a
+Windows mode nobody records replays in; and a hidden SDL window with a GPU device, which contradicts
+"headless needs no display" and waits on D4. Consequence: M2's gate is A1 (W3DDevice links) plus A2
+(CPU-backed resources), with no A3.
 
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
@@ -838,9 +888,9 @@ missing folder: it listed the current directory's six files, `Map Scratch.map` a
 C1 (c): both list the save folder by its path, and a missing folder lists nothing.
 
 **17. Fork-introduced: the logic catch-up lets the water grid, which the simulation reads, fall
-behind by the number of catch-up frames.** Not fixed yet (T1c). A code-path argument, not yet shown
+behind by the number of catch-up frames.** Fixed by T1c (below). A code-path argument, not yet shown
 to desync in a match. `TerrainLogic::isUnderwater` (`TerrainLogic.cpp:2218, 2276`) reads
-`TheTerrainVisual->getWaterGridHeight` whenever a script has enabled the water grid, and its
+`TheTerrainVisual->getWaterGridHeight` whenever the map has enabled the water grid, and its
 callers are simulation: pathfinding (`AIPathfind.cpp:5918`), `Locomotor`, `PartitionManager`,
 `FloatUpdate`, `ParachuteContain`, `ObjectCreationList`, `GenerateMinefieldBehavior`. The grid's
 mesh moves in `WaterRenderObjClass::update` (`W3DWater.cpp:1343`), on the CLIENT pass, gated by a
@@ -851,10 +901,22 @@ them, in network games and whenever `m_maxFPS > 0`. A machine that catches up k 
 grid once, so grid heights at frame N depend on that machine's frame-rate history. Two machines in
 one match can then disagree about `isUnderwater`, and a replay played at a different speed from its
 recording can too. The loop's authors guarded the same class for the camera freeze
-(`GameEngine.cpp:2546`), but not for the water grid. It affects only maps whose scripts call
-`enableWaterGrid` (likely the campaign dam and flood missions). Fix direction: step the grid once
-per LOGIC frame, which restores EA's count on Windows. That is a rule 3 change needing a replay check.
-Found by T1's recon (-47), read-only.
+(`GameEngine.cpp:2546`), but not for the water grid. **Which maps:** the grid is not a script
+action; `TerrainLogic::newMap` (`TerrainLogic.cpp:1143`) turns it on when the map has a waypoint
+named `WaveGuide1`. Every shipped map was searched for that name (read-only from the archives, each
+decompressed from RefPack or zlib and checked to be a whole `CkMp` file): it is in three, all
+original-Generals campaign maps in `maps.big` - `CHI03` (the dam), `GLA01` and `USA06`. **None of Zero
+Hour's 116 maps has it, so no shipped multiplayer or skirmish map runs the grid**; where it bites a
+player is a custom map with a `WaveGuide1`, and replays of those three campaign missions played back
+at a different speed. Fix direction: step the grid once per LOGIC frame, which restores EA's count on
+Windows. That is a rule 3 change needing a replay check. Found by T1's recon (-47), read-only.
+**Fixed by T1c:** the step (W3DWater.cpp's text, frame gate and all) is `WaterGridMotion` in gameengine,
+and `GameLogic::update` calls it at its top through `TerrainVisual::updateWaterGrid`, where EA's client
+pass stood, once per logic frame. `test_water_grid` holds it, under EA's loop and three catch-up
+schedules, to the original code's own output under EA's loop (an oracle, identical under Wine, arm64
+and x86_64); the original under the same catch-up schedules is the armed control and differs. **On
+Windows this changes grid heights on water-grid maps whenever the catch-up runs, back to EA's count.**
+Headless runs (one logic frame a pass) step as before. `WINDOWS-DEBT.md` has the row.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
