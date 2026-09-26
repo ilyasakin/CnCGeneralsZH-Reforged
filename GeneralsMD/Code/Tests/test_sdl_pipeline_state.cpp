@@ -206,6 +206,21 @@ static void check_samplers()
 	CHECK(info.enable_anisotropy && info.max_anisotropy == 8.0f && info.min_filter == SDL_GPU_FILTER_LINEAR
 		&& info.mipmap_mode == SDL_GPU_SAMPLERMIPMAPMODE_LINEAR && info.address_mode_v == SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE
 		&& info.max_lod > 2.0f);
+	// MAXANISOTROPY as the game sets it (16), past the caps' 16, and 0: held to 1..16.
+	states[D3DSAMP_MAXANISOTROPY] = 16;
+	CHECK(Sdl_Sampler_Description(states, &info, refusal) && info.enable_anisotropy && info.max_anisotropy == 16.0f);
+	states[D3DSAMP_MAXANISOTROPY] = 64;
+	CHECK(Sdl_Sampler_Description(states, &info, refusal) && info.max_anisotropy == 16.0f);
+	states[D3DSAMP_MAXANISOTROPY] = 0;
+	CHECK(Sdl_Sampler_Description(states, &info, refusal) && info.max_anisotropy == 1.0f);
+	// A magnification filter of ANISOTROPIC alone turns it on too; LINEAR with MAXANISOTROPY 16 does not.
+	states[D3DSAMP_MAXANISOTROPY] = 16;
+	states[D3DSAMP_MINFILTER] = D3DTEXF_LINEAR;
+	states[D3DSAMP_MAGFILTER] = D3DTEXF_ANISOTROPIC;
+	CHECK(Sdl_Sampler_Description(states, &info, refusal) && info.enable_anisotropy && info.mag_filter == SDL_GPU_FILTER_LINEAR);
+	states[D3DSAMP_MAGFILTER] = D3DTEXF_LINEAR;
+	CHECK(Sdl_Sampler_Description(states, &info, refusal) && !info.enable_anisotropy && info.max_anisotropy == 1.0f);
+	states[D3DSAMP_MINFILTER] = D3DTEXF_ANISOTROPIC;
 
 	states[D3DSAMP_ADDRESSU] = D3DTADDRESS_BORDER;
 	refusal.clear();

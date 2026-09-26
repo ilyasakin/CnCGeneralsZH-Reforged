@@ -633,9 +633,9 @@ static void summary(size_t captures)
 	for (std::map<std::string, int>::const_iterator it = not_replayed.begin(); it != not_replayed.end(); ++it) {
 		printf("  not replayed %d: %s\n", it->second, it->first.c_str());
 	}
-	printf("ffref_capture: %zu captures, %d compared (%d with anisotropic as linear, %d drew nothing on the"
-		" reference), %d failed, %d known findings\n", captures, compared, anisotropic_as_linear, drew_nothing, failures,
-		known_findings);
+	printf("  %d draws: ANISOTROPIC replayed as LINEAR\n", anisotropic_as_linear);
+	printf("ffref_capture: %zu captures, %d compared (%d drew nothing on the reference), %d failed, %d known findings\n",
+		captures, compared, drew_nothing, failures, known_findings);
 }
 
 // ---- The round trip: without captures of the game's, this captures draws of its own and replays them.
