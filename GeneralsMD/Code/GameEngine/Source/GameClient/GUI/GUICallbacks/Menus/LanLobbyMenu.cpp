@@ -255,7 +255,7 @@ Money LANPreferences::getStartingCash(void) const
   }
 
   Money money;
-  money.deposit( strtoul( it->second.str(), NULL, 10 ), FALSE  );
+  money.deposit( strtoulAsWindows( it->second.str() ), FALSE  );
 
   return money;
 }

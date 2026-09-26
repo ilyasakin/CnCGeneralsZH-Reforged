@@ -236,19 +236,26 @@ typedef UnsignedInt DeathTypeFlags;
 const DeathTypeFlags DEATH_TYPE_FLAGS_ALL = 0xffffffff;
 const DeathTypeFlags DEATH_TYPE_FLAGS_NONE = 0x00000000;
 
+/* A death type's bit in DeathTypeFlags: bit (type - 1), the shift count taken modulo 32, so DEATH_NORMAL
+	 (0) is bit 31 as it is on Windows.  See veterancyLevelFlagBit (Common/GameCommon.h) for why. */
+inline DeathTypeFlags deathTypeFlagBit(DeathType dt)
+{
+	return (DeathTypeFlags)1 << (((Int)dt - 1) & 31);
+}
+
 inline Bool getDeathTypeFlag(DeathTypeFlags flags, DeathType dt)
 {
-	return (flags & (1UL << (dt - 1))) != 0;
+	return (flags & deathTypeFlagBit(dt)) != 0;
 }
 
 inline DeathTypeFlags setDeathTypeFlag(DeathTypeFlags flags, DeathType dt)
 {
-	return (flags | (1UL << (dt - 1)));
+	return (flags | deathTypeFlagBit(dt));
 }
 
 inline DeathTypeFlags clearDeathTypeFlag(DeathTypeFlags flags, DeathType dt)
 {
-	return (flags & ~(1UL << (dt - 1)));
+	return (flags & ~deathTypeFlagBit(dt));
 }
 
 //-------------------------------------------------------------------------------------------------
