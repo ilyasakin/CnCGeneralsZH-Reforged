@@ -37,7 +37,9 @@
 	 executable's directory.  Here that is the default too, and "-root <dir>" overrides it.  It is set
 	 once, before anything asks for a path, and nothing changes it after (C1's Roots paragraph).  Plan
 	 rule 9 applies to how this is RUN: GameEngine::init deletes Data\INI\INIZH.big from the root, as it
-	 does in a player's install, so a development run must be rooted at a copy of the game data. */
+	 does in a player's install, so a development run must be rooted at a copy of the game data.
+	 The fork's own data is an overlay searched before that root (P1, decision 9): "-overlay <dir>", or
+	 the one a package puts beside the executable.  See chooseOverlays. */
 
 #include <SDL3/SDL_main.h>	// SDL3's main: on macOS and Linux an ordinary main
 
@@ -64,12 +66,20 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <locale.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
+
+#include <string>
+#include <vector>
+
+#include "posixpath.h"
 
 // GLOBALS ////////////////////////////////////////////////////////////////////
 // gameengine names these three; WinMain.cpp defines them on Windows, with these values.
@@ -108,6 +118,49 @@ static Bool chooseInstallRoot( int argc, char *argv[], char *out, size_t outSize
 	}
 	getExecutableDirectory( out, outSize, FALSE );
 	return out[0] != 0;
+}
+
+/** The fork's overlay (P1, decision 9): read roots searched before the install for every relative path
+	* that is read.  "-overlay <dir>", repeatable, in the order given; with none, the one a package puts
+	* beside the executable: "<exe>/../Resources/Overlay" in a macOS app bundle, or
+	* "<exe>/../share/zero-hour-reforged/overlay" in a Linux package.  An unpacked build has neither and
+	* runs on the install alone, as before.  Resolved to real paths here, before the chdir to the root,
+	* so a relative -overlay means what it meant where the command was typed.  FALSE for an -overlay
+	* that is not a directory. */
+static Bool chooseOverlays( int argc, char *argv[], std::vector<std::string> &overlays )
+{
+	for (int i = 1; i + 1 < argc; ++i)
+	{
+		if (strcasecmp( argv[i], "-overlay" ) != 0)
+			continue;
+		char real[ PATH_MAX ];
+		struct stat status;
+		if (realpath( argv[i + 1], real ) == NULL || stat( real, &status ) != 0 || !S_ISDIR( status.st_mode ))
+		{
+			fprintf( stderr, "generals: cannot use '%s' as an overlay: %s\n", argv[i + 1], strerror( errno ? errno : ENOTDIR ) );
+			return FALSE;
+		}
+		overlays.push_back( real );
+		++i;
+	}
+	if (!overlays.empty())
+		return TRUE;
+
+	char exe[ 4096 ];
+	getExecutableDirectory( exe, sizeof( exe ), FALSE );
+	static const char *const packaged[] = { "/../Resources/Overlay", "/../share/zero-hour-reforged/overlay" };
+	for (size_t i = 0; exe[0] != 0 && i < sizeof( packaged ) / sizeof( packaged[0] ); ++i)
+	{
+		const std::string candidate = std::string( exe ) + packaged[i];
+		char real[ PATH_MAX ];
+		struct stat status;
+		if (realpath( candidate.c_str(), real ) != NULL && stat( real, &status ) == 0 && S_ISDIR( status.st_mode ))
+		{
+			overlays.push_back( real );
+			break;
+		}
+	}
+	return TRUE;
 }
 
 /** WinMain's one-copy guard: a named mutex there, an exclusive lock on a file in the user data directory
@@ -150,12 +203,18 @@ int main( int argc, char *argv[] )
 		TheMemoryPoolCriticalSection = &critSec4;
 		TheDebugLogCriticalSection = &critSec5;
 
+		std::vector<std::string> overlays;
+		if (!chooseOverlays( argc, argv, overlays ))
+			return 1;
 		char root[ 4096 ];
 		if (!chooseInstallRoot( argc, argv, root, sizeof( root ) ) || chdir( root ) != 0)
 		{
 			fprintf( stderr, "generals: cannot use '%s' as the install root: %s\n", root, strerror( errno ) );
 			return 1;
 		}
+		PosixPath_Set_Overlays( overlays );
+		for (size_t i = 0; i < overlays.size(); ++i)
+			fprintf( stderr, "generals: overlay %s, searched before the install\n", overlays[i].c_str() );
 
 		// The window mode, as WinMain settles it: Options.ini's saved mode, then the command line over it.
 		{
