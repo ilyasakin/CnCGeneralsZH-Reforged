@@ -452,9 +452,28 @@ RenderResult PosixDevice9::Clear( RenderUInt32 count, const D3DRECT *rects, Rend
 		return D3DERR_INVALIDCALL;
 	if ((flags & D3DCLEAR_TARGET) && RenderTargets[0] == NULL)
 		return D3DERR_INVALIDCALL;
-	// With a window, a render target's pixels are the GPU's (A3 design, the render-target seam).
+	// With a window, a render target's pixels are the GPU's (the A3d render-target seam): the colour is
+	// cleared there when render target 0 is the GPU's, and the depth and stencil when the depth surface is,
+	// each on its own.  Whatever is left is a CPU image, filled here.
+	RenderUInt32 cpuFlags = flags;
 	if (Get_Gpu() != NULL)
-		return Gpu_Clear( count, rects, flags, color, z, stencil );
+	{
+		RenderUInt32 gpuFlags = 0;
+		if ((flags & D3DCLEAR_TARGET) && Gpu_Owns( RenderTargets[0] ))
+			gpuFlags |= D3DCLEAR_TARGET;
+		if (depthAsked && Gpu_Owns( DepthStencil ))
+			gpuFlags |= flags & (D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL);
+		if (gpuFlags != 0)
+		{
+			const RenderResult result = Gpu_Clear( count, rects, gpuFlags, color, z, stencil );
+			if (result != D3D_OK)
+				return result;
+		}
+		cpuFlags = flags & ~gpuFlags;
+	}
+	const bool cpuDepth = (cpuFlags & (D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL)) != 0;
+	if ((cpuFlags & D3DCLEAR_TARGET) == 0 && !cpuDepth)
+		return D3D_OK;
 
 	const PosixColor colour = posixColorFromD3DColor( color );
 	const unsigned int passes = (count == 0) ? 1 : count;
@@ -462,7 +481,7 @@ RenderResult PosixDevice9::Clear( RenderUInt32 count, const D3DRECT *rects, Rend
 	{
 		const D3DRECT *rect = (count == 0) ? NULL : &rects[index];
 		PosixRegion region;
-		if (flags & D3DCLEAR_TARGET)
+		if (cpuFlags & D3DCLEAR_TARGET)
 		{
 			PosixImage &target = imageOf( RenderTargets[0] );
 			if (clipped( Viewport, target, rect, &region ))
@@ -472,12 +491,12 @@ RenderResult PosixDevice9::Clear( RenderUInt32 count, const D3DRECT *rects, Rend
 					return result;
 			}
 		}
-		if (depthAsked)
+		if (cpuDepth)
 		{
 			PosixImage &depth = imageOf( DepthStencil );
 			if (clipped( Viewport, depth, rect, &region ))
 			{
-				const RenderResult result = posixFillDepth( depth, region, flags, z, stencil );
+				const RenderResult result = posixFillDepth( depth, region, cpuFlags, z, stencil );
 				if (result != D3D_OK)
 					return result;
 			}
