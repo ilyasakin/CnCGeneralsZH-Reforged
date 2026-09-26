@@ -16,7 +16,10 @@
 #   5. the oldest macOS (P2): the bundle's LSMinimumSystemVersion is the build's deployment target, and
 #      every object it ships is built for no newer one.  Two controls: a lower --min-macos than the
 #      build's is refused, naming libraries; a Mach-O built for a newer macOS planted in the overlay is
-#      refused by the bundle-side check, naming it.
+#      refused by the bundle-side check, naming it;
+#   6. universal2 (option A's path, tested with tiny stand-ins, no second build): an x86_64 executable
+#      for the target lipo'd in makes a bundle whose executable holds both slices and still verifies;
+#      one built for a newer macOS is refused, and so is an arm64 file passed as the x86_64 one.
 # What it cannot see: the art (built only by `ninja macos_app`, cloned), a quarantined download and
 # Gatekeeper (E2), the dialog of the root chooser (by hand).
 # Usage: test_macos_app.sh <generals> <staged overlay> <build dir> <deployment target>.
@@ -101,5 +104,23 @@ if cc -mmacosx-version-min=26.0 -o "$T/overlay/newer-tool" "$T/newer.c" 2>/dev/n
 else
 	check 'false' "cc could not build the control's newer-macOS Mach-O"
 fi
+
+# 6. universal2
+printf 'int main(void) { return 0; }\n' > "$T/x86.c"
+cc -arch x86_64 -mmacosx-version-min="$TARGET" -o "$T/x86-ok" "$T/x86.c" 2>/dev/null
+cc -arch x86_64 -mmacosx-version-min=26.0 -o "$T/x86-newer" "$T/x86.c" 2>/dev/null
+cc -arch arm64 -mmacosx-version-min="$TARGET" -o "$T/not-x86" "$T/x86.c" 2>/dev/null
+U="$T/six/Zero Hour Reforged.app"
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$U" --bundle-id "$ID" --min-macos "$TARGET" --no-art --x86-64-generals "$T/x86-ok" 2>&1)"; status=$?
+archs="$(lipo -archs "$U/Contents/MacOS/generals" 2>/dev/null | tr ' ' '\n' | sort | tr '\n' ' ')"
+check '[ $status -eq 0 ] && [ "$archs" = "arm64 x86_64 " ] && codesign --verify --deep --strict "$U" 2>/dev/null' \
+	"an x86_64 slice for $TARGET makes a universal executable ($archs) that verifies (exit $status)"
+check '[ "$(otool -arch all -l "$U/Contents/MacOS/generals" | awk "\$1 == \"minos\" {print \$2}" | sort -u | tr "\n" " ")" = "$TARGET " ]' \
+	"and both slices are stamped for $TARGET"
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$T/seven/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --no-art --x86-64-generals "$T/x86-newer" 2>&1)"; status=$?
+check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "the x86_64 executable built for a newer macOS" && [ ! -e "$T/seven/Zero Hour Reforged.app" ]' \
+	"an x86_64 slice for macOS 26 is refused before a bundle exists (exit $status)"
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$T/eight/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --no-art --x86-64-generals "$T/not-x86" 2>&1)"; status=$?
+check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "is not an x86_64 executable"' "an arm64 file passed as the x86_64 slice is refused (exit $status)"
 
 exit $failed
