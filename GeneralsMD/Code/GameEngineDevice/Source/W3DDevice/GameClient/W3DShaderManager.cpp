@@ -77,6 +77,7 @@
 #include "dx8caps.h"
 #include "Common/GameLOD.h"
 #include "benchmark.h"
+#include <string.h>	// memset, strcpy, strlen
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -150,7 +151,7 @@ FilterTypes W3DShaderManager::m_currentFilter=FT_NULL_FILTER; ///< Last filter t
 Int W3DShaderManager::m_currentShaderPass;
 ChipsetType W3DShaderManager::m_currentChipset;
 GraphicsVenderID W3DShaderManager::m_currentVendor;
-__int64 W3DShaderManager::m_driverVersion;
+Int64 W3DShaderManager::m_driverVersion;
 
 Bool W3DShaderManager::m_renderingToTexture = false;
 IDirect3DSurface9 *W3DShaderManager::m_oldRenderSurface=NULL;	///<previous render target
@@ -3179,7 +3180,7 @@ IDirect3DTexture9 *W3DShaderManager::getRenderTexture(void)
 	return m_renderTexture;
 }
 
-enum GraphicsVenderID
+enum GraphicsVenderID : int
 {
 	DC_NVIDIA_VENDOR_ID	= 0x10DE,
 	DC_3DFX_VENDOR_ID	= 0x121A,
@@ -3204,9 +3205,13 @@ ChipsetType W3DShaderManager::getChipset( void )
 	{
 
 		D3DADAPTER_IDENTIFIER9 did;
-		::ZeroMemory(&did, sizeof(D3DADAPTER_IDENTIFIER9));
+		memset(&did,0, sizeof(D3DADAPTER_IDENTIFIER9));
 	/*	HRESULT res = */ d3d8Interface->GetAdapterIdentifier(0,NO_ADAPTER_IDENTIFIER_FLAGS,&did);
+#if defined(_WIN32)
 		*((LARGE_INTEGER*)&m_driverVersion) = did.DriverVersion;
+#else
+		m_driverVersion = did.DriverVersion;	// D3D9Posix.h's DriverVersion is an int64_t: the same eight bytes
+#endif
 
 		if(did.VendorId == DC_NVIDIA_VENDOR_ID)
 		{
@@ -3452,7 +3457,7 @@ Real W3DShaderManager::GetCPUBenchTime(void)
 	float ztot, yran, ymult, ymod, x, y, z, pi, prod;
     long int low, ixran, itot, j, iprod;
 
-  	__int64 endTime64,freq64,startTime64;
+  	Int64 endTime64,freq64,startTime64;
 	freq64 = Clock_Ticks_Per_Second();
 	startTime64 = Clock_Ticks();
 
