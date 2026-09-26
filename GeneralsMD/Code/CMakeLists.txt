@@ -1258,6 +1258,15 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(sdl_pipeline_state_selfcheck PRIVATE posixd3d9 d3dx9runtime ffshader ffvertex SDL3::SDL3-static)
   add_test(NAME sdl_pipeline_state_selfcheck COMMAND sdl_pipeline_state_selfcheck)
   set_tests_properties(sdl_pipeline_state_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
+
+  # A3c's draws: through the device's D3D9 calls onto this machine's GPU, read back from the back buffer
+  # (77 without a GPU).
+  add_executable(posix_gpu_draw_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_gpu_draw.cpp)
+  set_target_properties(posix_gpu_draw_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(posix_gpu_draw_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(posix_gpu_draw_selfcheck PRIVATE posixd3d9 SDL3::SDL3-static)
+  add_test(NAME posix_gpu_draw_selfcheck COMMAND posix_gpu_draw_selfcheck)
+  set_tests_properties(posix_gpu_draw_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(sdl_gpu_frame_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
   # A2's half of the device (-18): the resources, the pixel codec, the image operations, the device's

@@ -1,0 +1,336 @@
+/*
+**	Command & Conquer Generals Zero Hour(tm)
+**	Copyright 2025 Electronic Arts Inc.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+// The frame's recorded batch (decision 7, phase A3c): what the draws record, and the flush that runs it
+// as one copy pass and then the render passes.  See SdlGpuFrame.h.
+
+#include "SdlGpuFrame.h"
+
+#include <SDL3/SDL.h>
+
+#include <string.h>
+
+// Past this much staged or uploaded data the next draw flushes first, so one batch never needs an
+// unbounded transfer buffer.
+static const size_t BATCH_LIMIT = 64u * 1024u * 1024u;
+
+// Every staged and uploaded range starts on this: enough for any vertex or index offset and for a texel
+// block's copy on every backend.
+static const uint32_t STAGING_ALIGNMENT = 16;
+
+static uint8_t * grow(std::vector<uint8_t> & bytes, uint32_t size, uint32_t & offset)
+{
+	offset = (uint32_t)((bytes.size() + STAGING_ALIGNMENT - 1) & ~(size_t)(STAGING_ALIGNMENT - 1));
+	bytes.resize((size_t)offset + size);
+	return size == 0 ? NULL : &bytes[offset];
+}
+
+uint8_t * SdlGpuFrame::Stage(uint32_t size, uint32_t & offset)
+{
+	return grow(StreamBytes, size, offset);
+}
+
+uint8_t * SdlGpuFrame::Upload_Space(uint32_t size, uint32_t & offset)
+{
+	return grow(UploadBytes, size, offset);
+}
+
+void SdlGpuFrame::Queue_Buffer_Upload(SDL_GPUBuffer * buffer, uint32_t upload_offset, uint32_t size)
+{
+	Upload upload;
+	memset(&upload, 0, sizeof(upload));
+	upload.Buffer = buffer;
+	upload.Offset = upload_offset;
+	upload.Size = size;
+	Uploads.push_back(upload);
+}
+
+void SdlGpuFrame::Queue_Texture_Upload(SDL_GPUTexture * texture, unsigned int level, unsigned int width,
+	unsigned int height, uint32_t upload_offset)
+{
+	Upload upload;
+	memset(&upload, 0, sizeof(upload));
+	upload.Texture = texture;
+	upload.Level = level;
+	upload.Width = width;
+	upload.Height = height;
+	upload.Offset = upload_offset;
+	Uploads.push_back(upload);
+}
+
+uint32_t SdlGpuFrame::Constants(unsigned int stage, const void * bytes, uint32_t size)
+{
+	if (LastConstantsSize[stage] == size && memcmp(&ConstantBytes[LastConstants[stage]], bytes, size) == 0) {
+		return LastConstants[stage];
+	}
+	uint32_t offset = 0;
+	memcpy(grow(ConstantBytes, size, offset), bytes, size);
+	LastConstants[stage] = offset;
+	LastConstantsSize[stage] = size;
+	return offset;
+}
+
+void SdlGpuFrame::Record_Draw(const SdlRecordedDraw & draw)
+{
+	Command command;
+	memset(&command, 0, sizeof(command));
+	command.IsDraw = true;
+	command.Draw = (uint32_t)Draws.size();
+	Draws.push_back(draw);
+	Commands.push_back(command);
+}
+
+void SdlGpuFrame::Release_After_Batch(SDL_GPUTexture * texture, SDL_GPUBuffer * buffer)
+{
+	if (texture != NULL) DeadTextures.push_back(texture);
+	if (buffer != NULL) DeadBuffers.push_back(buffer);
+}
+
+bool SdlGpuFrame::Batch_Is_Full() const
+{
+	return StreamBytes.size() + UploadBytes.size() > BATCH_LIMIT;
+}
+
+void SdlGpuFrame::End_Batch()
+{
+	Commands.clear();
+	Draws.clear();
+	StreamBytes.clear();
+	UploadBytes.clear();
+	ConstantBytes.clear();
+	LastConstants[0] = LastConstants[1] = LastConstantsSize[0] = LastConstantsSize[1] = 0;
+	Uploads.clear();
+	// The batch that could use these has been submitted: SDL keeps each until the GPU is done with it.
+	for (size_t i = 0; i < DeadTextures.size(); ++i) SDL_ReleaseGPUTexture(GpuDevice, DeadTextures[i]);
+	for (size_t i = 0; i < DeadBuffers.size(); ++i) SDL_ReleaseGPUBuffer(GpuDevice, DeadBuffers[i]);
+	DeadTextures.clear();
+	DeadBuffers.clear();
+	++BatchNumber;
+}
+
+// The copy pass: the staging stream into its GPU buffer, and the queued uploads into the GPU copies,
+// all from one transfer buffer.  Then the passes.
+bool SdlGpuFrame::Record_Batch(SDL_GPUCommandBuffer * commands)
+{
+	if (Commands.empty() && Uploads.empty()) {
+		return true;
+	}
+	const uint32_t stream_size = (uint32_t)((StreamBytes.size() + 3) & ~(size_t)3);
+	const uint32_t upload_base = (uint32_t)((stream_size + STAGING_ALIGNMENT - 1) & ~(STAGING_ALIGNMENT - 1));
+	const uint32_t total = upload_base + (uint32_t)UploadBytes.size();
+	if (total > 0) {
+		if (TransferSize < total) {
+			if (Transfer != NULL) SDL_ReleaseGPUTransferBuffer(GpuDevice, Transfer);
+			TransferSize = total + total / 2;
+			SDL_GPUTransferBufferCreateInfo info;
+			SDL_zero(info);
+			info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+			info.size = TransferSize;
+			Transfer = SDL_CreateGPUTransferBuffer(GpuDevice, &info);
+			if (Transfer == NULL) {
+				TransferSize = 0;
+				return false;
+			}
+		}
+		if (StreamBufferSize < stream_size) {
+			if (StreamBuffer != NULL) SDL_ReleaseGPUBuffer(GpuDevice, StreamBuffer);
+			StreamBufferSize = stream_size + stream_size / 2;
+			SDL_GPUBufferCreateInfo info;
+			SDL_zero(info);
+			info.usage = SDL_GPU_BUFFERUSAGE_VERTEX | SDL_GPU_BUFFERUSAGE_INDEX;
+			info.size = StreamBufferSize;
+			StreamBuffer = SDL_CreateGPUBuffer(GpuDevice, &info);
+			if (StreamBuffer == NULL) {
+				StreamBufferSize = 0;
+				return false;
+			}
+		}
+		// Cycled: the batch before may still be reading the last contents.
+		uint8_t * mapped = (uint8_t *)SDL_MapGPUTransferBuffer(GpuDevice, Transfer, true);
+		if (mapped == NULL) {
+			return false;
+		}
+		if (!StreamBytes.empty()) memcpy(mapped, &StreamBytes[0], StreamBytes.size());
+		if (!UploadBytes.empty()) memcpy(mapped + upload_base, &UploadBytes[0], UploadBytes.size());
+		SDL_UnmapGPUTransferBuffer(GpuDevice, Transfer);
+
+		SDL_GPUCopyPass * copy = SDL_BeginGPUCopyPass(commands);
+		if (copy == NULL) {
+			return false;
+		}
+		if (stream_size > 0) {
+			SDL_GPUTransferBufferLocation source = { Transfer, 0 };
+			SDL_GPUBufferRegion region = { StreamBuffer, 0, stream_size };
+			SDL_UploadToGPUBuffer(copy, &source, &region, true);
+		}
+		for (size_t i = 0; i < Uploads.size(); ++i) {
+			const Upload & upload = Uploads[i];
+			if (upload.Buffer != NULL) {
+				SDL_GPUTransferBufferLocation source = { Transfer, upload_base + upload.Offset };
+				SDL_GPUBufferRegion region = { upload.Buffer, 0, upload.Size };
+				SDL_UploadToGPUBuffer(copy, &source, &region, true);
+			}
+			else {
+				SDL_GPUTextureTransferInfo source;
+				SDL_zero(source);
+				source.transfer_buffer = Transfer;
+				source.offset = upload_base + upload.Offset;
+				SDL_GPUTextureRegion region;
+				SDL_zero(region);
+				region.texture = upload.Texture;
+				region.mip_level = upload.Level;
+				region.w = upload.Width;
+				region.h = upload.Height;
+				region.d = 1;
+				// Level 0 cycles the texture; the levels after it follow into the same new one.
+				SDL_UploadToGPUTexture(copy, &source, &region, upload.Level == 0);
+			}
+		}
+		SDL_EndGPUCopyPass(copy);
+	}
+	return Record_Passes(commands, StreamBuffer);
+}
+
+// The records in order.  A pass is opened by the first draw after a clear (the clear its load
+// operation), and a clear after draws ends the pass; clears that no draw follows get a pass of their
+// own.  Every pass has the back buffer and the depth-stencil: a pipeline's depth format is always the
+// frame's, and a draw with no depth surface bound has its depth state off instead.
+bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer * stream)
+{
+	SDL_GPURenderPass * pass = NULL;
+	bool clear_colour = false, clear_depth = false, clear_stencil = false;
+	uint32_t argb = 0, stencil_value = 0;
+	float z = 1.0f;
+
+	// What the pass has bound, to bind only a change.  Pushed uniforms outlive a pass (SDL3 keeps them for
+	// the rest of the command buffer), so those are tracked for the whole batch.
+	const SdlRecordedDraw * last = NULL;
+	uint32_t pushed_vertex = 0xFFFFFFFFu, pushed_pixel = 0xFFFFFFFFu;
+
+	for (size_t i = 0; i <= Commands.size(); ++i) {
+		const bool end = i == Commands.size();
+		if (end || !Commands[i].IsDraw) {
+			if (pass != NULL) {
+				SDL_EndGPURenderPass(pass);
+				pass = NULL;
+			}
+			if (end) {
+				if (!(clear_colour || clear_depth || clear_stencil)) {
+					break;
+				}
+			}
+			else {
+				const Command & clear = Commands[i];
+				if (clear.Colour) { clear_colour = true; argb = clear.Argb; }
+				if (clear.Depth) { clear_depth = true; z = clear.Z; }
+				if (clear.Stencil) { clear_stencil = true; stencil_value = clear.StencilValue; }
+				continue;
+			}
+		}
+		if (pass == NULL) {
+			SDL_GPUColorTargetInfo colour;
+			SDL_zero(colour);
+			colour.texture = BackBuffer;
+			colour.clear_color.a = (float)((argb >> 24) & 0xFF) / 255.0f;
+			colour.clear_color.r = (float)((argb >> 16) & 0xFF) / 255.0f;
+			colour.clear_color.g = (float)((argb >> 8) & 0xFF) / 255.0f;
+			colour.clear_color.b = (float)(argb & 0xFF) / 255.0f;
+			colour.load_op = clear_colour ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+			colour.store_op = SDL_GPU_STOREOP_STORE;
+			SDL_GPUDepthStencilTargetInfo depth;
+			SDL_zero(depth);
+			depth.texture = DepthStencil;
+			depth.clear_depth = z;
+			depth.clear_stencil = (Uint8)stencil_value;
+			depth.load_op = clear_depth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+			depth.store_op = SDL_GPU_STOREOP_STORE;
+			depth.stencil_load_op = clear_stencil ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+			depth.stencil_store_op = SDL_GPU_STOREOP_STORE;
+			pass = SDL_BeginGPURenderPass(commands, &colour, 1, &depth);
+			if (pass == NULL) {
+				return false;
+			}
+			clear_colour = clear_depth = clear_stencil = false;
+			last = NULL;
+			if (i == Commands.size()) {
+				SDL_EndGPURenderPass(pass);
+				break;
+			}
+		}
+
+		const SdlRecordedDraw & draw = Draws[Commands[i].Draw];
+		if (last == NULL || last->Pipeline != draw.Pipeline) {
+			SDL_BindGPUGraphicsPipeline(pass, draw.Pipeline);
+		}
+		if (last == NULL || memcmp(last->Viewport, draw.Viewport, sizeof(draw.Viewport)) != 0) {
+			SDL_GPUViewport viewport = { draw.Viewport[0], draw.Viewport[1], draw.Viewport[2], draw.Viewport[3],
+				draw.Viewport[4], draw.Viewport[5] };
+			SDL_SetGPUViewport(pass, &viewport);
+		}
+		if (last == NULL || memcmp(last->Scissor, draw.Scissor, sizeof(draw.Scissor)) != 0) {
+			SDL_Rect scissor = { draw.Scissor[0], draw.Scissor[1], draw.Scissor[2], draw.Scissor[3] };
+			SDL_SetGPUScissor(pass, &scissor);
+		}
+		if (last == NULL || last->StencilReference != draw.StencilReference) {
+			SDL_SetGPUStencilReference(pass, (Uint8)draw.StencilReference);
+		}
+		if (last == NULL || last->BlendFactor != draw.BlendFactor) {
+			SDL_FColor factor = { (float)((draw.BlendFactor >> 16) & 0xFF) / 255.0f,
+				(float)((draw.BlendFactor >> 8) & 0xFF) / 255.0f, (float)(draw.BlendFactor & 0xFF) / 255.0f,
+				(float)((draw.BlendFactor >> 24) & 0xFF) / 255.0f };
+			SDL_SetGPUBlendConstants(pass, factor);
+		}
+		SDL_GPUBuffer * vertices = draw.VertexBuffer != NULL ? draw.VertexBuffer : stream;
+		if (last == NULL || last->VertexBuffer != draw.VertexBuffer || last->VertexOffset != draw.VertexOffset) {
+			SDL_GPUBufferBinding binding = { vertices, draw.VertexOffset };
+			SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
+		}
+		if (draw.IndexSize != 0 && (last == NULL || last->IndexSize == 0 || last->IndexBuffer != draw.IndexBuffer
+			|| last->IndexOffset != draw.IndexOffset || last->IndexSize != draw.IndexSize)) {
+			SDL_GPUBufferBinding binding = { draw.IndexBuffer != NULL ? draw.IndexBuffer : stream, draw.IndexOffset };
+			SDL_BindGPUIndexBuffer(pass, &binding,
+				draw.IndexSize == 4 ? SDL_GPU_INDEXELEMENTSIZE_32BIT : SDL_GPU_INDEXELEMENTSIZE_16BIT);
+		}
+		if (draw.SamplerCount > 0 && (last == NULL || last->SamplerCount != draw.SamplerCount
+			|| memcmp(last->Textures, draw.Textures, sizeof(draw.Textures[0]) * draw.SamplerCount) != 0
+			|| memcmp(last->Samplers, draw.Samplers, sizeof(draw.Samplers[0]) * draw.SamplerCount) != 0)) {
+			SDL_GPUTextureSamplerBinding bindings[SdlRecordedDraw::MAXIMUM_SAMPLERS];
+			for (uint32_t slot = 0; slot < draw.SamplerCount; ++slot) {
+				bindings[slot].texture = draw.Textures[slot];
+				bindings[slot].sampler = draw.Samplers[slot];
+			}
+			SDL_BindGPUFragmentSamplers(pass, 0, bindings, draw.SamplerCount);
+		}
+		if (draw.VertexConstantsSize != 0 && draw.VertexConstants != pushed_vertex) {
+			SDL_PushGPUVertexUniformData(commands, 0, &ConstantBytes[draw.VertexConstants], draw.VertexConstantsSize);
+			pushed_vertex = draw.VertexConstants;
+		}
+		if (draw.PixelConstantsSize != 0 && draw.PixelConstants != pushed_pixel) {
+			SDL_PushGPUFragmentUniformData(commands, 0, &ConstantBytes[draw.PixelConstants], draw.PixelConstantsSize);
+			pushed_pixel = draw.PixelConstants;
+		}
+		if (draw.IndexSize != 0) {
+			SDL_DrawGPUIndexedPrimitives(pass, draw.Count, 1, draw.First, draw.BaseVertex, 0);
+		}
+		else {
+			SDL_DrawGPUPrimitives(pass, draw.Count, 1, draw.First, 0);
+		}
+		last = &draw;
+	}
+	return true;
+}

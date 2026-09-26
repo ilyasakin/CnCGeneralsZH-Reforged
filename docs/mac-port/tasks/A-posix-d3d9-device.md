@@ -412,3 +412,75 @@ that flips the pass's vertical texture coordinate fails every pixel. **Not check
 real window (ctest has no display), and a device made through `CreateDevice` with a window, which needs
 A2's implicit surfaces (merged separately) and a display. POSIX-only files: nothing a Windows build
 compiles changes.
+
+## A3c: fixed-function draws on SDL3 GPU (in progress, 2026-09-26)
+
+What is in, each piece with a unit test:
+
+- **The resolve.** `PosixDevice9Draw.cpp` reads the state as set into D3's generator descriptions and
+  the two constant blocks, the way dx11backend does. It also holds D3D9's documented initial states.
+  (`posix_draw_resolve_selfcheck`)
+- **Programs.** `SdlProgramCache` covers HLSL through SPIR-V to `SDL_GPUShader`, the slot lines and a
+  negative cache. On Metal, 27 programs compile in about 520 ms. (`sdl_program_cache_selfcheck`)
+- **Pipelines and samplers.** `SdlPipelineCache` holds the vertex layout at D3's locations. The POD key
+  covers blend, depth, stencil, rasterizer, the program pair, the FVF, the primitive and the formats.
+  The sampler description is built from the sampler-state row. Point fill, border/mirror-once
+  addressing and blend-weighted positions are refused. Every engine FVF's stride matches D3DX's own
+  vertex size. (`sdl_pipeline_state_selfcheck`)
+- **The batch.** `SdlGpuFrame` plus `SdlGpuFrameBatch.cpp`:
+  - Clears and draws are recorded in order. Bytes that can still change are staged.
+  - The flush is one copy pass, then render passes. A clear is the load operation of the pass after
+    it, and a clear after draws ends the pass.
+  - Uniform blocks are pushed only on change, per stage.
+  - Every pass has the back buffer and the depth-stencil. With no depth surface bound, a draw gets
+    depth and stencil off in its key instead of a different attachment.
+- **GPU copies.** `SdlResourceMirror`:
+  - Formats: DXT1/2-3/4-5 go up as BC1/2/3 where the GPU samples them and the base level is whole
+    blocks. A8R8G8B8 goes up as B8G8R8A8. X8R8G8B8 is copied with alpha forced to 1. Everything else
+    is decoded with A2's codec.
+  - Copies are keyed by the A2 object's address and dropped by `posixResourceDestroyed` (-18's hook,
+    agreed and reviewed).
+- **The draws.** `DrawPrimitive`, `DrawIndexedPrimitive` and `DrawPrimitiveUP`:
+  - Static buffers bind their copy. Dynamic buffers and UP data are staged from the first vertex the
+    draw can read. Fans are expanded into staged list indices.
+  - The viewport moves half a pixel as dx11backend's does. The scissor is the viewport.
+  - An unbound slot samples 1x1 white.
+  - `DrawPrimitiveUP` leaves stream 0 unbound, as D3D9 documents.
+  - Refusals are counted by reason, logged once, and answer `D3D_OK`: programmable draws (A3e),
+    other render targets or depth surfaces (A3d), user clip planes, cube and volume textures.
+
+**One refinement of the design's "The frame".** The design says a static resource written again after a
+draw used it goes "through the ring" for the later draw. But the earlier draw would still read the
+later bytes, since the copy pass runs before every draw of the batch. What happens instead:
+
+- A copy's new bytes are taken when the draw that needs them is recorded.
+- A copy that this batch has already used, and that has changed, flushes the batch first.
+
+Each draw sees what D3D9 showed it. The flushes are counted (`Stale_Flushes`): the engine's
+per-frame writes go to `DYNAMIC` buffers, which are staged instead.
+
+**Checked** (`posix_gpu_draw_selfcheck`, Metal on the M3 Pro, `ZH_GPU_DEBUG=1` validation clean; 77
+without a GPU). Everything goes through D3D9 calls on a device with an offscreen frame, read back from
+the back buffer:
+
+- Placement: a pre-transformed quad with edges at x.25 covers D3D9's columns 9-24. Its clockwise
+  triangles are front-facing under `CULL_CCW`, and are culled when wound the other way.
+- A transformed, unlit quad.
+- Textures: an A8R8G8B8 2x2 lands texel by texel in its quadrants. DXT1 goes up as BC1. X8R8G8B8
+  blends as opaque. An unbound slot reads white.
+- Buffers: a UP fan and an indexed fan with a base vertex. A static buffer rewritten between two draws
+  shows both quads, with one stale flush. A dynamic buffer rewritten with `DISCARD` shows both, with
+  none.
+- Clears and depth: a clear between draws, and the depth test ordering two quads either way.
+- Lifetimes and refusals: texture copies go with their textures. A cube texture is refused, counted,
+  and draws nothing. A headless device records nothing.
+
+Six mutations were each caught: no half-pixel shift, cull swapped, no stale flush, fan off by one,
+X8 alpha left as stored, and a clear after draws ignored.
+
+**Not yet:**
+
+- the clear draw (a partial clear is still refused);
+- a run of the game with a window: shell map and skirmish, refusal counts;
+- the FFReference comparison (A3b's harness, next);
+- the on-disk program cache and warm-up list.
