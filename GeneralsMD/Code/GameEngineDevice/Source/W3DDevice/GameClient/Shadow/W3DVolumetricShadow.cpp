@@ -324,11 +324,11 @@ class W3DShadowGeometryMesh
 	friend class W3DVolumetricShadow;
 	
 public:
-	W3DShadowGeometryMesh::W3DShadowGeometryMesh( void );
+	W3DShadowGeometryMesh( void );
 #ifdef DO_TERRAIN_SHADOW_VOLUMES
 	virtual
 #endif
-	W3DShadowGeometryMesh::~W3DShadowGeometryMesh( void );
+	~W3DShadowGeometryMesh( void );
 
 	/// @todo: Cache/Store face normals someplace so they are not recomputed when lights move.
 	const Vector3& GetPolygonNormal(long dwPolyNormId) const
@@ -1575,7 +1575,7 @@ void W3DVolumetricShadow::RenderMeshVolume(Int meshIndex, Int lightIndex, const 
 	// and this pass sets a world matrix per mesh and never puts the old one back.  The Direct3D 11
 	// backend is told separately, which is all it needs.
 	Matrix4x4 mWorldTransposed = mWorld.Transpose();
-	m_pDev->SetTransform(D3DTS_WORLD,(_D3DMATRIX *)&mWorldTransposed);
+	m_pDev->SetTransform(D3DTS_WORLD,(D3DMATRIX *)&mWorldTransposed);
 	Direct3D11_Mirror_Transform(D3DTS_WORLD,(const float *)&mWorldTransposed);
 
 	W3DBufferManager::W3DVertexBufferSlot *vbSlot=m_shadowVolumeVB[lightIndex][ meshIndex ];
@@ -1737,7 +1737,7 @@ void W3DVolumetricShadow::RenderDynamicMeshVolume(Int meshIndex, Int lightIndex,
 	Matrix4x4 mWorld(*meshXform);
 	Matrix4x4 mWorldTransposed = mWorld.Transpose();
 
-	m_pDev->SetTransform(D3DTS_WORLD,(_D3DMATRIX *)&mWorldTransposed);
+	m_pDev->SetTransform(D3DTS_WORLD,(D3DMATRIX *)&mWorldTransposed);
 	Direct3D11_Mirror_Transform(D3DTS_WORLD,(const float *)&mWorldTransposed);
 
 	if (shadowVertexBufferD3D != lastActiveVertexBuffer)
@@ -1897,7 +1897,8 @@ void W3DVolumetricShadow::RenderMeshVolumeBounds(Int meshIndex, Int lightIndex, 
 	//todo: replace this with mesh transform
 	Matrix4x4 mWorld(1);	//identity since boxes are pre-transformed to world space.
 
-	m_pDev->SetTransform(D3DTS_WORLD,(_D3DMATRIX *)&mWorld.Transpose());
+	Matrix4x4 mWorldT = mWorld.Transpose();	// a named copy: ISO C++ takes no address of a temporary
+	m_pDev->SetTransform(D3DTS_WORLD,(D3DMATRIX *)&mWorldT);
 	
 	m_pDev->SetStreamSource(0,shadowVertexBufferD3D,0,sizeof(SHADOW_DYNAMIC_VOLUME_VERTEX));
 	m_pDev->SetFVF(SHADOW_DYNAMIC_VOLUME_FVF);

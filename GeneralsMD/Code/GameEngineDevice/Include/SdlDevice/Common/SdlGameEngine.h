@@ -23,13 +23,15 @@
 //     so a headless run needs no display (E1's replay runs are on machines without one);
 //   - the event pump (serviceWindowsOS), with a close request and the application's focus handled
 //     as WM_CLOSE and WM_ACTIVATEAPP are;
-//   - the window's title, through GameText's hook (GameClient/ApplicationWindowTitle.h).
+//   - the window's title, through GameText's hook (GameClient/ApplicationWindowTitle.h);
+//   - the displays, as Monitors.h's table (SdlDisplays.h), while SDL's video is up;
+//   - MessageBoxWrapper's box, as SDL_ShowMessageBox over the window (SdlMessageBox.h).
 // Nothing draws into the window yet: the renderer is D4's.
 //
 // The factories Windows answers with W3DDevice classes cannot be answered here yet, and each stops the
 // game with a message that names what it waits for rather than hand back something that is not the
 // game (PosixGameEngine.h says why for the logic and the module factory).  Audio is the exception:
-// NullAudioManager, the silent device, until C4's upper half wires the real one.
+// MilesAudioManager, over the Miles surface on miniaudio (C4).
 
 #pragma once
 

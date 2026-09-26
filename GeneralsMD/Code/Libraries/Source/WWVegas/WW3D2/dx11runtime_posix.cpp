@@ -25,6 +25,7 @@
 // being active, so they are not kept.)
 
 #include "dx11runtime.h"
+#include "dx11twin.h"
 
 #include <stddef.h>
 
@@ -170,3 +171,27 @@ const char * Direct3D11_Pipeline_Report(unsigned) { return ""; }
 unsigned Direct3D11_Foreign_Report_Count() { return 0; }
 const char * Direct3D11_Foreign_Report(unsigned) { return ""; }
 const char * Direct3D11_First_Compiler_Error() { return ""; }
+
+// The buffer twins W3DProjectedShadow locks directly.  None is ever made off Windows (the two
+// Direct3D11_Twin_ calls above return null), so every lock has none, and does what dx11twin.cpp's does
+// for a null twin: hands back nothing, so the caller writes its Direct3D 9 copy, and ends doing nothing.
+DX11BufferTwinClass::~DX11BufferTwinClass() {}
+
+DX11BufferLockClass::DX11BufferLockClass() :
+	Twin(NULL),
+	D3D9Memory(NULL),
+	ByteOffset(0),
+	ByteCount(0),
+	Discard(false),
+	CopyToD3D9(true),
+	Mapped(false)
+{
+}
+
+void * DX11BufferLockClass::Begin(DX11BufferTwinClass * twin, void *, unsigned, unsigned, unsigned, bool)
+{
+	Twin = twin;
+	return NULL;
+}
+
+void DX11BufferLockClass::End() {}

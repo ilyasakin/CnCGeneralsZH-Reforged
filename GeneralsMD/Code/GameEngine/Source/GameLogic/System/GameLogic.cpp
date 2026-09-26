@@ -4418,6 +4418,16 @@ void GameLogic::update( void )
 #endif
 
 	setFPMode();
+
+	/* The water grid's mesh motion, which isUnderwater reads, steps here, once per logic frame (T1c,
+		 defect 17).  EA stepped it on the client pass, gated on the logic frame having changed; with one
+		 pass per logic frame that was one step a frame, taken just ahead of the frame, which is where
+		 this stands - before a new game starts, before the scripts, before anything in the frame reads
+		 or writes the grid.  The logic catch-up runs frames with no client pass in front of them, and
+		 there the grid fell a step behind for each: grid heights depended on the machine's frame rate.
+		 The gate stays: a frozen or held frame, which does not advance, does not step twice. */
+	if (TheTerrainVisual)
+		TheTerrainVisual->updateWaterGrid( m_frame );
 	
 	/// @todo remove this hack
 	if ( m_startNewGame && !TheDisplay->isMoviePlaying())

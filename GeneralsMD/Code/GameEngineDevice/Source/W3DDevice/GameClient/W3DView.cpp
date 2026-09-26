@@ -35,7 +35,9 @@
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////////////////////////
 #include <stdlib.h>
 #include "Lib/Clock.h"
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "Common/BuildAssistant.h"
@@ -99,9 +101,11 @@
 
 #include "W3DDevice/GameClient/camerashakesystem.h"
 
+#if defined(_WIN32)
 #include "WinMain.h"  /** @todo Remove this, it's only here because we
 													are using timeGetTime, but we can remove that
 													when we have our own timer */
+#endif
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -1189,8 +1193,8 @@ void W3DView::update(void)
 	Bool recalcCamera = m_recalcCamera;
 	Bool didScriptedMovement = false;
 #ifdef LOG_FRAME_TIMES
-	__int64 curTime64,freq64;
-	static __int64 prevTime64=0;
+	Int64 curTime64,freq64;
+	static Int64 prevTime64=0;
 	freq64 = Clock_Ticks_Per_Second();
 	curTime64 = Clock_Ticks();
 	freq64 /= 1000;

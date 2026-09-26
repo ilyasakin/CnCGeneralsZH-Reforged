@@ -42,8 +42,10 @@
 #include "dx8wrapper.h"
 #include "formconv.h"
 #pragma warning (disable : 4201)		// nonstandard extension - nameless struct
+#if defined(_WIN32)
 #include <windows.h>
 #include <mmsystem.h>
+#endif
 
 static StringClass CapsWorkString;
 
@@ -521,7 +523,7 @@ void DX8Caps::Init_Caps(IDirect3DDevice9* D3DDevice)
 	// came out false and the device stayed in software vertex processing, at half the
 	// frame rate and with the wrong filter caps behind it.  The device runs in hardware
 	// mode, so that is the mode its caps are read in.
-	D3DDevice->SetSoftwareVertexProcessing(FALSE);
+	D3DDevice->SetSoftwareVertexProcessing(false);
 	DX8CALL(GetDeviceCaps(&Caps));
 
 	SupportTnL=(Caps.DevCaps&D3DDEVCAPS_HWTRANSFORMANDLIGHT)==D3DDEVCAPS_HWTRANSFORMANDLIGHT;
@@ -545,10 +547,21 @@ void DX8Caps::Compute_Caps(WW3DFormat display_format, const D3DADAPTER_IDENTIFIE
 	DXLOG(("Driver: %s\r\n",adapter_id.Driver));
 
 	DriverDLL=adapter_id.Driver;
+#if defined(_WIN32)
 	int Product = HIWORD(adapter_id.DriverVersion.HighPart);
 	int Version = LOWORD(adapter_id.DriverVersion.HighPart);
 	int SubVersion = HIWORD(adapter_id.DriverVersion.LowPart);
 	DriverBuildVersion = LOWORD(adapter_id.DriverVersion.LowPart);
+#else
+	// DriverVersion is an int64_t off Windows (Platform/D3D9Posix.h); these are LARGE_INTEGER's halves
+	// and their 16-bit words, as HIWORD and LOWORD take them.
+	const unsigned int version_high = (unsigned int)((unsigned long long)adapter_id.DriverVersion >> 32);
+	const unsigned int version_low = (unsigned int)((unsigned long long)adapter_id.DriverVersion & 0xFFFFFFFFu);
+	int Product = (int)(version_high >> 16);
+	int Version = (int)(version_high & 0xFFFF);
+	int SubVersion = (int)(version_low >> 16);
+	DriverBuildVersion = (int)(version_low & 0xFFFF);
+#endif
 
 	DXLOG(("Product=%d, Version=%d, SubVersion=%d, Build=%d\r\n",Product, Version, SubVersion, DriverBuildVersion));
 
@@ -723,7 +736,7 @@ void DX8Caps::Check_Texture_Format_Support(WW3DFormat display_format,const D3DCA
 			if (SupportTextureFormat[i]) {
 				StringClass name(0,true);
 				Get_WW3D_Format_Name(format,name);
-				DXLOG(("Supports texture format: %s\r\n",name));
+				DXLOG(("Supports texture format: %s\r\n",(const char *)name));
 			}
 		}
 	}
@@ -755,7 +768,7 @@ void DX8Caps::Check_Render_To_Texture_Support(WW3DFormat display_format,const D3
 			if (SupportRenderToTextureFormat[i]) {
 				StringClass name(0,true);
 				Get_WW3D_Format_Name(format,name);
-				DXLOG(("Supports render-to-texture format: %s\r\n",name));
+				DXLOG(("Supports render-to-texture format: %s\r\n",(const char *)name));
 			}
 		}
 	}
@@ -804,7 +817,7 @@ void DX8Caps::Check_Depth_Stencil_Support(WW3DFormat display_format, const D3DCA
 			{
 				StringClass name(0,true);
 				Get_WW3D_ZFormat_Name(format,name);
-				DXLOG(("Supports depth stencil format: %s\r\n",name));
+				DXLOG(("Supports depth stencil format: %s\r\n",(const char *)name));
 			}
 		}
 	}

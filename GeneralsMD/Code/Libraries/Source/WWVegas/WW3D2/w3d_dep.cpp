@@ -50,6 +50,7 @@
 
 //-----------------------------------------------------------------------------
 // srj sez: hack festival :-(
+#include <stddef.h>	// size_t, which this uses before any other header is in
 class STLSpecialAlloc
 {
 public:

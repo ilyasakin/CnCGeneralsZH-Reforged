@@ -6,7 +6,9 @@
  * from both sides.
  *
  * The user data directory is ZH_USER_DATA_DIR, set by CMake to a folder in the build tree; the test
- * empties it first.  Built with test_registryfile's engine sources (CMakeLists.txt).
+ * empties it first.  Without the variable the harness's guard (test_user_data_guard.cpp) stops the
+ * binary before anything here runs, so this can never write the real Registry.ini.  Built with
+ * test_registryfile's engine sources (CMakeLists.txt).
  */
 
 #include "test_harness.h"
@@ -55,16 +57,7 @@ void start_empty()
 		initMemoryManager();
 		booted = true;
 	}
-	/* Without ZH_USER_DATA_DIR every write below would go to this user's real Registry.ini
-		 (findUserDataDirectory's own answer), which a test has no business touching - and this function
-		 deletes the file.  ctest sets the variable to a folder in the build tree; run by hand without it,
-		 stop before anything is written. */
-	const char *dir = getenv("ZH_USER_DATA_DIR");
-	if (dir == NULL || *dir == 0) {
-		printf("FAIL: ZH_USER_DATA_DIR is not set; refusing to write the real Registry.ini (run through ctest)\n");
-		fflush(stdout);
-		exit(1);
-	}
+	const char *dir = getenv("ZH_USER_DATA_DIR");	// set: the harness's guard saw to that
 	const std::string command = std::string("mkdir -p '") + dir + "'";
 	if (system(command.c_str()) != 0)
 		printf("  could not make %s\n", dir);
@@ -72,12 +65,6 @@ void start_empty()
 }
 
 }  // namespace
-
-TEST(wwdownload_registry_needs_a_user_data_directory_to_write_to)
-{
-	const char *dir = getenv("ZH_USER_DATA_DIR");
-	CHECK(dir != NULL && *dir != 0);	// CMake sets it; without it every write below would fail
-}
 
 TEST(wwdownload_registry_strings_round_trip_through_registry_ini)
 {

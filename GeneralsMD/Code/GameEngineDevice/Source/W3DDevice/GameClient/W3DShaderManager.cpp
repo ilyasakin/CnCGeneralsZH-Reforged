@@ -77,6 +77,7 @@
 #include "dx8caps.h"
 #include "Common/GameLOD.h"
 #include "benchmark.h"
+#include <string.h>	// memset, strcpy, strlen
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -150,7 +151,7 @@ FilterTypes W3DShaderManager::m_currentFilter=FT_NULL_FILTER; ///< Last filter t
 Int W3DShaderManager::m_currentShaderPass;
 ChipsetType W3DShaderManager::m_currentChipset;
 GraphicsVenderID W3DShaderManager::m_currentVendor;
-__int64 W3DShaderManager::m_driverVersion;
+Int64 W3DShaderManager::m_driverVersion;
 
 Bool W3DShaderManager::m_renderingToTexture = false;
 IDirect3DSurface9 *W3DShaderManager::m_oldRenderSurface=NULL;	///<previous render target
@@ -3179,7 +3180,7 @@ IDirect3DTexture9 *W3DShaderManager::getRenderTexture(void)
 	return m_renderTexture;
 }
 
-enum GraphicsVenderID
+enum GraphicsVenderID : int
 {
 	DC_NVIDIA_VENDOR_ID	= 0x10DE,
 	DC_3DFX_VENDOR_ID	= 0x121A,
@@ -3204,9 +3205,13 @@ ChipsetType W3DShaderManager::getChipset( void )
 	{
 
 		D3DADAPTER_IDENTIFIER9 did;
-		::ZeroMemory(&did, sizeof(D3DADAPTER_IDENTIFIER9));
+		memset(&did,0, sizeof(D3DADAPTER_IDENTIFIER9));
 	/*	HRESULT res = */ d3d8Interface->GetAdapterIdentifier(0,NO_ADAPTER_IDENTIFIER_FLAGS,&did);
+#if defined(_WIN32)
 		*((LARGE_INTEGER*)&m_driverVersion) = did.DriverVersion;
+#else
+		m_driverVersion = did.DriverVersion;	// D3D9Posix.h's DriverVersion is an int64_t: the same eight bytes
+#endif
 
 		if(did.VendorId == DC_NVIDIA_VENDOR_ID)
 		{
@@ -3299,7 +3304,11 @@ static const RenderUInt32* readShaderBytecode(const char* strFilePath)
 	TheFileSystem->getFileInfo(AsciiString(strFilePath), &fileInfo);
 	const UnsignedInt dwFileSize = fileInfo.sizeLow;
 
+#if defined(_WIN32)
 	const RenderUInt32* pShader = (RenderUInt32*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwFileSize);
+#else
+	const RenderUInt32* pShader = (RenderUInt32*)calloc(1, dwFileSize);	// zeroed, as HEAP_ZERO_MEMORY is
+#endif
 	if (pShader != NULL)
 	{
 		file->read((void *)pShader, dwFileSize);
@@ -3322,7 +3331,11 @@ RenderResult W3DShaderManager::LoadAndCreateD3DPixelShader(const char* strFilePa
 	std::string source;
 	const RenderResult hr = Create_Translated_Pixel_Shader(DX8Wrapper::_Get_D3D_Device(), pShader, shader,
 		&source);
+#if defined(_WIN32)
 	HeapFree(GetProcessHeap(), 0, (void*)pShader);
+#else
+	free((void*)pShader);
+#endif
 	dumpEngineShaderSource(strFilePath, source);
 
 	if (Render_Failed(hr))
@@ -3352,7 +3365,11 @@ RenderResult W3DShaderManager::LoadAndCreateD3DVertexShader(const char* strFileP
 	std::string source;
 	const RenderResult hr = Create_Translated_Vertex_Shader(DX8Wrapper::_Get_D3D_Device(),
 		pDeclaration, pShader, shader, declaration, &source);
+#if defined(_WIN32)
 	HeapFree(GetProcessHeap(), 0, (void*)pShader);
+#else
+	free((void*)pShader);
+#endif
 	dumpEngineShaderSource(strFilePath, source);
 
 	if (Render_Failed(hr))
@@ -3452,7 +3469,7 @@ Real W3DShaderManager::GetCPUBenchTime(void)
 	float ztot, yran, ymult, ymod, x, y, z, pi, prod;
     long int low, ixran, itot, j, iprod;
 
-  	__int64 endTime64,freq64,startTime64;
+  	Int64 endTime64,freq64,startTime64;
 	freq64 = Clock_Ticks_Per_Second();
 	startTime64 = Clock_Ticks();
 

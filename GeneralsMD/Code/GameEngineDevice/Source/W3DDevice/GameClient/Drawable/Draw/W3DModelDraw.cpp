@@ -1241,7 +1241,7 @@ enum AnimParseType
 //-------------------------------------------------------------------------------------------------
 static void parseAnimation(INI* ini, void *instance, void * /*store*/, const void* userData)
 {
-	AnimParseType animType = (AnimParseType)(UnsignedInt)userData;
+	AnimParseType animType = (AnimParseType)(UnsignedInt)(uintptr_t)userData;	// an enum kept in a pointer
 
 	AsciiString animName = ini->getNextAsciiString();
 	animName.toLower();
@@ -1455,7 +1455,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 
 	ModelConditionInfo info;
 	W3DModelDrawModuleData* self = (W3DModelDrawModuleData*)instance;
-	ParseCondStateType cst = (ParseCondStateType)(UnsignedInt)userData;
+	ParseCondStateType cst = (ParseCondStateType)(UnsignedInt)(uintptr_t)userData;	// an enum kept in a pointer
 	switch (cst)
 	{
 		case PARSE_DEFAULT:

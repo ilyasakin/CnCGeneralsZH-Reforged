@@ -208,9 +208,16 @@ int MessageBoxWrapper( const char *lpText, const char *lpCaption, unsigned int u
 
 	return ::MessageBox(threadHWND, lpText, lpCaption, uType);
 #else
-	/* No window to own a box until C2 (SDL_ShowMessageBox), so this is Windows' own no-window path
-		 above: the same answer, and the text where someone can read it - stderr, and the log if it is
-		 open (written directly: DebugLog can be the caller). */
+	/* The platform layer's box when it has a window and is on its thread (TheMessageBoxHook, C2's SDL
+		 one); never in an unattended run, as above. */
+	if (TheMessageBoxHook != NULL && !isUnattendedRun())
+	{
+		const int answer = TheMessageBoxHook(lpText, lpCaption, uType);
+		if (answer >= 0)
+			return answer;
+	}
+	/* Otherwise Windows' own no-window path above: the same answer, and the text where someone can
+		 read it - stderr, and the log if it is open (written directly: DebugLog can be the caller). */
 	fprintf(stderr, "%s%s%s\n", lpCaption, (lpCaption && lpCaption[0]) ? ": " : "", lpText);
 #ifdef DEBUG_LOGGING
 	if (theLogFile)

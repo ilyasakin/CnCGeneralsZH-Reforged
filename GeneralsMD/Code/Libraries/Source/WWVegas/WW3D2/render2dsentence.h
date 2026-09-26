@@ -132,12 +132,16 @@ private:
 	int									PixelOverlap;
 	int									PointSize;
 	StringClass							GDIFontName;
+#if defined(_WIN32)
+	// GDI draws each glyph (Store_GDI_Char).  Off Windows there is no rasteriser until D6
+	// (docs/mac-port/tasks/D6-text-rasterisation.md), and the glyphs are blank.
 	HFONT									OldGDIFont;
 	HBITMAP								OldGDIBitmap;
 	HBITMAP								GDIBitmap;	
 	HFONT									GDIFont;
 	uint8 *								GDIBitmapBits;
 	HDC									MemDC;
+#endif
 	FontCharsClassCharDataStruct *					ASCIICharArray[256];
 	FontCharsClassCharDataStruct **					UnicodeCharArray;
 	uint16								FirstUnicodeChar;

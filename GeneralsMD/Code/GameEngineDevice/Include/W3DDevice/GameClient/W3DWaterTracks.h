@@ -28,7 +28,7 @@
 #ifndef __W3DWaterTracks_H_
 #define __W3DWaterTracks_H_
 
-enum waveType;	//forward reference
+enum waveType : int;	//forward reference; the definition (W3DWaterTracks.cpp) gives the same int, as MSVC's is
 
 /// Custom render object that draws animated tracks/waves on the water.
 /**

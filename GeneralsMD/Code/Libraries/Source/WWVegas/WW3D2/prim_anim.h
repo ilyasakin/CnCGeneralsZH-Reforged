@@ -166,6 +166,14 @@ public:
 	//	Public methods
 	/////////////////////////////////////////////////////////
 	virtual T Evaluate (float time);
+
+protected:
+
+	// The base is a dependent type, so its members are not found by unqualified lookup (MSVC found
+	// them anyway); these name them.
+	typedef typename PrimitiveAnimationChannelClass<T>::KeyClass KeyClass;
+	using PrimitiveAnimationChannelClass<T>::m_Data;
+	using PrimitiveAnimationChannelClass<T>::m_LastIndex;
 };
 
 
