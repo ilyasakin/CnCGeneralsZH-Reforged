@@ -542,3 +542,27 @@ passing, so the list cannot go stale. F1-F4 and F6 are in D3's shared generator 
 
 Not findings: table fog (refused by name; the engine never sets it), and N6 (lit specular only with
 SPECULARENABLE, which the GPU matches).
+
+### The first windowed skirmish on Metal (2026-09-26)
+
+![The first windowed skirmish on macOS, SDL3 GPU on Metal, frame 599](../a3c-first-skirmish-metal.png)
+
+`generals -root <farm> -randommap 1234 2 small -autoskirmish 2 -seed 1234 -maxframes 600` without
+`-headless`, on a rule-9 symlink farm with `Code/Data` overlaid.
+
+Result: exit 0 at the frame limit. 2,893 presents and 1,991,434 draws were recorded on Metal (M3 Pro).
+There was one refusal reason: "a render target other than the back buffer (A3d)", 24,157 draws. No
+program, pipeline, texture, sampler or format was refused. The picture is present 599, taken before
+the gamma ramp by the `ZH_GPU_DUMP_FRAMES` aid.
+
+It took one fix outside the renderer first: particle orientation was an undefined float→byte cast,
+which ARM64 turned into a read 190 GB past the table. See the latent-UB list in the README.
+
+**Known wrong in this picture:**
+- **Terrain blend tiles** are blotchy. The terrain atlas itself uploads correct (dumped with
+  `ZH_GPU_DUMP_TEXTURES`), so the fault is in the draw.
+- **Trees** draw as black silhouettes.
+- **The radar** is empty. It is a render target, which is A3d.
+
+The first two are A3c's; the plan is to capture the failing draws and reproduce each as a harness
+scenario.
