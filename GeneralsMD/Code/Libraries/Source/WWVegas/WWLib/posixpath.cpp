@@ -67,6 +67,12 @@ std::set<std::string> & reported()			// ambiguities already logged, by directory
 	return s_reported;
 }
 
+std::vector<std::string> & overlays()			// P1: read roots before the current directory, under g_lock
+{
+	static std::vector<std::string> s_overlays;
+	return s_overlays;
+}
+
 bool is_separator(char c)
 {
 	return c == '\\' || c == '/';
@@ -170,35 +176,13 @@ std::string match_in(const std::string & directory, const std::string & componen
 
 } // namespace
 
-bool PosixPath_Resolve(const char * engine_path, PosixPathIntent intent, std::string & real_path)
+namespace {
+
+// One resolution from `start` ("" the current directory, "/" for an absolute path, or an overlay).
+bool resolve_from(const std::string & start, const std::vector<std::string> & components, PosixPathIntent intent,
+	std::string & real_path)
 {
-	real_path.clear();
-	if (engine_path == NULL || engine_path[0] == '\0') {
-		return false;
-	}
-	// A UNC path, and a drive letter: Windows spellings no POSIX file system has.
-	if (is_separator(engine_path[0]) && is_separator(engine_path[1])) {
-		return false;
-	}
-	if (((engine_path[0] >= 'A' && engine_path[0] <= 'Z') || (engine_path[0] >= 'a' && engine_path[0] <= 'z'))
-		&& engine_path[1] == ':') {
-		return false;
-	}
-
-	std::vector<std::string> components;
-	std::string component;
-	for (const char * at = engine_path; ; ++at) {
-		if (*at == '\0' || is_separator(*at)) {
-			if (!component.empty()) components.push_back(component);
-			component.clear();
-			if (*at == '\0') break;
-		}
-		else {
-			component += *at;
-		}
-	}
-
-	std::string current = is_separator(engine_path[0]) ? "/" : "";
+	std::string current = start;
 	bool missing = false;	// once one component is missing, none after it can exist
 	for (size_t i = 0; i < components.size(); ++i) {
 		const std::string & name = components[i];
@@ -221,7 +205,8 @@ bool PosixPath_Resolve(const char * engine_path, PosixPathIntent intent, std::st
 			current = join(current, on_disk);
 			continue;
 		}
-		if (intent == POSIX_PATH_EXISTING || (intent == POSIX_PATH_CREATE_LEAF && !last)) {
+		if (intent == POSIX_PATH_EXISTING || intent == POSIX_PATH_EXISTING_IN_ROOT
+			|| (intent == POSIX_PATH_CREATE_LEAF && !last)) {
 			return false;
 		}
 		missing = true;
@@ -229,6 +214,74 @@ bool PosixPath_Resolve(const char * engine_path, PosixPathIntent intent, std::st
 	}
 	real_path = current.empty() ? "." : current;
 	return true;
+}
+
+bool split_components(const char * engine_path, std::vector<std::string> & components)
+{
+	if (engine_path == NULL || engine_path[0] == '\0') {
+		return false;
+	}
+	// A UNC path, and a drive letter: Windows spellings no POSIX file system has.
+	if (is_separator(engine_path[0]) && is_separator(engine_path[1])) {
+		return false;
+	}
+	if (((engine_path[0] >= 'A' && engine_path[0] <= 'Z') || (engine_path[0] >= 'a' && engine_path[0] <= 'z'))
+		&& engine_path[1] == ':') {
+		return false;
+	}
+	std::string component;
+	for (const char * at = engine_path; ; ++at) {
+		if (*at == '\0' || is_separator(*at)) {
+			if (!component.empty()) components.push_back(component);
+			component.clear();
+			if (*at == '\0') break;
+		}
+		else {
+			component += *at;
+		}
+	}
+	return true;
+}
+
+std::vector<std::string> overlays_now()
+{
+	std::lock_guard<std::mutex> guard(g_lock);
+	return overlays();
+}
+
+} // namespace
+
+bool PosixPath_Resolve(const char * engine_path, PosixPathIntent intent, std::string & real_path)
+{
+	real_path.clear();
+	std::vector<std::string> components;
+	if (!split_components(engine_path, components)) {
+		return false;
+	}
+	if (is_separator(engine_path[0])) {
+		return resolve_from("/", components, intent, real_path);
+	}
+	// P1: a relative path that is only read is looked for in each overlay first
+	if (intent == POSIX_PATH_EXISTING) {
+		const std::vector<std::string> roots = overlays_now();
+		for (size_t i = 0; i < roots.size(); ++i) {
+			if (resolve_from(roots[i], components, POSIX_PATH_EXISTING, real_path)) {
+				return true;
+			}
+		}
+	}
+	return resolve_from("", components, intent, real_path);
+}
+
+void PosixPath_Set_Overlays(const std::vector<std::string> & real_directories)
+{
+	std::lock_guard<std::mutex> guard(g_lock);
+	overlays() = real_directories;
+}
+
+std::vector<std::string> PosixPath_Overlays()
+{
+	return overlays_now();
 }
 
 void PosixPath_Forget_Directory(const char * real_directory)
@@ -325,19 +378,66 @@ void split_search(const std::string & search, std::string & directory, std::stri
 	}
 }
 
-// The real directory an engine directory names; "" (the current directory) for an empty one.  False
-// when it does not exist, which for a listing means nothing is found, as FindFirstFile finds nothing.
-bool real_directory_of(const std::string & engine_directory, std::string & real)
+// The real directory an engine directory names in the current directory (or itself, when absolute);
+// "" for an empty one.  False when it does not exist, which for a listing means nothing is found, as
+// FindFirstFile finds nothing.
+bool real_directory_of_root(const std::string & engine_directory, std::string & real)
 {
 	if (engine_directory.empty()) {
 		real.clear();
 		return true;
 	}
-	if (!PosixPath_Resolve(engine_directory.c_str(), POSIX_PATH_EXISTING, real)) {
+	// The current directory's (or an absolute path's) own copy: the overlays are listed separately
+	if (!PosixPath_Resolve(engine_directory.c_str(), POSIX_PATH_EXISTING_IN_ROOT, real)) {
 		return false;
 	}
 	if (real == ".") real.clear();
 	return true;
+}
+
+// A directory's entries in every root that has it (P1): an absolute directory in itself, a relative one
+// in each overlay and then the current directory, merged by name without regard to case across roots
+// (a name an earlier root has is that root's), then byte order.  Without overlays it is entries_of, unchanged.
+std::vector<Entry> merged_entries_of(const std::string & engine_directory)
+{
+	std::vector<std::string> roots;
+	if (engine_directory.empty() || !is_separator(engine_directory[0])) {
+		roots = overlays_now();
+	}
+	std::vector<Entry> merged;
+	std::set<std::string> seen;
+	for (size_t r = 0; r <= roots.size(); ++r) {
+		std::string real;
+		if (r < roots.size()) {
+			std::vector<std::string> components;
+			if (engine_directory.empty()) {
+				real = roots[r];
+			}
+			else if (!split_components(engine_directory.c_str(), components)
+				|| !resolve_from(roots[r], components, POSIX_PATH_EXISTING, real)) {
+				continue;
+			}
+		}
+		else if (!real_directory_of_root(engine_directory, real)) {
+			continue;
+		}
+		// A name an earlier root holds is that root's; within one root every entry stays, as without
+		// overlays (a case-sensitive volume can hold two names that differ only in case)
+		const std::vector<Entry> entries = entries_of(real);
+		std::set<std::string> here;
+		for (size_t i = 0; i < entries.size(); ++i) {
+			const std::string folded = fold(entries[i].name);
+			if (seen.count(folded) == 0) {
+				merged.push_back(entries[i]);
+				here.insert(folded);
+			}
+		}
+		seen.insert(here.begin(), here.end());
+	}
+	if (!roots.empty()) {
+		std::sort(merged.begin(), merged.end(), [](const Entry & a, const Entry & b) { return a.name < b.name; });
+	}
+	return merged;
 }
 
 } // namespace
@@ -359,10 +459,10 @@ bool PosixPath_Matches_Pattern(const char * pattern, const char * name)
 void PosixPath_List_Like_Win32(const std::string & current_directory, const std::string & original_directory,
 	const std::string & search_name, bool search_subdirectories, std::vector<std::string> & found)
 {
-	std::string directory, pattern, real;
+	std::string directory, pattern;
 	split_search(original_directory + current_directory + search_name, directory, pattern);
-	if (real_directory_of(directory, real)) {
-		const std::vector<Entry> entries = entries_of(real);
+	{
+		const std::vector<Entry> entries = merged_entries_of(directory);
 		for (size_t i = 0; i < entries.size(); ++i) {
 			if (!entries[i].directory && PosixPath_Matches_Pattern(pattern.c_str(), entries[i].name.c_str())) {
 				found.push_back(original_directory + current_directory + entries[i].name);
@@ -374,10 +474,7 @@ void PosixPath_List_Like_Win32(const std::string & current_directory, const std:
 		return;
 	}
 	split_search(original_directory + current_directory + "*.", directory, pattern);
-	if (!real_directory_of(directory, real)) {
-		return;
-	}
-	const std::vector<Entry> entries = entries_of(real);
+	const std::vector<Entry> entries = merged_entries_of(directory);
 	for (size_t i = 0; i < entries.size(); ++i) {
 		if (entries[i].directory && PosixPath_Matches_Pattern(pattern.c_str(), entries[i].name.c_str())) {
 			PosixPath_List_Like_Win32(current_directory + entries[i].name + '\\', original_directory, search_name,
@@ -409,8 +506,9 @@ void forget_parent(const std::string & real)
 FILE * zh_fopen(const char * path, const char * mode)
 {
 	const bool creates = mode != NULL && (mode[0] == 'w' || mode[0] == 'a');
+	const bool writes = mode != NULL && strchr(mode, '+') != NULL;
 	std::string real;
-	if (!resolve_or_fail(path, creates ? POSIX_PATH_CREATE_LEAF : POSIX_PATH_EXISTING, real)) {
+	if (!resolve_or_fail(path, creates ? POSIX_PATH_CREATE_LEAF : (writes ? POSIX_PATH_EXISTING_IN_ROOT : POSIX_PATH_EXISTING), real)) {
 		return NULL;
 	}
 	FILE * file = fopen(real.c_str(), mode);
@@ -423,8 +521,9 @@ FILE * zh_fopen(const char * path, const char * mode)
 int zh_open(const char * path, int flags, int permissions)
 {
 	const bool creates = (flags & O_CREAT) != 0;
+	const bool writes = (flags & (O_WRONLY | O_RDWR | O_TRUNC | O_APPEND)) != 0;
 	std::string real;
-	if (!resolve_or_fail(path, creates ? POSIX_PATH_CREATE_LEAF : POSIX_PATH_EXISTING, real)) {
+	if (!resolve_or_fail(path, creates ? POSIX_PATH_CREATE_LEAF : (writes ? POSIX_PATH_EXISTING_IN_ROOT : POSIX_PATH_EXISTING), real)) {
 		return -1;
 	}
 	const int handle = open(real.c_str(), flags, permissions);
@@ -446,7 +545,7 @@ int zh_access(const char * path, int mode)
 int zh_remove(const char * path)
 {
 	std::string real;
-	if (!resolve_or_fail(path, POSIX_PATH_EXISTING, real)) {
+	if (!resolve_or_fail(path, POSIX_PATH_EXISTING_IN_ROOT, real)) {
 		return -1;
 	}
 	const int result = remove(real.c_str());
@@ -459,7 +558,7 @@ int zh_remove(const char * path)
 int zh_unlink(const char * path)
 {
 	std::string real;
-	if (!resolve_or_fail(path, POSIX_PATH_EXISTING, real)) {
+	if (!resolve_or_fail(path, POSIX_PATH_EXISTING_IN_ROOT, real)) {
 		return -1;
 	}
 	const int result = unlink(real.c_str());
@@ -472,7 +571,7 @@ int zh_unlink(const char * path)
 int zh_rename(const char * from, const char * to)
 {
 	std::string real_from, real_to;
-	if (!resolve_or_fail(from, POSIX_PATH_EXISTING, real_from) || !resolve_or_fail(to, POSIX_PATH_CREATE_LEAF, real_to)) {
+	if (!resolve_or_fail(from, POSIX_PATH_EXISTING_IN_ROOT, real_from) || !resolve_or_fail(to, POSIX_PATH_CREATE_LEAF, real_to)) {
 		return -1;
 	}
 	const int result = rename(real_from.c_str(), real_to.c_str());

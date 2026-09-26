@@ -23,10 +23,15 @@
 # the executable, as on Windows, each under its own -logPrefix, and are removed once read.
 #
 # Usage: replay-check.sh --generals <path> [--data <dir>] [--seeds "0 1"] [--players 2]
-#          [--aidiff brutal] [--maxframes 12000] [--cells 128] [--extra "<args>"]
+#          [--aidiff brutal] [--maxframes 12000] [--cells <n>] [--extra "<args>"]
 #          [--control] [--keep]
 #   --data            a folder holding zerohour/ (with the base game in zerohour/ZH_Generals, as the
 #                     install has it); default $ZH_DATA_DIR
+#   --cells           playable cells a side of the generated map.  Default: none given, so the
+#                     generator sizes the map for the player count (normal).  replay-check.ps1 passes
+#                     128, below even the generator's small size for two players, and at 128 seed 1
+#                     puts the two starts 124 units apart: both AIs judge every build site unsafe and
+#                     the match stays idle, so a CRC over it proves little
 #   --extra           switches for every run of every seed.  One that reaches the match has to be on
 #                     for the recording and the playback alike
 #   --control         the harness's own armed control: before the playback, the kept replay's game
@@ -43,7 +48,7 @@ SEEDS="0 1"
 PLAYERS=2
 AIDIFF=brutal
 MAXFRAMES=12000
-CELLS=128
+CELLS=""
 EXTRA=""
 CONTROL=0
 KEEP=0
@@ -122,8 +127,9 @@ overlay Scenarios Scenarios
 overlay Cinema Cinema
 
 # ---- a run ---------------------------------------------------------------------------------------
-# Sets RUN_CRC and RUN_FRAME from the run's last HEADLESS CRC line, and RUN_RESULT from its HEADLESS
-# RESULT line; empty when the run wrote none.
+# Sets RUN_CRC and RUN_FRAME from the run's last HEADLESS CRC line, RUN_RESULT from its HEADLESS
+# RESULT line, and RUN_BUILT to the number of structures the AI put up after frame 0; empty when the
+# run wrote none.
 run_game() {	# run_game <log prefix> <switches...>
 	local prefix="$TAG$1"; shift
 	local log="$EXEDIR/${prefix}DebugLogFile.txt"
@@ -134,13 +140,14 @@ run_game() {	# run_game <log prefix> <switches...>
 		-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" "$@" $EXTRA \
 		> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
 	RUN_STATUS=$?
-	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""
+	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0
 	[ -f "$log" ] || return
 	local line
 	line="$(grep -a 'HEADLESS CRC: 0x' "$log" | tail -1)"
 	RUN_CRC="$(printf '%s' "$line" | sed -n 's/.*HEADLESS CRC: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\1/p')"
 	RUN_FRAME="$(printf '%s' "$line" | sed -n 's/.*HEADLESS CRC: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\2/p')"
 	RUN_RESULT="$(grep -a 'HEADLESS RESULT: ' "$log" | tail -1 | sed 's/.*HEADLESS RESULT: //')"
+	RUN_BUILT="$(grep -a -c 'AI BUILT frame [1-9]' "$log")"
 }
 
 REPLAYS="$USERDATA/Replays"
@@ -151,9 +158,9 @@ for seed in $SEEDS; do
 	printf 'seed %s: recording ... ' "$seed"
 	rm -f -- "$REPLAYS/00000000.rep"
 	# -observer, so both sides are AI and the command stream is the AI's own decisions
-	run_game "det${seed}_live" -randommap "$seed" "$PLAYERS" "$CELLS" -autoskirmish "$PLAYERS" \
+	run_game "det${seed}_live" -randommap "$seed" "$PLAYERS" $CELLS -autoskirmish "$PLAYERS" \
 		-aidiff "$AIDIFF" -seed "$seed" -observer
-	LIVE_CRC="$RUN_CRC"; LIVE_FRAME="$RUN_FRAME"
+	LIVE_CRC="$RUN_CRC"; LIVE_FRAME="$RUN_FRAME"; LIVE_BUILT="$RUN_BUILT"
 	if [ -z "$LIVE_CRC" ]; then echo "no result from the live run (exit $RUN_STATUS)"; failures=$((failures + 1)); continue; fi
 	if [ ! -f "$REPLAYS/00000000.rep" ]; then echo "the live run wrote no replay"; failures=$((failures + 1)); continue; fi
 	# out of the way of the next recording, and under a name -replay can be given
@@ -162,18 +169,23 @@ for seed in $SEEDS; do
 		# the same length, so nothing after it in the header moves
 		perl -0777 -pi -e 's/SD=(\d*)(\d);/"SD=".$1.(($2+1)%10).";"/e' "$REPLAYS/determinism${seed}.rep"
 	fi
-	printf 'frame %s, CRC %s (%s); playing back ... ' "$LIVE_FRAME" "$LIVE_CRC" "$RUN_RESULT"
+	printf 'frame %s, CRC %s, %s structures built after frame 0 (%s); playing back ... ' "$LIVE_FRAME" "$LIVE_CRC" "$LIVE_BUILT" "$RUN_RESULT"
 
 	run_game "det${seed}_back" -replay "determinism${seed}"
 	BACK_CRC="$RUN_CRC"; BACK_FRAME="$RUN_FRAME"
 
 	printf 'again ... '
 	rm -f -- "$REPLAYS/00000000.rep"
-	run_game "det${seed}_again" -randommap "$seed" "$PLAYERS" "$CELLS" -autoskirmish "$PLAYERS" \
+	run_game "det${seed}_again" -randommap "$seed" "$PLAYERS" $CELLS -autoskirmish "$PLAYERS" \
 		-aidiff "$AIDIFF" -seed "$seed" -observer
 	AGAIN_CRC="$RUN_CRC"; AGAIN_FRAME="$RUN_FRAME"
 
 	bad=""
+	# An idle match agrees with itself and proves nothing: a divergence in movement, combat or the AI
+	# cannot show in a world where nothing happens.
+	if [ "$LIVE_BUILT" -eq 0 ]; then
+		bad="${bad} IDLE: the AI built nothing after frame 0;"
+	fi
 	if [ "$BACK_CRC" != "$LIVE_CRC" ] || [ "$BACK_FRAME" != "$LIVE_FRAME" ]; then
 		bad="${bad} playback ${BACK_CRC:-none} at frame ${BACK_FRAME:-none};"
 	fi
@@ -184,7 +196,7 @@ for seed in $SEEDS; do
 		echo "the playback and the second run agree at frame $LIVE_FRAME"
 		echo "  seed $seed: HEADLESS CRC $LIVE_CRC at frame $LIVE_FRAME"
 	else
-		echo "DIVERGED from live $LIVE_CRC at frame $LIVE_FRAME:$bad"
+		echo "FAILED, live $LIVE_CRC at frame $LIVE_FRAME:$bad"
 		failures=$((failures + 1))
 	fi
 done

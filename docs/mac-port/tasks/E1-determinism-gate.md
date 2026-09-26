@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** B6
 - **Blocks:** E2
-- **Status:** in progress: the POSIX harness and a first Mac baseline (below); the skirmish AI does not build yet
+- **Status:** in progress: the POSIX harness, the Mac baseline over a real fight, and defect #20 found and fixed (below); cross-platform parity needs a Windows run
 - **Size:** a test and a script; the change it forces could be anywhere
 
 ## Why
@@ -131,32 +131,39 @@ these three, not a general audit.
 - **Rule 9:** it roots every run at its own farm of the install in `$TMPDIR`, with the fork's
   `Code/Data` overlay (decision 9, until packaging carries the overlay). Each run's log has its own
   `-logPrefix`, and everything is removed afterwards.
-- **`--control` edits the kept replay's game seed** before the playback. The harness must then report
-  DIVERGED, on the playback and not on the second run.
-- **`replay_check`** (ctest, Skipped without data) runs seed 0 for 1,200 frames and the control for 600.
-  With data it passes in about 30 s: 0xEB822AF0 at frame 1,200. The control gives the playback
-  0xFF469310 against the live 0xE21F0AC9 at frame 600.
+- **`--control` edits the kept replay's game seed** before the playback. The harness must then fail
+  the seed on the playback, and not on the second run.
+- **The IDLE guard:** a seed whose AI built nothing after frame 0 fails. An idle match agrees with
+  itself and proves nothing.
+- **The map size is the generator's own** (normal for the player count). `--cells` overrides it.
+  `replay-check.ps1` passed 128, below even the small size, and at 128 seed 1's two starts land 124
+  units apart (defect #19).
+- **`replay_check`** (ctest, Skipped without data, about 90 s):
+  - seed 0 at 1,200 frames agrees;
+  - the seed-edit control fails on the playback only;
+  - seed 1 at 128 cells is reported IDLE (the guard's control);
+  - seed 1 at 12,000 frames agrees: fourteen checkpoint saves and still the recording's world, which
+    is defect #20's end-to-end check.
 
 **What it proves:** same-machine determinism only. A recording, its playback and a second run from
 one seed agree on this machine and this build. It says nothing about agreement with a Windows build,
 which needs a replay recorded on Windows.
 
-**The first Mac baseline**, macOS 27 arm64, M3 Pro, Release, at feature/mac-port d71941d3 plus this
-harness. Default arguments: 2 players, brutal, 128 cells, 12,000 frames. The install listing is
-identical before and after.
+**The Mac baseline**, macOS 27 arm64, M3 Pro, Release, feature/mac-port 33f968c9 plus defect #20's fix.
+Default arguments: 2 players, brutal, the generator's size (248 cells), 12,000 frames. Each seed agreed
+with its own checkpointed playback and with a second run. The install listing is identical before and
+after.
 
-| name | seed | frame | HEADLESS CRC |
-|:--|:--|:--|:--|
-| `mac_baseline_seed0` | 0 | 12000 | 0xAC31075F |
-| `mac_baseline_seed1` | 1 | 12000 | 0xEE8A5309 |
+| name | seed | frame | HEADLESS CRC | built after frame 0 | buildings / units built / peak units / lost, per side |
+|:--|:--|:--|:--|:--|:--|
+| `mac_baseline_seed0` | 0 | 12000 | 0x845181C8 | 46 structures | 26 / 45 / 54 / 8 and 20 / 61 / 85 / 8 |
+| `mac_baseline_seed1` | 1 | 12000 | 0xB5B11D73 | 52 structures | 25 / 95 / 135 / 25 and 29 / 82 / 118 / 17 |
 
-**Read these with the finding below.** They are self-consistent, but the match they cover barely
-moves.
+**Replaced:** the first pair (0xAC31075F, 0xEE8A5309) was taken at 128 cells. There, seed 1's starts
+sit 124 units apart and neither AI can build, so that pair covered an idle match (defect #19).
 
-**Finding: the skirmish AI does not build.** Over 12,000 frames (6.7 minutes of game time), seed 1's
-two brutal AIs trained 5 and 2 units, spent 4,500 each, and never placed a second structure. The log has
-the frame-0 command centres (`AI BUILT frame 0`) and then no `AI ECONOMY`, `AI WAVE` or `AI TACTICS`
-line at all, so the AI's economy never acts. The runs reach 2,000-5,000 logic fps, where the README's
-Windows figure (a 23-minute skirmish in 38 s) is about 1,100 with a real fight. Until this is
-explained, a CRC here covers a nearly idle world, and a divergence in movement, combat or the AI could
-not show up in it. Not yet diagnosed.
+**What the harness found on the way: defect #20.** With a real fight, seed 1's playback parted from its
+recording at frame 8,260. One object differed: a Stinger Soldier's rotation, 1-2 ULP off. The cause
+was the replay viewer's checkpoint saves, which set every object's transform back through a setter that
+recomputes its angle. Found by bisecting on `-maxframes`, then ruling out the wall-clock W3D clock,
+then isolating the checkpoints. Fixed (README, defect #20).
