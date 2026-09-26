@@ -212,6 +212,29 @@ you start. That commit is the lock.
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
 
+### Known gaps, not on a milestone's critical path
+
+- **`-nodevice` (`m_noRenderDevice`) does not survive a map yet (C2's read, 2026-09-26).**
+  - **Why it is not M2's blocker:** it is the device-less path, which is not `-headless`. Windows'
+    `-headless` makes a real device and skips only the draw. POSIX `-headless` makes decision 7's
+    CPU-backed device with no window (decision 8, refined), so M2 does not run this path.
+  - **Background:** CommandLine.cpp:1859-1868 says a match "does not survive map load yet".
+    Under `-nodevice`, `DX8Wrapper::Compute_Caps` never runs, so `Get_Current_Caps()` is NULL, and
+    `_Get_D3D_Device()` is NULL (citations are GeneralsMD/Code on 2026-09-26's tip).
+  - **Crash sites a `-nodevice` run still reaches:**
+    - Sized textures (terrain at map load: WorldHeightMap.cpp:1939/1954/1961, BaseHeightMap.cpp:1913)
+      go through `_Create_DX8_Texture` into `D3DXCreateTexture` with a NULL device
+      (dx8wrapper.cpp:3070). Whether Microsoft's d3dx9_43 fails cleanly there is unverified.
+    - `_Create_DX8_ZTexture` calls the device directly (dx8wrapper.cpp:3211).
+    - TextureClass's bump-format constructor reads the caps (texture.cpp:1249-1256).
+    - `W3DSnowManager` reads the caps on a map that enables snow (W3DSnow.cpp:64).
+    - The dynamic vertex and index buffers read the caps, on the draw path only
+      (dx8vertexbuffer.cpp:867, dx8indexbuffer.cpp:577).
+    - `createVideoBuffer` (W3DDisplay.cpp:3411) is reached under `-nodevice` without `-headless`
+      when movies play.
+    - An INI `ChipsetType` of 6 or more builds shaders on the NULL device (W3DTreeBuffer).
+    - W3DRadar is avoided: `-nodevice` takes HeadlessRadar (Win32GameEngine.h:107-114).
+
 ### Decisions taken, 2026-09-25
 
 The user delegated every decision on this port. These were taken by the PM session, with the
