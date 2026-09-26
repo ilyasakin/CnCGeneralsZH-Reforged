@@ -484,6 +484,18 @@ Linux, and **abstract on purpose.**
     the same order right after `ModuleFactory::init` (their NameKeys), with parsers that accept each
     one's INI fields. -47 sent the list; it is not in (f).
   - An abstract class can't return the wrong one.
+- **The headless module factory's requirement** (from -47, for whoever builds it; proposed as its
+  own piece after T1):
+  - Register these 19 draw modules straight after `ModuleFactory::init()`, in this order, which
+    fixes their NameKeys as Windows has them: W3DDefaultDraw, W3DDebrisDraw, W3DModelDraw,
+    W3DLaserDraw, W3DOverlordTankDraw, W3DOverlordTruckDraw, W3DOverlordAircraftDraw,
+    W3DProjectileStreamDraw, W3DPoliceCarDraw, W3DRopeDraw, W3DScienceModelDraw, W3DSupplyDraw,
+    W3DDependencyModelDraw, W3DTankDraw, W3DTruckDraw, W3DTracerDraw, W3DTankTruckDraw,
+    W3DTreeDraw, W3DPropDraw.
+  - Each one's ModuleData must accept that module's INI fields (W3DModelDraw's table and the ones
+    that extend it), or object INI loading fails on the first unknown field. Ignoring them is safe
+    only if no draw ModuleData feeds logic; -47 knows of none, but W3DModelDraw's parse table should
+    be checked for anything GameLogic reads.
 - **Agreed with -18 for C2:**
   - `serviceWindowsOS` is an empty virtual, and C2's SDL subclass overrides it (event pump, focus).
   - The factories stay virtual and non-final.
