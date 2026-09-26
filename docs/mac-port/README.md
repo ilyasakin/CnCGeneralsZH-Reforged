@@ -1210,7 +1210,10 @@ reads the set's register as before. The comment on `stage_register` records both
   - One call of the same triangles *unindexed* matches the per-triangle picture exactly.
   - `posix_gpu_draw_selfcheck` repeats it in miniature: two triangles sharing an indexed edge, 16 of 32
     pixels along it at the other triangle's level.
-- **Size:** a few pixels along the edges of small, strongly minified models.
+- **Size:** a few pixels along the edges of small, strongly minified models, and of the trees' shadow
+  cards (C5, the same mechanism).
+- **Every remaining finding is this one.** Drawn a triangle per call, every capture that failed (C1's
+  models, C5's tree shadows) passes the interpreter with 0 pixels outside.
 - **Not fixed:** the fix would be drawing every indexed mesh unindexed, which throws away vertex reuse
   across the game. It may differ on other GPUs.
 

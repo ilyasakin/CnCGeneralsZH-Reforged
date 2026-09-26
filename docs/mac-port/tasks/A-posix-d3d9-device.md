@@ -1054,3 +1054,10 @@ The run: hidden window, 800x600, `-nologo`, no `-quickstart`, 300 s.
   hardware did not.
 - **What's recorded:** it is a known Mac-against-Windows difference, in the README's list, and left as it
   is. C1 stays in the KNOWN list with that reading, and the test records the count without asserting it.
+- **C5 is C1.** The trees' shadow pass: draws 14 and 29 of the seed-1234 skirmish.
+  - -47 worked the mechanism out: per-layer texture alpha differed by 0.1 to 0.3.
+  - With the D3D9 filter LINEAR, forcing MAXANISOTROPY to 1 changed nothing, which confirms the sampler's
+    unit test.
+  - Drawn a triangle per call, both pass with 0 pixels outside, against 6 and 8 in one call. The C1
+    captures do the same: 0 against 20, 2 and 11.
+  - So every finding left in the capture sets is this GPU's quad sharing.
