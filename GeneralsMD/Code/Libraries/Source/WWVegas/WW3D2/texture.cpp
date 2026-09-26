@@ -45,7 +45,7 @@
 #include <stdio.h>
 #include "d3dx9runtime.h"
 #include "dx8wrapper.h"
-#include "targa.h"
+#include "TARGA.H"
 #include <nstrdup.h>
 #include "w3d_file.h"
 #include "assetmgr.h"

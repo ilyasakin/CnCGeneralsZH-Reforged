@@ -46,7 +46,7 @@
 #include "wwstring.h"
 #include "wwdebug.h"
 #include "assetmgr.h"
-#include "vector3i.h"
+#include "Vector3i.h"
 #include "quat.h"
 #include "ini.h"
 #include "point.h"
