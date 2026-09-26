@@ -178,10 +178,10 @@ void Direct3D11_Mirror_Material(const float ambient[4], const float diffuse[4],
 
 void Direct3D11_Mirror_Light(unsigned index, unsigned type, const float position[4],
 	const float direction[4], const float diffuse[4], const float specular[4],
-	const float attenuation[4], const float spot[4])
+	const float attenuation[4], const float spot[4], const float ambient[4])
 {
 	if (Active) {
-		Backend.Set_Light(index, type, position, direction, diffuse, specular, attenuation, spot);
+		Backend.Set_Light(index, type, position, direction, diffuse, specular, attenuation, spot, ambient);
 	}
 }
 

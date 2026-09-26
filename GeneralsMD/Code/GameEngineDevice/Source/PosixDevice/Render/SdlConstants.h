@@ -50,7 +50,7 @@ struct SdlVertexConstants
 	float GlobalAmbient[4];
 	float FogParameters[4];			///< start, end, density
 	float ViewportInverse[4];		///< one over the viewport's width and height
-	float LightFields[MAXIMUM_VERTEX_LIGHTS][6][4];	///< position, direction, diffuse, specular, attenuation, spot
+	float LightFields[MAXIMUM_VERTEX_LIGHTS][VERTEX_REGISTERS_PER_LIGHT][4];	///< position, direction, diffuse, specular, attenuation, spot, ambient
 };
 
 struct SdlPixelConstants
@@ -62,7 +62,7 @@ struct SdlPixelConstants
 
 static_assert(sizeof(SdlVertexConstants) % 16 == 0 && sizeof(SdlPixelConstants) % 16 == 0,
 	"whole float4s, as std140 lays them out");
-static_assert(sizeof(SdlVertexConstants) == (3 + MAXIMUM_VERTEX_STAGES) * 64 + 8 * 16 + MAXIMUM_VERTEX_LIGHTS * 6 * 16,
+static_assert(sizeof(SdlVertexConstants) == (3 + MAXIMUM_VERTEX_STAGES) * 64 + 8 * 16 + MAXIMUM_VERTEX_LIGHTS * VERTEX_REGISTERS_PER_LIGHT * 16,
 	"the generated VertexPipeline block, field for field");
 
 #endif // SDLCONSTANTS_H

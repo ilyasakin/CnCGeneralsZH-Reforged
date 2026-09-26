@@ -337,7 +337,13 @@ bool CombinerShader_Generate(const CombinerDescription & description, CombinerSh
 		// the terrain relies on it, blending its ground layers by an alpha two stages older than
 		// the colour being written.
 		std::string alpha_expression = "current";
-		if (source.AlphaOperation != FF_TOP_DISABLE
+		if (source.ColourOperation == FF_TOP_DOTPRODUCT3) {
+			// DOTPRODUCT3 as the colour operation writes its sum to alpha too, whatever the alpha
+			// operation says (D3DTEXTUREOP: "replicate the sum to all color channels, including
+			// alpha").
+			alpha_expression = colour_expression;
+		}
+		else if (source.AlphaOperation != FF_TOP_DISABLE
 			&& !operation_expression(source.AlphaOperation, alpha_argument0, alpha_argument1,
 				alpha_argument2, alpha_expression)) {
 			return false;
@@ -464,6 +470,10 @@ bool CombinerShader_Generate(const CombinerDescription & description, CombinerSh
 	if (description.NormalMapped) {
 		hlsl += "    current.rgb = saturate(current.rgb + highlight);\n";
 	}
+	else if (description.SpecularAdd) {
+		// Before the fog and the alpha test, as D3D9 orders them; the alpha is the stages'.
+		hlsl += "    current.rgb = saturate(current.rgb + input.Specular.rgb);\n";
+	}
 
 	// Before the fog: a shadow is a thing in the world and the fog is between the world and the eye.
 	if (description.ShadowReceiving) {
@@ -545,6 +555,9 @@ std::string CombinerShader_Key(const CombinerDescription & description)
 	}
 	if (description.ShadowReceiving) {
 		key += ":S";
+	}
+	if (description.SpecularAdd) {
+		key += ":SP";
 	}
 	return key;
 }

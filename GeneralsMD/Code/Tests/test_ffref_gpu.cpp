@@ -278,13 +278,9 @@ public:
 			for (int set = 0; set < 4; ++set) for (int k = 0; k < 4; ++k) r.tex[set][k] = v.tex[set][k];
 		}
 		FFRef::Report report;
-		// a contributor's ruling on F11: D3D9 never defines the footprint norm, and any between L-infinity and L1 is
-		// within a factor of the square root of two of FFReference's exact L2, so +-0.5 in log2, and 0.1 more
-		// for 2x2 differencing.  Until FFReference's default says so, the harness sets it.
-		FFRef::Freedoms freedoms;
-		freedoms.lodDelta = 0.6;
+		// The freedoms are FFReference's defaults, the LOD's +-0.6 among them (F11, N15).
 		FFRef::draw(State, type, &reference[0], (int)reference.size(), NULL, (int)reference.size(), Reference, &report,
-			mutations, freedoms);
+			mutations);
 		for (size_t i = 0; i < report.refusals.size(); ++i) printf("  reference refused: %s\n", report.refusals[i].c_str());
 	}
 
@@ -319,8 +315,16 @@ public:
 			}
 			else {
 				++known_findings;
-				printf("KNOWN %-39s %s: %ld outside, worst %.0f/255\n", label, known, comparison.outside,
+				printf("KNOWN %-39s %s: %ld outside, worst %.0f/255", label, known, comparison.outside,
 					comparison.worst * 255.0);
+				const int x = comparison.worstX, y = comparison.worstY;
+				if (x >= 0) {
+					const FFRef::Color &n = Reference.color[y * SIZE + x];
+					const uint8_t *g = &rgba[(y * SIZE + x) * 4];
+					printf(" at (%d, %d): gpu %u %u %u, reference %.0f %.0f %.0f", x, y, g[0], g[1], g[2], n.r * 255,
+						n.g * 255, n.b * 255);
+				}
+				printf("\n");
 			}
 			return;
 		}
@@ -525,7 +529,7 @@ static void scenarios_textures(Harness &h)
 		h.rs(D3DRS_LIGHTING, 0);
 		set_camera(h);
 		h.draw(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1, D3DPT_TRIANGLELIST, grid(3, -2, 2, -2, 2, 3, 6, 0));
-		if (translate) h.check("texture transform, count 2, scrolled", false, "F4: 2D texture translation row");
+		if (translate) h.check("texture transform, count 2, scrolled");
 		else h.check("texture transform, count 2, scale");
 	}
 }
@@ -555,7 +559,7 @@ static void scenarios_cascade(Harness &h)
 		h.tss(0, D3DTSS_COLORARG0, D3DTA_TFACTOR);
 		h.tss(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
 		h.draw(SCREEN, D3DPT_TRIANGLELIST, screen_quad(-0.5f, -0.5f, 63.5f, 63.5f, CORNERS));
-		h.check(OPS[i].name, false, OPS[i].op == D3DTOP_DOTPRODUCT3 ? "F3: DOTPRODUCT3 alpha" : NULL);
+		h.check(OPS[i].name);
 	}
 
 	h.begin(0xFF000000);
@@ -583,7 +587,7 @@ static void scenarios_cascade(Harness &h)
 	std::vector<V> quad = screen_quad(4, 4, 60, 60, CORNERS);
 	for (size_t k = 0; k < quad.size(); ++k) quad[k].specular = 0xFF402010;
 	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_SPECULAR, D3DPT_TRIANGLELIST, quad);
-	h.check("specular add (vertex specular)", false, "F6: vertex specular");
+	h.check("specular add (vertex specular)");
 
 	h.begin(0xFF000000);
 	h.rs(D3DRS_SPECULARENABLE, 1);
@@ -607,8 +611,8 @@ static void scenarios_lighting(Harness &h)
 		{ "light spot", D3DLIGHT_SPOT, false, true, 0.0f, NULL },
 		{ "light specular, no local viewer", D3DLIGHT_DIRECTIONAL, true, false, 0.0f, NULL },
 		{ "light point, spot specular, no local viewer", D3DLIGHT_SPOT, true, false, 0.0f, NULL },
-		{ "light point with its own ambient", D3DLIGHT_POINT, false, true, 0.1f, "F1: per-light ambient" },
-		{ "light specular, local viewer", D3DLIGHT_DIRECTIONAL, true, true, 0.0f, "F2: LOCALVIEWER" } };
+		{ "light point with its own ambient", D3DLIGHT_POINT, false, true, 0.1f, NULL },
+		{ "light specular, local viewer", D3DLIGHT_DIRECTIONAL, true, true, 0.0f, NULL } };
 	for (size_t i = 0; i < sizeof(LIGHTS) / sizeof(LIGHTS[0]); ++i) {
 		h.begin(0xFF000000);
 		set_camera(h);

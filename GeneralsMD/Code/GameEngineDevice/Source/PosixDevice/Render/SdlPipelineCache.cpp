@@ -68,7 +68,9 @@ bool Sdl_Vertex_Layout(RenderUInt32 fvf, SdlVertexLayout &layout, std::string &r
 		offset += 4;
 	}
 	if (fvf & D3DFVF_SPECULAR) {
-		offset += 4;	// the generated program does not declare it
+		// COLOR1, a D3DCOLOR like the diffuse, which the program swaps the same way.
+		add_attribute(layout, 3, SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, offset);
+		offset += 4;
 	}
 	const unsigned int sets = (fvf & D3DFVF_TEXCOUNT_MASK) >> D3DFVF_TEXCOUNT_SHIFT;
 	static const SDL_GPUVertexElementFormat FLOATS[4] = { SDL_GPU_VERTEXELEMENTFORMAT_FLOAT,

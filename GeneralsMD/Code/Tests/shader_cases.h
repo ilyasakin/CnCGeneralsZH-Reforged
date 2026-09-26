@@ -144,6 +144,14 @@ inline std::vector<ShaderCase> Shader_Cases()
 		cases.push_back(c);
 	}
 	{
+		// A lit specular draw's pixel half: one modulated stage and D3DRS_SPECULARENABLE.
+		ShaderCase c = combiner("ps_extra_specular_add", false);
+		c.Combiner.StageCount = 1;
+		c.Combiner.Stages[0] = one_stage(FF_TOP_MODULATE, FF_TA_TEXTURE, FF_TA_DIFFUSE, FF_TOP_MODULATE, FF_TA_TEXTURE, FF_TA_DIFFUSE, 0, true);
+		c.Combiner.SpecularAdd = true;
+		cases.push_back(c);
+	}
+	{
 		ShaderCase c = combiner("ps_shroud_widest", true);
 		c.Combiner.StageCount = 2;
 		c.Combiner.Stages[0] = one_stage(FF_TOP_MULTIPLYADD, FF_TA_TEXTURE, FF_TA_DIFFUSE, FF_TOP_SELECTARG1, FF_TA_TEXTURE, FF_TA_CURRENT, 0, true);
@@ -289,6 +297,41 @@ inline std::vector<ShaderCase> Shader_Cases()
 		description.LightCount = 1;
 		description.Lights[0].Type = FF_LIGHT_DIRECTIONAL;
 		cases.push_back(vertex("vs_extra_lit_no_colour", false, description));
+	}
+	{
+		// A mesh with a second colour array (D3DFVF_SPECULAR, dx8renderer.cpp) drawn unlit, and the
+		// same pretransformed, and lit with its specular material read from that colour.
+		VertexPipelineDescription description = plain_vertex();
+		description.FVF = FF_FVF_XYZ | FF_FVF_DIFFUSE | FF_FVF_SPECULAR | FF_FVF_TEX1;
+		cases.push_back(vertex("vs_extra_unlit_vertex_specular", false, description));
+		description.FVF = FF_FVF_XYZRHW | FF_FVF_DIFFUSE | FF_FVF_SPECULAR | FF_FVF_TEX1;
+		cases.push_back(vertex("vs_extra_pretransformed_vertex_specular", false, description));
+		description.FVF = FF_FVF_XYZ | FF_FVF_NORMAL | FF_FVF_DIFFUSE | FF_FVF_SPECULAR | FF_FVF_TEX1;
+		description.LightingEnabled = true;
+		description.SpecularEnabled = true;
+		description.ColourVertexEnabled = true;
+		description.SpecularMaterialSource = FF_MCS_COLOR2;
+		description.LightCount = 1;
+		description.Lights[0].Type = FF_LIGHT_DIRECTIONAL;
+		cases.push_back(vertex("vs_extra_lit_specular_from_vertex", false, description));
+	}
+	{
+		// Specular with D3D9's default local viewer, as every lit specular draw of the engine's is.
+		VertexPipelineDescription description = plain_vertex();
+		description.LightingEnabled = true;
+		description.SpecularEnabled = true;
+		description.LocalViewer = true;
+		description.LightCount = 1;
+		description.Lights[0].Type = FF_LIGHT_DIRECTIONAL;
+		cases.push_back(vertex("vs_extra_specular_local_viewer", false, description));
+	}
+	{
+		// A scrolling texture as W3D's mappers set one up: the vertex's own set through a COUNT2
+		// transform whose translation is in _31 and _32 (mapper.cpp).
+		VertexPipelineDescription description = plain_vertex();
+		description.Stages[0].TextureCoordinateIndex = FF_TSS_TCI_PASSTHRU;
+		description.Stages[0].TextureTransformFlags = FF_TTFF_COUNT2;
+		cases.push_back(vertex("vs_extra_passthrough_count2", false, description));
 	}
 
 	// ---- engineshader.cpp: every program, pixel and vertex, bumped where it can be ----

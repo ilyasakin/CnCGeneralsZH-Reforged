@@ -1204,7 +1204,7 @@ WWINLINE void DX8Wrapper::Set_DX8_Light(int index, D3DLIGHT9* light)
 		SNAPSHOT_SAY(("DX8 - SetLight %d\n",index));
 
 		// D3DLIGHT9 keeps the position and the direction as three floats each and the attenuation
-		// and the cone as loose scalars; ffvertex reads six four-float fields, so they are packed
+		// and the cone as loose scalars; ffvertex reads seven four-float fields, so they are packed
 		// here rather than in the backend, which never sees a D3DLIGHT9.
 		const float position[4] = { light->Position.x, light->Position.y, light->Position.z, 1.0f };
 		const float direction[4] = { light->Direction.x, light->Direction.y, light->Direction.z, 0.0f };
@@ -1213,7 +1213,8 @@ WWINLINE void DX8Wrapper::Set_DX8_Light(int index, D3DLIGHT9* light)
 		const float spot[4] = { cosf(light->Theta * 0.5f), cosf(light->Phi * 0.5f),
 			light->Falloff, 0.0f };
 		Direct3D11_Mirror_Light(index, light->Type, position, direction,
-			(const float*)&light->Diffuse, (const float*)&light->Specular, attenuation, spot);
+			(const float*)&light->Diffuse, (const float*)&light->Specular, attenuation, spot,
+			(const float*)&light->Ambient);
 	}
 	else if (CurrentDX8LightEnables[index]) {
 		DX8_RECORD_LIGHT_CHANGE();
