@@ -24,7 +24,9 @@
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
 #include "GameClient/ApplicationWindowTitle.h"
+#include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
+#include "SdlDevice/Common/SdlMessageBox.h"
 #include "NullAudioManager.h"
 
 #include <SDL3/SDL.h>
@@ -96,14 +98,23 @@ void SdlGameEngine::createWindow( void )
 		return;
 	}
 	m_sdlVideoStarted = TRUE;
+	ThePlatformDisplays = &TheSdlDisplays;		// Monitors.h answers from SDL's displays from here on
 
 	SDL_WindowFlags flags = 0;
 	if (!m_request.windowed)
 		flags |= SDL_WINDOW_FULLSCREEN;
-	if (m_request.borderless)
+	int width = INITIAL_WINDOW_WIDTH;
+	int height = INITIAL_WINDOW_HEIGHT;
+	SDL_Rect bounds;
+	if (m_request.borderless && SDL_GetDisplayBounds( SDL_GetPrimaryDisplay(), &bounds ))
+	{
+		// Borderless is a frameless window covering the display, as WinMain makes it.
 		flags |= SDL_WINDOW_BORDERLESS;
+		width = bounds.w;
+		height = bounds.h;
+	}
 
-	m_window = SDL_CreateWindow( "Command and Conquer Generals Zero Hour", INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT, flags );
+	m_window = SDL_CreateWindow( "Command and Conquer Generals Zero Hour", width, height, flags );
 	if (m_window == NULL)
 	{
 		char why[ 512 ];
@@ -111,11 +122,12 @@ void SdlGameEngine::createWindow( void )
 		RELEASE_CRASH( why );
 		return;
 	}
-	DEBUG_LOG(( "SdlGameEngine: window %dx%d, %s%s\n", INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT,
+	DEBUG_LOG(( "SdlGameEngine: window %dx%d, %s%s\n", width, height,
 		m_request.windowed ? "windowed" : "fullscreen", m_request.borderless ? ", borderless" : "" ));
 
 	s_titledWindow = m_window;
 	TheApplicationWindowTitleHook = setTitleOfWindow;
+	setSdlMessageBoxOwner( m_window );
 }
 
 void SdlGameEngine::destroyWindow( void )
@@ -127,11 +139,13 @@ void SdlGameEngine::destroyWindow( void )
 			TheApplicationWindowTitleHook = NULL;
 			s_titledWindow = NULL;
 		}
+		setSdlMessageBoxOwner( NULL );
 		SDL_DestroyWindow( m_window );
 		m_window = NULL;
 	}
 	if (m_sdlVideoStarted)
 	{
+		ThePlatformDisplays = NULL;
 		SDL_QuitSubSystem( SDL_INIT_VIDEO );
 		m_sdlVideoStarted = FALSE;
 	}

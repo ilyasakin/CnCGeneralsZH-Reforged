@@ -35,6 +35,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include <strings.h>
 #endif
 #include <stdlib.h>
 #include <string.h>
@@ -202,11 +204,23 @@ inline int listDisplayModes( const char *device, DisplayModeEntry *entries, int 
 	return count;
 }
 #else
-/* Off Windows the displays are C2's: SDL3 enumerates them, and nothing does until C2.  Until then
-	 there is one monitor, the primary, the size of the game's floor (800x600), offering that one mode.
-	 That is Windows' own answer above when it has no desktop to enumerate, with the floor for a size:
-	 an empty rect would give borderless mode a 0x0 resolution, and empty lists would give the
-	 options menu nothing to select. */
+/* Off Windows the displays belong to the platform layer that owns the window: C2's SdlGameEngine
+	 installs ThePlatformDisplays, over SDL3's display list, once its video is up.  This header cannot
+	 call SDL itself (gameengine does not link it), so it asks through that table.
+
+	 With no table there is one monitor, the primary, the size of the game's floor (800x600), offering
+	 that one mode: a headless run, which starts no video, and the tests.  That is Windows' own answer
+	 above when it has no desktop to enumerate, with the floor for a size: an empty rect would give
+	 borderless mode a 0x0 resolution, and empty lists would give the options menu nothing to select. */
+struct PlatformDisplays
+{
+	/** Every monitor, in the order of their numbers; as listMonitors. */
+	int (*listMonitors)( MonitorEntry *entries, int capacity );
+	/** The sizes the named monitor can be set to, smallest first and each once; as listDisplayModes. */
+	int (*listDisplayModes)( const char *device, DisplayModeEntry *entries, int capacity );
+};
+inline const PlatformDisplays *ThePlatformDisplays = NULL;
+
 inline MonitorEntry fallbackMonitorEntry( void )
 {
 	MonitorEntry screen;
@@ -222,19 +236,43 @@ inline int listMonitors( MonitorEntry *entries, int capacity )
 {
 	if (capacity < 1)
 		return 0;
+	if (ThePlatformDisplays != NULL)
+	{
+		const int count = ThePlatformDisplays->listMonitors( entries, capacity );
+		if (count > 0)
+			return count;
+	}
 	entries[0] = fallbackMonitorEntry();
 	return 1;
 }
 
-inline MonitorEntry findMonitor( const char * )
+/** The monitor with this device name, or the primary when none has it; as on Windows. */
+inline MonitorEntry findMonitor( const char *device )
 {
-	return fallbackMonitorEntry();
+	MonitorEntry monitors[MAX_MONITOR_ENTRIES];
+	const int count = listMonitors( monitors, MAX_MONITOR_ENTRIES );
+
+	int primary = -1;
+	for (int index = 0; index < count; ++index)
+	{
+		if (device != NULL && ::strcasecmp( monitors[index].device, device ) == 0)
+			return monitors[index];
+		if (monitors[index].primary)
+			primary = index;
+	}
+	return monitors[primary >= 0 ? primary : 0];
 }
 
-inline int listDisplayModes( const char *, DisplayModeEntry *entries, int capacity )
+inline int listDisplayModes( const char *device, DisplayModeEntry *entries, int capacity )
 {
 	if (capacity < 1)
 		return 0;
+	if (ThePlatformDisplays != NULL)
+	{
+		const int count = ThePlatformDisplays->listDisplayModes( device, entries, capacity );
+		if (count > 0)
+			return count;
+	}
 	entries[0].width = MIN_DISPLAY_MODE_WIDTH;
 	entries[0].height = MIN_DISPLAY_MODE_HEIGHT;
 	return 1;
