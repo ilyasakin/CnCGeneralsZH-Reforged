@@ -27,6 +27,9 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/ExecutableDirectory.h"
+#if !defined(_WIN32)
+#include "Common/EarlyOptions.h"	// findUserDataDirectory, for getLogDirectory
+#endif
 
 #include <string.h>
 
@@ -86,3 +89,24 @@ void getExecutableDirectory( char *buf, size_t size, Bool keepTrailingSeparator 
 		pEnd--;
 	}
 }
+
+#if !defined(_WIN32)
+void getLogDirectory( char *buf, size_t size, Bool keepTrailingSeparator )
+{
+	getExecutableDirectory( buf, size, keepTrailingSeparator );
+	char exe[ 4096 ];
+	getExecutableDirectory( exe, sizeof( exe ), FALSE );
+	static const char bundled[] = ".app/Contents/MacOS";
+	const size_t length = strlen( exe ), tail = sizeof( bundled ) - 1;
+	if (length < tail || strcmp( exe + length - tail, bundled ) != 0)
+		return;
+
+	char logs[ 4096 ];
+	buf[0] = 0;
+	if (!findUserDataDirectory( logs, sizeof( logs ) ) || strlcat( logs, "Logs", sizeof( logs ) ) >= sizeof( logs ))
+		return;
+	zh_mkdir( logs );		// absolute, so the read-only root does not apply; EEXIST after the first run
+	if (strlcpy( buf, logs, size ) >= size || (keepTrailingSeparator && strlcat( buf, "\\", size ) >= size))
+		buf[0] = 0;
+}
+#endif
