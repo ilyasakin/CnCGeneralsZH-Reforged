@@ -950,7 +950,6 @@ The run: hidden window, 800x600, `-nologo`, no `-quickstart`, 300 s.
   - Drawn a triangle per call, both pass with 0 pixels outside, against 6 and 8 in one call. The C1
     captures do the same: 0 against 20, 2 and 11.
   - So every finding left in the capture sets is this GPU's quad sharing.
-||||||| e3cd8fae
 
 ### A3e-asm: Microsoft's own assembler as the oracle (-47, 2026-09-26)
 
@@ -1000,3 +999,44 @@ table. The fields, per programmable draw:
 - for each stream the declaration names: its SetStreamSource stride and the byte offset of the draw's
   first vertex, so the D3D8 layout is read over the right bytes;
 - the D3D9 elements as today, kept for the comparison.
+
+### The engine's own D3D8 declaration, decoded by the oracle (-47, 2026-09-26)
+
+Capture v3 (d3773b6b) records it; FFReference now reads it without the device's table.
+- `FFRef::decodeD3D8Declaration` reads the tokens to register bindings (vN, stream, offset, type).
+  `bindingsFromElements` reads the device's D3D9 elements back to registers through Microsoft's
+  "Map between D3D9 and D3D8 declarations" (usage and index to D3DVSDE_). `compareBindings` names every
+  register bound differently. `registerInputs` feeds v0-v15 from either; `declarationInputs` is now the
+  elements through it.
+- **Where the semantics come from:** no reference page. The D3D8 documentation is not on
+  learn.microsoft.com, so the token fields and their meaning are from Microsoft's d3d8types.h, its
+  definitions and its comments ("Skip _DWORDCount DWORDs in vertex", "_VertexRegister [0..15]").
+  They are written as FFReference's own constants and static_asserted against MinGW-w64's d3d8types.h
+  (`ffprogram_values_check`), with every literal token the tests use checked against the D3DVSD_
+  macro that makes it.
+- Named choices: **D1**, a stream's bindings and skips are packed from byte 0, each as wide as its type
+  (the header says so only through SKIP); **D2**, NOP is passed over, while TESSELLATOR, CONSTMEM, EXT,
+  STREAM_TESS, a register past v15 (D3DVSDE_NORMAL2), a register bound twice, data before a STREAM and a
+  missing END are refused by name.
+- **Result, capF (the 50-capture v3 set):** six .prog files. The four Trees draws (14, 15, 29, 30)
+  decode to v0 FLOAT3 @0, v1 FLOAT3 @12, v2 D3DCOLOR @24, v7 FLOAT2 @28, stride 36. That equals the
+  device's D3D9 elements register for register, and the extent fits the stride. The other two (terrain,
+  water) have no D3D8 declaration and no D3D9 elements. **No disagreement, so no device bug and no
+  finding.**
+- The checks, with their armed mutations:
+  - `test_ffprogram`: Trees' tokens, SKIP, NOP, two streams, every D2 refusal, and both readings
+    feeding identical inputs.
+  - `ffdecl_captures <dir>` (a tool, since captures are never committed): the comparison over every
+    .prog given. Its built-in control moves the first register's type in each capture and must be
+    seen; 4 of 4 were.
+  - Source mutations, each reverted: D3DCOLOR's width 4 to 8 fails 6 checks and all 4 captures;
+    SKIP counted in bytes fails 2 checks; TEXCOORD0 mapped to v8 fails 8 checks and all 4 captures;
+    dropping the D3D9 side's refusal of two elements on one register fails 1 check.
+- **What it cannot see:**
+  - Declarations the capture sets never drew: only Trees' vertex program ran, so SKIP, a second stream
+    and every other D3DVSDT_ type are checked by the unit tests alone. The SKIP mutation shows that.
+  - Whether D1 is how D3D8 laid a stream out: the header implies it and the device agrees, but no
+    page states it.
+  - The FVF the device actually draws from (the .cap header): this compares declarations, not the
+    bytes the GPU read.
+
