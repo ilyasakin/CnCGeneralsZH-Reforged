@@ -49,13 +49,14 @@ class SdlGameEngine : public PosixGameEngine
 {
 public:
 	/** How the window starts, as WinMain settles it before the engine exists: -headless, -win,
-		* -fullscreen and -borderless over Options.ini's WindowMode, and -hiddenwindow. */
+		* -fullscreen and -borderless over Options.ini's WindowMode, -hiddenwindow and -offscreen. */
 	struct WindowRequest
 	{
 		Bool headless;		///< no window, and SDL's video never started
 		Bool windowed;
 		Bool borderless;	///< windowed, with no frame
 		Bool hidden;		///< windowed and never shown: for harnesses and automated runs (-hiddenwindow)
+		Bool offscreen;		///< no window at all: every frame drawn into the device's own target (-offscreen)
 	};
 
 	SdlGameEngine( const WindowRequest &request );
@@ -77,6 +78,7 @@ protected:
 
 private:
 	void createWindow( void );
+	void startOffscreen( void );		///< -offscreen: SDL's video, and no window (SdlGameEngine.cpp)
 	void destroyWindow( void );
 
 	WindowRequest m_request;
