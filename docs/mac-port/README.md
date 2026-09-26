@@ -175,7 +175,7 @@ you start. That commit is the lock.
 | B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | done: merged; later CRT spellings land in `MSVCCompat.h` as found (was -95) | |
 | B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
 | B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | in progress: `GameEngine` half on `feature/mac-port-B5-gameengine`; the `wwlib` pass is done (-a9) | -18 |
-| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | in progress: `debuglib`/`dinput8` drops done; rest unclaimed | -18 |
+| B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | in progress: link census done (311 undefined, by owner, in the task file); `debuglib`/`dinput8` drops were -18's | -47 |
 | B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) — **see [findings](B7-w3d-layout.md)** | M1 | A1 | done: merged with B10 (was -14) | |
 | B8 | [JobSystem thread pool](tasks/B8-jobsystem-threads.md) | M1 | A1 | done: merged (was -83) | |
 | B9 | [Backslash include paths](tasks/B9-backslash-includes.md) | M1 | — | done: merged (was -21) | |

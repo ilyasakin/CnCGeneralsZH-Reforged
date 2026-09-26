@@ -4,20 +4,17 @@
  *
  * Two kinds of thing end up here:
  *
- *  - The well-known Dict keys and the MapObject list.  Both are *defined* in
- *    GameEngineDevice's WorldHeightMap.cpp (it is the one file that defines
- *    INSTANTIATE_WELL_KNOWN_KEYS), which is DX8 code and not ported yet, so the
- *    keys are instantiated here instead - same macro, same one definition.
+ *  - MapObject's render half on Windows.  The well-known Dict keys and MapObject's
+ *    data are gameengine's since B6 (Common/WellKnownKeys.cpp, Common/MapObject.cpp),
+ *    so the tests link the real ones.  The three members that hold a RenderObjClass
+ *    live beside the W3D terrain code in gameenginedevice, which this test does not
+ *    link; off Windows gameengine's MapObjectRenderPosix.cpp has them.
  *
  *  - Device/exe callbacks the engine calls out to: the W3D shader manager, the
  *    CD manager, the Win32 message boxes, WinMain.  None of them are reachable
  *    from the tests, so they are stubs; when GameEngineDevice lands in Phase 4
  *    the real definitions take over and this file shrinks.
  */
-
-// must come before anything else that might pull the header in transitively
-#define INSTANTIATE_WELL_KNOWN_KEYS
-#include "Common/WellKnownKeys.h"
 
 #include "Common/MapObject.h"
 #include "Common/OSDisplay.h"
@@ -30,41 +27,21 @@
 #include <windows.h>
 
 //////////////////////////////////////////////////////////////////////////////
-// MapObject - the map file's object list, owned by WorldHeightMap.cpp
+// MapObject's render half, Windows only (see the top of this file)
 //////////////////////////////////////////////////////////////////////////////
 
-MapObject *MapObject::TheMapObjectListPtr = NULL;
-Dict MapObject::TheWorldDict;
-
-MapObject::MapObject( Coord3D loc, AsciiString name, Real angle, Int flags,
-											const Dict *props, const ThingTemplate *thingTemplate ) :
-	m_location(loc), m_objectName(name), m_thingTemplate(thingTemplate), m_angle(angle),
-	m_nextMapObject(NULL), m_flags(flags), m_color(0), m_renderObj(NULL),
-	m_shadowObj(NULL), m_runtimeFlags(0)
+#if defined(_WIN32)
+void MapObject::setRenderObj( RenderObjClass *pObj ) { m_renderObj = pObj; }
+void MapObject::setBridgeRenderObject( BridgeTowerType type, RenderObjClass *renderObj )
 {
-	if( props )
-		m_properties = *props;
-	for( Int i = 0; i < BRIDGE_MAX_TOWERS; i++ )
-		m_bridgeTowers[ i ] = NULL;
+	if( type >= 0 && type < BRIDGE_MAX_TOWERS )
+		m_bridgeTowers[ type ] = renderObj;
 }
-
-MapObject::~MapObject() {}
-
-void MapObject::setName( AsciiString name ) { m_objectName = name; }
-void MapObject::setThingTemplate( const ThingTemplate *thing ) { m_thingTemplate = thing; }
-const ThingTemplate *MapObject::getThingTemplate( void ) const { return m_thingTemplate; }
-
-WaypointID MapObject::getWaypointID( void )
+RenderObjClass *MapObject::getBridgeRenderObject( BridgeTowerType type )
 {
-	Bool exists;
-	return (WaypointID)m_properties.getInt( TheKey_waypointID, &exists );
+	return ( type >= 0 && type < BRIDGE_MAX_TOWERS ) ? m_bridgeTowers[ type ] : NULL;
 }
-
-AsciiString MapObject::getWaypointName( void )
-{
-	Bool exists;
-	return m_properties.getAsciiString( TheKey_waypointName, &exists );
-}
+#endif
 
 //////////////////////////////////////////////////////////////////////////////
 // Device layer
