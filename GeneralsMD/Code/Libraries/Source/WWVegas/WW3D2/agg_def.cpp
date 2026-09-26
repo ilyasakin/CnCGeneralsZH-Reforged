@@ -34,6 +34,9 @@
 
 
 #include "agg_def.h"
+#if !defined(_WIN32)
+#include "zhio.h"		// zh_access: the engine's Windows-spelled paths (C1)
+#endif
 #include "htree.h"
 #include "w3derr.h"
 #include "chunkio.h"
@@ -354,19 +357,29 @@ AggregateDefClass::Load_Assets (const char *passet_name)
 		
 		// Determine what the current working directory is
 		char path[MAX_PATH];
+#if defined(_WIN32)
 		::GetCurrentDirectory (sizeof (path), path);
+#else
+		if (getcwd (path, sizeof (path)) == NULL) {
+			strcpy (path, ".");		// never an empty path: the test below reads the last character
+		}
+#endif
 
 		// Ensure the path is directory delimited
 		if (path[strlen(path)-1] != '\\') {
-			::lstrcat (path, "\\");
+			strcat (path, "\\");
 		}
 
 		// Assume the filename is simply the "asset name" + the w3d extension
-		::lstrcat (path, passet_name);
-		::lstrcat (path, ".w3d");
+		strcat (path, passet_name);
+		strcat (path, ".w3d");
 
 		// If the file exists, then load it into the asset manager.
+#if defined(_WIN32)
 		if (::GetFileAttributes (path) != 0xFFFFFFFF) {
+#else
+		if (zh_access (path, 0) == 0) {
+#endif
 			retval = WW3DAssetManager::Get_Instance()->Load_3D_Assets (path);
 		}
 	}

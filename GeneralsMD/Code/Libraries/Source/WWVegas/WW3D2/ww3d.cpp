@@ -126,7 +126,9 @@
 #include "shdlib.h"
 
 #ifndef _UNIX
-#include "framgrab.h"
+#if defined(_WIN32)
+#include "framgrab.h"	// AVI capture through vfw32; its uses are all under _WINDOWS
+#endif
 #endif
 
 
@@ -1313,6 +1315,7 @@ void WW3D::Normalize_Coordinates(int x, int y, float &fx, float &fy)
  *=============================================================================================*/
 void WW3D::Make_Screen_Shot( const char * filename_base , const float gamma, const ScreenShotFormatEnum format)
 {
+#if defined(_WIN32)	// the front buffer through the window's rectangle, written with wingdi's structures
 
 	WWASSERT(!IsRendering);
 
@@ -1474,6 +1477,11 @@ void WW3D::Make_Screen_Shot( const char * filename_base , const float gamma, con
 	}
 
 	delete [] image;
+#else
+	// Off Windows a screenshot is W3DDisplay's, from the back buffer, once the device can read it back (A3).
+	(void)filename_base; (void)gamma; (void)format;
+	WWDEBUG_SAY(("WW3D::Make_Screen_Shot: not off Windows yet\n"));
+#endif
 }
 
 
