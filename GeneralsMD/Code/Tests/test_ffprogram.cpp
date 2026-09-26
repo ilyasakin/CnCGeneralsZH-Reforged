@@ -420,3 +420,98 @@ TEST(ffprogram_pixel_texbem_offsets_and_colour_saturation)
 	CHECK_NEAR( out.nominal[0], 1.0, 0.0 );
 	CHECK_NEAR( out.nominal[2], 0.0, 0.0 );
 }
+
+// ---- the ps.1.1 assembler, on the game's own text -------------------------------------------------
+namespace {
+/// Every "ps.1.1..." string literal in a C++ file, as the compiler would read it
+std::vector<std::string> pixelProgramsIn( const std::string &path )
+{
+	std::vector<std::string> programs;
+	FILE *f = fopen( path.c_str(), "rb" );
+	if (f == NULL)
+		return programs;
+	std::string source;
+	char buffer[ 4096 ];
+	size_t got;
+	while ((got = fread( buffer, 1, sizeof( buffer ), f )) > 0)
+		source.append( buffer, got );
+	fclose( f );
+	size_t at = 0;
+	while ((at = source.find( "\"ps.1.1", at )) != std::string::npos)
+	{
+		std::string text;
+		size_t i = at + 1;
+		for (; i < source.size() && source[i] != '"'; ++i)
+		{
+			if (source[i] != '\\')
+			{
+				text += source[i];
+				continue;
+			}
+			++i;
+			if (source[i] == 'n') text += '\n';
+			else if (source[i] == '\n') {}				// a continued line
+			else if (source[i] == '\r' && source[i + 1] == '\n') ++i;
+			else text += source[i];
+		}
+		programs.push_back( text );
+		at = i;
+	}
+	return programs;
+}
+}
+
+TEST(ffprogram_assembles_the_waters_text)
+{
+	const std::vector<std::string> programs = pixelProgramsIn(
+		std::string( ZH_CODE_DIR ) + "/GameEngineDevice/Source/W3DDevice/GameClient/Water/W3DWater.cpp" );
+	CHECK_EQ( programs.size(), (size_t)4 );		// river, environment, trapezoid, mirror (2026-09-26)
+	const size_t instructions[ 4 ] = { 11, 6, 7, 9 };
+	for (size_t k = 0; k < programs.size() && k < 4; ++k)
+	{
+		std::vector<uint32_t> tokens;
+		std::string error;
+		const bool assembled = assemblePixelProgram( programs[k], tokens, error );
+		if (!assembled)
+			printf( "  water program %zu: %s\n", k, error.c_str() );
+		CHECK( assembled );
+		Program p;
+		const bool ok = assembled && decodeProgram( &tokens[0], tokens.size(), p );
+		if (assembled && !ok)
+			printf( "  water program %zu: %s\n", k, p.refusals[0].c_str() );
+		CHECK( ok );
+		CHECK_EQ( p.code.size(), instructions[k] );
+	}
+	// the text form of an instruction gives the tokens the builders give
+	std::vector<uint32_t> tokens;
+	std::string error;
+	CHECK( assemblePixelProgram( "ps_1_1 // a comment\n tex t0\n mul_x2 r0.rgb, v0, t0 ; another\n +mov r0.a, 1-t0.a\n", tokens, error ) );
+	const std::vector<uint32_t> expect = { PS11, ins( OP_TEX ), dst( REG_TEXTURE, 0 ),
+		ins( OP_MUL ), dst( REG_TEMP, 0, 0x7, 1 ), src( REG_INPUT, 0 ), src( REG_TEXTURE, 0 ),
+		ins( OP_MOV, true ), dst( REG_TEMP, 0, 0x8 ), src( REG_TEXTURE, 0, 0xFF, SRC_COMPLEMENT ), END };
+	CHECK( tokens == expect );
+	CHECK( !assemblePixelProgram( "ps.1.1\n cnd r0, r0.a, t0, t1\n", tokens, error ) );
+	CHECK( !assemblePixelProgram( "ps.1.4\n texld r0, t0\n", tokens, error ) );
+
+	// The mirror program (the fork's own) "four times and clamped": that clamp is the range cap (P4).
+	// Over a mid-grey object, (1 - .5) * 4 = 2 is clamped to 1 at the documented minimum cap, so the water
+	// darkens by the strength c0; a device whose cap is higher does not clamp, and darkens twice as much.
+	if (programs.size() == 4)
+	{
+		CHECK( assemblePixelProgram( programs[3], tokens, error ) );
+		Program mirror;
+		CHECK( decodeProgram( &tokens[0], tokens.size(), mirror ) );
+		Sampled sampled;
+		memset( &sampled, 0, sizeof( sampled ) );
+		for (int ch = 0; ch < 3; ++ch)
+			sampled.colour[0][ch] = 0.5;
+		PixelInputs in = pixelInputs( sampled );
+		for (int ch = 0; ch < 4; ++ch)
+			in.constants[0][ch] = 0.25;		// the strength
+		Interval4 out;
+		runPixelProgram( mirror, in, out );
+		CHECK_NEAR( out.nominal[0], 0.75, 1e-9 );		// clamped at cap 1: 1 - 1 * .25
+		CHECK( out.lo[0] <= 0.5 + 1e-9 );				// uncapped: 1 - 2 * .25
+		printf( "  mirror water over mid grey: %.3f at the minimum cap, down to %.3f without it\n", out.nominal[0], out.lo[0] );
+	}
+}

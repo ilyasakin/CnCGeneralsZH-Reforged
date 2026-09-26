@@ -27,6 +27,8 @@
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <algorithm>
 #include <string.h>
 
 namespace FFRef {
@@ -375,6 +377,218 @@ bool decodeProgram( const uint32_t *tokens, size_t count, Program &out )
 	if (refusals.empty())
 		checkPages( out, refusals );
 	return refusals.empty();
+}
+
+// ---- the ps.1.1 assembler -------------------------------------------------------------------------
+/*
+ * The syntax as the ps_1_x pages write it: "instruction[_modifier] dst[.mask], src, ..." with '+' for a
+ * co-issued instruction, registers r#, v#, c#, t#, masks .rgba/.rgb/.a (or .xyzw/.xyz/.w), the alpha
+ * replicate .a/.w, the complement prefix "1-", and "def c#, f, f, f, f".
+ *   P9  The version line: the pages write ps_1_1; the game writes ps.1.1, which the runtime accepted.
+ *       Both are taken.  Comments run from ';' or "//" to the end of the line.
+ */
+namespace {
+
+std::string lower( std::string s )
+{
+	for (size_t i = 0; i < s.size(); ++i)
+		if (s[i] >= 'A' && s[i] <= 'Z')
+			s[i] = (char)(s[i] + 32);
+	return s;
+}
+
+std::string trim( const std::string &s )
+{
+	size_t a = 0, b = s.size();
+	while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r'))
+		++a;
+	while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\r'))
+		--b;
+	return s.substr( a, b - a );
+}
+
+std::vector<std::string> splitOperands( const std::string &s )
+{
+	std::vector<std::string> out;
+	size_t start = 0;
+	for (size_t i = 0; i <= s.size(); ++i)
+		if (i == s.size() || s[i] == ',')
+		{
+			out.push_back( trim( s.substr( start, i - start ) ) );
+			start = i + 1;
+		}
+	return out;
+}
+
+bool registerOf( const std::string &name, uint32_t &type, int &index )
+{
+	if (name.size() < 2)
+		return false;
+	switch (name[0])
+	{
+		case 'r': type = REG_TEMP; break;
+		case 'v': type = REG_INPUT; break;
+		case 'c': type = REG_CONST; break;
+		case 't': type = REG_TEXTURE; break;
+		default: return false;
+	}
+	for (size_t i = 1; i < name.size(); ++i)
+		if (name[i] < '0' || name[i] > '9')
+			return false;
+	index = atoi( name.c_str() + 1 );
+	return true;
+}
+
+bool maskOf( const std::string &m, unsigned &mask )
+{
+	if (m.empty() || m == "rgba" || m == "xyzw") mask = 0xF;
+	else if (m == "rgb" || m == "xyz") mask = 0x7;
+	else if (m == "a" || m == "w") mask = 0x8;
+	else return false;
+	return true;
+}
+
+bool destinationToken( const std::string &text, int shift, uint32_t &token, std::string &error )
+{
+	const size_t dot = text.find( '.' );
+	uint32_t type;
+	int index;
+	unsigned mask;
+	if (!registerOf( text.substr( 0, dot ), type, index ) || !maskOf( dot == std::string::npos ? "" : text.substr( dot + 1 ), mask ))
+	{
+		error = "a destination the census does not hold: " + text;
+		return false;
+	}
+	token = PARAMETER | (type << REGTYPE_SHIFT) | (uint32_t)index | (mask << WRITEMASK_SHIFT)
+		| ((uint32_t)(shift & 0xF) << RESULTSHIFT_SHIFT);
+	return true;
+}
+
+bool sourceToken( std::string text, uint32_t &token, std::string &error )
+{
+	uint32_t modifier = SRC_NONE;
+	if (text.compare( 0, 2, "1-" ) == 0)
+	{
+		modifier = SRC_COMPLEMENT;
+		text = trim( text.substr( 2 ) );
+	}
+	const size_t dot = text.find( '.' );
+	uint32_t type;
+	int index;
+	uint32_t swizzle = 0xE4;		// .xyzw: none
+	if (!registerOf( text.substr( 0, dot ), type, index ))
+	{
+		error = "a source the census does not hold: " + text;
+		return false;
+	}
+	if (dot != std::string::npos)
+	{
+		const std::string s = text.substr( dot + 1 );
+		if (s == "a" || s == "w")
+			swizzle = 0xFF;
+		else if (s != "rgba" && s != "xyzw")
+		{
+			error = "a source swizzle the census does not hold: " + text;
+			return false;
+		}
+	}
+	token = PARAMETER | (type << REGTYPE_SHIFT) | (uint32_t)index | (swizzle << SWIZZLE_SHIFT) | (modifier << SRCMOD_SHIFT);
+	return true;
+}
+
+}	// namespace
+
+bool assemblePixelProgram( const std::string &text, std::vector<uint32_t> &tokens, std::string &error )
+{
+	tokens.clear();
+	bool versioned = false;
+	size_t start = 0;
+	while (start <= text.size())
+	{
+		size_t end = text.find( '\n', start );
+		if (end == std::string::npos)
+			end = text.size();
+		std::string line = lower( text.substr( start, end - start ) );
+		start = end + 1;
+		const size_t semicolon = line.find( ';' ), slashes = line.find( "//" );
+		line = trim( line.substr( 0, std::min( semicolon, slashes ) ) );
+		if (line.empty())
+			continue;
+		if (!versioned)
+		{
+			if (line != "ps.1.1" && line != "ps_1_1")		// P9
+			{
+				error = "the first statement is not ps.1.1: " + line;
+				return false;
+			}
+			tokens.push_back( VERSION_PIXEL | 0x0101 );
+			versioned = true;
+			continue;
+		}
+		bool coissue = false;
+		if (line[0] == '+')
+		{
+			coissue = true;
+			line = trim( line.substr( 1 ) );
+		}
+		const size_t space = line.find_first_of( " \t" );
+		std::string mnemonic = line.substr( 0, space );
+		const std::vector<std::string> operands = splitOperands( space == std::string::npos ? "" : trim( line.substr( space ) ) );
+		int shift = 0;
+		const size_t underscore = mnemonic.find( '_' );
+		if (underscore != std::string::npos)
+		{
+			const std::string modifier = mnemonic.substr( underscore + 1 );
+			mnemonic = mnemonic.substr( 0, underscore );
+			if (modifier == "x2") shift = 1;
+			else { error = "an instruction modifier the census does not hold: _" + modifier; return false; }
+		}
+		struct Op { const char *name; uint32_t code; int sources; };
+		static const Op ops[] = { { "tex", OP_TEX, 0 }, { "texbem", OP_TEXBEM, 1 }, { "mov", OP_MOV, 1 }, { "mul", OP_MUL, 2 },
+			{ "mad", OP_MAD, 3 }, { "add", OP_ADD, 2 }, { "dp3", OP_DP3, 2 }, { "lrp", OP_LRP, 3 }, { "def", OP_DEF, 4 } };
+		const Op *op = NULL;
+		for (size_t k = 0; k < sizeof( ops ) / sizeof( ops[0] ); ++k)
+			if (mnemonic == ops[k].name)
+				op = &ops[k];
+		if (op == NULL)
+		{
+			error = "an instruction the census does not hold: " + mnemonic;
+			return false;
+		}
+		if ((int)operands.size() != 1 + op->sources || operands[0].empty())
+		{
+			error = "the wrong number of operands: " + line;
+			return false;
+		}
+		tokens.push_back( op->code | (coissue ? COISSUE : 0u) );
+		uint32_t token;
+		if (!destinationToken( operands[0], shift, token, error ))
+			return false;
+		tokens.push_back( token );
+		for (int k = 0; k < op->sources; ++k)
+		{
+			if (op->code == OP_DEF)
+			{
+				const float f = (float)atof( operands[1 + k].c_str() );
+				uint32_t bits;
+				memcpy( &bits, &f, 4 );
+				tokens.push_back( bits );
+			}
+			else
+			{
+				if (!sourceToken( operands[1 + k], token, error ))
+					return false;
+				tokens.push_back( token );
+			}
+		}
+	}
+	if (!versioned)
+	{
+		error = "no version statement";
+		return false;
+	}
+	tokens.push_back( END );
+	return true;
 }
 
 // ---- the vertex program ---------------------------------------------------------------------------
