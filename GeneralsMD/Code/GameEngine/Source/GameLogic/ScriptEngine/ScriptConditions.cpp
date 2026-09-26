@@ -60,6 +60,7 @@
 #include "GameLogic/ScriptEngine.h"
 #include "GameLogic/Scripts.h"
 #include "GameLogic/VictoryConditions.h"
+#include "Platform/MsvcFloatCasts.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -955,7 +956,8 @@ Bool ScriptConditions::evaluateUnitHealth(Parameter *pUnitParm, Parameter* pComp
 
 	Real curHealth = theObj->getBodyModule()->getHealth();
 	Real initialHealth = theObj->getBodyModule()->getInitialHealth();
-	Int curPercent = (curHealth*100 + initialHealth/2)/initialHealth;
+	// 0/0 for an object with no health (a prop, a hulk): Windows' answer, INT_MIN, on every platform
+	Int curPercent = floatToIntAsMsvc((curHealth*100 + initialHealth/2)/initialHealth);
 
 	switch (pComparisonParm->getInt())
 	{

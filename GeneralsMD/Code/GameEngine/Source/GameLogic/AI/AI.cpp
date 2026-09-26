@@ -47,6 +47,7 @@
 #include "GameLogic/AIPlayer.h"		// for the per-frame AI profile the slow-frame report prints
 #include "GameLogic/Weapon.h"
 #include "GameLogic/WeaponSet.h"
+#include "Platform/MsvcFloatCasts.h"
 
 extern void addIcon(const Coord3D *pos, Real width, Int numFramesDuration, RGBColor color);
 
@@ -876,7 +877,7 @@ Object *AI::findClosestEnemy( const Object *me, Real range, UnsignedInt qualifie
 
 		Real distSqr = ThePartitionManager->getDistanceSquared(me, theEnemy, FROM_BOUNDINGSPHERE_2D);
 		Real dist = sqrt(distSqr);
-		Int modifier = dist/TheAI->getAiData()->m_attackPriorityDistanceModifier;
+		Int modifier = floatToIntAsMsvc(dist/TheAI->getAiData()->m_attackPriorityDistanceModifier);
 		Int modPriority = curPriority-modifier;
 		if (modPriority < 1)
 			modPriority = 1;
