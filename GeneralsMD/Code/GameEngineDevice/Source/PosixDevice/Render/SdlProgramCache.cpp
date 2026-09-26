@@ -20,6 +20,7 @@
 
 #include "SdlProgramCache.h"
 #include "sdl3shadercompile.h"
+#include "engineshader.h"
 #include "ffshader.h"
 #include "ffvertex.h"
 
@@ -118,6 +119,34 @@ const SdlProgram &SdlProgramCache::Vertex_Program(const VertexPipelineDescriptio
 	std::string hlsl;
 	const bool generated = VertexShader_Generate(description, VERTEX_SHADER_TARGET_SDL3_GPU, hlsl);
 	return Make(VertexPrograms, key, generated, hlsl, true);
+}
+
+const SdlProgram &SdlProgramCache::Engine_Vertex_Program(int program)
+{
+	const EngineShaderProgram engine = (EngineShaderProgram)program;
+	const std::string key = std::string("engine:") + EngineShader_Name(engine);
+	std::map<std::string, SdlProgram>::iterator existing = VertexPrograms.find(key);
+	if (existing != VertexPrograms.end()) {
+		++existing->second.Uses;
+		return existing->second;
+	}
+	std::string hlsl;
+	const bool written = EngineShader_Vertex_Program(engine, hlsl, VERTEX_SHADER_TARGET_SDL3_GPU);
+	return Make(VertexPrograms, key, written, hlsl, true);
+}
+
+const SdlProgram &SdlProgramCache::Engine_Pixel_Program(int program, const PixelPipelineDescription &pipeline)
+{
+	const EngineShaderProgram engine = (EngineShaderProgram)program;
+	const std::string key = std::string("engine:") + EngineShader_Name(engine) + CombinerShader_Pipeline_Key(pipeline);
+	std::map<std::string, SdlProgram>::iterator existing = PixelPrograms.find(key);
+	if (existing != PixelPrograms.end()) {
+		++existing->second.Uses;
+		return existing->second;
+	}
+	std::string hlsl;
+	const bool written = EngineShader_Pixel_Program(engine, pipeline, hlsl, false, COMBINER_SHADER_TARGET_SDL3_GPU);
+	return Make(PixelPrograms, key, written, hlsl, false);
 }
 
 const SdlProgram &SdlProgramCache::Pixel_Program(const CombinerDescription &description)

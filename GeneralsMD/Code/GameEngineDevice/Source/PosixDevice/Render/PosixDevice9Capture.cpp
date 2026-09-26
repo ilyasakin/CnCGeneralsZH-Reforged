@@ -221,7 +221,10 @@ void PosixDevice9::Capture_Draw(const DrawCall &call, const std::string &signatu
 		skip(state, signature, "vertices past their buffer");
 		return;
 	}
-	if (!any_vertex_in_view(vertex_bytes + (size_t)first * stride, count, stride, (FVF & D3DFVF_POSITION_MASK) == D3DFVF_XYZRHW,
+	// A transcribed vertex program places its vertices from its own constants, so the transforms say
+	// nothing about where they land: its first draw is taken.
+	if (VertexShader == NULL
+		&& !any_vertex_in_view(vertex_bytes + (size_t)first * stride, count, stride, (FVF & D3DFVF_POSITION_MASK) == D3DFVF_XYZRHW,
 			Viewport, Transforms[D3DTS_WORLD], Transforms[D3DTS_VIEW], Transforms[D3DTS_PROJECTION])) {
 		if (++state.OffScreen[signature] <= OFF_SCREEN_TRIES) {
 			return;
@@ -232,7 +235,8 @@ void PosixDevice9::Capture_Draw(const DrawCall &call, const std::string &signatu
 	DrawCaptureHeader header;
 	memset(&header, 0, sizeof(header));
 	memcpy(header.Magic, "ZHDC", 4);
-	header.Version = DRAW_CAPTURE_VERSION;
+	const bool programmable = VertexShader != NULL || PixelShader != NULL;
+	header.Version = programmable ? DRAW_CAPTURE_VERSION_PROGRAMMABLE : DRAW_CAPTURE_VERSION;
 	header.Primitive = call.Type;
 	header.PrimitiveCount = call.PrimitiveCount;
 	header.FVF = FVF;
@@ -319,8 +323,65 @@ void PosixDevice9::Capture_Draw(const DrawCall &call, const std::string &signatu
 	}
 	fclose(file);
 	state.Written += sizeof(header) + (uint64_t)count * stride + indices.size() * sizeof(uint32_t);
+	if (programmable) {
+		char program_leaf[32];
+		snprintf(program_leaf, sizeof(program_leaf), "/draw_%05u.prog", state.Captured);
+		state.Written += Write_Programs(state.Directory + program_leaf);
+	}
 	state.Signatures.insert(signature);
 	++state.Captured;
+}
+
+uint64_t PosixDevice9::Write_Programs(const std::string &path)
+{
+	FILE *file = fopen(path.c_str(), "wb");
+	if (file == NULL) {
+		return 0;
+	}
+	uint64_t written = 0;
+	struct Out
+	{
+		static void bytes(FILE *file, uint64_t &written, const void *data, size_t size)
+		{
+			fwrite(data, 1, size, file);
+			written += size;
+		}
+		static void u32(FILE *file, uint64_t &written, uint32_t value) { bytes(file, written, &value, 4); }
+		static void program(FILE *file, uint64_t &written, const void *shader)
+		{
+			std::vector<RenderUInt32> tokens;
+			const bool present = shader != NULL && Shader_Tokens_Of(shader, tokens);
+			u32(file, written, present ? 1 : 0);
+			if (!present) {
+				return;
+			}
+			char name[DRAW_CAPTURE_PROGRAM_NAME];
+			memset(name, 0, sizeof(name));
+			snprintf(name, sizeof(name), "%s", Engine_Name_Of(shader).c_str());
+			bytes(file, written, name, sizeof(name));
+			u32(file, written, (uint32_t)tokens.size());
+			bytes(file, written, &tokens[0], tokens.size() * sizeof(RenderUInt32));
+		}
+	};
+	Out::bytes(file, written, "ZHPG", 4);
+	Out::u32(file, written, 1);
+	Out::program(file, written, VertexShader);
+	std::vector<D3DVERTEXELEMENT9> elements;
+	Declaration_Elements_Of(DeclarationIsCurrent ? Declaration : NULL, elements);
+	Out::u32(file, written, (uint32_t)elements.size());
+	for (size_t i = 0; i < elements.size(); ++i) {
+		const uint16_t stream = (uint16_t)elements[i].Stream, offset = (uint16_t)elements[i].Offset;
+		const uint8_t small[4] = { (uint8_t)elements[i].Type, (uint8_t)elements[i].Method, (uint8_t)elements[i].Usage,
+			(uint8_t)elements[i].UsageIndex };
+		Out::bytes(file, written, &stream, 2);
+		Out::bytes(file, written, &offset, 2);
+		Out::bytes(file, written, small, 4);
+	}
+	Out::program(file, written, PixelShader);
+	Out::bytes(file, written, VertexShaderConstants, DRAW_CAPTURE_VS_CONSTANTS * sizeof(VertexShaderConstants[0]));
+	Out::bytes(file, written, PixelShaderConstants, DRAW_CAPTURE_PS_CONSTANTS * sizeof(PixelShaderConstants[0]));
+	fclose(file);
+	return written;
 }
 
 void PosixDevice9::Capture_Report()

@@ -1213,7 +1213,7 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
   # A3: with a window the device draws through SDL3 GPU, and compiles its own small programs (the gamma
   # pass) the way the generated ones are compiled.
-  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile ffshader ffvertex)
+  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile engineshader ffshader ffvertex)
 
   # A3a's frame: a clear read back, and the gamma pass through a picture that shows any flip.  Needs a GPU
   # but no window; exits 77 (skipped, and ctest says so) where SDL has no GPU device to give.

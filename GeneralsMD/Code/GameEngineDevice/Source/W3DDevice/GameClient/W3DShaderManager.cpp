@@ -3411,6 +3411,22 @@ enum { UNMEASURED_CPU_REPORTED_MHZ = 3049 };
 	 override (-noshaders, GlobalData's ChipsetType) is not DC_UNKNOWN and is reported as it is.
 	 test_render_hooks checks the value against the game's own file. */
 enum { UNKNOWN_CHIPSET_REPORTED = DC_MAX - 1 };
+
+/* Which chipset the presets see for the one getChipset found (testMinimumRequirements' POSIX branch, a
+	 function of its own so test_render_hooks can table it).  Placing a device only by its caps is not
+	 placing it: since A3e the POSIX device claims pixel shader 1.1, so getChipset answers
+	 DC_GENERIC_PIXEL_SHADER_1_1 rather than DC_UNKNOWN, and that is below the GF3 every shipped preset
+	 asks for - every Mac would fall to LOW again.  An override (-noshaders, GlobalData's ChipsetType) is
+	 reported as it is. */
+ChipsetType chipsetForPresets(ChipsetType detected, Bool overridden)
+{
+	if (overridden)
+		return detected;
+	if (detected == DC_UNKNOWN || detected == DC_GENERIC_PIXEL_SHADER_1_1 || detected == DC_GENERIC_PIXEL_SHADER_1_4
+			|| detected == DC_GENERIC_PIXEL_SHADER_2_0)
+		return (ChipsetType)UNKNOWN_CHIPSET_REPORTED;
+	return detected;
+}
 #endif
 
 Bool testMinimumRequirements(ChipsetType *videoChipType, CpuType *cpuType, Int *cpuFreq, Int *numRAM, Real *intBenchIndex, Real *floatBenchIndex, Real *memBenchIndex)
@@ -3424,10 +3440,10 @@ Bool W3DShaderManager::testMinimumRequirements(ChipsetType *videoChipType, CpuTy
 	{
 		*videoChipType = getChipset();
 #if !defined(_WIN32)
-		// Decision 2 for the GPU: a device the chipset table cannot place counts as meeting every preset.
-		// Windows' D3D9 names its adapter, and keeps the original presumption (GameLOD: a TNT2).
-		if (*videoChipType == DC_UNKNOWN)
-			*videoChipType = (ChipsetType)UNKNOWN_CHIPSET_REPORTED;
+		// Decision 2 for the GPU: a device the chipset table cannot place counts as meeting every preset
+		// (chipsetForPresets).  Windows' D3D9 names its adapter, and keeps the original presumption
+		// (GameLOD: a TNT2).
+		*videoChipType = chipsetForPresets(*videoChipType, TheGlobalData != NULL && TheGlobalData->m_chipSetType != DC_UNKNOWN);
 #endif
 	}
 
