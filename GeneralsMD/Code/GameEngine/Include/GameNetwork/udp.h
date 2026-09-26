@@ -40,6 +40,7 @@
 //#define write _write
 
 #else  //UNIX
+#include <errno.h>		// errno and its E* codes: <errno.h> above hangs off _UNIX, which is never defined
 #include <netdb.h>
 #include <sys/types.h>
 #include <sys/socket.h>
