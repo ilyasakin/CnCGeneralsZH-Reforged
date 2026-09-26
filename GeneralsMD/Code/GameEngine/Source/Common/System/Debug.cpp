@@ -44,6 +44,7 @@
 
 // SYSTEM INCLUDES 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 #include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
@@ -452,20 +453,20 @@ void DebugInit(int flags)
 		strlcat(curbuf, logPrefix, ARRAY_SIZE(curbuf));
 		strlcat(curbuf, DEBUG_FILE_NAME, ARRAY_SIZE(curbuf));
 
- 		remove(prevbuf);
+ 		zh_remove(prevbuf);
 		// A failed rotate is not fatal - the log still opens - but it means the ".prev" file holds
 		// some older run than the one before this, and a bug report read on that assumption is read
 		// wrong. It fails when the previous log is still open somewhere, which is what a second copy
 		// of the game without -logPrefix does.
 		// A first run under a new -logPrefix has nothing to rotate, and rename fails for that too -
 		// so ask whether the file was there before deciding anything went wrong.
-		FILE *existing = fopen(curbuf, "r");
+		FILE *existing = zh_fopen(curbuf, "r");
 		const bool hadPreviousLog = (existing != NULL);
 		if (existing != NULL)
 			fclose(existing);
 
-		const int rotated = rename(curbuf, prevbuf);
-		theLogFile = fopen(curbuf, "w");
+		const int rotated = zh_rename(curbuf, prevbuf);
+		theLogFile = zh_fopen(curbuf, "w");
 		if (theLogFile != NULL)
 		{
 			DebugLog("Log %s opened: %s\n", curbuf, getCurrentTimeString());
@@ -816,14 +817,14 @@ void ReleaseCrash(const char *reason)
 	strlcpy(curbuf, TheGlobalData->getPath_UserData().str(), ARRAY_SIZE(curbuf));
 	strlcat(curbuf, RELEASECRASH_FILE_NAME, ARRAY_SIZE(curbuf));
 
- 	remove(prevbuf);
-	FILE *existingCrashLog = fopen(curbuf, "r");
+ 	zh_remove(prevbuf);
+	FILE *existingCrashLog = zh_fopen(curbuf, "r");
 	const bool hadPreviousCrashLog = (existingCrashLog != NULL);
 	if (existingCrashLog != NULL)
 		fclose(existingCrashLog);
-	const int rotated = rename(curbuf, prevbuf);
+	const int rotated = zh_rename(curbuf, prevbuf);
 
-	theReleaseCrashLogFile = fopen(curbuf, "w");
+	theReleaseCrashLogFile = zh_fopen(curbuf, "w");
 	if (theReleaseCrashLogFile)
 	{
 		fprintf(theReleaseCrashLogFile, "Release Crash at %s; Reason %s\n", getCurrentTimeString(), reason);
@@ -940,14 +941,14 @@ void ReleaseCrashLocalized(const AsciiString& p, const AsciiString& m)
 	strlcpy(curbuf, TheGlobalData->getPath_UserData().str(), ARRAY_SIZE(curbuf));
 	strlcat(curbuf, RELEASECRASH_FILE_NAME, ARRAY_SIZE(curbuf));
 
- 	remove(prevbuf);
-	FILE *existingCrashLog = fopen(curbuf, "r");
+ 	zh_remove(prevbuf);
+	FILE *existingCrashLog = zh_fopen(curbuf, "r");
 	const bool hadPreviousCrashLog = (existingCrashLog != NULL);
 	if (existingCrashLog != NULL)
 		fclose(existingCrashLog);
-	const int rotated = rename(curbuf, prevbuf);
+	const int rotated = zh_rename(curbuf, prevbuf);
 
-	theReleaseCrashLogFile = fopen(curbuf, "w");
+	theReleaseCrashLogFile = zh_fopen(curbuf, "w");
 	if (theReleaseCrashLogFile)
 	{
 		fprintf(theReleaseCrashLogFile, "Release Crash at %s; Reason %s\n", getCurrentTimeString(), WideCharAsUtf8( mesg.str() ).str());

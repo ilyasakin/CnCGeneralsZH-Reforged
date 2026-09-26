@@ -32,6 +32,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "zhio.h"
 
 #include "Common/GameLOD.h"
 #include "GameClient/TerrainVisual.h"
@@ -304,7 +305,7 @@ void GameLODManager::init(void)
 			
 			if (TheGlobalData->m_forceBenchmark)
 			{	//we want to see the numbers.  So dump them to a logfile.
-				FILE *fp=fopen("Benchmark.txt","w");
+				FILE *fp=zh_fopen("Benchmark.txt","w");
 				if (fp)
 				{
 					fprintf(fp,"BenchProfile = %s %d %f %f %f", CPUNames[m_cpuType], m_cpuFreq, m_intBenchIndex, m_floatBenchIndex, m_memBenchIndex);

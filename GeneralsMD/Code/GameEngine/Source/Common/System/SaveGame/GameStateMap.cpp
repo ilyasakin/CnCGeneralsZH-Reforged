@@ -29,6 +29,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"
+#include "zhio.h"
 
 #include "Common/file.h"
 #include "Common/FileSystem.h"
@@ -135,7 +136,7 @@ static void embedPristineMap( AsciiString map, Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 static void embedInUseMap( AsciiString map, Xfer *xfer )
 {
-	FILE *fp = fopen( map.str(), "rb" );
+	FILE *fp = zh_fopen( map.str(), "rb" );
 
 	// sanity
 	if( fp == NULL )
@@ -193,7 +194,7 @@ static void extractAndSaveMap( AsciiString mapToSave, Xfer *xfer )
 	UnsignedInt dataSize;
 
 	// open handle to output file
-	FILE *fp = fopen( mapToSave.str(), "w+b" );
+	FILE *fp = zh_fopen( mapToSave.str(), "w+b" );
 	if( fp == NULL )
 	{
 

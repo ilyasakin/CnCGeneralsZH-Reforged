@@ -30,6 +30,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 #include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
@@ -188,7 +189,7 @@ Bool GameSpyLoginPreferences::write( void )
 	if (m_filename.isEmpty())
 		return false;
 
-	FILE *fp = fopen(m_filename.str(), "w");
+	FILE *fp = zh_fopen(m_filename.str(), "w");
 	if (fp)
 	{
 		fprintf(fp, "lastEmail = %s\n",   ((*this)["lastEmail"].str()));

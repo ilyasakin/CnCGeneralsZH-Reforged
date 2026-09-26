@@ -124,6 +124,22 @@ TEST(user_data_directory_is_made_and_ends_as_windows_does)
 	CHECK(!findUserDataDirectory(small, sizeof(small)));	// too long for the buffer: no answer, not a cut one
 	CHECK_STR(small, "");
 
+	// The files in it, by the engine's spelling "<dir>\\Options.ini": read through zh_fopen, which a
+	// raw fopen could not do - it takes the '\\' as part of the file's name (C1 (d)).
+	FILE * options = fopen((wanted + "/Options.ini").c_str(), "w");
+	if (options != NULL) {
+		fputs("Resolution = 1920 1080\nWindowMode = Borderless\n", options);
+		fclose(options);
+	}
+	char value[64];
+	CHECK(findEarlyOptionValue("WindowMode", value, sizeof(value)));
+	CHECK_STR(value, "Borderless");
+	CHECK(!findEarlyOptionValue("Absent", value, sizeof(value)));
+	char registry[4096];
+	CHECK(findRegistryFile(registry, sizeof(registry)));
+	CHECK_STR(registry, (wanted + "\\Registry.ini").c_str());
+	CHECK(!findRegistryFile(small, sizeof(small)));
+
 	unsetenv("ZH_USER_DATA_DIR");
 	const std::string command = "rm -rf '" + root + "'";
 	if (system(command.c_str()) != 0) printf("  could not remove %s\n", root.c_str());

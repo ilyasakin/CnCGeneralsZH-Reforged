@@ -30,6 +30,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 
 #include <fcntl.h>
 #if !defined(_WIN32)
@@ -159,10 +160,10 @@ static Bool hasWriteAccess()
 {
 	const char* filename = "PatchAccessTest.txt";	
 
-	remove(filename);
+	zh_remove(filename);
 
 #if defined(_WIN32)
-	int handle = _open( filename, _O_CREAT | _O_RDWR, _S_IREAD | _S_IWRITE);
+	int handle = zh_open( filename, _O_CREAT | _O_RDWR, _S_IREAD | _S_IWRITE);
 #else
 	int handle = open( filename, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR );
 #endif
@@ -176,7 +177,7 @@ static Bool hasWriteAccess()
 #else
 	close(handle);
 #endif
-	remove(filename);
+	zh_remove(filename);
 	
 	unsigned int val;
 	if (!GetUnsignedIntFromRegistry("", "Version", val))
@@ -417,7 +418,7 @@ static GHTTPBool configCallback( GHTTPRequest request, GHTTPResult result,
 
 	AsciiString fname;
 	fname.format("%sGeneralsOnline\\Config.txt", TheGlobalData->getPath_UserData().str());
-	FILE *fp = fopen(fname.str(), "wb");
+	FILE *fp = zh_fopen(fname.str(), "wb");
 	if (fp)
 	{
 		fwrite(configBuffer, bufferLen, 1, fp);
@@ -475,7 +476,7 @@ static GHTTPBool configHeadCallback( GHTTPRequest request, GHTTPResult result,
 				Int fileLen = 0;
 				AsciiString fname;
 				fname.format("%sGeneralsOnline\\Config.txt", TheGlobalData->getPath_UserData().str());
-				FILE *fp = fopen(fname.str(), "rb");
+				FILE *fp = zh_fopen(fname.str(), "rb");
 				if (fp)
 				{
 					fseek(fp, 0, SEEK_END);
@@ -502,7 +503,7 @@ static GHTTPBool configHeadCallback( GHTTPRequest request, GHTTPResult result,
 
 					AsciiString fname;
 					fname.format("%sGeneralsOnline\\Config.txt", TheGlobalData->getPath_UserData().str());
-					FILE *fp = fopen(fname.str(), "rb");
+					FILE *fp = zh_fopen(fname.str(), "rb");
 					if (fp)
 					{
 						configBuffer = NEW char[fileLen];

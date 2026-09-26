@@ -29,6 +29,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"
+#include "zhio.h"
 #include "Common/file.h"
 #include "Common/FileSystem.h"
 #include "Common/GameEngine.h"
@@ -513,7 +514,7 @@ AsciiString GameState::findNextSaveFilename( UnicodeString desc )
 		leaf.format("%s_%04d%s", adesc.str(), i, SAVE_GAME_EXTENSION);
 
 		AsciiString path = getFilePathInSaveDirectory(leaf);
-		if( access( path.str(), 0 ) == -1 )
+		if( zh_access( path.str(), 0 ) == -1 )
 			return leaf;	// note that this returns the leaf, not the full path
 	}
 #else
@@ -560,7 +561,7 @@ AsciiString GameState::findNextSaveFilename( UnicodeString desc )
 			fullPath = getFilePathInSaveDirectory(filename);
 
 			// if file does not exist we're all good
-			if( access( fullPath.str(), 0 ) == -1 )
+			if( zh_access( fullPath.str(), 0 ) == -1 )
 				return filename;
 
 			// test the text filename

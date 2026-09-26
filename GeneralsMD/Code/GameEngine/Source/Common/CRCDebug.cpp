@@ -24,6 +24,7 @@
 
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 
 #include "Common/CRCDebug.h"
 #include "Common/Debug.h"
@@ -100,7 +101,7 @@ void outputCRCDebugLines( void )
 	IPEnumeration ips;
 	AsciiString fname;
 	fname.format("crcDebug%s.txt", ips.getMachineName().str());
-	FILE *fp = fopen(fname.str(), "wt");
+	FILE *fp = zh_fopen(fname.str(), "wt");
 	int start = 0;
 	int end = nextDebugString;
 	if (numDebugStrings >= MaxStrings)

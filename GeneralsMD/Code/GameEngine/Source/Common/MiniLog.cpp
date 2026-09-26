@@ -28,6 +28,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 #include "Common/MiniLog.h"
 #include "Common/ExecutableDirectory.h"
 
@@ -39,7 +40,7 @@ LogClass::LogClass(const char *fname)
 	getExecutableDirectory( buffer, sizeof( buffer ), FALSE );
 	AsciiString fullPath;
 	fullPath.format("%s\\%s", buffer, fname);
-	m_fp = fopen(fullPath.str(), "wt");
+	m_fp = zh_fopen(fullPath.str(), "wt");
 }
 
 LogClass::~LogClass()
