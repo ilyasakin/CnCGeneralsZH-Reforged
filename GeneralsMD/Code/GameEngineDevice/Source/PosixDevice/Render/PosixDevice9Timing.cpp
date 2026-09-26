@@ -125,9 +125,9 @@ void PosixDevice9::Timing_Present(double present_ms, unsigned int draws)
 		// A long frame, split into the device's parts: what is left is the engine's.
 		const double frame_ms = (double)(now - state.LastPresent) / 1.0e6;
 		fprintf(stderr, "PosixDevice9 timing: LONG FRAME %.1f ms at %.1f s: device draw %.2f, flushes %u (%.2f ms), present %.2f"
-			" (swapchain wait %.2f), %u draws; the engine's own %.1f ms\n", frame_ms,
+			" (swapchain wait %.2f, offscreen wait %.2f), %u draws; the engine's own %.1f ms\n", frame_ms,
 			(double)(state.LastPresent - state.FirstPresent) / 1.0e9, TimingDrawMs, flushes, flush_ms, present_ms, acquire_ms,
-			draws, frame_ms - TimingDrawMs - flush_ms - present_ms);
+			offscreen_ms, draws, frame_ms - TimingDrawMs - flush_ms - present_ms);
 	}
 	const bool measuring = (double)(now - state.FirstPresent) / 1.0e9 >= state.Delay && state.Frame.size() < state.Count;
 	if (measuring && state.LastPresent != 0) {
