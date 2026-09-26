@@ -88,6 +88,11 @@ int main()
 	CHECK(device != NULL);
 	if (device == NULL) return 1;
 	device->SetFVF(D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX1);
+	// A texture at stage 0: with none bound, a stage whose COLORARG1 is the texture ends the cascade and
+	// every operation below would resolve to the one diffuse program.
+	IDirect3DTexture9 *texture = NULL;
+	CHECK(device->CreateTexture(4, 4, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, NULL) == D3D_OK);
+	device->SetTexture(0, texture);
 
 	SdlProgramCache *cache_owner = new SdlProgramCache(frame->Device());
 	SdlProgramCache &cache = *cache_owner;
@@ -133,6 +138,7 @@ int main()
 		}
 	}
 	CHECK(compiled == count);
+	CHECK(cache.Programs_Built() >= built + count - 1);	// one program per operation (MODULATE was built above)
 
 	// The three light types.
 	D3DLIGHT9 light;
@@ -159,6 +165,8 @@ int main()
 	printf("sdl_program_cache_selfcheck: %s, %u programs built in %.0f ms, %u refused\n",
 		SDL_GetGPUDeviceDriver(frame->Device()), cache.Programs_Built(), cache.Milliseconds_Compiling(),
 		cache.Programs_Refused());
+	device->SetTexture(0, NULL);
+	texture->Release();
 	device->Release();
 	d3d->Release();
 	delete cache_owner;		// its shaders go before the GPU device that made them

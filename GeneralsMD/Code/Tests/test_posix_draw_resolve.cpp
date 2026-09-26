@@ -19,8 +19,11 @@
 // The draw's resolve (PosixDevice/Render/PosixDevice9Draw.cpp, A3c) on a real headless device made
 // through CreateDevice, its state set through the D3D9 calls the engine makes:
 //   - D3D9's documented initial states;
-//   - the combiner walk: stage count, the arguments carried as set, whether a texture is bound, and a
-//     disabled stage 0 as the one-stage diffuse combiner;
+//   - the combiner walk: stage count, the arguments carried as set, whether a texture is bound, a
+//     disabled stage 0 as the one-stage diffuse combiner, and a stage whose COLORARG1 is an unbound
+//     texture ending the walk as a disabled one does;
+//   - the vertex description's D3D9 simplifications: no lighting for pretransformed vertices, a material
+//     source the vertex cannot supply read from the material; table fog refused with its reason;
 //   - the vertex description: the enabled lights packed down in order, and more than the generator
 //     carries refused;
 //   - the constants: world * view * projection against a double product, the normal transform of a
@@ -99,11 +102,19 @@ static void check_defaults(PosixDevice9 *device)
 static void check_combiner(PosixDevice9 *device)
 {
 	CombinerDescription description;
+	// The default stage 0 reads COLORARG1 = TEXTURE: with nothing bound, D3D9 ends the cascade there.
+	device->Build_Combiner_Description(description);
+	CHECK(description.StageCount == 1);
+	CHECK(description.Stages[0].ColourOperation == D3DTOP_SELECTARG1 && description.Stages[0].ColourArgument1 == D3DTA_DIFFUSE);
+
+	IDirect3DTexture9 *texture = NULL;
+	CHECK(device->CreateTexture(4, 4, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, NULL) == D3D_OK);
+	device->SetTexture(0, texture);
 	device->Build_Combiner_Description(description);
 	CHECK(description.StageCount == 1);
 	CHECK(description.Stages[0].ColourOperation == D3DTOP_MODULATE);
 	CHECK(description.Stages[0].ColourArgument1 == D3DTA_TEXTURE && description.Stages[0].ColourArgument2 == D3DTA_CURRENT);
-	CHECK(!description.Stages[0].TextureBound);
+	CHECK(description.Stages[0].TextureBound);
 
 	device->SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_ADD);
 	device->SetTextureStageState(1, D3DTSS_COLORARG1, D3DTA_TFACTOR | D3DTA_COMPLEMENT);
@@ -127,8 +138,38 @@ static void check_combiner(PosixDevice9 *device)
 	CHECK(device->Build_Vertex_Description(vertex));
 	CHECK(vertex.StageCount == 1);
 	device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+
+	// Stage 1 with COLORARG1 = TEXTURE and nothing bound at 1 ends the walk after stage 0.
+	device->SetTextureStageState(1, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	device->Build_Combiner_Description(description);
+	CHECK(description.StageCount == 1);
+	CHECK(device->Build_Vertex_Description(vertex) && vertex.StageCount == 1);
+
 	device->SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+	device->SetTextureStageState(1, D3DTSS_COLORARG1, D3DTA_TEXTURE);
 	device->SetRenderState(D3DRS_ALPHATESTENABLE, 0);
+	device->SetTexture(0, NULL);
+	texture->Release();
+
+	// D3D9's simplifications in the vertex description.
+	device->SetFVF(D3DFVF_XYZRHW | D3DFVF_DIFFUSE);
+	device->SetRenderState(D3DRS_LIGHTING, 1);
+	CHECK(device->Build_Vertex_Description(vertex) && !vertex.LightingEnabled);
+	device->SetFVF(D3DFVF_XYZ | D3DFVF_NORMAL);
+	device->SetRenderState(D3DRS_SPECULARMATERIALSOURCE, D3DMCS_COLOR2);
+	device->SetRenderState(D3DRS_DIFFUSEMATERIALSOURCE, D3DMCS_COLOR1);
+	CHECK(device->Build_Vertex_Description(vertex) && vertex.LightingEnabled);
+	CHECK(vertex.SpecularMaterialSource == D3DMCS_MATERIAL && vertex.DiffuseMaterialSource == D3DMCS_MATERIAL);
+	device->SetFVF(D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE);
+	CHECK(device->Build_Vertex_Description(vertex) && vertex.DiffuseMaterialSource == D3DMCS_COLOR1);
+	device->SetRenderState(D3DRS_FOGENABLE, 1);
+	device->SetRenderState(D3DRS_FOGTABLEMODE, D3DFOG_LINEAR);
+	std::string refusal;
+	CHECK(!device->Build_Vertex_Description(vertex, &refusal) && refusal == "table fog");
+	device->SetRenderState(D3DRS_FOGENABLE, 0);
+	device->SetRenderState(D3DRS_FOGTABLEMODE, D3DFOG_NONE);
+	device->SetRenderState(D3DRS_SPECULARMATERIALSOURCE, D3DMCS_COLOR2);
+	device->SetFVF(0);
 }
 
 static void check_lights(PosixDevice9 *device)

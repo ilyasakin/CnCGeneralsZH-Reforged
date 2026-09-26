@@ -47,9 +47,9 @@ bool Sdl_Vertex_Layout(RenderUInt32 fvf, SdlVertexLayout &layout, std::string &r
 		offset += 12;
 	}
 	else if (position == D3DFVF_XYZRHW) {
-		// Four floats in the buffer; the program reads the first three (its w is the reciprocal the
-		// pass-through does not use).
-		add_attribute(layout, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, offset);
+		// Four floats, all read: the pretransformed program takes w from the vertex's RHW, which is
+		// what makes its colours and coordinates interpolate with perspective.
+		add_attribute(layout, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4, offset);
 		offset += 16;
 	}
 	else {
@@ -443,9 +443,12 @@ bool Sdl_Sampler_Description(const RenderUInt32 ss[14], void *create_info, std::
 	}
 	info.mip_lod_bias = float_of(ss[D3DSAMP_MIPMAPLODBIAS]);
 	// D3DSAMP_MAXMIPLEVEL is the most detailed level the sampler may use.  With no mip filter the
-	// sampler reads that level and no other.
+	// sampler reads that level and no other, and still magnifies or minifies by the LOD: SDL3 GPU's
+	// backends (Metal, Vulkan) choose between the two filters on the LOD after this clamp, so pinning
+	// both ends to the level would magnify everywhere.  A quarter level of room keeps the nearest level
+	// the same one and leaves a minified pixel's LOD above zero.
 	info.min_lod = (float)ss[D3DSAMP_MAXMIPLEVEL];
-	info.max_lod = mip == D3DTEXF_NONE ? info.min_lod : 1000.0f;
+	info.max_lod = mip == D3DTEXF_NONE ? info.min_lod + 0.25f : 1000.0f;
 	info.enable_anisotropy = anisotropic;
 	info.max_anisotropy = anisotropic ? (float)(ss[D3DSAMP_MAXANISOTROPY] < 1 ? 1 : ss[D3DSAMP_MAXANISOTROPY]) : 1.0f;
 	return true;

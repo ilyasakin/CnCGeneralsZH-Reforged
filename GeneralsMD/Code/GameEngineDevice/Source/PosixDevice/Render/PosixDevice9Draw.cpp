@@ -153,6 +153,17 @@ void PosixDevice9::Set_Default_States()
 // The descriptions.
 //-------------------------------------------------------------------------------------------------
 
+bool PosixDevice9::Stage_Ends_Cascade(unsigned int stage) const
+{
+	// A disabled stage ends it; so does one whose COLORARG1 is the texture when none is bound.  That
+	// second case is D3D9's documented one (FFReference's N20, from the D3DTA and texture blending
+	// pages); ffshader's own answer for a stage with no texture is opaque white, which D3 left for a
+	// Windows measurement to settle, and a stage that reads the texture only elsewhere still gets it.
+	const RenderUInt32 *ts = TextureStageStates[stage];
+	return ts[D3DTSS_COLOROP] == D3DTOP_DISABLE
+		|| ((ts[D3DTSS_COLORARG1] & D3DTA_SELECTMASK) == D3DTA_TEXTURE && Textures[stage] == NULL);
+}
+
 void PosixDevice9::Build_Combiner_Description(CombinerDescription &description) const
 {
 	// memset first, as dx11backend's does: descriptions are compared with memcmp, padding included.
@@ -163,7 +174,7 @@ void PosixDevice9::Build_Combiner_Description(CombinerDescription &description) 
 	description.PixelPipeline.AlphaFunction = RenderStates[D3DRS_ALPHAFUNC];
 	description.PixelPipeline.FogEnabled = RenderStates[D3DRS_FOGENABLE] != 0;
 
-	if (TextureStageStates[0][D3DTSS_COLOROP] == D3DTOP_DISABLE) {
+	if (Stage_Ends_Cascade(0)) {
 		// No texturing: D3D9 draws the diffuse colour and its alpha.  The generator ends its chain at a
 		// disabled stage and would refuse, so this is the one-stage combiner that means the same.
 		CombinerStage &stage = description.Stages[0];
@@ -183,7 +194,7 @@ void PosixDevice9::Build_Combiner_Description(CombinerDescription &description) 
 
 	for (unsigned index = 0; index < MAXIMUM_COMBINER_STAGES; ++index) {
 		const RenderUInt32 *ts = TextureStageStates[index];
-		if (ts[D3DTSS_COLOROP] == D3DTOP_DISABLE) {
+		if (Stage_Ends_Cascade(index)) {
 			break;
 		}
 		CombinerStage &stage = description.Stages[index];
@@ -201,26 +212,44 @@ void PosixDevice9::Build_Combiner_Description(CombinerDescription &description) 
 	}
 }
 
-bool PosixDevice9::Build_Vertex_Description(VertexPipelineDescription &description) const
+// A material source as D3D9 reads it: COLOR1 or COLOR2 names the vertex's diffuse or specular colour,
+// and with COLORVERTEX off, or a vertex that has not got that colour, the material's own is used
+// ("D3DMATERIALCOLORSOURCE").  The generator reads no vertex specular, so COLOR2 it can take only as that
+// fallback.
+static RenderUInt32 material_source(RenderUInt32 source, RenderUInt32 fvf, bool colour_vertex)
+{
+	if (source == D3DMCS_COLOR1 && (!colour_vertex || (fvf & D3DFVF_DIFFUSE) == 0)) {
+		return D3DMCS_MATERIAL;
+	}
+	if (source == D3DMCS_COLOR2 && (!colour_vertex || (fvf & D3DFVF_SPECULAR) == 0)) {
+		return D3DMCS_MATERIAL;
+	}
+	return source;
+}
+
+bool PosixDevice9::Build_Vertex_Description(VertexPipelineDescription &description, std::string *refusal) const
 {
 	memset(&description, 0, sizeof(description));
 	description.FVF = FVF;
-	description.LightingEnabled = RenderStates[D3DRS_LIGHTING] != 0;
+	// Pretransformed vertices skip transform and lighting altogether.
+	description.LightingEnabled = RenderStates[D3DRS_LIGHTING] != 0 && (FVF & D3DFVF_POSITION_MASK) != D3DFVF_XYZRHW;
 	description.SpecularEnabled = RenderStates[D3DRS_SPECULARENABLE] != 0;
 	description.ColourVertexEnabled = RenderStates[D3DRS_COLORVERTEX] != 0;
-	description.DiffuseMaterialSource = RenderStates[D3DRS_DIFFUSEMATERIALSOURCE];
-	description.AmbientMaterialSource = RenderStates[D3DRS_AMBIENTMATERIALSOURCE];
-	description.EmissiveMaterialSource = RenderStates[D3DRS_EMISSIVEMATERIALSOURCE];
-	description.SpecularMaterialSource = RenderStates[D3DRS_SPECULARMATERIALSOURCE];
+	const bool colour_vertex = description.ColourVertexEnabled;
+	description.DiffuseMaterialSource = material_source(RenderStates[D3DRS_DIFFUSEMATERIALSOURCE], FVF, colour_vertex);
+	description.AmbientMaterialSource = material_source(RenderStates[D3DRS_AMBIENTMATERIALSOURCE], FVF, colour_vertex);
+	description.EmissiveMaterialSource = material_source(RenderStates[D3DRS_EMISSIVEMATERIALSOURCE], FVF, colour_vertex);
+	description.SpecularMaterialSource = material_source(RenderStates[D3DRS_SPECULARMATERIALSOURCE], FVF, colour_vertex);
 
 	// The enabled lights, packed down in order: the program declares them contiguously, and
-	// Build_Constants packs their fields the same way.
+	// Build_Constants packs their fields the same way.  Unlit, the program has none.
 	description.LightCount = 0;
-	for (unsigned index = 0; index < LIGHT_COUNT; ++index) {
+	for (unsigned index = 0; index < LIGHT_COUNT && description.LightingEnabled; ++index) {
 		if (!LightsEnabled[index]) {
 			continue;
 		}
 		if (description.LightCount == MAXIMUM_VERTEX_LIGHTS) {
+			if (refusal != NULL) *refusal = "more lights enabled than the generator carries";
 			return false;
 		}
 		description.Lights[description.LightCount].Type = Lights[index].Type;
@@ -231,10 +260,10 @@ bool PosixDevice9::Build_Vertex_Description(VertexPipelineDescription &descripti
 	// disabled stage 0 is the one-stage diffuse combiner, which reads no coordinates but has a stage.
 	description.StageCount = 0;
 	for (unsigned index = 0; index < MAXIMUM_VERTEX_STAGES; ++index) {
-		if (index > 0 && TextureStageStates[index][D3DTSS_COLOROP] == D3DTOP_DISABLE) {
+		if (index > 0 && Stage_Ends_Cascade(index)) {
 			break;
 		}
-		if (index == 0 && TextureStageStates[0][D3DTSS_COLOROP] == D3DTOP_DISABLE) {
+		if (index == 0 && Stage_Ends_Cascade(0)) {
 			description.StageCount = 1;
 			break;
 		}
@@ -245,6 +274,16 @@ bool PosixDevice9::Build_Vertex_Description(VertexPipelineDescription &descripti
 
 	description.FogEnabled = RenderStates[D3DRS_FOGENABLE] != 0;
 	description.FogVertexMode = RenderStates[D3DRS_FOGVERTEXMODE];
+	// The engine fogs per vertex, LINEAR (dx8wrapper's defaults); the generator has no table fog, and no
+	// fog factor taken from the specular alpha, which is D3D9's answer with both modes NONE.
+	if (description.FogEnabled && RenderStates[D3DRS_FOGTABLEMODE] != D3DFOG_NONE) {
+		if (refusal != NULL) *refusal = "table fog";
+		return false;
+	}
+	if (description.FogEnabled && description.FogVertexMode == D3DFOG_NONE) {
+		if (refusal != NULL) *refusal = "fog from the specular alpha (both fog modes NONE)";
+		return false;
+	}
 	return true;
 }
 
@@ -528,8 +567,8 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	CombinerDescription combiner;
 	VertexPipelineDescription vertex;
 	Build_Combiner_Description(combiner);
-	if (!Build_Vertex_Description(vertex)) {
-		Refuse_Draw("more lights enabled than the generator carries");
+	if (!Build_Vertex_Description(vertex, &refusal)) {
+		Refuse_Draw(refusal);
 		return D3D_OK;
 	}
 	const SdlProgram &vertex_program = Programs->Vertex_Program(vertex);
