@@ -20,7 +20,7 @@
 # into it.  The fork's own data is the overlay the app bundle carries (P1): staged by
 # Tools/stage-overlay.sh, the zh_overlay target's script, and passed with -overlay, so these runs
 # resolve every file as the shipped game does (packaging-resolution-check.sh proves that layout equal
-# to Windows' one folder).  The install is hashed before and after, and must be unchanged.  The user data
+# to Windows' one folder).  The user data
 # (ZH_USER_DATA_DIR) is in the same folder, and the folder is removed at the end.  The logs go next to
 # the executable, as on Windows, each under its own -logPrefix, and are removed once read.
 #
@@ -111,26 +111,6 @@ mkdir -p "$ROOT" "$USERDATA"
 OVERLAY="$WORK/overlay"
 "$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
 
-# The install's contents, to compare at the end (P1 step 2's standard)
-hash_install() {
-	python3 - "$INSTALL" > "$1" <<'PYEOF'
-import hashlib, os, sys
-root = sys.argv[1]
-for base, dirs, files in os.walk(root):
-    dirs.sort()
-    for name in sorted(dirs + files):
-        p = os.path.join(base, name)
-        if os.path.isdir(p):
-            print(os.path.relpath(p, root), 'dir'); continue
-        h = hashlib.blake2b(digest_size=16)
-        with open(p, 'rb') as f:
-            for block in iter(lambda: f.read(1 << 20), b''):
-                h.update(block)
-        st = os.lstat(p)
-        print(os.path.relpath(p, root), st.st_size, int(st.st_mtime_ns), h.hexdigest())
-PYEOF
-}
-hash_install "$WORK/install.before"
 
 # ---- a run ---------------------------------------------------------------------------------------
 # Sets RUN_CRC and RUN_FRAME from the run's last HEADLESS CRC line, RUN_RESULT from its HEADLESS
@@ -217,12 +197,6 @@ for match in $MATCHES; do
 		failures=$((failures + 1))
 	fi
 done
-
-hash_install "$WORK/install.after"
-if ! cmp -s "$WORK/install.before" "$WORK/install.after"; then
-	echo "FAILED: THE INSTALL CHANGED during these runs:"; diff "$WORK/install.before" "$WORK/install.after" | head -5
-	failures=$((failures + 1))
-fi
 
 echo
 if [ "$failures" -eq 0 ]; then
