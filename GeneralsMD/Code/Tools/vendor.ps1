@@ -276,5 +276,8 @@ Step 'skipping SDL3 and miniaudio: not Windows, and vendor.sh is what fetches th
 Step 'skipping glslang, SPIRV-Cross and SDL_shadercross: the SDL3 GPU shader path, vendor.sh fetches them'
 # FreeType rasterises text off Windows (decision 6); Windows draws it with GDI, so it is not fetched here.
 Step 'skipping FreeType: text off Windows, vendor.sh fetches it'
+# FFmpeg's source is built only off Windows (V1); Windows links the committed dist/ that
+# Tools/ffmpeg-build.sh made, so the tarball is not fetched here.
+Step 'skipping the FFmpeg source: the POSIX movie decoder, vendor.sh fetches it'
 Install-Art
 Step 'everything the build needs is in place'
