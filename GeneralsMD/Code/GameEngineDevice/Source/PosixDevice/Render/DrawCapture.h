@@ -1,0 +1,90 @@
+/*
+**	Command & Conquer Generals Zero Hour(tm)
+**	Copyright 2025 Electronic Arts Inc.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/*
+** A captured draw (decision 7, A3's DONE: "every pipeline key checked").  With ZH_GPU_CAPTURE=<dir> the
+** device writes the first draw of every distinct signature - the vertex program's key, the pixel
+** program's and the pipeline's - with everything a replay needs to draw it again: the state as set, the
+** vertices and indices it reads, and its textures.  test_ffref_capture replays each through the device on
+** the GPU and through FFReference, and compares.
+**
+** What a capture does not hold: the target's pixels, depth and stencil before the draw.  A replay draws
+** into a cleared target, so a draw that depends on what was under it (EQUAL depth, a stencil test,
+** blending onto the frame) is checked against the clear, not against the frame.
+**
+** Version 1 skips a draw that samples a render target: its texels are the GPU's, and reading them back
+** at the draw would flush the batch.  The writer counts what it skipped and why.
+**
+** Captures come from the user's install: they are written to a scratch directory and never committed.
+** The files are raw structs of this build, not an interchange format - the same build writes and reads them.
+**
+**   <dir>/draw_<n>.cap      a DrawCaptureHeader, then vertex_count * stride vertex bytes, then index_count
+**                            uint32_t indices (0 for a non-indexed draw), rebased to the first vertex stored
+**   <dir>/<name>.tex        a DrawCaptureTexture, then each level's rows, packed, as the texture holds them;
+**                            one file per texture content, shared by every capture that samples it
+*/
+
+#pragma once
+
+#ifndef DRAWCAPTURE_H
+#define DRAWCAPTURE_H
+
+#include "Platform/D3D9Posix.h"
+
+#include <stdint.h>
+
+enum { DRAW_CAPTURE_VERSION = 1, DRAW_CAPTURE_STAGES = 8, DRAW_CAPTURE_NAME = 48, DRAW_CAPTURE_SIGNATURE = 512 };
+
+struct DrawCaptureHeader
+{
+	char Magic[4];										///< "ZHDC"
+	uint32_t Version;
+	uint32_t Primitive;									///< D3DPRIMITIVETYPE
+	uint32_t PrimitiveCount;
+	uint32_t FVF;
+	uint32_t Stride;
+	uint32_t VertexCount;
+	uint32_t IndexCount;								///< 0: not indexed
+	uint32_t TargetWidth;
+	uint32_t TargetHeight;
+	uint32_t TargetFormat;								///< D3DFORMAT of render target 0
+	uint32_t DepthBound;								///< a depth-stencil surface was bound: 0 draws as D3D9 does, without depth
+	D3DVIEWPORT9 Viewport;
+	uint32_t RenderStates[256];
+	uint32_t StageStates[DRAW_CAPTURE_STAGES][33];
+	uint32_t SamplerStates[DRAW_CAPTURE_STAGES][14];
+	D3DMATRIX World, View, Projection;
+	D3DMATRIX TextureMatrices[DRAW_CAPTURE_STAGES];
+	D3DMATERIAL9 Material;
+	D3DLIGHT9 Lights[8];
+	uint32_t LightsEnabled[8];
+	char Textures[DRAW_CAPTURE_STAGES][DRAW_CAPTURE_NAME];	///< a .tex name per stage, "" for none
+	char Signature[DRAW_CAPTURE_SIGNATURE];				///< the program keys and the pipeline key's hash
+};
+
+struct DrawCaptureTexture
+{
+	char Magic[4];										///< "ZHTX"
+	uint32_t Format;									///< D3DFORMAT
+	uint32_t Width;
+	uint32_t Height;
+	uint32_t Levels;
+	// then, per level: uint32_t byte count, and that many bytes
+};
+
+#endif // DRAWCAPTURE_H

@@ -156,6 +156,7 @@ PosixDevice9::~PosixDevice9()
 		for (std::map<std::string, unsigned int>::const_iterator it = DrawRefusals.begin(); it != DrawRefusals.end(); ++it) {
 			fprintf(stderr, "PosixDevice9:   refused %u: %s\n", it->second, it->first.c_str());
 		}
+		Capture_Report();
 	}
 	// The GPU objects before the device that made them; the pipelines before their shaders.
 	delete Pipelines;

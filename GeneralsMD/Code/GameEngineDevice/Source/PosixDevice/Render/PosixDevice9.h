@@ -362,6 +362,12 @@ protected:
 		unsigned int stride);
 	/// ZH_GPU_DUMP_FRAMES' frames to ZH_GPU_DUMP_DIR, a development aid until A3d's capture.
 	void Dump_Frame_If_Asked();
+	/// ZH_GPU_CAPTURE (DrawCapture.h, PosixDevice9Capture.cpp): whether it is set, the first draw of each
+	/// signature written there, and at teardown what was written and what was not, and why.
+	static bool Capture_Is_Asked();
+	void Capture_Draw(const DrawCall &call, const std::string &signature, unsigned int stride, unsigned int reads,
+		unsigned int sampled_stages, unsigned int target_width, unsigned int target_height);
+	static void Capture_Report();
 
 	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
 	SdlGpuFrame *Gpu;					///< the SDL3 GPU frame, with a window only

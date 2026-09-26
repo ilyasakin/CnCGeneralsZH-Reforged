@@ -1270,6 +1270,15 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(ffref_gpu_selfcheck PRIVATE posixd3d9 ffreference SDL3::SDL3-static)
   add_test(NAME ffref_gpu_selfcheck COMMAND ffref_gpu_selfcheck)
   set_tests_properties(ffref_gpu_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
+
+  # The game's own draws against FFReference: ZH_GPU_CAPTURE's captures, replayed one by one (77 without
+  # ZH_FFREF_CAPTURE_DIR; the captures come from the user's install and stay out of the repository).
+  add_executable(ffref_capture_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_ffref_capture.cpp)
+  set_target_properties(ffref_capture_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(ffref_capture_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(ffref_capture_selfcheck PRIVATE posixd3d9 ffreference SDL3::SDL3-static)
+  add_test(NAME ffref_capture_selfcheck COMMAND ffref_capture_selfcheck)
+  set_tests_properties(ffref_capture_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(sdl_gpu_frame_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
   # A2's half of the device (a contributor): the resources, the pixel codec, the image operations, the device's

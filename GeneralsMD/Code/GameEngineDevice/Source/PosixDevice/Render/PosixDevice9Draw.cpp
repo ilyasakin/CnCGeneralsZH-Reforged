@@ -911,6 +911,27 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 
 	Trace_Draw_If_Asked(call, vertex_program.Key + " | " + pixel_program.Key,
 		vertex_buffer, stride);
+	if (Capture_Is_Asked()) {
+		// The signature: both programs' keys, and the pipeline key's bytes (the pipeline's states, formats
+		// and target format), so every pipeline the game makes has a draw to replay.  The key's shaders are
+		// left out of the hash: they are the programs already named, and their addresses change run to run.
+		SdlPipelineKey stable = key;
+		stable.VertexShader = NULL;
+		stable.PixelShader = NULL;
+		uint64_t hash = 14695981039346656037ull;
+		const uint8_t *key_bytes = (const uint8_t *)&stable;
+		for (size_t i = 0; i < sizeof(stable); ++i) {
+			hash = (hash ^ key_bytes[i]) * 1099511628211ull;
+		}
+		char pipeline[40];
+		snprintf(pipeline, sizeof(pipeline), " | pipeline %016llx", (unsigned long long)hash);
+		unsigned int sampled = 0;
+		for (unsigned int slot = 0; slot < pixel_program.SamplerSlots; ++slot) {
+			sampled |= 1u << pixel_program.SlotTexture[slot];
+		}
+		Capture_Draw(call, vertex_program.Key + " | " + pixel_program.Key + pipeline, stride, reads, sampled,
+			target.Width, target.Height);
+	}
 
 	// The constants, pushed only when they change.
 	SdlVertexConstants vertex_constants;
