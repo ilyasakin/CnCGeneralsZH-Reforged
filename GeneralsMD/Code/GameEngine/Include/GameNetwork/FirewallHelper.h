@@ -51,6 +51,8 @@
 #ifndef __FIREWALLHELPER_H
 #define __FIREWALLHELPER_H
 
+
+#include <stddef.h>	// offsetof, for the wire-layout asserts (B4)
 class UDP;
 
 #define NUM_TEST_PORTS 4
@@ -110,6 +112,9 @@ struct ManglerMessage {
 // ManglerData goes on the wire as it sits in memory (see NetworkDefs.h).
 static_assert(sizeof(ManglerData) == 20, "ManglerData is 20 bytes on the wire");
 static_assert(sizeof(ManglerMessage) == 30, "ManglerMessage is ManglerData and 10 bytes");
+// Each struct's last member, from the definitions at pack(1) (B4)
+static_assert(offsetof(ManglerData, Padding) == 18, "ManglerData: Padding is its last 2 bytes");
+static_assert(offsetof(ManglerMessage, port) == 28, "ManglerMessage: port is its last 2 bytes");
 
 static const Int MAX_NUM_MANGLERS = 4;
 static const UnsignedShort MANGLER_PORT = 4321;
