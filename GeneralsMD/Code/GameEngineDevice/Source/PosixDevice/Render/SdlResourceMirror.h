@@ -79,6 +79,9 @@ public:
 	/// The copy of a 2D texture, current for a draw being recorded now.  Null, with the reason, for a
 	/// texture that is not 2D (A3c draws 2D textures only) or a format there is no way up for.
 	SDL_GPUTexture * Texture(IDirect3DBaseTexture9 * texture, std::string & refusal);
+	/// Whether the object already has a GPU copy: a render target nothing has drawn into has none, and its
+	/// CPU image is then the current one.
+	bool Has_Copy(const void * owner) const;
 	/// A standalone render-target (colour) or depth surface's GPU texture, made on first use (A3d).  Its
 	/// pixels are the GPU's: nothing is uploaded from its image.
 	SDL_GPUTexture * Surface(IDirect3DSurface9 * surface, bool depth, std::string & refusal);
