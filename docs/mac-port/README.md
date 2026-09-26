@@ -1176,6 +1176,16 @@ numbered by stage. -47's reading of the pages pointed toward stage, but by infer
 sentence. A commit following it (c6e52558) was reverted after -18's second read, and the D3D9 profile
 reads the set's register as before. The comment on `stage_register` records both. `WINDOWS-DEBT.md` has the row.
 
+**Latent, not numbered: a missing coordinate set under a texture transform.**
+- **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
+  D3D9 documents (0,0) ("the system defaults to the u and v coordinates (0,0)"). FFReference's N28 pads
+  that (0,0) like any two-component set, to (0,0,1,0).
+- **When it shows:** without a texture transform both read (0,0). With one, they take different rows of
+  the matrix: the fourth against the third.
+- **Why it isn't numbered:** no captured draw has a missing set, XYZ vertices and a texture transform
+  together (capture layer, 2026-09-26). If a real draw ever does, this becomes a shared-generator defect,
+  numbered and fixed like #21 to #27.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and

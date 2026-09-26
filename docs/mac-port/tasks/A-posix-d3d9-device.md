@@ -737,3 +737,85 @@ is given.
 **A3 is not done.** Both runs draw with no refusals. But "every key checked" still waits on C1 and C2, and
 on the draws that drew nothing. Those need a capture of the pixels, depth and stencil under the draw, which
 version 1 does not have.
+
+## A3e design: the engine's own shaders (proposed 2026-09-26, for the PM)
+
+**Where it stands.**
+- The POSIX caps say vertex and pixel shader version 0.0 (`PosixD3D9Caps.cpp`). So
+  `W3DShaderManager::getChipset()` is `DC_UNKNOWN`, and the engine never loads a shader. Terrain, water,
+  roads, trees and the monochrome filter all take their fixed-function fallbacks. That is why A3's runs
+  have no refusals.
+- Raising the caps alone would get nothing drawn, for three reasons:
+  - **No bytecode off Windows.** The shipped `.vso` and `.pso` programs go through
+    `d3d8shadertranslate`, which disassembles and reassembles them with D3DX. The water assembles
+    `ps.1.1` text with `D3DXAssembleShader`. Off Windows, all three D3DX shader functions fail
+    (`d3dx9posix.cpp`, A1).
+  - **No registration.** `Direct3D11_Register_Engine_Shader` is a no-op off Windows
+    (`dx11runtime_posix.cpp`).
+  - **No draw.** The device refuses every draw with a shader or a vertex declaration bound.
+
+**The approach is the D3D11 backend's: recognise, don't execute.** The Windows D3D11 backend never runs
+D3D9 bytecode. It maps the bound shader, by the name it was registered under, to D3's hand-written HLSL
+transcription (`engineshader.cpp`, which already has an SDL3_GPU target). The POSIX device does the same
+(RENDERER-ROUTE-RECON.md: "recognise what it is handed").
+
+**A3e-1: shaders made and registered off Windows.** Windows keeps compiling what it compiles today.
+- **`d3d8shadertranslate`, off Windows only:**
+  - It decodes the D3D8 declaration into D3D9 elements, as it does now (that part is native).
+  - It skips the D3DX disassemble and reassemble, and creates the shader from the shipped D3D8 tokens.
+  - The device keeps the tokens and never executes them.
+- **The POSIX `D3DXAssembleShader` (mine, A1):**
+  - For `ps.1.x` or `vs.1.x` text it returns a token stream: the version token, the source in a comment
+    token, and END.
+  - It is not an assembler, and it says so. It gives the water's `CreatePixelShader` something to hand
+    over, and the water's registration names it.
+  - Anything else still fails.
+- **Registration off Windows:** `Direct3D11_Register_Engine_Shader` tags the device's shader object with
+  its `EngineShaderProgram` (`EngineShader_From_File`).
+  - It goes through a small `Platform/` declaration that posixd3d9 implements, the way
+    `posixResourceDestroyed` crosses the same layer.
+  - A shader with no tag is foreign, and its draws are refused by name.
+- **Caps:** vertex and pixel shader 1.1, and nothing higher. That is `DC_GENERIC_PIXEL_SHADER_1_1` with the
+  8 stages already advertised. The engine asks for no more.
+
+**A3e-2: drawing them.**
+- **The programs:**
+  - A bound, tagged program takes the half it names: `EngineShader_Vertex_Program` or
+    `EngineShader_Pixel_Program`, with the SDL3_GPU target, compiled and cached by `SdlProgramCache`
+    under the engine program's name.
+  - The other half is generated, as D3 found the game pairs them. Trees' vertex program meets only
+    ffshader's pixel programs, and the engine's pixel programs meet only ffvertex's vertex programs.
+  - A pair the game never makes is refused, not guessed.
+- **Constants:** the 96 vertex-shader constant registers (`ENGINE_SHADER_CONSTANTS`) feed the engine
+  program's `b0` block, as the D3D11 backend mirrors them. Pixel-shader constants are not read, in either
+  backend.
+- **Vertex declarations** (Trees): `CreateVertexDeclaration` and `SetVertexDeclaration` give the vertex
+  layout from the elements, and the pipeline key takes the layout in place of the FVF.
+- **Left out:**
+  - The terrain's bumped programs. They need the normal atlas and the sun, which reach the D3D11 backend
+    through calls the POSIX runtime answers as "no D3D11".
+  - The environment water (texbem) and `wave.*`, which have no transcription on Windows either.
+  - Each is refused by name, not drawn wrongly.
+- **One branch:** raising the caps moves the game onto its shader paths. So the caps land with the draw,
+  on one branch, and the shell map and the skirmish must still show zero refusals except those named
+  above.
+
+**A3e-3: checking them.**
+- FFReference can't check a programmable draw, and comparing the transcription against itself proves
+  nothing. The independent oracle would be a CPU interpreter of `vs_1_1` and `ps_1_1`, written from the
+  D3D8/D3D9 shader reference pages, that runs the *shipped* tokens. The water's text would need the
+  interpreter to read the assembly text.
+- The capture layer's version 2 would then capture programmable draws: the program's name, its original
+  tokens or text, and the constant bank. The replay compares Metal's picture from the transcription with
+  the interpreter's picture from the original.
+- **Independence:** as with FFReference, whoever writes the interpreter reads neither `engineshader.cpp`
+  nor the generators. I propose -47. That is the PM's call.
+- Until it exists, A3e-2 is checked by what the game shows (terrain, water, trees and roads on the shell
+  map and in the skirmish, with the HUD overlay in the picture). That is looks, and it's recorded as such.
+
+**Whose files:**
+- **Mine:** `d3d8shadertranslate`'s POSIX branch, `d3dx9posix.cpp`'s assembler, `dx11runtime_posix.cpp`
+  (A1), and the device.
+- **Shared with Windows D3D11:** `engineshader.cpp`, the transcriptions. A change there is a generator fix
+  under the usual process, with -18 as second reader.
+- **-18's:** the caps file, which is a one-line change for each version.
