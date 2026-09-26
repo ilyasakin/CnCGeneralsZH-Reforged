@@ -53,9 +53,18 @@ check '[ $status -eq 0 ]' "seed 1 at 12000 frames: fourteen checkpoint saves lea
 
 # 5. The install check's control: with its snapshot spoiled (the install itself untouched), the harness
 #    must report the install changed and exit 99.
-out="$(REPLAY_CHECK_CONTROL_INSTALL=1 bash "$HARNESS" --generals "$GENERALS" --seeds "0" --maxframes 30 2>&1)"
+out="$(REPLAY_CHECK_CONTROL_INSTALL=changed bash "$HARNESS" --generals "$GENERALS" --seeds "0" --maxframes 30 2>&1)"
 status=$?
 printf '%s\n' "$out"
 check '[ $status -eq 99 ] && printf "%s" "$out" | grep -q "INSTALL CHANGED"' "a changed install fails the run (exit $status)"
+
+# 6. And with its snapshot removed, it must say it COULD NOT VERIFY the install - never that it changed -
+#    and still exit 99.  Both controls leave no folder behind.
+out="$(REPLAY_CHECK_CONTROL_INSTALL=missing bash "$HARNESS" --generals "$GENERALS" --seeds "0" --maxframes 30 2>&1)"
+status=$?
+printf '%s\n' "$out"
+check '[ $status -eq 99 ] && printf "%s" "$out" | grep -q "COULD NOT VERIFY" && ! printf "%s" "$out" | grep -q "CHANGED"' \
+	"an install that cannot be checked fails the run as COULD NOT VERIFY, not as a change (exit $status)"
+check '! printf "%s" "$out" | grep -q "kept for inspection"' "and the controls keep no folder"
 
 exit $failed

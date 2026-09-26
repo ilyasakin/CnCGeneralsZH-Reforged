@@ -69,24 +69,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-hash_install() {	# hash_install <out>: every install entry's size, mtime and BLAKE2, read only
-	python3 - "$INSTALL" > "$1" <<'EOF'
-import hashlib, os, sys
-root = sys.argv[1]
-for base, dirs, files in os.walk(root):
-    dirs.sort()
-    for name in sorted(dirs + files):
-        p = os.path.join(base, name)
-        st = os.lstat(p)
-        if os.path.isdir(p):
-            print(os.path.relpath(p, root), 'dir'); continue
-        h = hashlib.blake2b(digest_size=16)
-        with open(p, 'rb') as f:
-            for block in iter(lambda: f.read(1 << 20), b''):
-                h.update(block)
-        print(os.path.relpath(p, root), st.st_size, int(st.st_mtime_ns), h.hexdigest())
-EOF
-}
+. "$TOOLS/install-guard.sh"	# install_snapshot, install_verify
 
 farm() {	# the install's folders made anew, every file a link
 	mkdir -p "$1"
@@ -110,7 +93,10 @@ dump() {	# dump <name> <root> <out> <switches...>
 		> "$WORK/$name.out" 2> "$WORK/$name.err" )
 }
 
-hash_install "$WORK/install.before"
+if ! install_snapshot "$INSTALL" "$WORK/install.before"; then
+	echo "FAIL: COULD NOT VERIFY the install: its listing before the run could not be made; nothing was run"
+	exit 1
+fi
 "$TOOLS/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$WORK/overlay"
 ARTS=$(ls "$WORK/overlay"/Reforged*.big 2>/dev/null | wc -l | tr -d ' ')
 
@@ -175,10 +161,5 @@ else
 	echo "FAIL: no ReforgedTextures.big in the overlay (vendor.sh's art), so the control cannot run"; status=1
 fi
 
-hash_install "$WORK/install.after"
-if cmp -s "$WORK/install.before" "$WORK/install.after"; then
-	echo "ok: the install is as it was (sizes, times and contents)"
-else
-	echo "FAIL: THE INSTALL CHANGED:"; diff "$WORK/install.before" "$WORK/install.after" | head -5; status=1
-fi
+install_verify "$INSTALL" "$WORK/install.before" "$WORK/install.after" || status=1
 exit $status

@@ -180,6 +180,17 @@ static std::string readFile( const std::string &path )
 	return contents;
 }
 
+/** Removes a child's user data folder once it has been read: TMPDIR is the test's own folder in the build
+	* (CMakeLists.txt), and every run left one there. */
+static void removeFolder( const std::string &folder )
+{
+	if (folder.empty())
+		return;
+	const std::string command = "rm -rf '" + folder + "'";
+	if (system( command.c_str() ) != 0)
+		printf( "  could not remove %s\n", folder.c_str() );
+}
+
 /** Runs one child; returns its wait status, and its user data folder in `folder`. */
 static int runChild( const char *self, const char *kind, std::string &folder )
 {
@@ -244,6 +255,7 @@ static void expectReport( const char *self, const char *kind, int signal, const 
 	check( log.compare( 0, 26, "a line the log already had" ) == 0 && log.find( "\nLast error:\n" ) != std::string::npos,
 		kind, "the same report in the debug log, after what it had" );
 	printf( "  %s: %s\n", kind, report.empty() ? "(no report)" : "report written" );
+	removeFolder( folder );
 }
 
 static void expectNoReport( const char *self, const char *kind, int signal )
@@ -253,6 +265,7 @@ static void expectNoReport( const char *self, const char *kind, int signal )
 	check( WIFSIGNALED( status ) && WTERMSIG( status ) == signal, kind, "died of the expected signal" );
 	check( readFile( folder + "/ReleaseCrashInfo.txt" ).empty(), kind, "left no report (the control)" );
 	printf( "  %s: control, no report\n", kind );
+	removeFolder( folder );
 }
 
 int main( int argc, char *argv[] )
