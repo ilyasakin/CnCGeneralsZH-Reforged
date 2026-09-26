@@ -184,6 +184,33 @@ public:
 	RenderResult Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, RenderUInt32 flags, D3DCOLOR color, float z,
 		RenderUInt32 stencil);
 
+	// ---- The render-target seam (A3d), agreed with -18 2026-09-26.  With a window, the pixels of every
+	// surface a render target or depth-stencil can be - the back buffer, the depth surfaces, CreateRenderTarget
+	// surfaces and the levels of D3DUSAGE_RENDERTARGET textures - are the GPU's; A2's CPU image is stale
+	// until downloaded.  -18's surface code (PosixDevice9Resources.cpp) calls these:
+	//   - Clear: colour to the GPU when Gpu_Owns(RenderTargets[0]), depth and stencil when
+	//     Gpu_Owns(DepthStencil), each decided on its own.
+	//   - GetRenderTargetData, and LockRect on a GPU-owned surface: Gpu_Download first.
+	//   - StretchRect with both sides GPU-owned: Gpu_StretchRect.  A GPU-owned source only: Gpu_Download it.
+	//   - Any CPU write into a GPU-owned image that does not cover the whole image (StretchRect, UpdateSurface
+	//     or UpdateTexture into it, a writing lock of part of it): Gpu_Download it first, so the version bump
+	//     after the write uploads a whole image that is current everywhere.
+	//   - GetFrontBufferData: Gpu_Download_Front.
+
+	/// Whether the surface's pixels are the GPU's: with a GPU frame, for the surfaces listed above.
+	bool Gpu_Owns(IDirect3DSurface9 *surface) const;
+	/// Flushes the batch and reads the surface's GPU pixels back into its image with posixWriteFromBgra, which
+	/// does not bump version().  D3DERR_INVALIDCALL for a depth surface or a surface the GPU does not own.
+	RenderResult Gpu_Download(IDirect3DSurface9 *surface);
+	/// The last presented frame into dest's image (GetFrontBufferData).  The frame keeps a copy of what each
+	/// Present showed, so this is the presented picture whenever it is called, not the back buffer's
+	/// current, half-drawn or cleared, state.
+	RenderResult Gpu_Download_Front(IDirect3DSurface9 *dest);
+	/// A GPU copy between two GPU-owned surfaces (StretchRect), recorded in order with the draws.  NULL
+	/// rectangles are the whole surfaces.
+	RenderResult Gpu_StretchRect(IDirect3DSurface9 *source, const RenderRect *source_rect, IDirect3DSurface9 *dest,
+		const RenderRect *dest_rect, D3DTEXTUREFILTERTYPE filter);
+
 	// ---- The draw's resolve (A3c, PosixDevice9Draw.cpp): the state as set, read the way dx11backend
 	// reads it, into D3's generator descriptions and the constants their programs read.
 

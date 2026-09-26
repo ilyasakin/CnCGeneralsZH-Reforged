@@ -224,6 +224,29 @@ RenderResult PosixDevice9::Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, R
 	return D3D_OK;
 }
 
+// ---- The render-target seam (A3d).  Stubs so -18's side links while mine lands: nothing is GPU-owned yet.
+
+bool PosixDevice9::Gpu_Owns(IDirect3DSurface9 *) const
+{
+	return false;
+}
+
+RenderResult PosixDevice9::Gpu_Download(IDirect3DSurface9 *)
+{
+	return D3DERR_INVALIDCALL;
+}
+
+RenderResult PosixDevice9::Gpu_Download_Front(IDirect3DSurface9 *)
+{
+	return D3DERR_INVALIDCALL;
+}
+
+RenderResult PosixDevice9::Gpu_StretchRect(IDirect3DSurface9 *, const RenderRect *, IDirect3DSurface9 *, const RenderRect *,
+	D3DTEXTUREFILTERTYPE)
+{
+	return D3DERR_INVALIDCALL;
+}
+
 void PosixDevice9::Release_Surfaces()
 {
 	for (int index = 0; index < RENDER_TARGET_COUNT; ++index) {

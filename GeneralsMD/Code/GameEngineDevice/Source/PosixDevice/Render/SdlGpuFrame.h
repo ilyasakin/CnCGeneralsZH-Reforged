@@ -50,6 +50,16 @@ struct SDL_GPUShader;
 struct SDL_GPUTexture;
 struct SDL_Window;
 
+/// Where a pass draws: a colour texture of Target_Format() and a depth-stencil of Depth_Format(), the
+/// same size.  The back buffer is one; a render-target surface's GPU texture is another (A3d).
+struct SdlTarget
+{
+	SDL_GPUTexture * Colour;
+	SDL_GPUTexture * Depth;
+	uint32_t Width;
+	uint32_t Height;
+};
+
 /// One draw as the flush replays it, everything by value.  The device's resolve fills it.
 struct SdlRecordedDraw
 {
@@ -88,7 +98,18 @@ public:
 	/// A new back buffer and depth-stencil of this size (Reset), after running what is recorded.
 	bool Resize(unsigned int width, unsigned int height);
 
-	/// D3DCLEAR_TARGET, _ZBUFFER and _STENCIL over the whole back buffer, recorded for the next pass.  A
+	/// Where the clears and draws recorded from now on go (A3d); the back buffer until told otherwise.
+	void Set_Target(const SdlTarget & target);
+	SdlTarget Back_Buffer_Target() const;
+	/// A depth-stencil of this size for a render target the back buffer's does not fit, made once and
+	/// kept.  D3D9 lets a smaller target borrow the bigger depth surface; SDL3 GPU wants one size per pass.
+	SDL_GPUTexture * Depth_For(unsigned int width, unsigned int height);
+	/// A copy between two GPU textures of Target_Format(), rectangles as x, y, width, height, recorded in
+	/// order between the passes (StretchRect).
+	void Record_Blit(SDL_GPUTexture * source, const int32_t source_rect[4], SDL_GPUTexture * destination,
+		const int32_t destination_rect[4], bool linear);
+
+	/// D3DCLEAR_TARGET, _ZBUFFER and _STENCIL over the whole current target, recorded for the next pass.  A
 	/// later clear of the same thing replaces an earlier one, as the second would overwrite the first.
 	void Clear_Back_Buffer(bool colour, bool depth, bool stencil, uint32_t argb, float z, uint32_t stencil_value);
 	/// The same over a rectangle of it, in pixels: recorded in order as a clear draw, a triangle over the
@@ -149,6 +170,8 @@ private:
 	void Release_Targets();
 	bool Record_Batch(struct SDL_GPUCommandBuffer * commands);
 	bool Record_Passes(struct SDL_GPUCommandBuffer * commands, SDL_GPUBuffer * stream);
+	bool Begin_Pass(struct SDL_GPUCommandBuffer * commands, const SdlTarget & target, bool clear_colour, bool clear_depth,
+		bool clear_stencil, uint32_t argb, float z, uint32_t stencil_value, struct SDL_GPURenderPass ** pass);
 	SDL_GPUGraphicsPipeline * Clear_Pipeline(unsigned int which);
 	void End_Batch();
 	bool Present_Into(struct SDL_GPUCommandBuffer * commands, SDL_GPUTexture * target, unsigned int width,
@@ -171,6 +194,12 @@ private:
 		uint32_t Draw;					///< into Draws
 		bool IsRect;					///< a clear draw over Rect, not a load operation
 		int32_t Rect[4];				///< x, y, width, height
+		uint32_t Target;				///< into Targets: where a clear or draw goes
+		bool IsBlit;					///< a copy between textures, Rect to BlitRect
+		SDL_GPUTexture * BlitSource;
+		SDL_GPUTexture * BlitDestination;
+		int32_t BlitRect[4];
+		bool BlitLinear;
 		bool Colour, Depth, Stencil;	///< a clear's
 		uint32_t Argb;
 		float Z;
@@ -184,6 +213,12 @@ private:
 		uint32_t Offset, Size;
 	};
 	std::vector<Command> Commands;
+	std::vector<SdlTarget> Targets;		///< this batch's, in first use order
+	SdlTarget CurrentTarget;
+	bool TargetSet;						///< CurrentTarget was given; the back buffer otherwise
+	struct ScratchDepth { SDL_GPUTexture * Texture; uint32_t Width, Height; };
+	std::vector<ScratchDepth> ScratchDepths;
+	uint32_t Target_Index();
 	std::vector<SdlRecordedDraw> Draws;
 	std::vector<uint8_t> StreamBytes;
 	std::vector<uint8_t> UploadBytes;
