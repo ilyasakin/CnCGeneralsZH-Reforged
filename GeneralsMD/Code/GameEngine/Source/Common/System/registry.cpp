@@ -31,8 +31,12 @@
 #include "Common/Registry.h"
 #if !defined(_WIN32)
 #include "Common/EarlyOptions.h"	// findRegistryFile, findEarlyOptionValueIn, and zh_fopen through it
+#include "Common/RegistryFile.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <string>
+#include <unistd.h>
 #endif
 
 #ifdef _INTERNAL
@@ -192,16 +196,16 @@ Bool GetUnsignedIntFromRegistry(AsciiString path, AsciiString key, UnsignedInt& 
 	 findEarlyOptionValueIn: case-insensitive keys, the last one wins.  A Zero Hour value's key is its
 	 registry path below the game's key, then its name - "Language", or "ergc\\<name>" for the \\ergc
 	 subkey - and an original-Generals value's is the same under "Generals\\".  Windows' two hives, per
-	 user and per machine, are one file here.
+	 user and per machine, are one file here.  Common/RegistryFile.h has the whole protocol, and gives
+	 WWDownload's registry functions this file's reader and writer.
 
-	 Nothing in the engine writes the file: on Windows the installer writes the registry, and here that
-	 is the future launcher's or installer's job (C1's task file says so).  Where there is no file, or
+	 Nothing in the engine proper writes the file: on Windows the installer writes the registry, and
+	 here that is the future launcher's or installer's job (C1's task file says so).  Where there is no file, or
 	 no user data directory, every caller keeps its compiled-in default - GetRegistryLanguage's
 	 "english", GetRegistryVersion's 65536.  The user data directory is EarlyOptions.h's
 	 findUserDataDirectory (C1 (e)). */
 
-/** The value of one key in a Registry.ini file already chosen; FALSE if the file or the key is not there. */
-static Bool readRegistryFileAt( const char *file, const AsciiString &name, AsciiString &val )
+Bool readRegistryFileAt( const char *file, const AsciiString &name, AsciiString &val )
 {
 	FILE *fp = zh_fopen( file, "r" );		// the path is spelled as the engine spells paths (C1 (d))
 	if (fp == NULL)
@@ -214,7 +218,7 @@ static Bool readRegistryFileAt( const char *file, const AsciiString &name, Ascii
 	return found ? TRUE : FALSE;
 }
 
-static Bool readRegistryFile( const AsciiString &name, AsciiString &val )
+Bool readRegistryFile( const AsciiString &name, AsciiString &val )
 {
 	char file[ 1024 ];
 	if (!findRegistryFile( file, sizeof( file ) ))		// every reader and writer takes the path from there
@@ -222,8 +226,7 @@ static Bool readRegistryFile( const AsciiString &name, AsciiString &val )
 	return readRegistryFileAt( file, name, val );
 }
 
-/** "Generals\\" or "", then the path below the game's key without its leading backslashes, then the name. */
-static AsciiString registryFileKey( const char *tree, const AsciiString &path, const AsciiString &key )
+AsciiString registryFileKey( const char *tree, const AsciiString &path, const AsciiString &key )
 {
 	AsciiString name = tree;
 	const char *below = path.str();
@@ -236,6 +239,94 @@ static AsciiString registryFileKey( const char *tree, const AsciiString &path, c
 	}
 	name.concat( key );
 	return name;
+}
+
+/** Whether findEarlyOptionValueIn could give back exactly `val`: it reads a value to the line's end,
+	* trims blanks after the '=' and at the end, takes an empty value as missing, and readRegistryFileAt
+	* reads it into 256 bytes.  The write checks the file it made in any case; this says why up front. */
+static Bool valueReadsBack( const AsciiString &val )
+{
+	const char *text = val.str();
+	const size_t length = ::strlen( text );
+	if (length == 0 || length > 255 || ::strpbrk( text, "\r\n" ) != NULL)
+		return FALSE;
+	const char first = text[ 0 ], last = text[ length - 1 ];
+	return (first != ' ' && first != '\t' && last != ' ' && last != '\t') ? TRUE : FALSE;
+}
+
+Bool writeRegistryFileAt( const char *file, const AsciiString &name, const AsciiString &val )
+{
+	if (name.isEmpty() || !valueReadsBack( val ))
+		return FALSE;
+
+	std::string contents;
+	FILE *in = zh_fopen( file, "r" );
+	if (in != NULL)
+	{
+		char chunk[ 1024 ];
+		size_t count;
+		while ((count = ::fread( chunk, 1, sizeof( chunk ), in )) > 0)
+			contents.append( chunk, count );
+		::fclose( in );
+	}
+	else if (zh_access( file, F_OK ) == 0)
+		return FALSE;		// there, but not readable: writing a new one would lose what it holds
+
+	// The last line that sets the key, by the reader's own test (EarlyOptions.h), is the one replaced.
+	// Lines end at '\n' and keep it.
+	size_t lastStart = std::string::npos, lastEnd = 0;
+	for (size_t start = 0; start < contents.size(); )
+	{
+		size_t end = contents.find( '\n', start );
+		end = (end == std::string::npos) ? contents.size() : end + 1;
+		if (earlyOptionLineValue( contents.substr( start, end - start ).c_str(), name.str() ) != NULL)
+		{
+			lastStart = start;
+			lastEnd = end;
+		}
+		start = end;
+	}
+
+	std::string line = name.str();
+	line += " = ";
+	line += val.str();
+	line += '\n';
+	if (lastStart != std::string::npos)
+		contents.replace( lastStart, lastEnd - lastStart, line );
+	else
+	{
+		if (!contents.empty() && contents[ contents.size() - 1 ] != '\n')
+			contents += '\n';	// the last line had no line ending; ours starts a line of its own
+		contents += line;
+	}
+
+	// Written beside the file and renamed over it, so a reader sees the old file or the new one; and
+	// renamed only if the reader reads the value back from it as written, which covers what the
+	// line-by-line view above cannot see (a name the reader would not match, or a line longer than
+	// the reader's 1024-byte buffer, which it reads in pieces).
+	AsciiString temporary;
+	temporary.format( "%s.%d", file, (int)::getpid() );
+	FILE *out = zh_fopen( temporary.str(), "w" );
+	if (out == NULL)
+		return FALSE;
+	const Bool wrote = ::fwrite( contents.data(), 1, contents.size(), out ) == contents.size();
+	const Bool closed = ::fclose( out ) == 0;
+	AsciiString readBack;
+	if (!wrote || !closed || !readRegistryFileAt( temporary.str(), name, readBack ) || readBack.compare( val ) != 0
+			|| zh_rename( temporary.str(), file ) != 0)
+	{
+		zh_remove( temporary.str() );
+		return FALSE;
+	}
+	return TRUE;
+}
+
+Bool writeRegistryFile( const AsciiString &name, const AsciiString &val )
+{
+	char file[ 1024 ];
+	if (!findRegistryFile( file, sizeof( file ) ))
+		return FALSE;
+	return writeRegistryFileAt( file, name, val );
 }
 
 Bool GetStringFromGeneralsRegistry(AsciiString path, AsciiString key, AsciiString& val)
