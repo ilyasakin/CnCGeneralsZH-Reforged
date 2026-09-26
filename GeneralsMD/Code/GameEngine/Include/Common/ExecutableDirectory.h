@@ -45,4 +45,8 @@ void getExecutableDirectory( char *buf, size_t size, Bool keepTrailingSeparator 
 	 even that cannot be had, which leaves a log unwritten rather than written into the bundle.  The
 	 same trailing-separator rule as getExecutableDirectory.  Safe before main. */
 void getLogDirectory( char *buf, size_t size, Bool keepTrailingSeparator );
+
+/* Whether the running executable is inside a macOS app bundle (its directory ends ".app/Contents/MacOS"):
+	 what decides where the logs go and whether PosixMain may ask the player for their install (P1). */
+Bool isExecutableInAppBundle( void );
 #endif
