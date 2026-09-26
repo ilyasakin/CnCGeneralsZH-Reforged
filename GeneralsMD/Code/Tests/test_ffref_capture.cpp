@@ -327,6 +327,8 @@ struct ProgramFile
 	std::vector<uint32_t> VertexTokens, PixelTokens;
 	uint32_t Elements;
 	std::vector<FFRef::DeclarationElement> Declaration;	///< the bound declaration, when it was current
+	std::vector<uint32_t> D3D8Declaration;				///< .prog version 2: the engine's own, through D3DVSD_END
+	uint32_t StreamStride;								///< .prog version 2: stream 0's
 	float VertexConstants[DRAW_CAPTURE_VS_CONSTANTS][4];
 	float PixelConstants[DRAW_CAPTURE_PS_CONSTANTS][4];
 };
@@ -364,7 +366,8 @@ static bool read_programs(const std::string &path, ProgramFile &out)
 			at += (size_t)count * 4;
 		}
 	};
-	ok = In::u32(b, at, ok) == 1;
+	const uint32_t version = In::u32(b, at, ok);
+	ok = ok && (version == 1 || version == 2);
 	In::program(b, at, ok, out.VertexPresent, out.VertexName, out.VertexTokens);
 	out.Elements = In::u32(b, at, ok);
 	if (!ok || at + (size_t)out.Elements * 8 > b.size()) {
@@ -382,12 +385,33 @@ static bool read_programs(const std::string &path, ProgramFile &out)
 		at += 8;
 	}
 	In::program(b, at, ok, out.PixelPresent, out.PixelName, out.PixelTokens);
-	if (!ok || at + sizeof(out.VertexConstants) + sizeof(out.PixelConstants) != b.size()) {
+	if (!ok || at + sizeof(out.VertexConstants) + sizeof(out.PixelConstants) > b.size()) {
 		return false;
 	}
 	memcpy(out.VertexConstants, &b[at], sizeof(out.VertexConstants));
 	memcpy(out.PixelConstants, &b[at + sizeof(out.VertexConstants)], sizeof(out.PixelConstants));
-	return true;
+	at += sizeof(out.VertexConstants) + sizeof(out.PixelConstants);
+	out.StreamStride = 0;
+	if (version == 2) {
+		const uint32_t count = In::u32(b, at, ok);
+		if (!ok || at + (size_t)count * 4 > b.size()) {
+			return false;
+		}
+		out.D3D8Declaration.resize(count);
+		if (count != 0) {
+			memcpy(&out.D3D8Declaration[0], &b[at], (size_t)count * 4);
+		}
+		at += (size_t)count * 4;
+		const uint32_t streams = In::u32(b, at, ok);
+		for (uint32_t s = 0; ok && s < streams; ++s) {
+			const uint32_t stream = In::u32(b, at, ok), stride = In::u32(b, at, ok);
+			In::u32(b, at, ok);		// the first vertex's offset in the .cap's vertex bytes
+			if (stream == 0) {
+				out.StreamStride = stride;
+			}
+		}
+	}
+	return ok && at == b.size();
 }
 
 /// The text a stub token stream wraps (d3dx9posix.cpp's POSIX D3DXAssembleShader, DrawCapture.h), or
@@ -905,6 +929,8 @@ static void summary(size_t captures)
 // ---- The round trip: without captures of the game's, this captures draws of its own and replays them.
 
 static const int ROUND_TRIP_SIZE = 64;
+/// The stride of the round trip's screen quads (four floats, a colour, two floats).
+static const uint32_t ROUND_TRIP_QUAD_STRIDE = 28;
 
 /// A pixel shader's tokens for the programmable round-trip draw: the device keeps them and never runs
 /// them (A3e), so any well-formed stream will do; this one is ps_1_1's version token, a comment, and the
@@ -1143,7 +1169,7 @@ static void check_programs(const std::string &path)
 	};
 	ok = ok && bytes.size() >= 4 && memcmp(&bytes[0], "ZHPG", 4) == 0;
 	at = 4;
-	ok = ok && In::u32(bytes, at, ok) == 1;
+	ok = ok && In::u32(bytes, at, ok) == 2;					// the .prog version (capture v3)
 	ok = ok && In::u32(bytes, at, ok) == 0;					// no vertex shader
 	ok = ok && In::u32(bytes, at, ok) == 0;					// no declaration
 	ok = ok && In::u32(bytes, at, ok) == 1;					// the pixel shader
@@ -1155,7 +1181,13 @@ static void check_programs(const std::string &path)
 	ok = ok && tokens == expected_tokens && at + tokens * 4 <= bytes.size()
 		&& memcmp(&bytes[at], ROUND_TRIP_PIXEL_TOKENS, tokens * 4) == 0;
 	at += (size_t)tokens * 4;
-	ok = ok && at + (96 + 8) * 16 == bytes.size();
+	// Version 2 closes with no D3D8 declaration (none is current) and stream 0: the quad's stride, from 0.
+	ok = ok && at + (96 + 8) * 16 + 4 * 5 == bytes.size();
+	if (ok) {
+		uint32_t tail[5];
+		memcpy(tail, &bytes[at + (96 + 8) * 16], sizeof(tail));
+		ok = tail[0] == 0 && tail[1] == 1 && tail[2] == 0 && tail[3] == ROUND_TRIP_QUAD_STRIDE && tail[4] == 0;
+	}
 	for (unsigned i = 0; ok && i < 96; ++i) {
 		float v[4];
 		memcpy(v, &bytes[at + i * 16], 16);

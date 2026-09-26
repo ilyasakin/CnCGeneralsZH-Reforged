@@ -368,8 +368,9 @@ protected:
 	void Capture_Draw(const DrawCall &call, const std::string &signature, unsigned int stride, unsigned int reads,
 		unsigned int sampled_stages, unsigned int target_width, unsigned int target_height);
 	static void Capture_Report();
-	/// Capture version 2's draw_<n>.prog for the draw being captured (DrawCapture.h); the bytes written.
-	uint64_t Write_Programs(const std::string &path);
+	/// Capture version 2's draw_<n>.prog for the draw being captured (DrawCapture.h), with the draw's own
+	/// stride; the bytes written.
+	uint64_t Write_Programs(const std::string &path, unsigned int stride);
 	/// The name the engine registered a shader of this device's under (Platform/EngineShaderName.h), or
 	/// empty for one it never named (A3e).
 	static std::string Engine_Name_Of(const void *shader);
@@ -377,6 +378,9 @@ protected:
 	static bool Shader_Tokens_Of(const void *shader, std::vector<RenderUInt32> &tokens);
 	/// A declaration of this device's elements, without the end element.
 	static void Declaration_Elements_Of(IDirect3DVertexDeclaration9 *declaration, std::vector<D3DVERTEXELEMENT9> &elements);
+	/// The engine's D3D8 declaration tokens a declaration was made from (PosixDevice_Keep_D3D8_Declaration);
+	/// empty for one made otherwise.
+	static void Declaration_D3D8_Tokens_Of(IDirect3DVertexDeclaration9 *declaration, std::vector<RenderUInt32> &tokens);
 	/// The engineshader program a bound shader is (EngineShaderProgram), from its registered name; false,
 	/// with the draw refused by that name, for one that has no transcription.
 	bool Engine_Program_Of(const void *shader, const char *stage, int &program);

@@ -22,6 +22,9 @@
 
 #include "d3d8shadertranslate.h"
 #include "d3dx9runtime.h"
+#if !defined(_WIN32)
+#include "Platform/EngineShaderName.h"
+#endif
 
 #include <regex>
 #include <string>
@@ -292,7 +295,9 @@ RenderResult Create_Translated_Vertex_Shader(IDirect3DDevice9 * device, const Re
 	if (Render_Failed(created)) {
 		(*shader)->Release();
 		*shader = NULL;
+		return created;
 	}
+	PosixDevice_Keep_D3D8_Declaration(*vertex_declaration, d3d8_declaration);	// for capture version 3
 	return created;
 #endif
 

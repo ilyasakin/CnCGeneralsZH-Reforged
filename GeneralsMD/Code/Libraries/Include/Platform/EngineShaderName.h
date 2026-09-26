@@ -32,6 +32,10 @@
 
 #if !defined(_WIN32)
 void PosixDevice_Name_Shader(const void *shader, const char *name);
+/// The engine's own D3D8 declaration a vertex declaration of the device's was decoded from
+/// (d3d8shadertranslate), through its D3DVSD_END: kept on the declaration for capture version 3, so
+/// -47's interpreter can read the vN mapping from the tokens themselves.
+void PosixDevice_Keep_D3D8_Declaration(void *declaration, const unsigned int *d3d8_tokens);
 #endif
 
 #endif // ENGINESHADERNAME_H

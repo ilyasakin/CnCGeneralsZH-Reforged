@@ -326,13 +326,13 @@ void PosixDevice9::Capture_Draw(const DrawCall &call, const std::string &signatu
 	if (programmable) {
 		char program_leaf[32];
 		snprintf(program_leaf, sizeof(program_leaf), "/draw_%05u.prog", state.Captured);
-		state.Written += Write_Programs(state.Directory + program_leaf);
+		state.Written += Write_Programs(state.Directory + program_leaf, stride);
 	}
 	state.Signatures.insert(signature);
 	++state.Captured;
 }
 
-uint64_t PosixDevice9::Write_Programs(const std::string &path)
+uint64_t PosixDevice9::Write_Programs(const std::string &path, unsigned int stride)
 {
 	FILE *file = fopen(path.c_str(), "wb");
 	if (file == NULL) {
@@ -364,7 +364,7 @@ uint64_t PosixDevice9::Write_Programs(const std::string &path)
 		}
 	};
 	Out::bytes(file, written, "ZHPG", 4);
-	Out::u32(file, written, 1);
+	Out::u32(file, written, 2);	// the .prog version: 2 appends the D3D8 declaration and the streams (capture v3)
 	Out::program(file, written, VertexShader);
 	std::vector<D3DVERTEXELEMENT9> elements;
 	Declaration_Elements_Of(DeclarationIsCurrent ? Declaration : NULL, elements);
@@ -380,6 +380,19 @@ uint64_t PosixDevice9::Write_Programs(const std::string &path)
 	Out::program(file, written, PixelShader);
 	Out::bytes(file, written, VertexShaderConstants, DRAW_CAPTURE_VS_CONSTANTS * sizeof(VertexShaderConstants[0]));
 	Out::bytes(file, written, PixelShaderConstants, DRAW_CAPTURE_PS_CONSTANTS * sizeof(PixelShaderConstants[0]));
+	// Version 2's additions (-47's capture v3): the engine's own D3D8 declaration, when the current one came
+	// from one, and the streams the draw reads - stream 0 only, the one the device draws from: its stride,
+	// and where the first stored vertex is in the .cap's vertex bytes (0: they start at it).
+	std::vector<RenderUInt32> d3d8;
+	Declaration_D3D8_Tokens_Of(DeclarationIsCurrent ? Declaration : NULL, d3d8);
+	Out::u32(file, written, (uint32_t)d3d8.size());
+	if (!d3d8.empty()) {
+		Out::bytes(file, written, &d3d8[0], d3d8.size() * sizeof(RenderUInt32));
+	}
+	Out::u32(file, written, 1);
+	Out::u32(file, written, 0);
+	Out::u32(file, written, stride);		// the draw's: the stream's, or DrawPrimitiveUP's own
+	Out::u32(file, written, 0);
 	fclose(file);
 	return written;
 }
