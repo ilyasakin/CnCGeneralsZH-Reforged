@@ -1160,6 +1160,7 @@ bool DX11BackendClass::Build_Combiner_Description(CombinerDescription & descript
 		RenderStates.Get_Render_State(D3DRS_ALPHATESTENABLE) != FALSE;
 	description.PixelPipeline.AlphaFunction = RenderStates.Get_Render_State(D3DRS_ALPHAFUNC);
 	description.PixelPipeline.FogEnabled = RenderStates.Get_Render_State(D3DRS_FOGENABLE) != FALSE;
+	description.SpecularAdd = RenderStates.Get_Render_State(D3DRS_SPECULARENABLE) != FALSE;
 
 	description.StageCount = 0;
 	for (unsigned stage = 0; stage < MAXIMUM_COMBINER_STAGES; ++stage) {

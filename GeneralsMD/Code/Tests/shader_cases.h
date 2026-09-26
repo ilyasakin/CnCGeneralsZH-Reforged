@@ -144,6 +144,14 @@ inline std::vector<ShaderCase> Shader_Cases()
 		cases.push_back(c);
 	}
 	{
+		// A lit specular draw's pixel half: one modulated stage and D3DRS_SPECULARENABLE.
+		ShaderCase c = combiner("ps_extra_specular_add", false);
+		c.Combiner.StageCount = 1;
+		c.Combiner.Stages[0] = one_stage(FF_TOP_MODULATE, FF_TA_TEXTURE, FF_TA_DIFFUSE, FF_TOP_MODULATE, FF_TA_TEXTURE, FF_TA_DIFFUSE, 0, true);
+		c.Combiner.SpecularAdd = true;
+		cases.push_back(c);
+	}
+	{
 		ShaderCase c = combiner("ps_shroud_widest", true);
 		c.Combiner.StageCount = 2;
 		c.Combiner.Stages[0] = one_stage(FF_TOP_MULTIPLYADD, FF_TA_TEXTURE, FF_TA_DIFFUSE, FF_TOP_SELECTARG1, FF_TA_TEXTURE, FF_TA_CURRENT, 0, true);

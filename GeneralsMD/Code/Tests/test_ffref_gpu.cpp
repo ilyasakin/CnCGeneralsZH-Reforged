@@ -587,7 +587,7 @@ static void scenarios_cascade(Harness &h)
 	std::vector<V> quad = screen_quad(4, 4, 60, 60, CORNERS);
 	for (size_t k = 0; k < quad.size(); ++k) quad[k].specular = 0xFF402010;
 	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_SPECULAR, D3DPT_TRIANGLELIST, quad);
-	h.check("specular add (vertex specular)", false, "F6: no specular add");
+	h.check("specular add (vertex specular)", false, "F6b: no unlit vertex specular");
 
 	h.begin(0xFF000000);
 	h.rs(D3DRS_SPECULARENABLE, 1);
@@ -612,7 +612,7 @@ static void scenarios_lighting(Harness &h)
 		{ "light specular, no local viewer", D3DLIGHT_DIRECTIONAL, true, false, 0.0f, NULL },
 		{ "light point, spot specular, no local viewer", D3DLIGHT_SPOT, true, false, 0.0f, NULL },
 		{ "light point with its own ambient", D3DLIGHT_POINT, false, true, 0.1f, NULL },
-		{ "light specular, local viewer", D3DLIGHT_DIRECTIONAL, true, true, 0.0f, "F2+F6: LOCALVIEWER, and no specular add" } };
+		{ "light specular, local viewer", D3DLIGHT_DIRECTIONAL, true, true, 0.0f, NULL } };
 	for (size_t i = 0; i < sizeof(LIGHTS) / sizeof(LIGHTS[0]); ++i) {
 		h.begin(0xFF000000);
 		set_camera(h);

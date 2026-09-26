@@ -173,6 +173,7 @@ void PosixDevice9::Build_Combiner_Description(CombinerDescription &description) 
 	description.PixelPipeline.AlphaTestEnabled = RenderStates[D3DRS_ALPHATESTENABLE] != 0;
 	description.PixelPipeline.AlphaFunction = RenderStates[D3DRS_ALPHAFUNC];
 	description.PixelPipeline.FogEnabled = RenderStates[D3DRS_FOGENABLE] != 0;
+	description.SpecularAdd = RenderStates[D3DRS_SPECULARENABLE] != 0;
 
 	if (Stage_Ends_Cascade(0)) {
 		// No texturing: D3D9 draws the diffuse colour and its alpha.  The generator ends its chain at a

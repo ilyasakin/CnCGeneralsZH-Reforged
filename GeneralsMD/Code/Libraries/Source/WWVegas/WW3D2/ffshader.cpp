@@ -470,6 +470,10 @@ bool CombinerShader_Generate(const CombinerDescription & description, CombinerSh
 	if (description.NormalMapped) {
 		hlsl += "    current.rgb = saturate(current.rgb + highlight);\n";
 	}
+	else if (description.SpecularAdd) {
+		// Before the fog and the alpha test, as D3D9 orders them; the alpha is the stages'.
+		hlsl += "    current.rgb = saturate(current.rgb + input.Specular.rgb);\n";
+	}
 
 	// Before the fog: a shadow is a thing in the world and the fog is between the world and the eye.
 	if (description.ShadowReceiving) {
@@ -551,6 +555,9 @@ std::string CombinerShader_Key(const CombinerDescription & description)
 	}
 	if (description.ShadowReceiving) {
 		key += ":S";
+	}
+	if (description.SpecularAdd) {
+		key += ":SP";
 	}
 	return key;
 }
