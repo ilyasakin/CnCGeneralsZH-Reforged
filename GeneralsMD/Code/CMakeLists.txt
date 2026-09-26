@@ -2139,8 +2139,10 @@ if(ZH_GAME_DATA)
 endif()
 # A3e: the programmable stages' token values against MinGW-w64's d3d8types.h and d3d9types.h (a second
 # source for the numbers the reference pages leave out).  Skipped without x86_64-w64-mingw32-g++.
-add_test(NAME ffprogram_values_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffprogram-values-check.sh)
-set_tests_properties(ffprogram_values_check PROPERTIES SKIP_RETURN_CODE 77)
+if(ZH_PLATFORM_POSIX)		# a bash script, and the MinGW cross-compiler it drives
+  add_test(NAME ffprogram_values_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffprogram-values-check.sh)
+  set_tests_properties(ffprogram_values_check PROPERTIES SKIP_RETURN_CODE 77)
+endif()
 
 # V1's check: every movie of the install through the Bink API, against its header and a golden
 # middle frame, and one movie's sound through C4's mix on the null backend.  Needs ZH_GAME_DATA.

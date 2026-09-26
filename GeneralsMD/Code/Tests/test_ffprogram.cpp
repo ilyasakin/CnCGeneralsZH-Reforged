@@ -23,6 +23,7 @@
 #include "ffreference/ffprogram.h"
 
 #include <float.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -513,5 +514,149 @@ TEST(ffprogram_assembles_the_waters_text)
 		CHECK_NEAR( out.nominal[0], 0.75, 1e-9 );		// clamped at cap 1: 1 - 1 * .25
 		CHECK( out.lo[0] <= 0.5 + 1e-9 );				// uncapped: 1 - 2 * .25
 		printf( "  mirror water over mid grey: %.3f at the minimum cap, down to %.3f without it\n", out.nominal[0], out.lo[0] );
+	}
+}
+
+// ---- the programs inside FFReference's draw -------------------------------------------------------
+#include "ffreference/ffreference.h"
+
+namespace {
+Color rgbaOf( double r, double g, double b, double a ) { Color c = { r, g, b, a }; return c; }
+Texture solid( Color c )
+{
+	Texture t;
+	t.type = TEXTURE_2D;
+	TextureLevel l;
+	l.width = l.height = 4;
+	l.texels.assign( 16, c );
+	t.levels.push_back( l );
+	return t;
+}
+Target exactTarget( int w, int h )
+{
+	Target t;
+	t.create( w, h );
+	t.colorBits = 0;
+	t.clear( rgbaOf( 0, 0, 0, 0 ) );
+	return t;
+}
+/// Two triangles over the whole 4x4 target, in clip space with identity matrices
+void quad( Vertex v[6], Color diffuse )
+{
+	const double xy[ 6 ][ 2 ] = { { -1, -1 }, { 1, -1 }, { -1, 1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } };
+	for (int i = 0; i < 6; ++i)
+	{
+		memset( &v[i], 0, sizeof( v[i] ) );
+		v[i].position[0] = xy[i][0]; v[i].position[1] = xy[i][1]; v[i].position[2] = 0.5; v[i].position[3] = 1;
+		v[i].diffuse = diffuse;
+		v[i].tex[0][0] = (xy[i][0] + 1) / 2; v[i].tex[0][1] = (1 - xy[i][1]) / 2;	// the texture across the quad
+	}
+}
+DrawState plainState()
+{
+	DrawState s;
+	s.setDefaults( 4, 4 );
+	s.renderState[RS_LIGHTING] = 0;
+	s.renderState[RS_CULLMODE] = CULL_NONE;
+	s.hasDiffuse = true;
+	s.texCoordSets = 1;
+	s.texCoordSize[0] = 2;
+	return s;
+}
+}
+
+TEST(ffprogram_draws_as_the_fixed_function_pipeline_it_mirrors)
+{
+	// vs: m4x4 oPos, v0, c0; mov oD0, v1; mov oT0, v2.  ps: tex t0; mul r0, t0, v0.
+	// The fixed-function draw of the same thing: identity matrices, stage 0 MODULATE texture by diffuse.
+	const Program vs = decoded( { VS11,
+		ins( OP_M4x4 ), dst( REG_RASTOUT, RASTOUT_POSITION ), src( REG_INPUT, 0 ), src( REG_CONST, 0 ),
+		ins( OP_MOV ), dst( REG_ATTROUT, 0 ), src( REG_INPUT, 1 ),
+		ins( OP_MOV ), dst( REG_TEXCRDOUT, 0 ), src( REG_INPUT, 2 ), END } );
+	const Program ps = decoded( { PS11, ins( OP_TEX ), dst( REG_TEXTURE, 0 ),
+		ins( OP_MUL ), dst( REG_TEMP, 0 ), src( REG_TEXTURE, 0 ), src( REG_INPUT, 0 ), END } );
+	Texture tex = solid( rgbaOf( 0, 0, 0, 1 ) );
+	for (int i = 0; i < 16; ++i)		// a ramp, so the coordinates matter: red by column, green by row
+		tex.levels[0].texels[i] = rgbaOf( (i % 4) / 4.0 + 0.125, (i / 4) / 4.0 + 0.125, 1.0, 1.0 );
+	Vertex v[ 6 ];
+	quad( v, rgbaOf( 0.5, 0.5, 0.25, 1 ) );
+
+	DrawState ff = plainState();
+	ff.samplerState[0][SAMP_MAGFILTER] = ff.samplerState[0][SAMP_MINFILTER] = TEXF_POINT;
+	ff.textures[0] = &tex;
+	Target a = exactTarget( 4, 4 );
+	Report ra;
+	CHECK( draw( ff, PT_TRIANGLELIST, v, 6, NULL, 6, a, &ra ) );
+
+	DrawState pr = plainState();
+	pr.samplerState[0][SAMP_MAGFILTER] = pr.samplerState[0][SAMP_MINFILTER] = TEXF_POINT;
+	pr.textures[0] = &tex;
+	pr.vertexProgram = &vs;
+	pr.pixelProgram = &ps;
+	for (int i = 0; i < 4; ++i)
+		pr.vertexConstants[i][i] = 1.0;		// the identity, row by row
+	pr.vertexInput[0] = INPUT_POSITION; pr.vertexInputSize[0] = 3;
+	pr.vertexInput[1] = INPUT_DIFFUSE; pr.vertexInputSize[1] = 4;
+	pr.vertexInput[2] = INPUT_TEXCOORD0; pr.vertexInputSize[2] = 2;
+	Target b = exactTarget( 4, 4 );
+	Report rb;
+	const bool drew = draw( pr, PT_TRIANGLELIST, v, 6, NULL, 6, b, &rb );
+	if (!rb.refusals.empty())
+		printf( "  refused: %s\n", rb.refusals[0].c_str() );
+	CHECK( drew );
+	CHECK_EQ( rb.pixelsWritten, ra.pixelsWritten );
+	int same = 0;
+	for (size_t i = 0; i < a.color.size(); ++i)
+		same += fabs( a.color[i].r - b.color[i].r ) < 1e-9 && fabs( a.color[i].g - b.color[i].g ) < 1e-9
+			&& fabs( a.color[i].b - b.color[i].b ) < 1e-9 ? 1 : 0;
+	CHECK_EQ( same, (int)a.color.size() );
+	int distinct = 0;		// the ramp shows through: the pixels are not all one colour
+	for (size_t i = 1; i < b.color.size(); ++i)
+		distinct += fabs( b.color[i].r - b.color[0].r ) > 1e-9 ? 1 : 0;
+	CHECK( distinct > 0 );
+	CHECK_NEAR( b.color[5].r, 0.5 * (1 / 4.0 + 0.125), 1e-9 );		// pixel (1, 1): texel (1, 1), times v0's .5
+	CHECK( (b.zones[5] & ZONE_PROGRAM) != 0 );		// P5: the iterated v0 and the product, +-1/256 each
+	CHECK( b.hi[5].r > b.color[5].r + 1.0 / 256 && b.lo[5].r < b.color[5].r - 1.0 / 256 );
+	CHECK_EQ( rb.programVerticesReported, 0L );
+}
+
+TEST(ffprogram_refusals_inside_draw)
+{
+	const Program ps = decoded( { PS11, ins( OP_TEX ), dst( REG_TEXTURE, 1 ), ins( OP_MOV ), dst( REG_TEMP, 0 ), src( REG_TEXTURE, 1 ), END } );
+	const Program vsNoColour = decoded( { VS11, ins( OP_MOV ), dst( REG_RASTOUT, RASTOUT_POSITION ), src( REG_INPUT, 0 ),
+		ins( OP_MOV ), dst( REG_TEXCRDOUT, 1 ), src( REG_INPUT, 0 ), END } );
+	const Program psColour = decoded( { PS11, ins( OP_MOV ), dst( REG_TEMP, 0 ), src( REG_INPUT, 0 ), END } );
+	const Texture tex = solid( rgbaOf( 1, 1, 1, 1 ) );
+	Vertex v[ 6 ];
+	quad( v, rgbaOf( 1, 1, 1, 1 ) );
+	struct Case { const char *what; DrawState s; };
+	std::vector<Case> cases;
+	DrawState s = plainState();
+	s.pixelProgram = &ps;		// samples stage 1, which has no texture
+	cases.push_back( { "no texture", s } );
+	s = plainState();
+	s.vertexProgram = &vsNoColour;		// no pixel program with it
+	cases.push_back( { "fixed-function pixel stage", s } );
+	s = plainState();
+	s.vertexProgram = &vsNoColour; s.pixelProgram = &psColour;	// v0 read, oD0 never written
+	cases.push_back( { "never wrote", s } );
+	s = plainState();
+	s.vertexProgram = &vsNoColour; s.pixelProgram = &ps; s.textures[1] = &tex;
+	s.renderState[RS_FOGENABLE] = 1;
+	cases.push_back( { "fog with a vertex program", s } );
+	s = plainState();
+	s.pixelShaderBound = true;		// bound, no program to run
+	cases.push_back( { "a pixel shader is bound", s } );
+	for (size_t i = 0; i < cases.size(); ++i)
+	{
+		Target t = exactTarget( 4, 4 );
+		Report r;
+		const bool drew = draw( cases[i].s, PT_TRIANGLELIST, v, 6, NULL, 6, t, &r );
+		bool named = false;
+		for (size_t k = 0; k < r.refusals.size(); ++k)
+			named = named || r.refusals[k].find( cases[i].what ) != std::string::npos;
+		if (drew || !named)
+			printf( "  expected a refusal naming \"%s\"; got %s\n", cases[i].what, r.refusals.empty() ? "none" : r.refusals[0].c_str() );
+		CHECK( !drew && named );
 	}
 }
