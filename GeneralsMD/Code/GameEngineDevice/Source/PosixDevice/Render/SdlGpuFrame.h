@@ -147,6 +147,13 @@ public:
 	/// Flush, then the back buffer to the window through the gamma ramp (null: none, a straight blit).
 	bool Present(const uint16_t (*ramp)[256]);
 
+	/// PERF1's timing aid (PosixDevice9's ZH_GPU_TIMING): with Serialize_Submits, every submit waits for
+	/// its fence, so the waits add up to the GPU's time for the work (CPU and GPU no longer overlap, so a
+	/// serialized run is a measurement, not a frame rate).  Take_Timing hands over, and zeroes, what was
+	/// spent since the last call: in mid-frame flushes, the fence waits, and how many flushes there were.
+	void Serialize_Submits(bool serialize) { SerializeSubmits = serialize; }
+	void Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes);
+
 	/// Present into a texture of the caller's, of Target_Format(), instead of the window: the test's
 	/// window.  The back buffer's size must be the target's.
 	bool Present_To(SDL_GPUTexture * target, unsigned int width, unsigned int height, const uint16_t (*ramp)[256]);
@@ -168,6 +175,13 @@ public:
 	static unsigned int Target_Format();
 
 private:
+	/// Submits, and with SerializeSubmits waits for the fence, adding the wait to FenceMs.
+	bool Submit(struct SDL_GPUCommandBuffer * commands);
+	bool SerializeSubmits;
+	double FlushMs;
+	double FenceMs;
+	unsigned int Flushes;
+
 	SdlGpuFrame();
 	bool Create_Targets(unsigned int width, unsigned int height);
 	void Release_Targets();
