@@ -1445,6 +1445,7 @@ GameEngineDevice/Source/PosixDevice/Render/PosixPixelCodec.h
 GameEngineDevice/Source/PosixDevice/Render/PosixResources9.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixResources9.h
 GameEngineDevice/Source/PosixDevice/Render/SdlConstants.h
+GameEngineDevice/Source/PosixDevice/Render/SdlCreationLog.h
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.h
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrameBatch.cpp

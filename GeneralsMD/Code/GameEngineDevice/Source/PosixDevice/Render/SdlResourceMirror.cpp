@@ -19,6 +19,7 @@
 // GPU copies of A2's textures and buffers (decision 7, phase A3c).  See SdlResourceMirror.h.
 
 #include "SdlResourceMirror.h"
+#include "SdlCreationLog.h"
 #include "PosixPixelCodec.h"
 #include "PosixResources9.h"
 #include "SdlGpuFrame.h"
@@ -241,6 +242,8 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 	}
 	PosixTexture9 * texture = static_cast<PosixTexture9 *>(base);
 	const unsigned int levels = texture->levelCount();
+	const double started = Sdl_Creation_Log_Asked() ? Sdl_Now_Ms() : 0.0;
+	bool created = false;
 	std::lock_guard<std::mutex> guard(Lock);
 	std::unordered_map<const void *, Copy>::iterator found = Copies.find(texture);
 	if (found == Copies.end()) {
@@ -297,6 +300,7 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 			}
 		}
 		found = Copies.insert(std::make_pair((const void *)texture, copy)).first;
+		created = true;
 	}
 	Copy & copy = found->second;
 	bool stale = copy.Versions.size() != levels;
@@ -316,6 +320,12 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 			copy.Versions[level] = image.version();
 		}
 		++TexturesUploaded;
+		if (Sdl_Creation_Log_Asked()) {
+			char detail[96];
+			snprintf(detail, sizeof(detail), "%ux%u, %u levels, format %u, %s", texture->level(0).width(),
+				texture->level(0).height(), levels, (unsigned)texture->level(0).format(), copy.Native ? "native" : "expanded");
+			Sdl_Creation_Log(created ? "texture" : "retexture", started, Sdl_Now_Ms() - started, detail);
+		}
 	}
 	copy.UsedBatch = Frame->Batch();
 	return copy.Texture;
