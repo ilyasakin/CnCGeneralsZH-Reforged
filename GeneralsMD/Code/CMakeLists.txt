@@ -1218,6 +1218,14 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(posixd3d9 PROPERTIES CXX_STANDARD 17)
   target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
 
+  # A2's half of the device (a contributor): the resources, the pixel codec, the image operations, the device's
+  # resource methods and Clear, the caps, and D3DX's texture helpers, against D3D9's and D3DX's rules.  See Tests/test_posix_resources.cpp.
+  add_executable(test_posix_resources ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_resources.cpp)
+  target_include_directories(test_posix_resources PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  set_target_properties(test_posix_resources PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_posix_resources PRIVATE posixd3d9 d3dx9runtime ffshader test_harness)
+  add_test(NAME test_posix_resources COMMAND test_posix_resources)
+
   # ---- ww3d2 -----------------------------------------------------------------------------------------
   add_library(ww3d2 STATIC ${ZH_WW3D2_SOURCES} ${WW}/WW3D2/dx11runtime_posix.cpp)
   set_target_properties(ww3d2 PROPERTIES CXX_STANDARD 17)
@@ -1250,6 +1258,18 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(w3d_link_probe PROPERTIES CXX_STANDARD 17)
   target_link_libraries(w3d_link_probe PRIVATE
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,w3ddevice,ww3d2>" posixdevice gameengine)
+
+  # A2's checkpoint: every texture of the install through WW3D2's loader into the POSIX device on a
+  # null-window (-headless) WW3D, read back and checked against the file.  Needs ZH_GAME_DATA, else Skipped.
+  add_executable(test_install_textures ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_textures.cpp)
+  set_target_properties(test_install_textures PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_install_textures PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_link_libraries(test_install_textures PRIVATE w3ddevice ww3d2 posixdevice gameengine test_harness)
+  add_test(NAME test_install_textures COMMAND test_install_textures)
+  set_tests_properties(test_install_textures PROPERTIES SKIP_RETURN_CODE 77)
+  if(ZH_GAME_DATA)
+    set_tests_properties(test_install_textures PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
 endif()
 
 # ===========================================================================
