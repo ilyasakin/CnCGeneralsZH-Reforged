@@ -27,6 +27,7 @@
 // Author: Michael S. Booth, April 2001
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "Common/MessageBoxFlags.h"	// MessageBoxWrapper and its flags
 #include "Platform/SleepMilliseconds.h"
 #if !defined(_WIN32)
 #include <unistd.h>		// getpid, for the model-checksum cache's scratch file
@@ -953,8 +954,7 @@ void GameEngine::init( int argc, char *argv[] )
 
 			AsciiString message;
 			message.format("Zero Hour's game files are not in\n\n%s\n\nThis generals.exe has to be in the Zero Hour folder, the one with INIZH.big in it. Run install.bat from the zip instead of starting the game in the folder it was unzipped to.", gameDirectory);
-			extern int MessageBoxWrapper( LPCSTR lpText, LPCSTR lpCaption, UINT uType );
-			MessageBoxWrapper( message.str(), "Command & Conquer Generals Zero Hour", MB_OK | MB_TASKMODAL | MB_ICONERROR );
+			MessageBoxWrapper( message.str(), "Command & Conquer Generals Zero Hour", MSGBOX_OK | MSGBOX_TASKMODAL | MSGBOX_ICONERROR );
 			_exit(1);
 		}
 
@@ -964,8 +964,7 @@ void GameEngine::init( int argc, char *argv[] )
 		{
 			DEBUG_LOG(("GameEngine::init - Art\\Textures\\TWWater01.dds is in no archive, the base game's are missing\n"));
 
-			extern int MessageBoxWrapper( LPCSTR lpText, LPCSTR lpCaption, UINT uType );
-			MessageBoxWrapper( "The original Generals game files are missing.\n\nZero Hour needs them next to it: a Steam install keeps them in the ZH_Generals folder beside generals.exe, with Textures.big and Terrain.big among them. Verify the game's files in Steam, or reinstall Command & Conquer Generals.", "Command & Conquer Generals Zero Hour", MB_OK | MB_TASKMODAL | MB_ICONERROR );
+			MessageBoxWrapper( "The original Generals game files are missing.\n\nZero Hour needs them next to it: a Steam install keeps them in the ZH_Generals folder beside generals.exe, with Textures.big and Terrain.big among them. Verify the game's files in Steam, or reinstall Command & Conquer Generals.", "Command & Conquer Generals Zero Hour", MSGBOX_OK | MSGBOX_TASKMODAL | MSGBOX_ICONERROR );
 			_exit(1);
 		}
 
@@ -2879,4 +2878,8 @@ void updateTGAtoDDS()
 // If we're using the Wide character version of MessageBox, then there's no additional
 // processing necessary. Please note that this is a sleazy way to get this information,
 // but pending a better one, this'll have to do.
+#if defined(_WIN32)
 extern const Bool TheSystemIsUnicode = (((void*) (::MessageBox)) == ((void*) (::MessageBoxW)));
+#else
+extern const Bool TheSystemIsUnicode = TRUE;		// every text API off Windows takes Unicode (UTF-8)
+#endif
