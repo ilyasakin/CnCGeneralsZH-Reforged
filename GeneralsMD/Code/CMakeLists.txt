@@ -201,9 +201,10 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   # expensive to discover.
   add_compile_options(-fsigned-char)
   # -g for the reason /Zi is there: there is no debugger on the porting machine, so a symbolised
-  # stack is the only stack anyone gets.  Deliberately no -fno-omit-frame-pointer - that would be
-  # propping up StackDump.cpp's frame walk, and C5 replaces that mechanism with the platform's own
-  # rather than teaching an EBP chain to a machine that never had one.
+  # stack is the only stack anyone gets (atos reads the frames C5's crash handler writes).  No
+  # -fno-omit-frame-pointer: Darwin's ABI keeps frame pointers, which the crash handler walks from the
+  # signal's context, and on Linux it takes backtrace(), which unwinds by the .eh_frame -fexceptions
+  # keeps, not by frame pointers.
   add_compile_options(-g)
 else()
   message(FATAL_ERROR
@@ -932,8 +933,9 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 # Platform bodies of one interface: each side's file is left out of the other's build, so Windows
 # gets exactly the sources it had.  B5, bucket (c).
 #  - StackDump.cpp: dbghelp symbol lookup and a structured-exception context walk, Windows only.
-#    StackDumpPosix.cpp is the same Common/StackDump.h interface from backtrace() and dladdr();
-#    crash reporting proper is C5's.
+#    StackDumpPosix.cpp is the same Common/StackDump.h interface from backtrace() and dladdr(), and
+#    CrashHandlerPosix.cpp is what a crash signal writes (C5): ReleaseCrashInfo.txt, as Windows'
+#    structured-exception path writes it.
 #  - WebBrowser.cpp: an ATL/COM wrapper around Internet Explorer for the dead WOL service's pages.
 #    Nothing ever creates TheWebBrowser, on Windows either (Win32GameEngine::createWebBrowser has
 #    no caller), and every caller - INIWebpageURL, WOLLadderScreen, WOLLoginMenu - tests it for NULL
@@ -957,6 +959,7 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 if(ZH_PLATFORM_WINDOWS)
   list(REMOVE_ITEM GAMEENGINE_SOURCES
     ${GE}/Source/Common/System/StackDumpPosix.cpp
+    ${GE}/Source/Common/System/CrashHandlerPosix.cpp
     ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp
     ${GE}/Source/GameNetwork/DownloadManagerPosix.cpp
     ${GE}/Source/GameClient/GUI/IMEManagerPosix.cpp
@@ -1700,6 +1703,15 @@ target_link_libraries(test_early_command_line PRIVATE test_harness wwlib wwdebug
 # test_harness takes the first argument as its name filter; the options follow it.
 add_test(NAME test_early_command_line COMMAND test_early_command_line early_command_line
   -logPrefix pre -headless -root "/tmp/zh_ä" -jobthreads 3 -last)
+
+# C5: the crash handler from the real CrashHandlerPosix.cpp, in a child process per way of crashing;
+# the report, the exit signal, and two armed controls.  See the test file.
+add_executable(test_crash_reporting ${TESTS}/test_crash_reporting.cpp ${GE}/Source/Common/System/CrashHandlerPosix.cpp)
+target_include_directories(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+target_compile_definitions(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(test_crash_reporting PROPERTIES CXX_STANDARD 17)
+target_link_libraries(test_crash_reporting PRIVATE wwlib wwdebug)
+add_test(NAME test_crash_reporting COMMAND test_crash_reporting)
 
 # The BIG archive reader on POSIX, against the real game data under rule 9 (C1 (f)): every path's
 # owning archive against an independent reading of the mount order, and the bytes of a sample against

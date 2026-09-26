@@ -26,8 +26,8 @@
 	 - _set_FMA3_enable(0): the x64 C runtime's choice between two libm paths.  Whether this platform's
 		 libm answers the logic's log() the same way is E1's question, not the entry point's.
 	 - SetProcessDPIAware: the window's pixel density is the renderer's (D4).
-	 - _set_se_translator / SetUnhandledExceptionFilter: the crash handler is C5's.  Left as a hole,
-		 not faked (C2's task file).
+	 - _set_se_translator / SetUnhandledExceptionFilter: their counterpart is C5's crash handler,
+		 installCrashHandlers, first thing in main.
 	 - "-DX" stack dumps: Windows symbol lookup (GetFunctionDetails).
 	 - _CrtSetDbgFlag, the splash bitmap, OLE, copy protection and the Optimus exports: Windows only.
 	 - The Windows window class and WndProc: the window is SdlGameEngine's, which the engine creates
@@ -44,6 +44,7 @@
 #include "PreRTS.h"
 
 #include "Lib/BaseType.h"
+#include "Common/CrashHandler.h"
 #include "Common/CriticalSection.h"
 #include "Common/Debug.h"
 #include "Common/EarlyCommandLine.h"
@@ -127,6 +128,10 @@ static Bool takeOneCopyLock( void )
 //=============================================================================
 int main( int argc, char *argv[] )
 {
+	// Before anything else, and before another thread exists: a crash from here on leaves
+	// ReleaseCrashInfo.txt, as WinMain's _set_se_translator and SetUnhandledExceptionFilter make it on Windows.
+	installCrashHandlers();
+
 	// The one locale category the game may set (plan rule; C2's task file): dates in the replay and save
 	// lists in the user's format.  LC_NUMERIC would change how the INI parser reads decimals.
 	setlocale( LC_TIME, "" );
