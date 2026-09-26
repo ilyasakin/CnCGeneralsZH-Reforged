@@ -70,6 +70,9 @@ static void drawFramerateBar(void);
 #include "GameClient/Drawable.h"
 #include "GameClient/Keyboard.h"		// TheKeyboard; on Windows WinMain.h brought it too
 #include "Platform/SleepMilliseconds.h"
+#if !defined(_WIN32)
+#include "Platform/RendererName.h"
+#endif
 #include "GameClient/GameText.h"
 #include "GameClient/GameConsole.h"
 #include "GameClient/GraphDraw.h"
@@ -4088,10 +4091,16 @@ void W3DDisplay::toggleMovieCapture(void)
 	* A 64-bit exe says so beside it. */
 const WideChar *W3DDisplay::getRendererName(void) const
 {
+#if defined(_WIN32)
 #ifdef _WIN64
 	return Direct3D11_Is_Active() ? u"DX11 x64" : u"DX9 x64";
 #else
 	return Direct3D11_Is_Active() ? u"DX11" : u"DX9";
+#endif
+#else
+	// Off Windows the picture is drawn by the SDL3 GPU device: its backend, "Metal arm64" or "Vulkan x64",
+	// or "Headless" with no window (Platform/RendererName.h).
+	return PosixRenderer_Name();
 #endif
 }
 
