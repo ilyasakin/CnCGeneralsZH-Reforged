@@ -30,6 +30,12 @@
 
 enum waveType : int;	//forward reference; the definition (W3DWaterTracks.cpp) gives the same int, as MSVC's is
 
+/// Whether a wave type read from a map's .wak file names an entry of the wave table.
+Bool isWakWaveType(Int type);
+/// How many of a .wak file's records to read: what it claims, but never more than a file of this size
+/// holds, and none for a negative claim.
+Int wakTrackCount(Int fileSize, Int claimed);
+
 /// Custom render object that draws animated tracks/waves on the water.
 /**
 	This is an object which draws a small breaking wave or splash animation.  These objects are
