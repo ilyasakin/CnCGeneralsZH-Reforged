@@ -1530,6 +1530,23 @@ if(ZH_PLATFORM_LINUX)
   set_tests_properties(test_posixlocalfilesystem PROPERTIES DISABLED TRUE)
 endif()
 
+# Registry.ini's reader and writer (Common/RegistryFile.h, registry.cpp's POSIX half), from the same
+# engine sources as test_posixlocalfilesystem, for the same reason, and not on Linux for the same one.
+set(ZH_REGISTRYFILE_SOURCES ${ZH_POSIXLFS_SOURCES})
+list(REMOVE_ITEM ZH_REGISTRYFILE_SOURCES ${TESTS}/test_posixlocalfilesystem.cpp)
+list(APPEND ZH_REGISTRYFILE_SOURCES ${TESTS}/test_registryfile.cpp)
+add_executable(test_registryfile ${ZH_REGISTRYFILE_SOURCES})
+target_include_directories(test_registryfile PRIVATE
+  $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+target_compile_definitions(test_registryfile PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(test_registryfile PROPERTIES CXX_STANDARD 17)
+target_link_libraries(test_registryfile PRIVATE test_harness wwlib wwdebug)
+add_test(NAME test_registryfile COMMAND test_registryfile)
+if(ZH_PLATFORM_LINUX)
+  set_target_properties(test_registryfile PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  set_tests_properties(test_registryfile PROPERTIES DISABLED TRUE)
+endif()
+
 # The user's folders off Windows (C1 (e)): the user data directory and the Desktop, EarlyOptions.h's
 # POSIX half.  Writes only under $TMPDIR.
 add_executable(test_userfolders ${TESTS}/test_userfolders.cpp)
