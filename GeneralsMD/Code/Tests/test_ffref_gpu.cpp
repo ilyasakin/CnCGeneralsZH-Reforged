@@ -278,13 +278,9 @@ public:
 			for (int set = 0; set < 4; ++set) for (int k = 0; k < 4; ++k) r.tex[set][k] = v.tex[set][k];
 		}
 		FFRef::Report report;
-		// a contributor's ruling on F11: D3D9 never defines the footprint norm, and any between L-infinity and L1 is
-		// within a factor of the square root of two of FFReference's exact L2, so +-0.5 in log2, and 0.1 more
-		// for 2x2 differencing.  Until FFReference's default says so, the harness sets it.
-		FFRef::Freedoms freedoms;
-		freedoms.lodDelta = 0.6;
+		// The freedoms are FFReference's defaults, the LOD's +-0.6 among them (F11, N15).
 		FFRef::draw(State, type, &reference[0], (int)reference.size(), NULL, (int)reference.size(), Reference, &report,
-			mutations, freedoms);
+			mutations);
 		for (size_t i = 0; i < report.refusals.size(); ++i) printf("  reference refused: %s\n", report.refusals[i].c_str());
 	}
 
@@ -501,8 +497,8 @@ static void scenarios_textures(Harness &h)
 
 	static const struct { const char *name; RenderUInt32 min, mip; const char *known; } MIPS[] = {
 		{ "mips: point, no mip filter", D3DTEXF_POINT, D3DTEXF_NONE, NULL },
-		{ "mips: point, point mips", D3DTEXF_POINT, D3DTEXF_POINT, "F11: the GPU's LOD" },
-		{ "mips: linear, linear mips", D3DTEXF_LINEAR, D3DTEXF_LINEAR, "F11: the GPU's LOD" } };
+		{ "mips: point, point mips", D3DTEXF_POINT, D3DTEXF_POINT, NULL },
+		{ "mips: linear, linear mips", D3DTEXF_LINEAR, D3DTEXF_LINEAR, NULL } };
 	for (int i = 0; i < 3; ++i) {
 		h.begin(0xFF000000);
 		h.rs(D3DRS_LIGHTING, 0);
