@@ -1304,10 +1304,26 @@ if(ZH_PLATFORM_POSIX)
   if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
     set(FFMPEG_POSIX_CFLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()
+  # FFmpeg's own configure picks the host's architecture, so a build for another one (x86_64 on Apple
+  # Silicon, run under Rosetta: E1's architecture axis) names it.  One at a time: configure builds one.
+  set(FFMPEG_POSIX_ARCH "")
+  if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+    list(LENGTH CMAKE_OSX_ARCHITECTURES FFMPEG_ARCH_COUNT)
+    if(NOT FFMPEG_ARCH_COUNT EQUAL 1)
+      message(FATAL_ERROR "FFmpeg builds one architecture at a time; CMAKE_OSX_ARCHITECTURES is '${CMAKE_OSX_ARCHITECTURES}'.")
+    endif()
+    string(STRIP "${FFMPEG_POSIX_CFLAGS} -arch ${CMAKE_OSX_ARCHITECTURES}" FFMPEG_POSIX_CFLAGS)
+    if(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
+      set(FFMPEG_POSIX_ARCH aarch64)
+    else()
+      set(FFMPEG_POSIX_ARCH ${CMAKE_OSX_ARCHITECTURES})
+    endif()
+  endif()
   add_custom_command(
     OUTPUT ${FFMPEG_POSIX_LIBS} ${FFMPEG_POSIX}/include/libavcodec/avcodec.h
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh ${FFMPEG_TARBALL}
             ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-work ${FFMPEG_POSIX} ${CMAKE_C_COMPILER} "${FFMPEG_POSIX_CFLAGS}"
+            "${FFMPEG_POSIX_ARCH}"
     DEPENDS ${FFMPEG_TARBALL} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/ffmpeg-build-posix.sh
     COMMENT "Building FFmpeg 8.1.2's Bink decoders for the movies (V1)"
     VERBATIM)
