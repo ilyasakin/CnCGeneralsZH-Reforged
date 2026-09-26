@@ -27,8 +27,7 @@
 # same files, so what differs is only where they sit.
 #
 # RULE 9: neither layout's root is the install itself. The install is linked file by file into a farm
-# (and, for W, the overlay copied over the links), because GameEngine::init deletes
-# Data\INI\INIZH.big from its root. Step 2 makes the roots read-only; until then the farm stays.
+# (and, for W, the overlay copied over the links, each link removed before its copy is written).
 #
 # Usage: overlay-crc-check.sh --generals <path> [--data <dir>] [--maxframes 600] [--keep]
 # Exit status: 0 when W and P agree and the control differs; 1 otherwise; 77 without game data.
@@ -81,31 +80,22 @@ farm() {	# farm <root>: the install's folders made anew, every file a link
 	( cd "$INSTALL" && find . -type f ! -name '._*' ) | while IFS= read -r f; do ln -s "$INSTALL/${f#./}" "$1/$f"; done
 }
 
-stage_overlay() {	# stage_overlay <folder>: the shipped overlay's files into <folder>, replacing links
-	local to="$1" item src dst
-	for item in "INI Data/INI" "Patch.str Data/Patch.str" "Scripts Data/Scripts" "Turkish Data/Turkish" \
-			"Install_Final.bmp Install_Final.bmp" "Art/Textures Art/Textures" "Window Window"; do
-		src="$CODE/Data/${item%% *}"; dst="$to/${item#* }"
-		if [ -d "$src" ]; then
-			( cd "$src" && find . -type f ) | while IFS= read -r f; do
-				mkdir -p "$(dirname "$dst/$f")"; rm -f -- "$dst/$f"; cp -- "$src/$f" "$dst/$f"
-			done
-		elif [ -f "$src" ]; then
-			mkdir -p "$(dirname "$dst")"; rm -f -- "$dst"; cp -- "$src" "$dst"
-		fi
-	done
-	if [ -n "$RUNDIR" ]; then
-		for big in "$RUNDIR"/Reforged*.big; do
-			[ -f "$big" ] && ln -sf "$big" "$to/$(basename "$big")"
-		done
-	fi
+stage_overlay() {	# stage_overlay <folder>: the shipped overlay, by the zh_overlay target's own script
+	"$CODE/Tools/stage-overlay.sh" "$CODE/Data" "$RUNDIR" "$1"
 }
 
-farm "$WORK/W"
-stage_overlay "$WORK/W"
-farm "$WORK/P"
-mkdir -p "$WORK/overlay"
+lay_over() {	# lay_over <overlay> <farm>: the overlay's entries into the farm, each farm link removed first
+	( cd "$1" && find . \( -type f -o -type l \) ) | while IFS= read -r f; do
+		mkdir -p "$(dirname "$2/$f")"
+		rm -f -- "$2/$f"
+		cp -P -- "$1/$f" "$2/$f"
+	done
+}
+
 stage_overlay "$WORK/overlay"
+farm "$WORK/W"
+lay_over "$WORK/overlay" "$WORK/W"
+farm "$WORK/P"
 ARTS=$(ls "$WORK/overlay"/Reforged*.big 2>/dev/null | wc -l | tr -d ' ')
 echo "overlay: $(cd "$WORK/overlay" && find . \( -type f -o -type l \) | wc -l | tr -d ' ') files, $ARTS of them the fork's art archives"
 
