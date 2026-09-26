@@ -287,6 +287,13 @@ menu background runs once then never; (b) a nominal MHz, because it puts a chose
 whose job is measurement; (d) a named arm64 CPU type, as more code for the same result. Every Apple
 Silicon Mac exceeds a 2003 game's requirements by orders of magnitude, so "top tier" is not in
 doubt — only where to say it. Verifiable once `gameengine` compiles, which is B5's GameEngine half.
+*Extended 2026-09-26 to the GPU:* off Windows the device reports chipset DC_UNKNOWN, which GameLOD
+presumes is a TNT2, below every shipped preset's GF3, so every Mac got the LOW preset on its first
+run (found by C2's resolution fix). The same reasoning applies: every Apple Silicon GPU, and any GPU
+with a Vulkan driver, exceeds the game's requirements by orders of magnitude. So an UNKNOWN chipset
+reported by the POSIX device counts as meeting the top preset's chipset requirement, beside the CPU
+rule, behind the same POSIX-only guard. Windows, where the chipset is always identified, is
+unchanged.
 
 **3. Linux is a target, and the non-Windows platform layer is chosen for it (taken 2026-09-25).**
 The user asked for everything to be abstracted so that Linux and further platforms can follow. What
