@@ -57,6 +57,10 @@
 
 typedef RenderUInt32 D3DCOLOR;
 
+// A shader's version token: pixel shaders are 0xFFFF, vertex shaders 0xFFFE, in the top half.
+#define D3DPS_VERSION(major, minor)	(0xFFFF0000u | ((major) << 8) | (minor))
+#define D3DVS_VERSION(major, minor)	(0xFFFE0000u | ((major) << 8) | (minor))
+
 #define D3D_SDK_VERSION			32
 #define D3DADAPTER_DEFAULT		0
 #define D3DDP_MAXTEXCOORD		8
@@ -701,6 +705,59 @@ struct D3DCAPS9
 	RenderUInt32 MaxPixelShader30InstructionSlots;
 };
 
+// A vertex declaration's element types, methods and usages.  Unlike the other enumerations these have
+// no _FORCE_DWORD: D3DVERTEXELEMENT9 stores each in a byte.
+enum D3DDECLTYPE
+{
+	D3DDECLTYPE_FLOAT1		= 0,
+	D3DDECLTYPE_FLOAT2		= 1,
+	D3DDECLTYPE_FLOAT3		= 2,
+	D3DDECLTYPE_FLOAT4		= 3,
+	D3DDECLTYPE_D3DCOLOR	= 4,
+	D3DDECLTYPE_UBYTE4		= 5,
+	D3DDECLTYPE_SHORT2		= 6,
+	D3DDECLTYPE_SHORT4		= 7,
+	D3DDECLTYPE_UBYTE4N		= 8,
+	D3DDECLTYPE_SHORT2N		= 9,
+	D3DDECLTYPE_SHORT4N		= 10,
+	D3DDECLTYPE_USHORT2N	= 11,
+	D3DDECLTYPE_USHORT4N	= 12,
+	D3DDECLTYPE_UDEC3		= 13,
+	D3DDECLTYPE_DEC3N		= 14,
+	D3DDECLTYPE_FLOAT16_2	= 15,
+	D3DDECLTYPE_FLOAT16_4	= 16,
+	D3DDECLTYPE_UNUSED		= 17
+};
+
+enum D3DDECLMETHOD
+{
+	D3DDECLMETHOD_DEFAULT			= 0,
+	D3DDECLMETHOD_PARTIALU			= 1,
+	D3DDECLMETHOD_PARTIALV			= 2,
+	D3DDECLMETHOD_CROSSUV			= 3,
+	D3DDECLMETHOD_UV				= 4,
+	D3DDECLMETHOD_LOOKUP			= 5,
+	D3DDECLMETHOD_LOOKUPPRESAMPLED	= 6
+};
+
+enum D3DDECLUSAGE
+{
+	D3DDECLUSAGE_POSITION		= 0,
+	D3DDECLUSAGE_BLENDWEIGHT	= 1,
+	D3DDECLUSAGE_BLENDINDICES	= 2,
+	D3DDECLUSAGE_NORMAL			= 3,
+	D3DDECLUSAGE_PSIZE			= 4,
+	D3DDECLUSAGE_TEXCOORD		= 5,
+	D3DDECLUSAGE_TANGENT		= 6,
+	D3DDECLUSAGE_BINORMAL		= 7,
+	D3DDECLUSAGE_TESSFACTOR		= 8,
+	D3DDECLUSAGE_POSITIONT		= 9,
+	D3DDECLUSAGE_COLOR			= 10,
+	D3DDECLUSAGE_FOG			= 11,
+	D3DDECLUSAGE_DEPTH			= 12,
+	D3DDECLUSAGE_SAMPLE			= 13
+};
+
 struct D3DVERTEXELEMENT9
 {
 	unsigned short Stream;
@@ -711,16 +768,22 @@ struct D3DVERTEXELEMENT9
 	unsigned char UsageIndex;
 };
 
+/// The element that ends a declaration: stream 0xFF.
+#define D3DDECL_END()	{ 0xFF, 0, D3DDECLTYPE_UNUSED, 0, 0, 0 }
+
 //-------------------------------------------------------------------------------------------------
 // Interfaces: the methods the renderer calls, with D3D9's parameters in D3D9's order.  BOOL is int,
 // UINT unsigned int, HANDLE a void *; a shared handle is never asked for, so its pointer is always
 // NULL.  Release returns the count left, as COM's does.
 //-------------------------------------------------------------------------------------------------
 
-// D3D9's interface identifiers, as GetContainer takes them.  COM spells their type IID, which is
-// guiddef.h's name and not D3D9's, so it is not defined here.
-extern const D3D9PosixGuid IID_IDirect3DTexture9;
-extern const D3D9PosixGuid IID_IDirect3DCubeTexture9;
+// D3D9's interface identifiers, as GetContainer takes them, with D3D9's published values.  COM spells
+// their type IID, which is guiddef.h's name and not D3D9's, so it is not defined here.  Defined in
+// the header, where the SDK only declares them, so that the checker can read the values.
+inline constexpr D3D9PosixGuid IID_IDirect3DTexture9 =
+	{ 0x85c31227, 0x3de5, 0x4f00, { 0x9b, 0x3a, 0xf1, 0x1a, 0xc3, 0x8c, 0x18, 0xb5 } };
+inline constexpr D3D9PosixGuid IID_IDirect3DCubeTexture9 =
+	{ 0xfff32f81, 0xd953, 0x473a, { 0x92, 0x23, 0x93, 0xd6, 0x52, 0xab, 0xa9, 0x3f } };
 
 class IDirect3DDevice9;
 class IDirect3DSurface9;
