@@ -108,6 +108,8 @@ SdlGpuFrame::SdlGpuFrame() :
 {
 	LastConstants[0] = LastConstants[1] = LastConstantsSize[0] = LastConstantsSize[1] = 0;
 	memset(ClearPipelines, 0, sizeof(ClearPipelines));
+	memset(&CurrentTarget, 0, sizeof(CurrentTarget));
+	TargetSet = false;
 }
 
 SdlGpuFrame * SdlGpuFrame::Create(RenderWindow window, unsigned int width, unsigned int height, std::string & error)
@@ -150,6 +152,7 @@ SdlGpuFrame::~SdlGpuFrame()
 	Commands.clear();
 	End_Batch();
 	if (StreamBuffer != NULL) SDL_ReleaseGPUBuffer(GpuDevice, StreamBuffer);
+	for (size_t i = 0; i < ScratchDepths.size(); ++i) SDL_ReleaseGPUTexture(GpuDevice, ScratchDepths[i].Texture);
 	for (int i = 0; i < 8; ++i) if (ClearPipelines[i] != NULL) SDL_ReleaseGPUGraphicsPipeline(GpuDevice, ClearPipelines[i]);
 	if (ClearVertex != NULL) SDL_ReleaseGPUShader(GpuDevice, ClearVertex);
 	if (ClearPixel != NULL) SDL_ReleaseGPUShader(GpuDevice, ClearPixel);
@@ -194,8 +197,10 @@ void SdlGpuFrame::Release_Targets()
 
 bool SdlGpuFrame::Resize(unsigned int width, unsigned int height)
 {
-	// What is recorded runs first: the GPU copies count the uploads it carries as done.
+	// What is recorded runs first: the GPU copies count the uploads it carries as done.  The current
+	// target named the old back buffer; the device sets it again before its next draw.
 	Flush();
+	TargetSet = false;
 	Release_Targets();
 	return Create_Targets(width, height);
 }
@@ -213,6 +218,7 @@ void SdlGpuFrame::Clear_Back_Buffer(bool colour, bool depth, bool stencil, uint3
 	command.Argb = argb;
 	command.Z = z;
 	command.StencilValue = stencil_value;
+	command.Target = Target_Index();
 	Commands.push_back(command);
 }
 
