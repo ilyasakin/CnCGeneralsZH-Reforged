@@ -368,6 +368,13 @@ protected:
 	void Capture_Draw(const DrawCall &call, const std::string &signature, unsigned int stride, unsigned int reads,
 		unsigned int sampled_stages, unsigned int target_width, unsigned int target_height);
 	static void Capture_Report();
+	/// PERF1's timing aid (PosixDevice9Timing.cpp): ZH_GPU_TIMING="delay,count", ZH_GPU_TIMING_SYNC=1.
+	static bool Timing_Is_Asked();
+	void Timing_Frame_Start();
+	void Timing_Present(double present_ms, unsigned int draws);
+	static void Timing_Report();
+	double TimingDrawMs = 0.0;				///< CPU time in Gpu_Draw since the last Present, when timing
+	unsigned int TimingDrawsAtPresent = 0;
 	/// Capture version 2's draw_<n>.prog for the draw being captured (DrawCapture.h), with the draw's own
 	/// stride; the bytes written.
 	uint64_t Write_Programs(const std::string &path, unsigned int stride);

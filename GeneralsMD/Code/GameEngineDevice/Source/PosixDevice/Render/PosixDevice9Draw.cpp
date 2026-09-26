@@ -34,6 +34,8 @@
 #include "ffshader.h"
 #include "ffvertex.h"
 
+#include <SDL3/SDL.h>
+
 #include <math.h>
 #include <set>
 #include <stdio.h>
@@ -705,6 +707,15 @@ RenderResult PosixDevice9::DrawPrimitiveUP(D3DPRIMITIVETYPE type, unsigned int p
 
 RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 {
+	// PERF1: the CPU time spent here, added to the frame's when ZH_GPU_TIMING asks.
+	struct DrawTimer
+	{
+		double *Into;
+		Uint64 Start;
+		explicit DrawTimer(double *into) : Into(into), Start(into != NULL ? SDL_GetTicksNS() : 0) {}
+		~DrawTimer() { if (Into != NULL) *Into += (double)(SDL_GetTicksNS() - Start) / 1.0e6; }
+	} timer(Timing_Is_Asked() ? &TimingDrawMs : NULL);
+
 	const unsigned int reads = vertices_of(call.Type, call.PrimitiveCount);
 	if (reads == 0 && call.PrimitiveCount != 0) {
 		return D3DERR_INVALIDCALL;

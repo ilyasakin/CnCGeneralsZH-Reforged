@@ -85,6 +85,11 @@ unsigned int SdlGpuFrame::Target_Format()
 }
 
 SdlGpuFrame::SdlGpuFrame() :
+	SerializeSubmits(false),
+	FlushMs(0.0),
+	FenceMs(0.0),
+	Flushes(0),
+	AcquireMs(0.0),
 	GpuDevice(NULL),
 	Window(NULL),
 	BackBuffer(NULL),
@@ -229,14 +234,45 @@ void SdlGpuFrame::Clear_Back_Buffer(bool colour, bool depth, bool stencil, uint3
 
 bool SdlGpuFrame::Flush()
 {
+	const Uint64 start = SDL_GetTicksNS();
 	SDL_GPUCommandBuffer * commands = SDL_AcquireGPUCommandBuffer(GpuDevice);
 	if (commands == NULL) {
 		return false;
 	}
 	const bool recorded = Record_Batch(commands);
-	const bool submitted = SDL_SubmitGPUCommandBuffer(commands);
+	const bool submitted = Submit(commands);
 	End_Batch();
+	FlushMs += (double)(SDL_GetTicksNS() - start) / 1.0e6;
+	++Flushes;
 	return submitted && recorded;
+}
+
+bool SdlGpuFrame::Submit(SDL_GPUCommandBuffer * commands)
+{
+	if (!SerializeSubmits) {
+		return SDL_SubmitGPUCommandBuffer(commands);
+	}
+	SDL_GPUFence * fence = SDL_SubmitGPUCommandBufferAndAcquireFence(commands);
+	if (fence == NULL) {
+		return false;
+	}
+	const Uint64 start = SDL_GetTicksNS();
+	const bool waited = SDL_WaitForGPUFences(GpuDevice, true, &fence, 1);
+	FenceMs += (double)(SDL_GetTicksNS() - start) / 1.0e6;
+	SDL_ReleaseGPUFence(GpuDevice, fence);
+	return waited;
+}
+
+void SdlGpuFrame::Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms)
+{
+	flush_ms = FlushMs;
+	fence_ms = FenceMs;
+	flushes = Flushes;
+	acquire_ms = AcquireMs;
+	FlushMs = 0.0;
+	FenceMs = 0.0;
+	Flushes = 0;
+	AcquireMs = 0.0;
 }
 
 SDL_GPUGraphicsPipeline * SdlGpuFrame::Gamma_Pipeline(unsigned int format)
@@ -426,12 +462,15 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 		Uint32 width = 0;
 		Uint32 height = 0;
 		// No texture (a minimised window) is not a failure: there is nothing to show this frame.
-		if (SDL_WaitAndAcquireGPUSwapchainTexture(commands, Window, &swapchain, &width, &height) && swapchain != NULL) {
+		const Uint64 acquire_start = SDL_GetTicksNS();
+		const bool acquired = SDL_WaitAndAcquireGPUSwapchainTexture(commands, Window, &swapchain, &width, &height);
+		AcquireMs += (double)(SDL_GetTicksNS() - acquire_start) / 1.0e6;
+		if (acquired && swapchain != NULL) {
 			ok = Present_Into(commands, swapchain, width, height, SDL_GetGPUSwapchainTextureFormat(GpuDevice, Window), ramp)
 				&& ok;
 		}
 	}
-	const bool submitted = SDL_SubmitGPUCommandBuffer(commands);
+	const bool submitted = Submit(commands);
 	End_Batch();
 	return submitted && ok;
 }
@@ -445,7 +484,7 @@ bool SdlGpuFrame::Present_To(SDL_GPUTexture * target, unsigned int width, unsign
 	}
 	bool ok = Record_Batch(commands) && Copy_To_Front(commands);
 	ok = Present_Into(commands, target, width, height, BACK_BUFFER_FORMAT, ramp) && ok;
-	const bool submitted = SDL_SubmitGPUCommandBuffer(commands);
+	const bool submitted = Submit(commands);
 	End_Batch();
 	return submitted && ok;
 }

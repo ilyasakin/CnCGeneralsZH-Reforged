@@ -187,6 +187,7 @@ PosixDevice9::~PosixDevice9()
 			fprintf(stderr, "PosixDevice9:   drawn with the engine's %s: %u\n", it->first.c_str(), it->second);
 		}
 		Capture_Report();
+		Timing_Report();
 	}
 	// The GPU objects before the device that made them; the pipelines before their shaders.
 	delete Pipelines;
@@ -511,7 +512,15 @@ RenderResult PosixDevice9::Present(const RenderRect *, const RenderRect *, Rende
 		"D3DGAMMARAMP is the three ramps back to back, as SdlGpuFrame::Present reads it");
 	++PresentCount;
 	Dump_Frame_If_Asked();
-	if (!Gpu->Present(reinterpret_cast<const uint16_t (*)[256]>(&GammaRamp))) {
+	const bool timing = Timing_Is_Asked();
+	const Uint64 present_start = timing ? SDL_GetTicksNS() : 0;
+	const bool presented = Gpu->Present(reinterpret_cast<const uint16_t (*)[256]>(&GammaRamp));
+	if (timing) {
+		Timing_Present((double)(SDL_GetTicksNS() - present_start) / 1.0e6, DrawsRecorded - TimingDrawsAtPresent);
+		TimingDrawsAtPresent = DrawsRecorded;
+		Timing_Frame_Start();
+	}
+	if (!presented) {
 		static bool said = false;
 		if (!said) {
 			said = true;
