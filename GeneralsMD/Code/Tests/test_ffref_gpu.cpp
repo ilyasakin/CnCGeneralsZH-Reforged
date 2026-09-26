@@ -493,8 +493,8 @@ static void scenarios_textures(Harness &h)
 
 	static const struct { const char *name; RenderUInt32 min, mip; const char *known; } MIPS[] = {
 		{ "mips: point, no mip filter", D3DTEXF_POINT, D3DTEXF_NONE, NULL },
-		{ "mips: point, point mips", D3DTEXF_POINT, D3DTEXF_POINT, "F11: the GPU's LOD" },
-		{ "mips: linear, linear mips", D3DTEXF_LINEAR, D3DTEXF_LINEAR, "F11: the GPU's LOD" } };
+		{ "mips: point, point mips", D3DTEXF_POINT, D3DTEXF_POINT, NULL },
+		{ "mips: linear, linear mips", D3DTEXF_LINEAR, D3DTEXF_LINEAR, NULL } };
 	for (int i = 0; i < 3; ++i) {
 		h.begin(0xFF000000);
 		h.rs(D3DRS_LIGHTING, 0);
