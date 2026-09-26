@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Check Platform/D3D9Posix.h against MinGW-w64's d3d9.h (decision 7, phase A1).
+
+The POSIX header is written from Direct3D 9's published values, not copied from any header.  This
+proves it agrees: it reads the POSIX header, writes a translation unit that includes MinGW-w64's
+d3d9.h and then the POSIX header inside a namespace, and static_asserts
+
+  - every enumerator: the same value as MinGW's;
+  - every object-like #define with a value, and the function-like ones on sample arguments: the same
+    value as MinGW's, captured before the POSIX header redefines them;
+  - every structure: the same size, and every field at the same offset.
+
+It then compiles that with x86_64-w64-mingw32-g++, once as it is and once with a false assertion
+added, which must fail - so a pass means the assertions ran.  MinGW-w64's headers are only compiled
+against here, never copied: they are Wine's work, under the LGPL.
+
+  d3d9posix_check.py [--keep FILE]      exit 0 when every check holds
+"""
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+CODE = os.path.dirname(HERE)
+HEADER = os.path.join(CODE, 'Libraries', 'Include', 'Platform', 'D3D9Posix.h')
+COMPILER = 'x86_64-w64-mingw32-g++'
+
+# Function-like macros, and the arguments to compare them on.
+FUNCTION_MACROS = {
+    'D3DCOLOR_ARGB': ['(0x12, 0x34, 0x56, 0x78)', '(0x1ff, 0x100, 0x2ff, 0x3ff)'],
+    'D3DCOLOR_RGBA': ['(0x12, 0x34, 0x56, 0x78)'],
+    'D3DCOLOR_XRGB': ['(0x12, 0x34, 0x56)'],
+    'D3DTS_WORLDMATRIX': ['(0)', '(3)'],
+    'D3DFVF_TEXCOORDSIZE1': ['(0)', '(1)', '(7)'],
+    'D3DFVF_TEXCOORDSIZE2': ['(0)', '(1)', '(7)'],
+    'D3DFVF_TEXCOORDSIZE3': ['(0)', '(1)', '(7)'],
+    'D3DFVF_TEXCOORDSIZE4': ['(0)', '(1)', '(7)'],
+}
+# The POSIX header's own names, which D3D9 has no counterpart for.
+OWN = re.compile(r'^(D3D9POSIX_|PLATFORM_D3D9POSIX_H)')
+
+
+def parse(text):
+    body = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+    body = re.sub(r'//[^\n]*', '', body)
+    macros = [m.group(1) for m in re.finditer(r'^\s*#define\s+(\w+)[ \t]+\S', body, re.M)
+              if not OWN.match(m.group(1))]
+    # *_FORCE_DWORD only makes an enumeration four bytes wide, and the renderer never names one.
+    # MinGW-w64 (Wine) gives some 0xffffffff where Microsoft's SDK gives 0x7fffffff, so their values
+    # are not compared; the four-byte width is asserted in the header.
+    enumerators = []
+    for block in re.finditer(r'\benum\s+(\w+)\s*\{(.*?)\}', body, re.S):
+        for member in re.finditer(r'(\w+)\s*=', block.group(2)):
+            if not member.group(1).endswith('_FORCE_DWORD'):
+                enumerators.append(member.group(1))
+    structs = {}
+    for head in re.finditer(r'\bstruct\s+(\w+)\s*\{', body):
+        name = head.group(1)
+        depth, at = 1, head.end()
+        while depth:
+            depth += {'{': 1, '}': -1}.get(body[at], 0)
+            at += 1
+        if name.startswith('D3D9Posix'):
+            continue
+        inner = re.sub(r'\bunion\s*\{|\bstruct\s*\{|\}\s*;|\}', ' ', body[head.end():at - 1])
+        fields = []
+        for decl in inner.split(';'):
+            decl = decl.strip()
+            if not decl:
+                continue
+            declared = re.match(r'^(?:const\s+)?(?:unsigned\s+)?\w+(?:\s*\*)?\s+(.*)$', decl, re.S)
+            if not declared:
+                continue
+            for part in declared.group(1).split(','):
+                field = re.match(r'\s*\*?\s*(\w+)', part)
+                if field:
+                    fields.append(field.group(1))
+        structs[name] = fields
+    return macros, enumerators, structs
+
+
+def unit(macros, enumerators, structs, control):
+    lines = ['// Written by Tools/d3d9posix_check.py; compiled by MinGW-w64, never built.',
+             '#include <stddef.h>', '#include <stdint.h>', '#include <d3d9.h>', '',
+             'namespace mingw {']
+    for name in macros:
+        lines.append(f'constexpr long long captured_{name} = (long long)({name});')
+    samples = []
+    for name, args in FUNCTION_MACROS.items():
+        for i, arg in enumerate(args):
+            lines.append(f'constexpr long long captured_{name}_{i} = (long long)({name}{arg});')
+            samples.append((name, i, arg))
+    lines.append('}')
+    for name in macros + list(FUNCTION_MACROS):
+        lines.append(f'#undef {name}')
+    lines += ['', '#define D3D9POSIX_CHECKER', '#include "Platform/RenderTypes.h"',
+              'namespace posix {', '#include "Platform/D3D9Posix.h"', '}', '']
+    for name in enumerators:
+        lines.append(f'static_assert((long long)posix::{name} == (long long)::{name}, "{name}");')
+    for name in macros:
+        lines.append(f'static_assert((long long)({name}) == mingw::captured_{name}, "{name}");')
+    for name, i, arg in samples:
+        lines.append(f'static_assert((long long)({name}{arg}) == mingw::captured_{name}_{i}, "{name}{arg}");')
+    for name, fields in structs.items():
+        lines.append(f'static_assert(sizeof(posix::{name}) == sizeof(::{name}), "sizeof({name})");')
+        for field in fields:
+            lines.append(f'static_assert(offsetof(posix::{name}, {field}) == offsetof(::{name}, {field}), '
+                         f'"{name}::{field}");')
+    if control:
+        lines.append('static_assert((long long)posix::D3DRS_ZENABLE == (long long)::D3DRS_FILLMODE, "control");')
+    return '\n'.join(lines) + '\n'
+
+
+def compile_unit(source):
+    with tempfile.NamedTemporaryFile('w', suffix='.cpp', delete=False) as handle:
+        handle.write(source)
+        path = handle.name
+    try:
+        result = subprocess.run([COMPILER, '-std=c++17', '-fsyntax-only', '-w', '-I',
+                                 os.path.join(CODE, 'Libraries', 'Include'), path],
+                                capture_output=True, text=True)
+    finally:
+        os.unlink(path)
+    return result.returncode, result.stderr
+
+
+def main():
+    macros, enumerators, structs = parse(open(HEADER).read())
+    source = unit(macros, enumerators, structs, control=False)
+    if '--keep' in sys.argv:
+        open(sys.argv[sys.argv.index('--keep') + 1], 'w').write(source)
+    fields = sum(len(f) for f in structs.values())
+    code, errors = compile_unit(source)
+    if code != 0:
+        failed = sorted(set(re.findall(r'static assertion failed: "?([^"\n]+)', errors)))
+        other = [l for l in errors.splitlines() if ' error: ' in l and 'static assertion failed' not in l]
+        print(f'd3d9posix_check: FAIL - {len(failed)} disagree with MinGW-w64, {len(other)} other errors:')
+        for name in failed[:60]:
+            print(f'  {name}')
+        for line in other[:20]:
+            print(f'  {line}')
+        return 1
+    control, _ = compile_unit(unit(macros, enumerators, structs, control=True))
+    if control == 0:
+        print('d3d9posix_check: FAIL - the false control assertion did not fire, so nothing was checked')
+        return 1
+    print(f'd3d9posix_check: {len(enumerators)} enumerators, {len(macros)} macros, '
+          f'{sum(len(a) for a in FUNCTION_MACROS.values())} macro samples, {len(structs)} structures '
+          f'({fields} field offsets) agree with MinGW-w64\'s d3d9.h; the control fails as it should')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
