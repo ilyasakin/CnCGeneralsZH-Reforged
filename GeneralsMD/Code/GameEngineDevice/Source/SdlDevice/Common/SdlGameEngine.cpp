@@ -148,6 +148,12 @@ void SdlGameEngine::createWindow( void )
 	if (m_request.headless)
 		return;		// no SDL video at all: a headless run must work with no display
 
+	if (m_request.offscreen)
+	{
+		startOffscreen();
+		return;
+	}
+
 	// Fullscreen as the game has it on Windows: the display is the game's.  macOS would otherwise put the
 	// window in a fullscreen Space, whose menu bar and Dock slide in when the pointer reaches the top or
 	// bottom edge - where the game scrolls the view.  SDL reads this once, when its video starts.
@@ -201,6 +207,37 @@ void SdlGameEngine::createWindow( void )
 	ApplicationIsBorderless = m_request.borderless;
 	TheW3DWindowFrameHook = dressWindow;
 	TheW3DWindowSizeHook = sizeWindow;
+}
+
+/* -offscreen (PosixMain.cpp): SDL's video runs, because SDL3 makes no GPU device without it, but no window
+	 is made, and the device draws every frame into its own target.  The display's own video driver first;
+	 where it has no display to add (no window server: a worker over ssh, CI), SDL's dummy driver, with
+	 ZH_SDL_GPU_METAL_WINDOWLESS for the Metal backend, which otherwise wants a view the dummy driver cannot
+	 make (Libraries/Source/sdl3-metal-windowless.patch).  The hint ZH_OFFSCREEN_FRAMES tells the device (a
+	 hint, not ZH_OFFSCREEN itself: the device must not act on the variable when -headless starts no video).
+	 Monitors.h keeps its no-display answers, as
+	 -headless has them, so a run sizes itself from -xres/-yres and Options.ini alone, whatever the host. */
+void SdlGameEngine::startOffscreen( void )
+{
+	SDL_SetHint( "ZH_OFFSCREEN_FRAMES", "1" );
+	SDL_SetHint( "ZH_SDL_GPU_METAL_WINDOWLESS", "1" );
+	const char *driver = "the display's";
+	if (!SDL_Init( SDL_INIT_VIDEO ))
+	{
+		const AsciiString first = SDL_GetError();
+		SDL_SetHint( SDL_HINT_VIDEO_DRIVER, "dummy" );
+		driver = "dummy";
+		if (!SDL_Init( SDL_INIT_VIDEO ))
+		{
+			char why[ 512 ];
+			snprintf( why, sizeof( why ), "SDL could not start its video subsystem for -offscreen: %s (then, with the "
+				"dummy driver: %s)", first.str(), SDL_GetError() );
+			RELEASE_CRASH( why );
+			return;
+		}
+	}
+	m_sdlVideoStarted = TRUE;
+	DEBUG_LOG(( "SdlGameEngine: offscreen, no window; SDL video driver %s (%s)\n", SDL_GetCurrentVideoDriver(), driver ));
 }
 
 void SdlGameEngine::destroyWindow( void )
@@ -289,20 +326,21 @@ Radar *SdlGameEngine::createRadar( void )
 }
 
 /* The user's rule: "no sound on agents tests along with no window".  A hidden window (-hiddenwindow, or
-	 ZH_HIDDEN_WINDOW) is a harness's or an agent's run, so it is silent exactly as -noaudio makes it, and
+	 ZH_HIDDEN_WINDOW) or no window (-offscreen, ZH_OFFSCREEN) is a harness's or an agent's run, so it is
+	 silent exactly as -noaudio makes it, and
 	 the audio device is never opened.  ZH_ALLOW_AUDIO=1 keeps the sound for a deliberate audio check.
 	 This is the place: after the command line is parsed, before TheAudio opens its device. */
 AudioManager *SdlGameEngine::createAudioManager( void )
 {
 	const char *allow = getenv( "ZH_ALLOW_AUDIO" );
 	const Bool allowed = allow != NULL && allow[0] != '\0' && strcmp( allow, "0" ) != 0;
-	if (m_request.hidden && !allowed && TheWritableGlobalData != NULL)
+	if ((m_request.hidden || m_request.offscreen) && !allowed && TheWritableGlobalData != NULL)
 	{
 		TheWritableGlobalData->m_audioOn = FALSE;
 		TheWritableGlobalData->m_speechOn = FALSE;
 		TheWritableGlobalData->m_soundsOn = FALSE;
 		TheWritableGlobalData->m_musicOn = FALSE;
-		DEBUG_LOG(( "Audio off: a hidden window is an agent's or a harness's run (ZH_ALLOW_AUDIO=1 keeps it)\n" ));
+		DEBUG_LOG(( "Audio off: a hidden window or -offscreen is an agent's or a harness's run (ZH_ALLOW_AUDIO=1 keeps it)\n" ));
 	}
 	return NEW MilesAudioManager;
 }

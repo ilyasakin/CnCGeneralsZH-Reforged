@@ -106,7 +106,7 @@ Bool ApplicationIsBorderless = FALSE;
 static CriticalSection critSec2, critSec3, critSec4, critSec5;
 
 // WinMain's pre-parse: how the window starts, settled before the engine exists.
-static SdlGameEngine::WindowRequest s_windowRequest = { FALSE, FALSE, FALSE, FALSE };
+static SdlGameEngine::WindowRequest s_windowRequest = { FALSE, FALSE, FALSE, FALSE, FALSE };
 
 // WinMain's GENERALS_GUID, the name of its one-copy mutex; here the name of a lock file.
 #define GENERALS_GUID "685EAFF2-3216-4265-B047-251C5F4B82F3"
@@ -349,6 +349,11 @@ int main( int argc, char *argv[] )
 				s_windowRequest.windowed = TRUE;
 				s_windowRequest.hidden = TRUE;
 			}
+			if (strcasecmp( argv[i], "-offscreen" ) == 0)
+			{
+				s_windowRequest.windowed = TRUE;
+				s_windowRequest.offscreen = TRUE;
+			}
 		}
 		/* -hiddenwindow, or ZH_HIDDEN_WINDOW=1: the game draws exactly as it does in a window - the device
 			 renders into its own back buffer, which -screenshot, -video and the frame dumps read - but the
@@ -361,6 +366,19 @@ int main( int argc, char *argv[] )
 			{
 				s_windowRequest.windowed = TRUE;
 				s_windowRequest.hidden = TRUE;
+			}
+		}
+		/* -offscreen, or ZH_OFFSCREEN=1: no window at all, for a host with no window server (a worker reached
+			 over ssh, CI).  The game runs as it does in a hidden window - it is not -headless: every frame is
+			 drawn - but into the device's own target, and nothing is presented to a display.  SdlGameEngine
+			 starts SDL's video without a window and asks the device for an offscreen frame; like a hidden
+			 window, it is silent.  ZH_OFFSCREEN_HZ=<n> paces the frames at n a second in place of vsync. */
+		{
+			const char *offscreen = getenv( "ZH_OFFSCREEN" );
+			if (offscreen != NULL && offscreen[0] != '\0' && strcmp( offscreen, "0" ) != 0)
+			{
+				s_windowRequest.windowed = TRUE;
+				s_windowRequest.offscreen = TRUE;
 			}
 		}
 
