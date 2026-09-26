@@ -36,9 +36,19 @@
 # (Tools/install-guard.sh), exit 99 if it changed or could not be checked.
 #
 # Usage: net-check.sh --generals <path> [--peer1 <path>] [--data <dir>] [--seed 3] [--frames 3000]
-#          [--netai 2] [--map "Maps\Golden Oasis\Golden Oasis.map"] [--control] [--keep]
+#          [--netai 2] [--map "Maps\Golden Oasis\Golden Oasis.map"] [--control] [--corrupt-at <frame>] [--legacy-replay] [--keep]
 #   --peer1     the executable for the second copy (default: --generals); an x86_64 build runs under
 #               Rosetta as it is
+#   --corrupt-at <frame>
+#               the playback check's control: before copy 0's replay is played back, every CRC it
+#               recorded at the first CRC frame at or after <frame> is changed by one bit.  Copy 0's
+#               playback must then report "out of sync" at exactly that frame (so the check is live
+#               to the end of the replay), and copy 1's untouched replay must still play back clean
+#   --legacy-replay
+#               the other alignment: before copy 1's replay is played back, the records of the first
+#               frame that carries CRCs are removed, which leaves it shaped like a replay recorded
+#               before d9eccdda or by the retail game (no frame 0 CRC).  Its playback must say
+#               "legacy: frame 0 missing" and stay in sync
 #   --control   the armed control: the second copy is given the next seed, so the two copies start
 #               different worlds from one command stream; the match must be reported FAILED with a CRC
 #               mismatch, so a pass means the check can see one
@@ -56,6 +66,8 @@ FRAMES=3000
 NETAI=2
 MAP='Maps\Golden Oasis\Golden Oasis.map'
 CONTROL=0
+CORRUPT_AT=""
+LEGACY=0
 KEEP=0
 LIVE_TIMEOUT="${NET_CHECK_LIVE_TIMEOUT:-900}"		# seconds for the match; 3000 frames took 105 s
 while [ $# -gt 0 ]; do
@@ -68,6 +80,8 @@ while [ $# -gt 0 ]; do
 		--netai) NETAI="$2"; shift 2;;
 		--map) MAP="$2"; shift 2;;
 		--control) CONTROL=1; shift;;
+		--corrupt-at) CORRUPT_AT="$2"; shift 2;;
+		--legacy-replay) LEGACY=1; shift;;
 		--keep) KEEP=1; shift;;
 		*) echo "net-check: unknown argument $1" >&2; exit 2;;
 	esac
@@ -314,6 +328,34 @@ if [ "$LIVE_CRC0" != "$LIVE_CRC1" ] || [ "$LIVE_FRAME0" != "$LIVE_FRAME1" ]; the
 	bad="$bad the copies ended apart ($LIVE_CRC0 at $LIVE_FRAME0 against $LIVE_CRC1 at $LIVE_FRAME1);"
 fi
 
+# edit_replay corrupt|strip <replay> <CRC message type> <frame>: the replay's MSG_LOGIC_CRC records
+# (Recorder.cpp writeToFile) are u32 frame, the message type, i32 player, 2 argument groups (one
+# integer, one boolean), the CRC and the boolean; the type's number is the one this build logged ("CRC
+# message is N").  corrupt changes by one bit every CRC recorded at the first CRC frame at or after
+# <frame>; strip removes every record of the first CRC frame.  Prints that frame, or "none".
+edit_replay() {
+	python3 - "$@" <<'EDIT_EOF'
+import struct, sys
+mode, path, msgtype, at = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+b = bytearray(open(path, "rb").read())
+tag, groups, size = struct.pack("<i", msgtype), bytes([2, 0, 1, 2, 1]), 22
+records = [i for i in range(len(b) - size + 1) if b[i + 4:i + 8] == tag and b[i + 12:i + 17] == groups]
+frames = sorted({struct.unpack_from("<I", b, i)[0] for i in records if struct.unpack_from("<I", b, i)[0] >= at})
+if not frames:
+    print("none"); sys.exit(0)
+frame = frames[0]
+chosen = [i for i in records if struct.unpack_from("<I", b, i)[0] == frame]
+if mode == "corrupt":
+    for i in chosen:
+        struct.pack_into("<I", b, i + 17, struct.unpack_from("<I", b, i + 17)[0] ^ 1)
+else:
+    for i in reversed(chosen):
+        del b[i:i + size]
+open(path, "wb").write(b)
+print(frame)
+EDIT_EOF
+}
+
 # ---- each copy's replay, played back alone --------------------------------------------------------------
 # Only after a match that kept one world: a replay of a desynced match says nothing more.
 LIVE_BAD="$bad"
@@ -323,15 +365,32 @@ for s in 0 1; do
 	if [ ! -f "$rep" ]; then bad="$bad copy $s wrote no replay;"; continue; fi
 	mkdir -p "$WORK/user-back$s/Replays"
 	cp -- "$rep" "$WORK/user-back$s/Replays/netcheck$s.rep"
+	CORRUPTED=""
+	crcmsg="$(grep -a -m1 'CRC message is' "$(log_of 0 live0)" | sed 's/.*CRC message is \([0-9]*\).*/\1/')"
+	EXPECT_ALIGN="recorded from frame 0"
+	if [ "$LEGACY" -eq 1 ] && [ "$s" -eq 1 ]; then
+		stripped="$(edit_replay strip "$WORK/user-back$s/Replays/netcheck$s.rep" "$crcmsg" 0)"
+		echo "  copy 1's replay: the CRC records of frame $stripped removed, as a legacy recording lacks them"
+		EXPECT_ALIGN="legacy: frame 0 missing"
+	fi
+	if [ -n "$CORRUPT_AT" ] && [ "$s" -eq 0 ]; then
+		CORRUPTED="$(edit_replay corrupt "$WORK/user-back$s/Replays/netcheck$s.rep" "$crcmsg" "$CORRUPT_AT")"
+		echo "  copy 0's replay: every recorded CRC at frame $CORRUPTED changed by one bit (the playback check's control)"
+	fi
 	start_copy "$s" "back$s" -replay "netcheck$s"
 	wait_all "$LIVE_TIMEOUT" "$LAST_PID" || bad="$bad the playback of copy $s's replay was STOPPED after $LIVE_TIMEOUT s;"
 	log="$(log_of "$s" "back$s")"
 	read -r crc frame <<< "$(crc_of "$log")"
 	oos="$(grep -a -m1 'Replay has gone out of sync' "$log" 2>/dev/null)"
-	echo "  copy $s's replay played back: HEADLESS CRC ${crc:-none} at frame ${frame:-none}${oos:+; it logged: $oos}"
+	aligned="$(grep -a -m1 'Replay CRCs: ' "$log" 2>/dev/null | sed 's/.*Replay CRCs: //')"
+	echo "  copy $s's replay played back: HEADLESS CRC ${crc:-none} at frame ${frame:-none}; its CRCs: ${aligned:-no alignment logged}${oos:+; it logged: $oos}"
 	if [ "${crc:-none}" != "$LIVE_CRC0" ] || [ "${frame:-none}" != "$LIVE_FRAME0" ]; then
 		bad="$bad copy $s's replay played back to ${crc:-none} at frame ${frame:-none};"
 	fi
+	# a replay recorded by this build carries its frame 0 CRC (Recorder.h, replayMayLackFirstCRC), and
+	# its every CRC must match
+	[ "$aligned" = "$EXPECT_ALIGN" ] || bad="$bad copy $s's replay CRCs were not \"$EXPECT_ALIGN\" (${aligned:-nothing logged});"
+	[ -z "$oos" ] || bad="$bad copy $s's replay: ${oos#*Replay has gone }${CORRUPTED:+ (its CRCs at frame $CORRUPTED were corrupted)};"
 done
 
 echo
