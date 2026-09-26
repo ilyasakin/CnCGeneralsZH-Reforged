@@ -33,6 +33,9 @@
 
 #include "Lib/BaseType.h"
 #include "Common/LocalFileSystem.h"
+#if !defined(_WIN32)
+#include "Common/EarlyOptions.h"	// findDesktopDirectory
+#endif
 #include "Common/FileSystem.h"
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
@@ -671,10 +674,22 @@ void copyReplay( void )
 	translate.translate(GetReplayFilenameFromListbox(listboxReplayFiles, selected));
 	filename.concat(translate);
 	
+	// The "copy" button puts a copy of the selected replay on the player's Desktop.
 	char path[1024];
+#if defined(_WIN32)
 	LPITEMIDLIST pidl;
 	SHGetSpecialFolderLocation(NULL, CSIDL_DESKTOPDIRECTORY, &pidl);
 	SHGetPathFromIDList(pidl,path);
+#else
+	// ~/Desktop on macOS, xdg-user-dirs' Desktop on Linux (EarlyOptions.h, C1 (e))
+	if (!findDesktopDirectory(path, sizeof(path)))
+	{
+		UnicodeString errorStr;
+		errorStr.translate(AsciiString(strerror(ENOENT)));
+		MessageBoxOk(TheGameText->fetch("GUI:Error"),errorStr, NULL);
+		return;
+	}
+#endif
 	AsciiString newFilename;
 	newFilename.set(path);
 	newFilename.concat("\\");

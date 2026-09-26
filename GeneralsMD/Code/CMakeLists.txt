@@ -1357,6 +1357,11 @@ endif()  # ZH_PLATFORM_WINDOWS - Windows-only support library tests
 # Phase 3 checkpoint: boots the memory manager, name keys and file system, then
 # runs a real INI file through the parser.
 add_lib_test(test_gameengine PENDING_MACOS gameengine)
+# GlobalData asks for the user data directory, which off Windows is made on first use: keep it in
+# the build tree rather than the real one under the user's home (C1 (e)).
+if(ZH_PLATFORM_POSIX)
+  set_tests_properties(test_gameengine PROPERTIES ENVIRONMENT "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data")
+endif()
 # the well-known Dict keys and a handful of device/exe entry points live in
 # GameEngineDevice, which Phase 4 ports; stand-ins until then.
 target_sources(test_gameengine PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
@@ -1481,6 +1486,15 @@ if(ZH_PLATFORM_LINUX)
   set_target_properties(test_posixlocalfilesystem PROPERTIES EXCLUDE_FROM_ALL TRUE)
   set_tests_properties(test_posixlocalfilesystem PROPERTIES DISABLED TRUE)
 endif()
+
+# The user's folders off Windows (C1 (e)): the user data directory and the Desktop, EarlyOptions.h's
+# POSIX half.  Writes only under $TMPDIR.
+add_executable(test_userfolders ${TESTS}/test_userfolders.cpp)
+target_include_directories(test_userfolders PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+target_compile_definitions(test_userfolders PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(test_userfolders PROPERTIES CXX_STANDARD 17)
+target_link_libraries(test_userfolders PRIVATE test_harness)
+add_test(NAME test_userfolders COMMAND test_userfolders)
 
 # The POSIX half of the Wine listing oracle (Tests/fs_oracle.cpp; its Windows half is built with
 # mingw-w64 and run under Wine, as C1's task file records).
