@@ -61,14 +61,27 @@ int main()
 	}
 
 #if defined(_MSC_VER)
-	// Where the claim can be measured: MSVC's own cast, for values in the int range (outside it the
-	// cast is undefined even to MSVC's optimiser), against the helper.
-	for (float value = -1000.0f; value <= 1000.0f; value += 0.37f) {
+	// Where the claim can be measured: MSVC's own cast against the helper, over the wrap in range and
+	// then past the int range, NaN and the infinities, where the claim is INT_MIN's low byte.  Each value
+	// goes through a volatile so the compiler converts it at run time, as the game's code does, rather
+	// than folding a constant (a contributor's second read).
+	for (float step = -1000.0f; step <= 1000.0f; step += 0.37f) {
+		volatile float value = step;
 		const unsigned char raw = (unsigned char)value;
 		if (raw != floatToByteAsMsvc(value)) {
 			++failures;
-			printf("FAIL: MSVC casts %f to %u, the helper says %u\n", value, (unsigned)raw, (unsigned)floatToByteAsMsvc(value));
+			printf("FAIL: MSVC casts %f to %u, the helper says %u\n", (double)value, (unsigned)raw, (unsigned)floatToByteAsMsvc(value));
 			break;
+		}
+	}
+	const float OUTSIDE[] = { 3.0e9f, -3.0e9f, 1.0e20f, -1.0e20f, std::numeric_limits<float>::infinity(),
+		-std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN() };
+	for (size_t i = 0; i < sizeof(OUTSIDE) / sizeof(OUTSIDE[0]); ++i) {
+		volatile float value = OUTSIDE[i];
+		const unsigned char raw = (unsigned char)value;
+		if (raw != floatToByteAsMsvc(value)) {
+			++failures;
+			printf("FAIL: MSVC casts %f to %u, the helper says %u\n", (double)value, (unsigned)raw, (unsigned)floatToByteAsMsvc(value));
 		}
 	}
 #endif
