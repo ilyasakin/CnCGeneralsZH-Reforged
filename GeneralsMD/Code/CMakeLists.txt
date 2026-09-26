@@ -1152,8 +1152,8 @@ endif()
 # ===========================================================================
 # WW3D2 and W3DDevice compile unchanged in their D3D9 calls: <d3d9.h> is Platform/PosixD3D9's, which is
 # Platform/D3D9Posix.h, and the device behind it is posixd3d9.  Phase A1 builds and links them; the
-# device has no resources until A2 and no draw until A3.  ww3d2 and w3ddevice are out of the default
-# build while A1 is open; the device and D3DX, which compile, are in it.
+# device has no resources until A2 and no draw until A3.  All of it is in the default build, the link
+# probe included, so a change that breaks the renderer off Windows fails the Mac build.
 if(ZH_PLATFORM_POSIX)
   set(ZH_POSIX_D3D9_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include/Platform/PosixD3D9)
 
@@ -1183,7 +1183,7 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
 
   # ---- ww3d2 -----------------------------------------------------------------------------------------
-  add_library(ww3d2 STATIC ${ZH_NOT_YET_PORTABLE} ${ZH_WW3D2_SOURCES} ${WW}/WW3D2/dx11runtime_posix.cpp)
+  add_library(ww3d2 STATIC ${ZH_WW3D2_SOURCES} ${WW}/WW3D2/dx11runtime_posix.cpp)
   set_target_properties(ww3d2 PROPERTIES CXX_STANDARD 17)
   target_include_directories(ww3d2
     PUBLIC ${WW}/WW3D2 ${ZH_POSIX_D3D9_INCLUDE}
@@ -1200,12 +1200,18 @@ if(ZH_PLATFORM_POSIX)
   # W3DWebBrowser is the embedded browser as a COM object, which only Win32GameEngine makes; GameEngine
   # has its own WebBrowser off Windows (B5).
   list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DWebBrowser\\.cpp$")
-  add_library(w3ddevice STATIC ${ZH_NOT_YET_PORTABLE} ${W3DDEVICE_SOURCES})
+  add_library(w3ddevice STATIC ${W3DDEVICE_SOURCES})
   set_target_properties(w3ddevice PROPERTIES CXX_STANDARD 17)
   target_include_directories(w3ddevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs ${CMAKE_CURRENT_SOURCE_DIR}/Main
             ${WW}/Miles6/include ${WW}/Bink/include)
   target_link_libraries(w3ddevice PUBLIC gameengine ww3d2)
+
+  # A1's link checkpoint: all of w3ddevice and ww3d2, whole archive, against what the POSIX game links.
+  add_executable(w3d_link_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_link_probe.cpp)
+  set_target_properties(w3d_link_probe PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(w3d_link_probe PRIVATE
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,w3ddevice,ww3d2>" posixdevice gameengine)
 endif()
 
 # ===========================================================================
