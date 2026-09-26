@@ -504,6 +504,172 @@ static void check_refusal(PosixDevice9 *device)
 	cube->Release();
 }
 
+// C1: whether one draw's triangles share derivatives.  Two triangles meeting on the diagonal, one
+// sampling about a texel a pixel and one about 32, through a texture whose every level is its own solid
+// colour and point sampled everywhere: a pixel's colour names the level it took.  Drawn as one call and
+// as two; with derivatives formed per primitive the two maps agree.  Then a grid of triangles two and
+// four pixels across, alternating the scales, one call against one per triangle: they agree too.  Then
+// the same two triangles INDEXED, sharing their edge's vertices: there one call differs from two (C1).
+// Measured on Metal (Apple silicon), 2026-09-26: the GPU forms a quad across an edge the index buffer
+// shares, so a pixel beside it takes the neighbour's derivatives; unindexed, or a call per triangle, it
+// does not.
+static int level_of(uint32_t colour)
+{
+	return (int)((colour >> 16) & 0xFF) / 32;
+}
+
+static void check_quad_derivatives(PosixDevice9 *device)
+{
+	const unsigned EDGE = 64, LEVELS = 7;
+	IDirect3DTexture9 *texture = NULL;
+	device->CreateTexture(EDGE, EDGE, LEVELS, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, NULL);
+	for (unsigned level = 0; level < LEVELS; ++level) {
+		D3DLOCKED_RECT locked;
+		texture->LockRect(level, &locked, NULL, 0);
+		const unsigned size = EDGE >> level;
+		for (unsigned y = 0; y < size; ++y)
+			for (unsigned x = 0; x < size; ++x)
+				((uint32_t *)((uint8_t *)locked.pBits + y * locked.Pitch))[x] = 0xFF000000u | ((level * 32 + 16) << 16);
+		texture->UnlockRect(level);
+	}
+	const float S = (float)SIZE;
+	const ScreenVertex triangles[6] = {
+		{ 0, 0, 0.5f, 1, WHITE, 0, 0 }, { S, 0, 0.5f, 1, WHITE, 1, 0 }, { 0, S, 0.5f, 1, WHITE, 0, 1 },
+		{ S, 0, 0.5f, 1, WHITE, 16, 0 }, { S, S, 0.5f, 1, WHITE, 16, 16 }, { 0, S, 0.5f, 1, WHITE, 0, 16 } };
+	int maps[2][SIZE * SIZE];
+	for (int calls = 1; calls <= 2; ++calls) {
+		begin(device, BLUE);
+		device->SetTexture(0, texture);
+		device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+		device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+		device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+		device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+		device->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_POINT);
+		device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+		if (calls == 1) {
+			device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 2, triangles, sizeof(ScreenVertex));
+		}
+		else {
+			device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 1, triangles, sizeof(ScreenVertex));
+			device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 1, triangles + 3, sizeof(ScreenVertex));
+		}
+		read_back(device);
+		for (unsigned y = 0; y < SIZE; ++y)
+			for (unsigned x = 0; x < SIZE; ++x)
+				maps[calls - 1][y * SIZE + x] = level_of(at(x, y));
+	}
+	int differ = 0;
+	for (unsigned i = 0; i < SIZE * SIZE; ++i) differ += maps[0][i] != maps[1][i];
+	CHECK(differ == 0);
+	CHECK(maps[0][2 * SIZE + 2] == 1 && maps[0][29 * SIZE + 29] == 5);	// the two scales took their levels
+	// The same with triangles a few pixels across, as the small models C1 found are: a grid of cells,
+	// each two triangles, alternating between the two scales, drawn as one call and as one per triangle.
+	for (unsigned cell_size = 2; cell_size <= 4; cell_size *= 2) {
+		std::vector<ScreenVertex> grid;
+		for (unsigned cy = 0; cy < SIZE; cy += cell_size) {
+			for (unsigned cx = 0; cx < SIZE; cx += cell_size) {
+				const float l = (float)cx + 0.3f, t = (float)cy + 0.3f, r = l + cell_size, b = t + cell_size;
+				const float scale = (((cx + cy) / cell_size) & 1) ? 16.0f / SIZE : 1.0f / SIZE;
+				const ScreenVertex c[4] = {
+					{ l, t, 0.5f, 1, WHITE, l * scale, t * scale }, { r, t, 0.5f, 1, WHITE, r * scale, t * scale },
+					{ l, b, 0.5f, 1, WHITE, l * scale, b * scale }, { r, b, 0.5f, 1, WHITE, r * scale, b * scale } };
+				grid.push_back(c[0]); grid.push_back(c[1]); grid.push_back(c[2]);
+				grid.push_back(c[1]); grid.push_back(c[3]); grid.push_back(c[2]);
+			}
+		}
+		for (int calls = 1; calls <= 2; ++calls) {
+			begin(device, BLUE);
+			device->SetTexture(0, texture);
+			device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+			device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+			device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+			if (calls == 1) {
+				device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, (unsigned)grid.size() / 3, &grid[0], sizeof(ScreenVertex));
+			}
+			else {
+				for (size_t i = 0; i < grid.size(); i += 3) {
+					device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 1, &grid[i], sizeof(ScreenVertex));
+				}
+			}
+			read_back(device);
+			for (unsigned y = 0; y < SIZE; ++y)
+				for (unsigned x = 0; x < SIZE; ++x)
+					maps[calls - 1][y * SIZE + x] = level_of(at(x, y));
+		}
+		int small_differ = 0;
+		for (unsigned i = 0; i < SIZE * SIZE; ++i) small_differ += maps[0][i] != maps[1][i];
+		if (small_differ != 0) {
+			++failures;
+			printf("FAIL quad derivatives, %ux%u cells: %d pixels take a different level in one draw than in one per triangle\n",
+				cell_size, cell_size, small_differ);
+		}
+	}
+	// Indexed, with the two triangles sharing their edge's vertices (and so those vertices' coordinates),
+	// the third vertex of one far out in the texture: one indexed call, the same as two indexed calls,
+	// and as one unindexed call of the same six vertices.
+	{
+		const ScreenVertex shared[4] = {
+			{ 0, 0, 0.5f, 1, WHITE, 0, 0 }, { S, 0, 0.5f, 1, WHITE, 1, 0 }, { 0, S, 0.5f, 1, WHITE, 0, 1 },
+			{ S, S, 0.5f, 1, WHITE, 16, 16 } };
+		const uint16_t list[6] = { 0, 1, 2, 1, 3, 2 };
+		IDirect3DVertexBuffer9 *vb = NULL;
+		IDirect3DIndexBuffer9 *ib = NULL;
+		void *locked = NULL;
+		device->CreateVertexBuffer(sizeof(shared), D3DUSAGE_WRITEONLY, SCREEN_FVF, D3DPOOL_MANAGED, &vb, NULL);
+		vb->Lock(0, 0, &locked, 0); memcpy(locked, shared, sizeof(shared)); vb->Unlock();
+		device->CreateIndexBuffer(sizeof(list), D3DUSAGE_WRITEONLY, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib, NULL);
+		ib->Lock(0, 0, &locked, 0); memcpy(locked, list, sizeof(list)); ib->Unlock();
+		ScreenVertex expanded[6];
+		for (int i = 0; i < 6; ++i) expanded[i] = shared[list[i]];
+		int indexed[3][SIZE * SIZE];
+		for (int way = 0; way < 3; ++way) {
+			begin(device, BLUE);
+			device->SetTexture(0, texture);
+			device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+			device->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+			device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+			if (way == 2) {
+				device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 2, expanded, sizeof(ScreenVertex));
+			}
+			else {
+				device->SetStreamSource(0, vb, 0, sizeof(ScreenVertex));
+				device->SetIndices(ib);
+				if (way == 0) {
+					device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, 4, 0, 2);
+				}
+				else {
+					device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, 4, 0, 1);
+					device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, 4, 3, 1);
+				}
+				device->SetStreamSource(0, NULL, 0, 0);
+				device->SetIndices(NULL);
+			}
+			read_back(device);
+			for (unsigned y = 0; y < SIZE; ++y)
+				for (unsigned x = 0; x < SIZE; ++x)
+					indexed[way][y * SIZE + x] = level_of(at(x, y));
+		}
+		int one_two = 0, two_unindexed = 0;
+		for (unsigned i = 0; i < SIZE * SIZE; ++i) {
+			one_two += indexed[0][i] != indexed[1][i];
+			two_unindexed += indexed[1][i] != indexed[2][i];
+		}
+		// Two indexed calls and one unindexed call are per primitive, as D3D9 drew them: they must agree.
+		CHECK(two_unindexed == 0);
+		// One indexed call is the GPU's own: on Metal (Apple silicon), 2026-09-26, 16 of the 32 pixels
+		// along the shared edge take the other triangle's level, in 2x2 blocks - the quad is formed across
+		// the edge the index buffer shares.  That is C1, a Mac-against-Windows difference, recorded and
+		// not asserted: another GPU may not share its quads.
+		printf("posix_gpu_draw_selfcheck: an indexed shared edge in one call differs from per-primitive at %d pixels"
+			" (C1: this GPU forms quads across edges an index buffer shares)\n", one_two);
+		vb->Release();
+		ib->Release();
+	}
+	device->SetTexture(0, NULL);
+	device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
+	texture->Release();
+}
+
 int main()
 {
 	IDirect3D9 *d3d = Direct3DCreate9(D3D_SDK_VERSION);
@@ -539,6 +705,7 @@ int main()
 	check_clears_and_depth(device);
 	check_render_targets(device);
 	check_refusal(device);
+	check_quad_derivatives(device);
 
 	printf("posix_gpu_draw_selfcheck: %s: %u draws recorded, %u textures and %u buffers uploaded, %u stale flushes\n",
 		SDL_GetGPUDeviceDriver(device->Get_Gpu()->Device()), device->Draws_Recorded(),
