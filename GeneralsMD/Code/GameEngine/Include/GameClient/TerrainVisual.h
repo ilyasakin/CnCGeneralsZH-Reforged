@@ -258,6 +258,9 @@ public:
 	virtual void addWaterVelocity( Real worldX, Real worldY, Real velocity, Real preferredHeight ) = 0;
 	/// get height of water grid at specified position
 	virtual Bool getWaterGridHeight( Real worldX, Real worldY, Real *height) = 0;
+	/** move the water grid's mesh one step for this logic frame; a second call for the same frame does
+		nothing.  GameLogic::update calls it at the top of every logic frame (T1c, defect 17). */
+	virtual void updateWaterGrid( UnsignedInt logicFrame ) = 0;
 
 	/// set detail of terrain tracks.
 	virtual void setTerrainTracksDetail(void)=0;
