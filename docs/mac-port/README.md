@@ -1134,6 +1134,48 @@ layout skipped it. Direct3D 9 is untouched: it runs no generated vertex programs
   pass-through (and the SDL3 swap), and the lit `COLOR2` case goes from refused to generated.
 - The harness's unlit vertex-specular scenario now matches FFReference. `WINDOWS-DEBT.md` has the row.
 
+**27. Fork-introduced: a texture stage that generates its coordinates, or reads another stage's set,
+samples with the wrong ones - fixed.** `ffvertex` writes each texture **stage**'s coordinates to its
+own interpolator, `TexCoord[stage]`, after the stage's set selection, generation and transform
+(`ffvertex.cpp:262`). `ffshader` sampled stage *n* from `TexCoord[k]`, where *k* is the set bits of
+the stage's `D3DTSS_TEXCOORDINDEX` (`coordinate_register`). They disagree for any stage whose *k* isn't
+*n*. That includes a stage that generates its coordinates, where *k* is 0: the shroud drawn on stage 1
+with `D3DTSS_TCI_CAMERASPACEPOSITION`. It then sampled the shroud with stage 0's texture coordinates,
+and landed on its black edge.
+
+On the SDL3 device the fixed-function trees (`W3DTreeBuffer`, the shroud on stage 1) drew as black
+silhouettes (found with `ZH_GPU_TRACE`; the tree atlas itself uploads correctly). The **Direct3D 11
+renderer** builds the same pairs from the same raw `TEXCOORDINDEX` (`dx11backend`), so every
+fixed-function draw of that shape is wrong there. Windows' trees escape only because they run
+`Trees.vso`. **Fixed** for the D3D11 profile, and so SDL3: a stage samples its own interpolator
+(`stage_register`), and so does the normal-mapped program's stage-0 sample.
+- Shader dump: the new case `ps_extra_texgen_on_stage_1` (the trees' stages) changes one line in d3d11
+  and sdl3.
+- Every existing program, the whole d3d9 target, and every key are byte-identical.
+- The harness's new scenario, stage-1 texgen beside stage 0's set 0, fails without the fix and matches
+  FFReference with it.
+
+**Direct3D 9 has it too - fixed in the following commit.** Its combiner shaders are always on
+(`W3DDisplay.cpp:1072`), are compiled `ps_2_0` (`ffshadercache.cpp:31`), and sit behind D3D9's
+fixed-function vertex pipeline. -47 read the pages: feeding ps_1_1-1_3 or ps_2_0, texture register *tN*
+holds stage *N*'s processed coordinates, after its own `TEXCOORDINDEX`, generation and
+`TEXTURETRANSFORMFLAGS`. The citation chain:
+- "ps_1_1..ps_1_4 Registers": the coordinates are "associated with a specific texture stage".
+- `D3DTSS_TEXCOORDINDEX` is "the texture coordinate set to use with this texture stage".
+- "Shader model 3" ignores `TEXCOORDINDEX` only from ps_3_0.
+
+Two caveats from the same reading:
+- No page says outright that the generated or transformed coordinates are what *tN* receives; it is
+  inferred from the stage association.
+- ps_1_4 decouples stage from register, which doesn't apply to ps_2_0.
+
+So D3D9's programs read *tk* where they should read *tN*, and the engine's texgen stages above 0 were
+wrong there too. Those are the terrain shaders' cloud, noise and shroud stages (`W3DShaderManager.cpp`:
+stage 1 at `:1973` and `:2550`, stage 2 at `:2286` and `:2577`, stage 3 at `:2313`; `TerrainTex.cpp`). It
+applies wherever such a draw runs fixed function with no engine pixel shader bound. The shader dump for
+that commit changes the new case's d3d9 text alone, one line (`tex2D(Sampler1, input.TexCoord0)` to
+`TexCoord1`). `WINDOWS-DEBT.md` has the row.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
