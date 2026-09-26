@@ -386,6 +386,21 @@ the D3D9-shaped device itself, and D4 is A3.
   can come later from the retail game under CrossOver, run on a COPY of the install (rule 9 applies
   there too: the INIZH.big delete is EA's code).
 
+**8. The POSIX engine uses the W3D factories, as Windows' own headless mode does (taken
+2026-09-26).** C2's first `generals -headless` run on macOS got through the file systems, the archive
+mount and the first INIs, then stopped at the first factory that only W3DDevice provides
+(FunctionLexicon, then ModuleFactory, ThingFactory, GameClient, ParticleSystemManager, Radar,
+GameLogic). On Windows, `-headless` does NOT swap those out: it keeps the W3D classes and skips only
+the frame. Decision 7 already builds WW3D2 and W3DDevice on POSIX (phase A1's checkpoint), so the POSIX
+engine's factories return the same W3D classes Windows uses, and a headless run has no video device
+under them. Rejected: a separate set of headless counterparts (null draw modules, a headless
+ThingFactory and so on). They would be a second copy of the INI-facing surface, and every difference
+from W3D's is a place for a replay to diverge. This supersedes C1's proposed "headless module factory"
+piece: W3DModuleFactory registers its own 19 draw modules. T1 is unaffected, because its extraction
+and height golden make the simulation's terrain independent of the render object on every platform,
+which is worth having whichever class answers. M2's first slice therefore waits on A1 (W3DDevice
+links) as well as on T1.
+
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
 Added 2026-09-22 after two Windows-only breaks in one afternoon, both with the same shape and
