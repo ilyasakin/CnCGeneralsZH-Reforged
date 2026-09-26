@@ -195,3 +195,38 @@ recording at frame 8,260. One object differed: a Stinger Soldier's rotation, 1-2
 was the replay viewer's checkpoint saves, which set every object's transform back through a setter that
 recomputes its angle. Found by bisecting on `-maxframes`, then ruling out the wall-clock W3D clock,
 then isolating the checkpoints. Fixed (README, defect #20).
+
+## The architecture axis, 2026-09-26 (-18)
+
+The whole game, not only E3's maths, built for **x86_64** with the same clang (`CMAKE_OSX_ARCHITECTURES=x86_64`,
+FFmpeg's configure told to cross-compile) and run under Rosetta 2 beside the arm64 build.
+
+- **x86_64 first could not start a match.** An `AsciiString` copied over itself (`nextToken` → overlapping
+  `strcpy`) lost a random subset of the archive directory under x86_64's `strcpy`. That is undefined
+  behaviour ARM64 and MSVC happen to tolerate; fixed with `memmove` (README, latent UB). With it,
+  `test_gameengine` (444 tests, 521,993 checks) and `test_bigfilesystem` (hash c8140abc27b4d05d) pass on
+  x86_64 exactly as on arm64.
+- **Same seed, same world, on both architectures.** Seeds 0 and 1 at 12,000 frames, each agreeing with
+  its own checkpointed playback and a second run:
+
+  | seed | arm64 | x86_64 (Rosetta) |
+  |:--|:--|:--|
+  | 0 | 0x845181C8 | 0x845181C8 |
+  | 1 | 0xB5B11D73 | 0xB5B11D73 |
+
+- **Cross-play.** Each architecture's recording was played back on the other: seed 0 and seed 1, arm64 →
+  x86_64 and x86_64 → arm64. All four reached the recording's HEADLESS CRC at frame 12,000, with
+  "Start of a replay game" in the log and no "out of sync".
+
+**What this covers:** the CPU axis, two instruction sets computing one simulation, in a full match
+with real fights (46 and 52 structures, hundreds of units).
+**What it does not:** the compiler axis. Both builds are clang with this project's flags; Windows
+players run MSVC's code generation, `long` of 32 bits and MSVC's CRT. Rosetta is x86-64 semantics on
+Apple hardware, not a Windows machine. The known compiler-side differences stay where E3 and the
+WINDOWS-DEBT rows put them. A Windows-recorded replay is still the only thing that closes E1.
+
+**The harness guards the install itself now.** Rule 9, after a script elsewhere wrote through a farm
+link into the real install. replay-check.sh hashes every install file (sha256, 510 files, about 11 s)
+before building its farm and again at exit however the run ends, and fails with exit 99 and the
+differing files if anything changed. `REPLAY_CHECK_CONTROL_INSTALL=1` spoils the saved snapshot (the
+install untouched) as the check's armed control, the fifth check of `replay_check`.
