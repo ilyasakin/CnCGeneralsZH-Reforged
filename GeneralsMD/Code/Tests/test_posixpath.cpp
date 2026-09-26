@@ -33,6 +33,7 @@
 
 #include "posixpath.h"
 #include "zhio.h"
+#include "rawfile.h"
 
 namespace {
 
@@ -276,6 +277,12 @@ unsigned run_suite(const std::string & root, const char * where)
 	CHECK(zh_unlink("Data\\Scripts\\EmptyDir") != 0);		// unlike zh_remove, never a directory
 	CHECK(is_directory_here(root + "/Data/Scripts/EmptyDir"));
 	CHECK(zh_unlink("Data\\Scripts\\Absent.txt") != 0 && errno == ENOENT);
+	struct stat found;
+	CHECK_EQ(zh_stat("data\\INI\\inizh.BIG", &found), 0);
+	CHECK(S_ISREG(found.st_mode) && found.st_size == 3);
+	CHECK_EQ(zh_stat("DATA\\scripts\\emptydir", &found), 0);
+	CHECK(S_ISDIR(found.st_mode));
+	CHECK(zh_stat("Data\\INI\\Absent.big", &found) != 0 && errno == ENOENT);
 	CHECK_EQ(zh_mkdir("SAVE\\Replays"), 0);
 	struct stat status;
 	CHECK(stat((root + "/Save/Replays").c_str(), &status) == 0 && S_ISDIR(status.st_mode));
@@ -286,6 +293,26 @@ unsigned run_suite(const std::string & root, const char * where)
 		close(handle);
 	}
 	CHECK_STR(read_file(root + "/Save/Replays/Last.rep").c_str(), "rep");
+
+	// RawFileClass (WWLib), which the W3D and INI loaders open files through: its POSIX arms open and
+	// delete through zh_open and zh_unlink, so the engine's spelling reaches the file (C1 (d)).
+	{
+		RawFileClass reader;
+		CHECK(reader.Is_Available() == false);
+		CHECK(reader.Open("data\\scripts\\SKIRMISHSCRIPTS.SCB", FileClass::READ) != 0);
+		char buffer[16] = { 0 };
+		CHECK_EQ(reader.Read(buffer, sizeof(buffer) - 1), 7);
+		CHECK_STR(buffer, "scripts");
+		reader.Close();
+		RawFileClass writer("SAVE\\raw.bin");
+		CHECK(writer.Open(FileClass::WRITE) != 0);
+		CHECK_EQ(writer.Write("raw", 3), 3);
+		writer.Close();
+		CHECK_STR(read_file(root + "/Save/raw.bin").c_str(), "raw");
+		CHECK(writer.Is_Available());
+		CHECK(writer.Delete());
+		CHECK(zh_access("Save\\raw.bin", F_OK) != 0);
+	}
 
 	sensitive_only += listing_checks(root, sensitive);
 
