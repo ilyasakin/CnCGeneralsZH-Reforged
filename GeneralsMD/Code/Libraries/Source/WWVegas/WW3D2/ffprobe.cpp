@@ -17,6 +17,9 @@
 */
 
 #include "ffprobe.h"
+#if !defined(_WIN32)
+#include "zhio.h"
+#endif
 #include "bittype.h"		// uint32
 
 #include <map>
@@ -210,7 +213,13 @@ void FixedFunctionProbe_Dump(const char * path)
 		return;
 	}
 
+#if defined(_WIN32)
 	FILE * file = fopen(path, "wt");
+#else
+	// Through zh_fopen, so a read-only install root (P1) refuses this relative dump rather than taking
+	// it: the probe is always on, and off Windows the working directory is the player's install
+	FILE * file = zh_fopen(path, "wt");
+#endif
 	if (file == NULL) {
 		return;
 	}

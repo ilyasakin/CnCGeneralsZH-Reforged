@@ -438,7 +438,11 @@ void DebugInit(int flags)
 	#ifdef DEBUG_LOGGING
 
 		char dirbuf[ _MAX_PATH ];
+#if defined(_WIN32)
 		getExecutableDirectory( dirbuf, sizeof( dirbuf ), TRUE );
+#else
+		getLogDirectory( dirbuf, sizeof( dirbuf ), TRUE );	// outside an app bundle (P1)
+#endif
 
 		char prevbuf[ _MAX_PATH ];
 		char curbuf[ _MAX_PATH ];

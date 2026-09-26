@@ -165,7 +165,9 @@ static Bool hasWriteAccess()
 #if defined(_WIN32)
 	int handle = zh_open( filename, _O_CREAT | _O_RDWR, _S_IREAD | _S_IWRITE);
 #else
-	int handle = open( filename, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR );
+	// Through zh_open like the Windows line, so a read-only install root (P1) answers "no write
+	// access" here rather than being written to
+	int handle = zh_open( filename, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR );
 #endif
 	if (handle == -1)
 	{
