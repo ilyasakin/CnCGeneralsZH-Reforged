@@ -27,6 +27,7 @@
 // Author: Michael S. Booth, April 2001
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "zhio.h"
 #include "Common/MessageBoxFlags.h"	// MessageBoxWrapper and its flags
 #include "Platform/SleepMilliseconds.h"
 #if !defined(_WIN32)
@@ -239,7 +240,7 @@ static AsciiString modelChecksumCachePath( void )
 static ModelChecksumMap readModelChecksumCache( void )
 {
 	ModelChecksumMap cache;
-	FILE *cacheFile = fopen( modelChecksumCachePath().str(), "r" );
+	FILE *cacheFile = zh_fopen( modelChecksumCachePath().str(), "r" );
 	if (cacheFile == NULL)
 		return cache;		// the first start on this machine, or the file was deleted
 
@@ -272,7 +273,7 @@ static void writeModelChecksumCache( const ModelChecksumMap &cache )
 	scratchPath.format( "%s.%u", finalPath.str(), (UnsignedInt)getpid() );
 #endif
 
-	FILE *cacheFile = fopen( scratchPath.str(), "w" );
+	FILE *cacheFile = zh_fopen( scratchPath.str(), "w" );
 	if (cacheFile == NULL)
 		return;		// a read-only user folder costs the next start a full read, nothing else
 

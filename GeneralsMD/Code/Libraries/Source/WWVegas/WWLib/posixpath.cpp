@@ -481,6 +481,15 @@ int zh_mkdir(const char * path)
 	return result;
 }
 
+int zh_stat(const char * path, struct stat * status)
+{
+	std::string real;
+	if (!resolve_or_fail(path, POSIX_PATH_EXISTING, real)) {
+		return -1;
+	}
+	return stat(real.c_str(), status);
+}
+
 int zh_read_text(int handle, void * buffer, unsigned bytes)
 {
 	const ssize_t got = read(handle, buffer, bytes);

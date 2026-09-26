@@ -1009,11 +1009,17 @@ set(ZH_WIDECHAR_TEST_SUPPORT
   ${GE}/Source/Common/System/UnicodeString.cpp ${GE}/Source/Common/System/AsciiString.cpp
   ${GE}/Source/Common/System/WideCharFns.cpp ${CMAKE_CURRENT_SOURCE_DIR}/Tests/widechar_test_stubs.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Tests/gcc_eager_vtable_stubs.cpp)
+# XferCRC.cpp, MemoryInit.cpp and their kind open files through WWLib's zh_fopen, which off Windows is
+# a function in wwlib (C1 (d)); on Windows it is fopen, inline, and needs nothing linked.
+if(ZH_PLATFORM_POSIX)
+  set(ZH_ZHIO_LIBS wwlib wwdebug)
+endif()
 function(zh_widechar_gate name)
   add_executable(${name} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_crc_gate.cpp ${ZH_WIDECHAR_TEST_SUPPORT})
   target_include_directories(${name} PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
   target_compile_definitions(${name} PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
   set_target_properties(${name} PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(${name} PRIVATE ${ZH_ZHIO_LIBS})
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 zh_widechar_gate(widechar_crc_gate)
@@ -1025,6 +1031,7 @@ add_executable(widechar_format_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_
 target_include_directories(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
 target_compile_definitions(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
 set_target_properties(widechar_format_selfcheck PROPERTIES CXX_STANDARD 17)
+target_link_libraries(widechar_format_selfcheck PRIVATE ${ZH_ZHIO_LIBS})
 add_test(NAME widechar_format_selfcheck COMMAND widechar_format_selfcheck)
 # The game's own .csf through the real GameText.cpp, RAMFile, File and memory manager: every string
 # against an independent reading, some against their English text, and a golden hash for a Windows
@@ -1038,6 +1045,7 @@ add_executable(gametext_csf ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gametext_csf.
 target_include_directories(gametext_csf PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
 target_compile_definitions(gametext_csf PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
 set_target_properties(gametext_csf PROPERTIES CXX_STANDARD 17)
+target_link_libraries(gametext_csf PRIVATE ${ZH_ZHIO_LIBS})
 add_test(NAME gametext_csf COMMAND gametext_csf)
 set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
 if(ZH_GAME_DATA)
@@ -1051,7 +1059,7 @@ add_executable(widechar_file_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_wi
 target_include_directories(widechar_file_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
 target_compile_definitions(widechar_file_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
 set_target_properties(widechar_file_selfcheck PROPERTIES CXX_STANDARD 17)
-target_link_libraries(widechar_file_selfcheck PRIVATE test_harness)
+target_link_libraries(widechar_file_selfcheck PRIVATE test_harness ${ZH_ZHIO_LIBS})
 add_test(NAME widechar_file_selfcheck COMMAND widechar_file_selfcheck)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   zh_widechar_gate(widechar_crc_gate_msvc_model)
@@ -1488,7 +1496,7 @@ set(ZH_POSIXLFS_SOURCES
   ${GE}/Source/Common/System/SubsystemInterface.cpp ${GE}/Source/Common/System/AsciiString.cpp
   ${GE}/Source/Common/System/WideCharFns.cpp ${GE}/Source/Common/System/File.cpp
   ${GE}/Source/Common/System/LocalFile.cpp ${GE}/Source/Common/System/LocalFileSystem.cpp
-  ${GE}/Source/Common/System/RAMFile.cpp
+  ${GE}/Source/Common/System/RAMFile.cpp ${GE}/Source/Common/System/registry.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFileSystem.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFile.cpp)
 add_executable(test_posixlocalfilesystem ${ZH_POSIXLFS_SOURCES})
@@ -1509,7 +1517,7 @@ add_executable(test_userfolders ${TESTS}/test_userfolders.cpp)
 target_include_directories(test_userfolders PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
 target_compile_definitions(test_userfolders PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
 set_target_properties(test_userfolders PROPERTIES CXX_STANDARD 17)
-target_link_libraries(test_userfolders PRIVATE test_harness)
+target_link_libraries(test_userfolders PRIVATE test_harness wwlib wwdebug)
 add_test(NAME test_userfolders COMMAND test_userfolders)
 
 # The POSIX half of the Wine listing oracle (Tests/fs_oracle.cpp; its Windows half is built with

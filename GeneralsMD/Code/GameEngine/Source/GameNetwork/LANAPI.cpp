@@ -23,6 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 #include "Lib/Clock.h"
 
 #include "Lib/WideCharFns.h"
@@ -282,7 +283,7 @@ void LANAPI::checkMOTD( void )
 		UnsignedInt newMOTDCRC = 0;
 		AsciiString asciiMOTD;
 		char buf[4096];
-		FILE *fp = fopen(TheGlobalData->m_MOTDPath.str(), "r");
+		FILE *fp = zh_fopen(TheGlobalData->m_MOTDPath.str(), "r");
 		Int len;
 		if (fp)
 		{

@@ -27,6 +27,7 @@
 // Author: Michael S. Booth, October 2000
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 
 #include "stdlib.h"
 #include "string.h"
@@ -240,7 +241,7 @@ m_pOut(pOut)
 {
 	AsciiString tmpFileName = TheGlobalData->getPath_UserData();
 	tmpFileName.concat(TEMP_FILENAME);
-	m_tmp_file = ::fopen( tmpFileName.str(), "wb" );	
+	m_tmp_file = zh_fopen( tmpFileName.str(), "wb" );	
 	// Added Sadullah Nader
 	// Initializations missing and needed
 	m_chunkStack = NULL;
@@ -259,7 +260,7 @@ DataChunkOutput::~DataChunkOutput()
 	AsciiString tmpFileName = TheGlobalData->getPath_UserData();
 	tmpFileName.concat(TEMP_FILENAME);
 
- 	m_tmp_file = ::fopen( tmpFileName.str(), "rb" );	
+ 	m_tmp_file = zh_fopen( tmpFileName.str(), "rb" );	
 	::fseek(m_tmp_file, 0, SEEK_SET);
 
 	// append the temp m_tmp_file m_contents

@@ -24,6 +24,7 @@
 
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "zhio.h"
 
 #include "Common/ArchiveFileSystem.h"
 #include "Common/CommandLine.h"
@@ -769,7 +770,7 @@ Int parseLogAssets( char *args[], int num )
 {
 	if( TheWritableGlobalData )
 	{
-		FILE *logfile=fopen("PreloadedAssets.txt","w");
+		FILE *logfile=zh_fopen("PreloadedAssets.txt","w");
 		if (logfile)	//clear the file
 			fclose(logfile);
 		TheWritableGlobalData->m_preloadReport = TRUE;
@@ -2291,7 +2292,7 @@ Int parseMod(char *args[], Int num)
 
 		// now check for dir-ness
 		struct stat statBuf;
-		if (stat(modPath.str(), &statBuf) != 0)
+		if (zh_stat(modPath.str(), &statBuf) != 0)
 		{
 			DEBUG_LOG(("Could not _stat() mod.\n"));
 			return 2; // could not stat the file/dir.

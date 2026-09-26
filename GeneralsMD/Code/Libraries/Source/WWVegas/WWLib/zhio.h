@@ -44,6 +44,8 @@
 #define ZHIO_H
 
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #if defined(_WIN32)
 
@@ -57,6 +59,7 @@ inline int zh_remove(const char * path) { return remove(path); }
 inline int zh_unlink(const char * path) { return _unlink(path); }
 inline int zh_rename(const char * from, const char * to) { return rename(from, to); }
 inline int zh_mkdir(const char * path) { return _mkdir(path); }
+inline int zh_stat(const char * path, struct stat * status) { return stat(path, status); }
 
 #else
 
@@ -71,6 +74,8 @@ int zh_unlink(const char * path);
 int zh_rename(const char * from, const char * to);
 // One directory, with permissions 0777 less the process's umask, as Windows' _mkdir takes none.
 int zh_mkdir(const char * path);
+// stat, following symbolic links, of a path that must exist.
+int zh_stat(const char * path, struct stat * status);
 
 // read(), as Windows' _read reads a file opened _O_TEXT (decision D6): each "\r\n" becomes "\n", a
 // lone '\r' stays, and the file position still counts the file's bytes, so a seek back by one after a

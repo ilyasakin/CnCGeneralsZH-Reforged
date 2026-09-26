@@ -63,6 +63,7 @@
 #include	<stdlib.h>
 #include	<string.h>
 #include "win.h"
+#include "zhio.h"
 #include	<limits.h>
 #include	<errno.h>
 #if !defined(_WIN32)
@@ -82,8 +83,10 @@
 **	Get_Date_Time returned a Unix time where every caller keeps a DOS date and time; Set_Date_Time
 **	asserted.  Each POSIX arm is written against the Windows arm beside it, call for call.
 **
-**	Set_Name's _UNIX arm is the one left in place: it rewrites backslashes and lowercases every name,
-**	which is a question about paths, and paths are C1's.  It is inert, since nothing defines _UNIX.
+**	Set_Name's _UNIX arm, which rewrote backslashes and lowercased every name, was left for C1 and
+**	removed there: C1 keeps names as the engine spells them and resolves them where they reach the
+**	operating system (zh_open, zh_unlink), since lowercasing breaks every file with capitals on a
+**	case-sensitive volume.  It was inert, since nothing defines _UNIX.
 */
 #if defined(_WIN32)
 #define RAWFILE_LAST_ERROR()	GetLastError()
@@ -388,17 +391,8 @@ char const * RawFileClass::Set_Name(char const * filename)
 
 	Filename=filename;
 
-	/*
-	** If this is a UNIX build, fix the filename from the DOS-like name passed in
-	*/
-	#ifdef _UNIX
-		for (int i=0; i<Filename.Get_Length(); i++)
-		{
-			if (Filename[i]=='\\')
-				Filename[i]='/';
-			Filename[i]=tolower(Filename[i]);  // don't preserve case
-		}
-	#endif
+	// The name keeps the engine's spelling on every platform; the POSIX arms open it through zh_open,
+	// which resolves it against the disk (C1, decision D1).
 
 	return(Filename);
 }
@@ -491,7 +485,7 @@ int RawFileClass::Open(int rights)
 					Handle = CreateFileA(Filename, GENERIC_READ, FILE_SHARE_READ,
 												NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 				#else
-					Handle = open(Filename, O_RDONLY);
+					Handle = zh_open(Filename, O_RDONLY, 0);
 				#endif
 				break;
 
@@ -502,7 +496,7 @@ int RawFileClass::Open(int rights)
 				#else
 					// CREATE_ALWAYS.  POSIX has no share mode, so the 0 above - nobody else may open
 					// the file while it is written - has no equivalent here and is not enforced.
-					Handle = open(Filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+					Handle = zh_open(Filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 				#endif
 				break;
 
@@ -514,7 +508,7 @@ int RawFileClass::Open(int rights)
 												NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 				#else
 					// OPEN_ALWAYS: create it if it is missing, and no O_TRUNC, for SKB's reason above.
-					Handle = open(Filename, O_RDWR | O_CREAT, 0666);
+					Handle = zh_open(Filename, O_RDWR | O_CREAT, 0666);
 				#endif
 				break;
 		}
@@ -592,7 +586,7 @@ bool RawFileClass::Is_Available(int forced)
 			Handle = CreateFileA(Filename, GENERIC_READ, FILE_SHARE_READ,
 											NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 		#else
-			Handle = open(Filename, O_RDONLY);
+			Handle = zh_open(Filename, O_RDONLY, 0);
 		#endif
 
 		if (Handle == NULL_HANDLE) {
@@ -1054,7 +1048,7 @@ int RawFileClass::Delete(void)
 		#if defined(_WIN32)
 			deleteok=DeleteFile(Filename);
 		#else
-			deleteok=(unlink(Filename)==0);
+			deleteok=(zh_unlink(Filename)==0);
 		#endif
 
 		if (! deleteok) {
