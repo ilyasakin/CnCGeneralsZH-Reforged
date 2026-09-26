@@ -216,7 +216,7 @@ you start. That commit is the lock.
 | A3b | [FFReference](tasks/A-posix-d3d9-device.md) (the renderer's phase A3b, not the build.sh A3 above) | M4 | A3a | done: FFReference, independent, 29 tests / 280 checks; harness is -a9's | -47 |
 | PERF1 | [A performance baseline of the Mac renderer](tasks/PERF1-renderer-baseline.md) | M4 | A3e | in progress: timing aid built, measurement matrix running | -a9 |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`), the Mac baseline over a real fight, defect #20 fixed; parity needs a Windows run | -18 |
-| N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
+| N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | done: `m_exeCRC` takes a CRC-32 over the tracked sources on every platform; LF/CRLF and one-byte checks in ctest | -47 |
 | P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | in progress: steps 1-4 merged (overlay root; read-only roots and logs; one staged overlay, W=P path by path, E1 on `-overlay`; root selection); step 5, the `.app`, held for disk | -47 |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
@@ -407,8 +407,8 @@ still separates builds, which is what the executable CRC was for ("the game will
 they change"). What it gives up: detecting a binary modified after the build. The source is GPL,
 so that detection protected nothing. What it changes on Windows: the `m_exeCRC` value, which
 already changes with every rebuild, so no compatibility is lost that a rebuild would not already
-lose. Until it lands, the POSIX build hashes version and scripts only, which can match no Windows
-build, and says so where it is computed. Task: `tasks/N1-build-fingerprint.md`.
+lose. Landed 2026-09-26 (N1): `GeneralsMD/Code/BuildFingerprint.manifest` lists the tracked files, so no
+git is needed at build time. Task: `tasks/N1-build-fingerprint.md`.
 
 **6. Text is rasterised with FreeType off Windows (taken 2026-09-26; task D6).**
 The plan had no task for text. `WW3D2/render2dsentence.cpp` draws every glyph through GDI
@@ -1187,6 +1187,31 @@ numbered by stage. -47's reading of the pages pointed toward stage, but by infer
 sentence. A commit following it (c6e52558) was reverted after -18's second read, and the D3D9 profile
 reads the set's register as before. The comment on `stage_register` records both. `WINDOWS-DEBT.md` has the row.
 
+**28. A player's rank walks off its table on remote stats data - fixed.**
+
+- **Where:** `PopupPlayerInfo.cpp:841` and `WOLLobbyMenu.cpp:315` and `:389`. Each finds a rank with
+  `while (rankPoints >= m_ranks[i + 1]) ++i;`, which has no bound. `RankPoints` is ten Int thresholds
+  followed by five Real multipliers.
+- **The points come from the stats service's record,** for the local player and for OTHER players: the
+  lobby tooltips and rank icons, the load screen, the player-info popup.
+- **Every Commander in Chief (≥ 2,000 points) reads one past `m_ranks`, on every build.** That word is
+  `m_winMultiplier`'s bits, 1,077,936,128, and the walk stops only because that number is large.
+- **On shipping Windows, without any overflow,** points above 1,084,227,584 pass every multiplier read as
+  an Int and walk past the struct into the heap. Examples: 400,000,000 wins × 3.0 = 1,200,000,000, or
+  715,000,000 wins.
+- **On arm64 it's worse:** an overflow of the float sum converts to INT_MAX, where Windows gives INT_MIN
+  and `max(0, …)` makes that 0. So any huge record walks off.
+- **Measured** by -18 in `rank_walk_stops_at_the_table_end_and_the_old_one_did_not`, over RankPoints' own
+  fifteen words (the layout is pinned by static_asserts) and the shipped values:
+  - 2,000 → index 9, reading one past;
+  - 1,077,936,129 → index 12;
+  - 1,200,000,000 and INT_MAX → off the struct.
+- **Fixed:** `rankForPoints` (`RankPointValue.h`) stops at `RANK_COMMANDER_IN_CHIEF`. It is identical to
+  the old walk for every points value 0 to 2,100. `CalculateRank`'s float → Int sums go through
+  `floatToIntAsMsvc`. `WINDOWS-DEBT.md` has the row: Windows' rank changes only where the old walk left
+  the table.
+- **Not traced:** how far the out-of-table rank index then reached into later tables on Windows.
+
 **Latent, not numbered: a missing coordinate set under a texture transform.**
 - **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
   D3D9 documents (0,0) ("the system defaults to the u and v coordinates (0,0)"). FFReference's N28 pads
@@ -1279,6 +1304,11 @@ hunting a crash or corruption that only one platform shows, look here first.**
   - The bit is now `(UnsignedInt)1 << ((dt - 1) & 31)`, which is exactly Windows' value for every
     input and defined everywhere. Found by -18's float sweep, chasing why `SlowDeathBehavior.cpp:189`
     never ran.
+- **A zero rope wobble length (mod data; fixed).** `W3DRopeDraw::buildSegments` computes
+  `ceil(maxLen / wobbleLen)`, with the wobble length from ChinookAIUpdate's `RopeWobbleLen` (shipped: 10).
+  A mod's 0 makes it 1/0. Windows converts the infinity to INT_MIN and draws no rope; ARM64 saturated to
+  INT_MAX and allocated 2^31 segments (out of memory, or a hang). `floatToIntAsMsvc` gives Windows' answer.
+  Found by -18's sample of the client float-to-signed sites.
 - **Float-to-integer conversions out of range or NaN, in the simulation (-18's float sweep; partly fixed).**
   The census (every conversion the sanitizer instruments in the arm64 binary) found 1,444 sites, 318 of
   them in the simulation. C leaves an out-of-range or NaN conversion undefined. MSVC and x86 give INT_MIN;

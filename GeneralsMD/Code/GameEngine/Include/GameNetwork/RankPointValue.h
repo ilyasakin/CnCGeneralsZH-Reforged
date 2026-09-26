@@ -94,6 +94,18 @@ RankPoints(void );
 // INLINING ///////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 
+/** The rank a player's points have reached: the last table entry at or below them, at most
+	* RANK_COMMANDER_IN_CHIEF.  The menus each walked the table with no bound, so points at or above the
+	* top rank read one past m_ranks, and points of 1,077,936,129 or more (a stats record reaches them
+	* without any overflow) walked on through the multipliers, read as Ints, and off the struct. */
+inline Int rankForPoints( const Int (&ranks)[MAX_RANKS], Int rankPoints )
+{
+	Int rank = 0;
+	while( rank + 1 < MAX_RANKS && rankPoints >= ranks[rank + 1] )
+		++rank;
+	return rank;
+}
+
 //-----------------------------------------------------------------------------
 // EXTERNALS //////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------

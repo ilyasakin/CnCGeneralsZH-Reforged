@@ -312,11 +312,7 @@ static void playerTooltip(GameWindow *window,
 		tooltip.concat(playerInfo);
 	}
 
-	Int rank = 0;
-	Int i = 0;
-	while( info->m_rankPoints >= TheRankPointValues->m_ranks[i + 1])
-		++i;
-	rank = i;
+	Int rank = rankForPoints( TheRankPointValues->m_ranks, info->m_rankPoints );
 	AsciiString sideName = "GUI:RandomSide";
 	if (info->m_side > 0)
 	{		
@@ -390,11 +386,7 @@ const Image* LookupSmallRankImage(Int side, Int rankPoints)
 	if (rankPoints == 0)
 		return NULL;
 
-	Int rank = 0;
-	Int i = 0;
-	while( rankPoints >= TheRankPointValues->m_ranks[i + 1])
-		++i;
-	rank = i;
+	Int rank = rankForPoints( TheRankPointValues->m_ranks, rankPoints );
 
 	if (rank < 0 || rank >= 10)
 		return NULL;

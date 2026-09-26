@@ -987,6 +987,38 @@ endif()
 # ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.
 # The link list below is left exactly as it is on purpose - B6 owns it.
 add_library(gameengine STATIC ${ZH_NOT_YET_PORTABLE} ${GAMEENGINE_SOURCES})
+
+# N1 (decision 5): the build fingerprint GlobalData.cpp folds into m_exeCRC in place of the executable's
+# own bytes, on every platform, so two builds of the same source agree whatever compiled them.  CRC-32 over
+# the files BuildFingerprint.manifest lists (the tracked sources: Tools/fingerprint-manifest.sh writes it,
+# build_fingerprint_manifest checks it), line endings normalised.  The header is rewritten only when the
+# value changes, so a rebuild with nothing changed runs nothing and recompiles nothing.
+add_executable(build_fingerprint ${CMAKE_CURRENT_SOURCE_DIR}/Tools/fingerprint/build_fingerprint.cpp)
+set(ZH_FINGERPRINT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/BuildFingerprint.manifest)
+set(ZH_FINGERPRINT_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated/fingerprint)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ZH_FINGERPRINT_MANIFEST})
+file(STRINGS ${ZH_FINGERPRINT_MANIFEST} ZH_FINGERPRINT_FILES)
+list(TRANSFORM ZH_FINGERPRINT_FILES PREPEND ${CMAKE_CURRENT_SOURCE_DIR}/)
+add_custom_command(
+  OUTPUT ${ZH_FINGERPRINT_DIR}/BuildFingerprint.stamp
+  BYPRODUCTS ${ZH_FINGERPRINT_DIR}/BuildFingerprint.h
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${ZH_FINGERPRINT_DIR}
+  COMMAND build_fingerprint ${CMAKE_CURRENT_SOURCE_DIR} ${ZH_FINGERPRINT_MANIFEST} ${ZH_FINGERPRINT_DIR}/BuildFingerprint.h
+  COMMAND ${CMAKE_COMMAND} -E touch ${ZH_FINGERPRINT_DIR}/BuildFingerprint.stamp
+  DEPENDS build_fingerprint ${ZH_FINGERPRINT_MANIFEST} ${ZH_FINGERPRINT_FILES}
+  COMMENT "Build fingerprint over the tracked sources (N1)" VERBATIM)
+add_custom_target(build_fingerprint_header DEPENDS ${ZH_FINGERPRINT_DIR}/BuildFingerprint.stamp)
+add_dependencies(gameengine build_fingerprint_header)
+target_include_directories(gameengine PRIVATE ${ZH_FINGERPRINT_DIR})
+if(ZH_PLATFORM_POSIX)		# bash and perl: the value itself is the same tool on every platform
+  # the fingerprint: LF and CRLF copies of the tree agree, one byte or a rename changes it, the header holds it
+  add_test(NAME build_fingerprint_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/fingerprint-check.sh $<TARGET_FILE:build_fingerprint>
+                   ${ZH_FINGERPRINT_DIR}/BuildFingerprint.h)
+  # the manifest still lists exactly the tracked files (skipped without git: a tarball uses it as shipped)
+  add_test(NAME build_fingerprint_manifest COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/fingerprint-manifest.sh --check)
+  set_tests_properties(build_fingerprint_manifest PROPERTIES SKIP_RETURN_CODE 77)
+endif()
 if(ZH_PLATFORM_POSIX)
   # GlobalLanguage registers Language.ini's LocalFontFile with the glyph rasteriser (D6b)
   target_link_libraries(gameengine PUBLIC glyphrasteriser)

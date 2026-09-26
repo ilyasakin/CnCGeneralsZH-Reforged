@@ -765,21 +765,23 @@ Int CalculateRank( const PSPlayerStats& stats )
 	{
 		numGames += it->second;
 	}
-	rankPoints += (numGames * TheRankPointValues->m_winMultiplier);
+	// Each sum is converted as Windows converts it (Platform/MsvcFloatCasts.h): a hostile stats record past
+	// the int range is INT_MIN there, which the max() below turns into 0, where ARM64 saturated to INT_MAX.
+	rankPoints = floatToIntAsMsvc(rankPoints + numGames * TheRankPointValues->m_winMultiplier);
 	
 	numGames = 0;
 	for(it =stats.losses.begin(); it != stats.losses.end(); ++it)
 	{
 		numGames += it->second;
 	}
-	rankPoints += (numGames * TheRankPointValues->m_lostMultiplier);
+	rankPoints = floatToIntAsMsvc(rankPoints + numGames * TheRankPointValues->m_lostMultiplier);
 
 	numGames = 0;
 	for(it =stats.duration.begin(); it != stats.duration.end(); ++it)
 	{
 		numGames += it->second;
 	}
-	rankPoints += (numGames / 60) * TheRankPointValues->m_hourSpentOnlineMultiplier;
+	rankPoints = floatToIntAsMsvc(rankPoints + (numGames / 60) * TheRankPointValues->m_hourSpentOnlineMultiplier);
 
 	numGames = 0;
 	for(it =stats.discons.begin(); it != stats.discons.end(); ++it)
@@ -790,11 +792,11 @@ Int CalculateRank( const PSPlayerStats& stats )
 	{
 		numGames += it->second;
 	}
-	rankPoints += numGames * TheRankPointValues->m_disconnectMultiplier;
+	rankPoints = floatToIntAsMsvc(rankPoints + numGames * TheRankPointValues->m_disconnectMultiplier);
 
 	if(BitTest(stats.battleHonors, BATTLE_HONOR_CAMPAIGN_USA | BATTLE_HONOR_CAMPAIGN_CHINA |BATTLE_HONOR_CAMPAIGN_GLA))
 	{
-		rankPoints += 1 * TheRankPointValues->m_completedSoloCampaigns;
+		rankPoints = floatToIntAsMsvc(rankPoints + 1 * TheRankPointValues->m_completedSoloCampaigns);
 	}
 
 	rankPoints = max(0, rankPoints); // clip off negative values, since discons can push us below 0.
@@ -835,12 +837,8 @@ void PopulatePlayerInfoWindows( AsciiString parentWindowName )
 		weHaveStats = TRUE;
 	}
 	
-	Int currentRank = 0;
 	Int rankPoints = CalculateRank(stats);
-	Int i = 0;
-	while( rankPoints >= TheRankPointValues->m_ranks[i + 1])
-		++i;
-	currentRank = i;
+	Int currentRank = rankForPoints( TheRankPointValues->m_ranks, rankPoints );
 
 	PerGeneralMap::iterator it;
 	Int numWins = 0;
