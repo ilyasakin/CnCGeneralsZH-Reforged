@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 #include <string>
+#include <vector>
 
 #include "Common/AsciiString.h"
 #include "Common/FileSystem.h"
@@ -246,6 +247,66 @@ unsigned run_suite(const std::string & root, const char * where)
 	CHECK(!files.createDirectory(AsciiString("save\\replays")));
 	CHECK(!files.createDirectory(AsciiString("NoParent\\Child")));
 	CHECK(!files.createDirectory(AsciiString("")));
+
+	// ---- the operations engine code used to make directly (C1, decision D3) ----
+	// copyFile: the bytes and the last write time; failIfExists; never onto itself.
+	make_directory(root + "/Replays");
+	write_file(root + "/Replays/Last Replay.rep", "GENREP-bytes");
+	times[0].tv_sec = times[1].tv_sec = 1044835200;
+	times[0].tv_usec = times[1].tv_usec = 0;
+	utimes((root + "/Replays/Last Replay.rep").c_str(), times);
+	CHECK(files.copyFile("replays\\LAST REPLAY.rep", "Replays\\Kept.rep", TRUE));
+	CHECK_STR(read_file(root + "/Replays/Kept.rep").c_str(), "GENREP-bytes");
+	struct stat copied;
+	CHECK(stat((root + "/Replays/Kept.rep").c_str(), &copied) == 0 && copied.st_mtime == 1044835200);
+	write_file(root + "/Replays/Kept.rep", "older");
+	CHECK(!files.copyFile("Replays\\Last Replay.rep", "Replays\\Kept.rep", TRUE));		// failIfExists
+	CHECK_STR(read_file(root + "/Replays/Kept.rep").c_str(), "older");
+	CHECK(files.copyFile("Replays\\Last Replay.rep", "Replays\\Kept.rep", FALSE));		// replaced
+	CHECK_STR(read_file(root + "/Replays/Kept.rep").c_str(), "GENREP-bytes");
+	CHECK(!files.copyFile("Replays\\Kept.rep", "replays\\kept.REP", FALSE));			// onto itself
+	CHECK_STR(read_file(root + "/Replays/Kept.rep").c_str(), "GENREP-bytes");
+	CHECK(!files.copyFile("Replays\\Absent.rep", "Replays\\X.rep", FALSE));
+	CHECK(!files.copyFile("Replays", "Replays\\Dir.rep", FALSE));						// a directory is not a file
+	CHECK(!files.doesFileExist("Replays\\Dir.rep"));
+
+	// deleteFile: one file, in any case spelling; never a directory, empty or not.
+	CHECK(files.deleteFile("REPLAYS\\kept.rep"));
+	CHECK(!files.doesFileExist("Replays\\Kept.rep"));
+	CHECK(!files.deleteFile("Replays\\Kept.rep"));
+	make_directory(root + "/Replays/Empty");
+	CHECK(!files.deleteFile("Replays\\Empty"));
+	CHECK(is_directory(root + "/Replays/Empty"));
+
+	// moveFileReplacing: over an existing file, which is gone afterwards.
+	write_file(root + "/Replays/cache.txt.123", "new");
+	write_file(root + "/Replays/cache.txt", "old");
+	CHECK(files.moveFileReplacing("Replays\\cache.txt.123", "replays\\CACHE.TXT"));
+	CHECK_STR(read_file(root + "/Replays/cache.txt").c_str(), "new");
+	CHECK(!files.doesFileExist("Replays\\cache.txt.123"));
+	CHECK(!files.moveFileReplacing("Replays\\cache.txt.123", "Replays\\cache.txt"));
+
+	// getFilesInDirectory: files only, bare names, matching the pattern, current directory untouched.
+	write_file(root + "/Replays/00000001.sav", "");
+	write_file(root + "/Replays/00000002.SAV", "");
+	write_file(root + "/Replays/map.map", "");
+	make_directory(root + "/Replays/dir.sav");
+	std::vector<AsciiString> names;
+	files.getFilesInDirectory(AsciiString("replays\\"), AsciiString("*.sav"), names);
+	CHECK_EQ((int)names.size(), 2);
+	if (names.size() == 2) {
+		CHECK_STR(names[0].str(), "00000001.sav");
+		CHECK_STR(names[1].str(), "00000002.SAV");
+	}
+	names.clear();
+	files.getFilesInDirectory(AsciiString("Replays"), AsciiString("*"), names);		// no trailing separator
+	CHECK_EQ((int)names.size(), 5);		// Last Replay.rep, cache.txt, the two saves, map.map
+	names.clear();
+	files.getFilesInDirectory(AsciiString("NoSuchDir"), AsciiString("*"), names);
+	CHECK_EQ((int)names.size(), 0);
+	char here[4096];
+	CHECK(getcwd(here, sizeof(here)) != NULL);
+	CHECK_STR(files.getCurrentDirectory().str(), here);
 
 	if (chdir(previous) != 0) CHECK(false);
 	if (!sensitive) {
