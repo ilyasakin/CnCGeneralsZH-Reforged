@@ -36,15 +36,18 @@ import re
 import subprocess
 import sys
 
-# MSVC x64: what it defines, and what it never does.
-MSVC_DEFINES = ['-D_MSC_VER=1930', '-D_WIN32=1', '-DWIN32=1', '-D_WIN64=1', '-D_M_X64=100',
-                '-D_M_AMD64=100']
+# MSVC x64: what it defines, and what it never does.  _WINDOWS and WIN32 are the build's own
+# (CMakeLists.txt: add_compile_definitions(WIN32 _WINDOWS) for every Windows target): without
+# _WINDOWS, code under `#ifdef _WINDOWS` (WW3D2's window sizing and movie capture, udp.h's winsock)
+# is never resolved.
+MSVC_DEFINES = ['-D_MSC_VER=1930', '-D_WIN32=1', '-DWIN32=1', '-D_WINDOWS=1', '-D_WIN64=1',
+                '-D_M_X64=100', '-D_M_AMD64=100']
 NOT_MSVC = ['-U__clang__', '-U__GNUC__', '-U__APPLE__', '-U__MACH__', '-U__linux__',
             '-U__unix__', '-U__GLIBC__', '-U__x86_64__', '-U__aarch64__', '-U__arm64__',
             '-UZH_PLATFORM_POSIX']
 # The control: the same files with the Windows macros unset must look different somewhere,
 # or the defines above resolved nothing and every "identical" below would be meaningless.
-POSIX_VIEW = ['-U_MSC_VER', '-U_WIN32', '-UWIN32', '-U_WIN64', '-U_M_X64', '-U_M_AMD64']
+POSIX_VIEW = ['-U_MSC_VER', '-U_WIN32', '-UWIN32', '-U_WINDOWS', '-U_WIN64', '-U_M_X64', '-U_M_AMD64']
 
 SOURCE = re.compile(r'\.(h|hpp|hh|inl|c|cc|cpp|cxx)$', re.I)
 INCLUDE = re.compile(r'\s*#\s*include\b')
@@ -99,6 +102,9 @@ def strip_comments(text):
 def view(data, flags):
     text = strip_comments(data.decode('latin-1').replace('\r\n', '\n'))
     text = DIAGNOSTIC.sub(lambda m: m.group(1) + m.group(2).replace("'", '`').replace('"', '`'), text)
+    # A raw NUL byte (W3DModelDraw.cpp held one in a character literal until A1) ends unifdef's read of
+    # the line.  It becomes a visible token instead, so the file resolves and the byte still compares.
+    text = text.replace('\x00', '<NUL>')
     run = subprocess.run(['unifdef', *flags], input=text.encode('latin-1'), capture_output=True)
     if run.returncode not in (0, 1):            # 0 unchanged, 1 changed, 2 trouble
         raise RuntimeError(run.stderr.decode('utf-8', 'replace').strip() or 'unifdef failed')

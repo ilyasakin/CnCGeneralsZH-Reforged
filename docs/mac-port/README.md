@@ -1073,7 +1073,11 @@ These are not style preferences. Breaking one of them costs somebody else a day.
      file into identical, include-case-only, or different, printing the differences. Put its
      summary in the pull request and give every "different" file a `WINDOWS-DEBT.md` row. Do not
      reach for mingw instead: it defines `_WIN32` but not `_MSC_VER`, so it takes the POSIX side of
-     most of this tree's platform code. **What the tool cannot see:** what a macro token expands to
+     most of this tree's platform code. **If you compile with MinGW as extra evidence, define what the
+     Windows build defines: `-DWIN32 -D_WINDOWS`** (`CMakeLists.txt` adds both to every Windows
+     target). Without `_WINDOWS` it silently skips WW3D2's window and movie code and `udp.h`'s winsock,
+     which is how A1's first MinGW runs checked less than they said; the tool itself left `_WINDOWS`
+     unresolved until A1's findings added it. A MinGW pass is still not MSVC's. **What the tool cannot see:** what a macro token expands to
      (check its definition), anything through an `#include` (each file is resolved on its own), a
      condition on any macro other than the compiler's and platform's own, and whether MSVC accepts
      the result. It is a text diff, not a compiler.
