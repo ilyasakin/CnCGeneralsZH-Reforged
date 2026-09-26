@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** B1 B2 B3 B4 B5
 - **Blocks:** C1 C5 E1
-- **Status:** in progress (-47, from 2026-09-26): link census done, below; nothing changed yet. The `debuglib`/`dinput8` drops were -18's
+- **Status:** done on macOS, 2026-09-26 (-47): `test_gameengine` is a ctest row and passes, 443 tests and 521,945 checks. Windows verification is `WINDOWS-DEBT.md`'s B6 rows
 - **Size:** `CMakeLists.txt` lines 515–539, plus whatever stubbing the link errors demand
 
 ## Why
@@ -34,6 +34,20 @@ cannot link.
 `GeneralsMD/Code/CMakeLists.txt`, the `gameengine` and `test_gameengine` blocks, plus new stub
 sources under `GeneralsMD/Code/Stubs/` (which already holds `NullAudioManager.h`, so the pattern
 exists).
+
+## Done, 2026-09-26
+
+`test_gameengine` lost `PENDING_MACOS` once -18's pre-main fix landed (the `LogClass` statics no
+longer reach a NULL allocator): built by `ninja`, linked against `gameengine` and `posixdevice` with
+nothing missing, and run by `ctest` - **443 tests, 521,945 checks, 0 failed**, among them
+`simulation_uses_no_runtime_trig`. The rest of "Done when" on macOS: `test_wwmath`, `test_wwlib`,
+`test_wwsaveload`, `test_wwutil`, `test_compression`, `wwmath_selfcheck` and
+`compression_selfcheck` pass (41/41 ctest in all). `test_debug` is not on the Mac: it tests
+`debuglib`, which is Windows-only by design and which `gameengine` no longer names off Windows.
+
+Open after B6, owned elsewhere: B19's end-to-end check (a first and a later launch choosing the same
+preset) can now be written against the linked engine; the headless module factory's 19 draw modules
+(C1's task file); T1, the simulation's terrain.
 
 ## Link census, 2026-09-26 (-47) - read this first; the sections after it predate B1, B5 and B17
 
