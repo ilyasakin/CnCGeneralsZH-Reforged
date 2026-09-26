@@ -127,6 +127,12 @@ static void check_combiner(PosixDevice9 *device)
 	CHECK(description.Stages[1].ColourArgument1 == (D3DTA_TFACTOR | D3DTA_COMPLEMENT));
 	CHECK(description.Stages[1].TextureCoordinateIndex == 0);
 	CHECK(description.PixelPipeline.AlphaTestEnabled && description.PixelPipeline.AlphaFunction == D3DCMP_GREATEREQUAL);
+	// D3DRS_SPECULARENABLE is the pixel program's specular add.
+	CHECK(!description.SpecularAdd);
+	device->SetRenderState(D3DRS_SPECULARENABLE, 1);
+	device->Build_Combiner_Description(description);
+	CHECK(description.SpecularAdd && CombinerShader_Key(description).find(":SP") != std::string::npos);
+	device->SetRenderState(D3DRS_SPECULARENABLE, 0);
 
 	// No texturing: the diffuse colour and alpha, as one stage.
 	device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_DISABLE);
@@ -162,6 +168,17 @@ static void check_combiner(PosixDevice9 *device)
 	CHECK(vertex.SpecularMaterialSource == D3DMCS_MATERIAL && vertex.DiffuseMaterialSource == D3DMCS_MATERIAL);
 	device->SetFVF(D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE);
 	CHECK(device->Build_Vertex_Description(vertex) && vertex.DiffuseMaterialSource == D3DMCS_COLOR1);
+	// D3DRS_LOCALVIEWER, TRUE by default, reaches the description, and the key of a lit specular program.
+	device->SetRenderState(D3DRS_SPECULARENABLE, 1);
+	CHECK(device->Build_Vertex_Description(vertex) && vertex.LocalViewer);
+	CHECK(VertexShader_Key(vertex).find(":V") != std::string::npos);
+	device->SetRenderState(D3DRS_LOCALVIEWER, 0);
+	CHECK(device->Build_Vertex_Description(vertex) && !vertex.LocalViewer);
+	CHECK(VertexShader_Key(vertex).find(":V") == std::string::npos);
+	device->SetRenderState(D3DRS_LOCALVIEWER, 1);
+	device->SetRenderState(D3DRS_SPECULARENABLE, 0);
+	// Lit without specular still writes the halfway vector, so its key still says which (-18's read).
+	CHECK(device->Build_Vertex_Description(vertex) && VertexShader_Key(vertex).find(":V") != std::string::npos);
 	device->SetRenderState(D3DRS_FOGENABLE, 1);
 	device->SetRenderState(D3DRS_FOGTABLEMODE, D3DFOG_LINEAR);
 	std::string refusal;

@@ -87,10 +87,11 @@ static void check_layout()
 	CHECK(layout.Location[3] == 4 && layout.Offset[3] == 28 && layout.Format[3] == SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2);
 	CHECK(layout.Stride == 36);
 
-	// Pre-transformed, with a specular colour skipped over and a one-float second set.
+	// Pre-transformed, with a specular colour at COLOR1's location and a one-float second set.
 	CHECK(Sdl_Vertex_Layout(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_SPECULAR | D3DFVF_TEX2 | D3DFVF_TEXCOORDSIZE1(1), layout, refusal));
-	CHECK(layout.AttributeCount == 4 && layout.Offset[1] == 16 && layout.Location[2] == 4 && layout.Offset[2] == 24
-		&& layout.Location[3] == 5 && layout.Offset[3] == 32 && layout.Format[3] == SDL_GPU_VERTEXELEMENTFORMAT_FLOAT);
+	CHECK(layout.AttributeCount == 5 && layout.Offset[1] == 16 && layout.Location[2] == 3 && layout.Offset[2] == 20
+		&& layout.Format[2] == SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM && layout.Location[3] == 4 && layout.Offset[3] == 24
+		&& layout.Location[4] == 5 && layout.Offset[4] == 32 && layout.Format[4] == SDL_GPU_VERTEXELEMENTFORMAT_FLOAT);
 	CHECK(layout.Stride == 36);
 
 	CHECK(!Sdl_Vertex_Layout(D3DFVF_XYZB2 | D3DFVF_NORMAL, layout, refusal) && !refusal.empty());

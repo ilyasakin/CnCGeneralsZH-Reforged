@@ -173,6 +173,7 @@ void PosixDevice9::Build_Combiner_Description(CombinerDescription &description) 
 	description.PixelPipeline.AlphaTestEnabled = RenderStates[D3DRS_ALPHATESTENABLE] != 0;
 	description.PixelPipeline.AlphaFunction = RenderStates[D3DRS_ALPHAFUNC];
 	description.PixelPipeline.FogEnabled = RenderStates[D3DRS_FOGENABLE] != 0;
+	description.SpecularAdd = RenderStates[D3DRS_SPECULARENABLE] != 0;
 
 	if (Stage_Ends_Cascade(0)) {
 		// No texturing: D3D9 draws the diffuse colour and its alpha.  The generator ends its chain at a
@@ -234,6 +235,7 @@ bool PosixDevice9::Build_Vertex_Description(VertexPipelineDescription &descripti
 	// Pretransformed vertices skip transform and lighting altogether.
 	description.LightingEnabled = RenderStates[D3DRS_LIGHTING] != 0 && (FVF & D3DFVF_POSITION_MASK) != D3DFVF_XYZRHW;
 	description.SpecularEnabled = RenderStates[D3DRS_SPECULARENABLE] != 0;
+	description.LocalViewer = RenderStates[D3DRS_LOCALVIEWER] != 0;
 	description.ColourVertexEnabled = RenderStates[D3DRS_COLORVERTEX] != 0;
 	const bool colour_vertex = description.ColourVertexEnabled;
 	description.DiffuseMaterialSource = material_source(RenderStates[D3DRS_DIFFUSEMATERIALSOURCE], FVF, colour_vertex);
@@ -417,6 +419,7 @@ void PosixDevice9::Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants
 		fields[5][1] = cosf(light.Phi * 0.5f);
 		fields[5][2] = light.Falloff;
 		fields[5][3] = 0.0f;
+		colour_value(light.Ambient, fields[6]);
 		++slot;
 	}
 

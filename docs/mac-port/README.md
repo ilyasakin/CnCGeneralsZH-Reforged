@@ -1002,6 +1002,137 @@ next `setOrientation` built a matrix an ULP or two away.
   not verified.
 - `replay_check` plays seed 1 at full length as the end-to-end check. `WINDOWS-DEBT.md` has the row.
   Found by E1's harness (-18).
+**21. Fork-introduced: under Direct3D 11 a scrolling texture does not scroll - fixed.** W3D's 2D texture
+mappers set a stage to `D3DTTFF_COUNT2` and put their translation in the texture matrix's `_31` and
+`_32` (`mapper.cpp`: linear offset at :183, "According to the docs this should work since its 2D"; grid at
+:263; sine, step and zig-zag offsets at :445, :529, :608; random at :1026). That is right for Direct3D 9, which pads a two-element coordinate set to
+(u, v, 1, 0) before the matrix, so the third row translates. The fork's generated vertex programs
+(`ffvertex.cpp`, which the **Direct3D 11 renderer** and the SDL3 GPU device both run) padded it
+(u, v, 0, 1), so the scroll read the fourth row, which is zero. A player on Direct3D 11 saw every texture those
+mappers move standing still: scrolling surfaces did not scroll, and a grid mapper's animated texture stayed
+on its first frame. Which models use them is data (a W3D material's mapper arguments), not surveyed here.
+Direct3D 9 is untouched: its fixed function pads correctly, and the generated vertex programs are not used
+there. Found by A3b's harness against FFReference (N13). **Fixed:** a passthrough set under an enabled
+transform is padded (u, v, 1, 0). The shader dump shows exactly one program changing, in one line
+(`vs_extra_passthrough_count2`, the new case); every other program and every key is byte-identical. The
+harness's scrolled-transform scenario now matches FFReference. `WINDOWS-DEBT.md` has the row.
+
+**22. Fork-introduced: the generated vertex programs ignore `D3DRS_LOCALVIEWER` - fixed in the vertex
+program; not yet visible.** Direct3D 9's default for `D3DRS_LOCALVIEWER` is TRUE, and the engine never
+turns it off (the only sets are TRUE: `W3DWater.cpp:2617`, and Generals' `:2362`; `dx8wrapper.cpp:4496`'s
+is inside a comment). With it on, the specular halfway vector points towards the vertex's own direction
+to the eye ("Specular Lighting"). `ffvertex.cpp` always used the fixed (0, 0, 1), and its comment said
+the reverse ("the engine never turns it on"). The **Direct3D 11 renderer** and the SDL3 GPU device run
+these programs; Direct3D 9 does not. **Fixed in the vertex program:** a `LocalViewer` field in the
+description, read from the state by `dx11backend` and the SDL3 device, and a `:V` in the key of every lit program that
+has it (each writes the halfway vector, kept or not). `dx11state` now starts
+`D3DRS_LOCALVIEWER` at Direct3D 9's TRUE, as it zeroed every state it did not list. Only a lit specular
+program's text and key change. **Not yet visible on screen:** the pixel programs never add the specular
+colour to the pixel (defect #25), so no generated program shows a lit highlight at all. This fix is what
+that highlight will be computed from. `WINDOWS-DEBT.md` has the row.
+
+**23. Fork-introduced: under Direct3D 11 a light's own ambient colour is dropped - fixed.** Direct3D 9
+lights a vertex's ambient as the material ambient times (the scene ambient plus each light's ambient,
+attenuated and coned like the rest of it; "Ambient Lighting"). The generated vertex programs summed the
+scene ambient only. The comment said "every light W3D creates leaves it black", which isn't so. The
+light environment hands its point lights `getPointAmbient` (`dx8wrapper.cpp:3776`, sent to `SetLight` at
+`:3802`), and those are set by `W3DDisplay::createLightPulse` (`:2668`, an FX list's light pulse, which grows and
+decays over a few frames), `W3DPoliceCarDraw` (`:163`), `W3DTerrainVisual` (`:639`) and water's mesh light
+(`W3DWater.cpp:1143`). A player on the **Direct3D 11 renderer** saw those point lights light only the
+sides that face them: the ambient share of a light pulse, which D3D9 spreads over everything in range,
+was missing. Direct3D 9 is untouched: it runs no generated vertex programs. Found by A3b's
+harness against FFReference (N4). **Fixed:**
+- Each light has a seventh register, its ambient colour, carried by `DX8Wrapper::Set_DX8_Light`'s
+  mirror to `dx11backend`.
+- The program sums `Atten * Spot * La` into the ambient term.
+- The shader dump changes exactly the nine lit cases with a light, in all three targets. That is the
+  new declaration, the sum, and the ambient line; in the D3D9 profile, the later lights' registers
+  also move by one.
+- No key and no unlit program changes.
+- The harness's point-light-with-ambient scenario now matches. `WINDOWS-DEBT.md` has the row.
+- The reach is wider than point lights: `Set_Light(LightClass)` gives every W3D light, directional
+  included, its ambient times its intensity (`dx8wrapper.cpp:3699-3704`, -18's second read). So any lit
+  geometry whose lights carry an ambient moves toward Direct3D 9's brightness on Direct3D 11.
+
+**24. Fork-introduced: a generated combiner program's `DOTPRODUCT3` does not write alpha - fixed; latent
+at both engine sites.** Direct3D 9's `D3DTOP_DOTPRODUCT3` as a colour operation writes its sum "to all
+color channels, including alpha" (`D3DTEXTUREOP`), whatever the stage's alpha operation says. `ffshader`'s
+programs took the alpha from the alpha operation instead. Those programs are what **both** Windows
+renderers draw fixed-function stages with: Direct3D 11, and Direct3D 9 too, where `W3DDisplay.cpp:1072`
+turns the generated combiner shaders on unconditionally and `dx8wrapper.cpp:2592-2605` binds them in
+place of the fixed-function stages. The engine's two DOT3 draws are the grayscale conversions, stage 1 of
+`Render2DClass`'s grayscale images (`render2d.cpp:687`) and of the black-and-white screen filter
+(`W3DShaderManager.cpp:791`). **Neither shows a difference today:** both draw with `_PresetOpaqueShader`
+(no blending, no alpha test), so the alpha they write is never read. It would be at the first DOT3 stage
+drawn with blending or an alpha test. Found by A3b's harness against FFReference (N17). **Fixed:** when the
+colour operation is `DOTPRODUCT3`, the stage's alpha is the same replicated sum. The shader dump changes
+one program, `ps_shroud_widest` (a DOT3 colour stage over a `MODULATE` alpha, the engine's shape), one
+line in each of the three targets. `ps_op_dotproduct3`, whose alpha operation is DOT3 as well, is
+byte-identical, as is everything else. The harness's DOTPRODUCT3 scenario now matches. `WINDOWS-DEBT.md`
+has the row.
+
+**25. Fork-introduced: generated pixel programs never add the specular colour, so no lit highlight
+shows - under Direct3D 9 as well as Direct3D 11 - fixed.** With `D3DRS_SPECULARENABLE`, Direct3D 9's
+fixed-function pipeline adds the vertex's specular colour to the pixel after the texture stages
+(`D3DRENDERSTATETYPE`: "added to the base color after the texture cascade but before alpha blending").
+`ffshader`'s programs never did. The engine turns specular on:
+- `shader.cpp:1018`: a W3D shader's secondary gradient;
+- `W3DWater.cpp:2616`: water, with `D3DRS_LOCALVIEWER` TRUE beside it;
+- `wwshade/shdcubemap.cpp:251`.
+
+**Both Windows renderers lose those highlights today.** Direct3D 11 runs these programs. So does
+Direct3D 9: its generated combiner shaders are always on (`W3DDisplay.cpp:1072`) and are bound in place of
+the fixed-function stages (`dx8wrapper.cpp:2592-2605`). A bound pixel shader replaces D3D9's specular add
+rather than being followed by it. -47 read the pages independently:
+- "Writing HLSL Shaders in Direct3D 9": "A pixel shader completely replaces the pixel-blending
+  functionality specified by the multi-texture blender including operations previously defined by the
+  texture stage states". Also: "Other pixel operations (fog blending, stencil operations, and
+  render-target blending) occur after execution of the shader", which doesn't list the specular add.
+  Also: ps_1_x's r0 "is sent to the fog stage and render-target blender".
+- "Set device state on fixed-function, shader pipelines" lists `D3DRS_SPECULARENABLE` among the
+  fixed-function-only states.
+
+The same pages keep fog after the shader below ps_3_0, so the D3D9 profile still writes no fog. The one
+contradiction: the device-state page also lists the fog states as fixed-function only, against the three
+specific pages. Found by A3b's harness: defect #22 changed the program key and not one pixel.
+
+**Fixed:**
+- `CombinerDescription::SpecularAdd`, set from `D3DRS_SPECULARENABLE` by `ffshadercache` (the D3D9
+  path), `dx11backend` and the SDL3 device, adds `input.Specular.rgb` after the stages, before the fog
+  and the alpha test, as D3D9 orders them.
+- A normal-mapped draw with `D3DRS_SPECULARENABLE` gets D3D11's own per-pixel highlight **instead of**
+  the vertex one, not as well: adding both would count the highlight twice (-18's second read). That
+  program is the fork's, with no Direct3D 9 frame to match.
+- Shader dump: every existing program is byte-identical. The new case `ps_extra_specular_add` is
+  `ps_op_modulate` plus exactly that line, in all three targets.
+- The harness's lit-specular scenario, with #22's local viewer, now matches FFReference.
+
+Still open: an **unlit** draw's vertex specular colour (meshes with a second colour array get
+`D3DFVF_SPECULAR`, `dx8renderer.cpp:715`). The vertex programs don't pass it through, so the add has
+nothing to add there yet. `WINDOWS-DEBT.md` has the row.
+
+**26. Fork-introduced: under Direct3D 11 a mesh's second vertex colour is ignored - fixed.** A W3D mesh with
+a second colour array is drawn with `D3DFVF_SPECULAR` (`dx8renderer.cpp:715`, `wwshade/shdsubmesh.cpp:148`),
+and Direct3D 9 uses that colour two ways:
+- **Unlit:** it is the specular colour the pixel adds with `D3DRS_SPECULARENABLE` (defect #25).
+- **Lit:** it is what `D3DMCS_COLOR2` names. A W3D material may take its diffuse, ambient or emissive
+  colour from it (`vertmaterial.cpp:355-377`).
+
+The generated vertex programs declared no such input. Unlit, they wrote a black specular. Lit, they
+refused a `COLOR2` source outright, so the **Direct3D 11 renderer** left those draws out of the frame.
+`dx11layout.cpp:104-105` was already handing the vertex's `COLOR1` to the input assembler, as
+B8G8R8A8 like the diffuse, but no program declared it; it was checked, not assumed. The SDL3 device's
+layout skipped it. Direct3D 9 is untouched: it runs no generated vertex programs.
+
+**Fixed:**
+- The vertex program declares `Specular : COLOR1` when the format has it.
+- Unlit, it passes the colour through, pretransformed included.
+- `D3DMCS_COLOR2` reads it where COLORVERTEX is on, and the material otherwise, as `COLOR1` does with the
+  diffuse.
+- The SDL3 layout feeds location 3, which its retarget swaps like the diffuse.
+- Shader dump: every existing program is byte-identical. The two new unlit cases gain the input and the
+  pass-through (and the SDL3 swap), and the lit `COLOR2` case goes from refused to generated.
+- The harness's unlit vertex-specular scenario now matches FFReference. `WINDOWS-DEBT.md` has the row.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 

@@ -50,7 +50,7 @@ void Direct3D11_Mirror_Sampler_State(unsigned, unsigned, unsigned) {}
 void Direct3D11_Mirror_Transform(unsigned, const float [16]) {}
 void Direct3D11_Mirror_Material(const float [4], const float [4], const float [4], const float [4], float) {}
 void Direct3D11_Mirror_Light(unsigned, unsigned, const float [4], const float [4], const float [4],
-	const float [4], const float [4], const float [4]) {}
+	const float [4], const float [4], const float [4], const float [4]) {}
 void Direct3D11_Mirror_Light_Disabled(unsigned) {}
 
 DX11BufferTwinClass * Direct3D11_Twin_Vertex_Buffer(unsigned, bool) { return NULL; }

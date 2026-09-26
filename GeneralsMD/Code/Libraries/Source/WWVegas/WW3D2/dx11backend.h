@@ -126,7 +126,7 @@ public:
 		const float emissive[4], float power);
 	void Set_Light(unsigned index, DWORD type, const float position[4], const float direction[4],
 		const float diffuse[4], const float specular[4], const float attenuation[4],
-		const float spot[4]);
+		const float spot[4], const float ambient[4]);
 	void Disable_Light(unsigned index);
 
 	// Write every program this builds to a file in this directory, named by the state it was built
@@ -270,7 +270,7 @@ private:
 		// One over the viewport's width and height, for the pre-transformed draws.  It goes before
 		// the lights because the generated block declares only as many lights as the state has.
 		float ViewportInverse[4];
-		float LightFields[MAXIMUM_VERTEX_LIGHTS][6][4];
+		float LightFields[MAXIMUM_VERTEX_LIGHTS][VERTEX_REGISTERS_PER_LIGHT][4];
 	};
 
 	// The normal map fields go last: a program that is not normal mapped declares the first three
@@ -403,6 +403,7 @@ private:
 		float Specular[4];
 		float Attenuation[4];
 		float Spot[4];
+		float Ambient[4];
 	};
 	Light Lights[MAXIMUM_VERTEX_LIGHTS];
 

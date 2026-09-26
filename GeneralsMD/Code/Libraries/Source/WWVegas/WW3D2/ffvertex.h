@@ -80,7 +80,7 @@ const unsigned VERTEX_REGISTER_GLOBAL_AMBIENT = VERTEX_REGISTER_MATERIAL_AMBIENT
 const unsigned VERTEX_REGISTER_FOG_PARAMETERS = VERTEX_REGISTER_MATERIAL_AMBIENT + 6;
 const unsigned VERTEX_REGISTER_VIEWPORT = VERTEX_REGISTER_MATERIAL_AMBIENT + 7;
 const unsigned VERTEX_REGISTER_LIGHTS = VERTEX_REGISTER_MATERIAL_AMBIENT + 8;
-const unsigned VERTEX_REGISTERS_PER_LIGHT = 6;
+const unsigned VERTEX_REGISTERS_PER_LIGHT = 7;
 
 struct VertexLightDescription
 {
@@ -109,12 +109,18 @@ struct VertexPipelineDescription
 	bool LightingEnabled;
 	bool SpecularEnabled;
 
+	// D3DRS_LOCALVIEWER, whose Direct3D 9 default is TRUE and which the engine never turns off: the
+	// specular halfway vector is taken towards the vertex's own direction to the eye rather than the
+	// fixed (0, 0, 1).  Only a lit, specular program reads it.  Initialised here for a caller that fills
+	// the rest field by field.
+	bool LocalViewer = false;
+
 	// D3DRS_COLORVERTEX.  With it off the vertex colour is ignored whatever the material sources
 	// say, which is how a lit draw with a colour in its vertices still comes out unlit by it.
 	bool ColourVertexEnabled;
 
-	// D3DMCS_MATERIAL or D3DMCS_COLOR, one each.  D3DMCS_COLOR2 is the specular vertex colour and
-	// nothing in the game selects it.
+	// D3DMCS_MATERIAL, D3DMCS_COLOR1 or D3DMCS_COLOR2, one each: the material's colour, or the
+	// vertex's diffuse or specular one where the format has it and COLORVERTEX is on.
 	FixedFunctionValue DiffuseMaterialSource;
 	FixedFunctionValue AmbientMaterialSource;
 	FixedFunctionValue EmissiveMaterialSource;
