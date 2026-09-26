@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** B3 (the shim), B14 (`mutex.h`), B5 (the Windows types)
 - **Blocks:** B6, and every other WWVegas target, all of which link `wwlib`
-- **Status:** in progress — mac-port-wwlib
+- **Status:** done (closed 2026-09-26 by -47 with evidence): `wwlib` builds under clang on macOS and every POSIX executable links it (`libwwlib.a`; test_posixpath and the other ctest rows that link it pass)
 
 ## Why
 

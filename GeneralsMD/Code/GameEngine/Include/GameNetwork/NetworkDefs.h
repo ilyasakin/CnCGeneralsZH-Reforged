@@ -28,6 +28,8 @@
 #ifndef __NETWORKDEFS_H
 #define __NETWORKDEFS_H
 
+
+#include <stddef.h>	// offsetof, for the wire-layout asserts (B4)
 #include "Lib/BaseType.h"
 #include "Common/MessageStream.h"
 
@@ -69,6 +71,7 @@ struct TransportMessageHeader
 	 little-endian on every machine the game has run on.  A big-endian port would need a byte swap at
 	 every read and write of them.  MSVC's targets are all little-endian; other compilers say. */
 static_assert(sizeof(TransportMessageHeader) == 6, "TransportMessageHeader is 6 bytes on the wire");
+static_assert(offsetof(TransportMessageHeader, magic) == 4, "TransportMessageHeader: magic follows the 4-byte crc");
 #if defined(__BYTE_ORDER__)
 static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "the network structs are sent in little-endian byte order");
 #elif !defined(_MSC_VER)
@@ -138,6 +141,18 @@ struct DelayedTransportMessage
 	TransportMessage message;
 };
 #pragma pack(pop)
+
+/* The transport's packed layouts (B4), each from its definition at pack(1): the header's 6, then
+	 MAX_PACKET_SIZE (1094) bytes of data, then length (4), addr (4) and port (2); a delayed message is a
+	 4-byte delivery time in front of one.  MSVC compiles these too: a pack(1) layout that differed there
+	 fails the Windows build rather than a game between the two. */
+static_assert(offsetof(TransportMessage, data) == 6, "TransportMessage: data follows the 6-byte header");
+static_assert(offsetof(TransportMessage, length) == 6 + MAX_PACKET_SIZE, "TransportMessage: length follows the data");
+static_assert(offsetof(TransportMessage, addr) == 10 + MAX_PACKET_SIZE, "TransportMessage: addr follows length");
+static_assert(offsetof(TransportMessage, port) == 14 + MAX_PACKET_SIZE, "TransportMessage: port is the last member");
+static_assert(sizeof(TransportMessage) == 16 + MAX_PACKET_SIZE, "TransportMessage is its members, unpadded");
+static_assert(offsetof(DelayedTransportMessage, message) == 4, "DelayedTransportMessage: message follows the delivery time");
+static_assert(sizeof(DelayedTransportMessage) == 4 + sizeof(TransportMessage), "DelayedTransportMessage is its members, unpadded");
 
 /**
  * Message types

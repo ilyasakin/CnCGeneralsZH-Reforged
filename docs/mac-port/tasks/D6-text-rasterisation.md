@@ -3,7 +3,7 @@
 - **Milestone:** M4 (the game is visible; without this, it has no text)
 - **Depends on:** nothing to start the seam and the rasteriser; D4 to see the result in the game
 - **Blocks:** any screen with text on macOS and Linux
-- **Status:** D6a merged; D6b on its branch (-47)
+- **Status:** done: D6a and D6b merged (`c1270c87`)
 - **Size:** `WW3D2/render2dsentence.cpp` (the GDI path), `GameClient/GlobalLanguage.cpp` (font
   installation), one vendored library
 

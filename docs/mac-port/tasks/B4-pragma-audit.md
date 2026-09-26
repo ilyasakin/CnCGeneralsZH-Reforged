@@ -1,9 +1,14 @@
 # B4 — Pragma audit
 
+> **Verdict (2026-09-26, -47): no pragma splits the Windows and POSIX simulation arithmetic.** 335 of the
+> 338 `#pragma optimize` lines are commented out; the 3 live ones are `_DEBUG`/`_INTERNAL`-only, so neither
+> Release build keeps them; and there is no `float_control`, `fenv_access`, `fp_contract` or `STDC` FP
+> pragma anywhere, live or commented. E1 need not model any pragma-induced divergence.
+
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6
-- **Status:** not started
+- **Status:** done (-47, 2026-09-26): audited, the missing wire-layout asserts added, `-Wno-unknown-pragmas`; see "Result" at the end
 - **Size:** 335 `#pragma optimize`, 67 `#pragma warning`, 16 `#pragma pack`, 6 `#pragma comment`,
   3 `#pragma warn`, 1 `#pragma inline_depth` (936 `#pragma once` are fine everywhere)
 
@@ -89,3 +94,47 @@ Take them in order of how much they matter, which is the reverse of how many the
 
 - Do not delete a `#pragma pack`. Not one. Every one is load-bearing until its assert says
   otherwise, and then it is still load-bearing.
+
+## Result (-47, 2026-09-26)
+
+**Method.** Every `#pragma` in GameEngine, GameEngineDevice, Main, WWVegas, Libraries/Include and
+Compression was swept, with comments detected. Each line was resolved through `unifdef` in MSVC's
+Release view and in the clang Release view (`windows_view_diff.py`'s macro sets, plus `_RELEASE`,
+`-U_DEBUG`, `-U_INTERNAL`).
+
+**Floating point.**
+- `optimize`: 338 lines, 335 of them commented out (129 in GameLogic, 75 GameClient, 46 Common,
+  45 W3DDevice, 24 GameNetwork, 8 WWVegas, the rest scattered). The 3 live ones are `Debug.cpp:86`
+  (`_INTERNAL`) and the `aabtree.cpp:732/795` pair (`_DEBUG`); neither Release view keeps them.
+- No `float_control`, `fenv_access`, `fp_contract` or `STDC FP_CONTRACT`/`FENV_ACCESS` anywhere.
+- `#pragma clang fp contract(off)` ×2 in `d3dxportable.h`: clang-only, restating the global
+  `-ffp-contract=off`.
+- `intrinsic(memcpy, memset, _rotl)` in `_lzhl.h`: MSVC-only, integer, compression code.
+- `inline_depth(255)` in `visualc.h`: MSVC-only; it affects inlining, not arithmetic.
+- With MSVC's default `/fp:precise` and no `/arch` (SSE2, no FMA), and clang's `-ffp-contract=off`
+  with no fast-math, neither compiler reassociates or fuses, so the optimisation level cannot change
+  a per-operation IEEE result. The FP risks left are the maths library (`dettrig.h`) and runtime
+  FP control (`test_fpucontrol`), not pragmas.
+
+**Unknown pragmas.** The project's flags never enabled `-Wunknown-pragmas`, so a clang build showed
+none. With it forced (a `-fsyntax-only` pass over all 1,067 game translation units) there were 39
+distinct sites, 19,621 occurrences, all MSVC `#pragma warning` diagnostics lines. `CMakeLists.txt` now
+says `-Wno-unknown-pragmas` explicitly, so a future `-Wall` stays usable. Two `#pragma message` lines
+still print by default (`-W#pragma-messages`): `colmathobbobb.cpp`'s "Fatal assert disabled for demo"
+and one TODO. They are informational and were left.
+
+**`#pragma pack`.** All 8 regions are push/pop.
+- Present before: `TransportMessageHeader` == 6, `LANMessage` == 471 (plus `<=` the datagram),
+  `ManglerData` == 20, `ManglerMessage` == 30.
+- Added: `sizeof` of `TransportMessage` (16 + `MAX_PACKET_SIZE`, 1110) and `DelayedTransportMessage`
+  (4 + that); `offsetof` of every packed struct's members up to its last; and `LANMessage`'s fields in
+  every union arm (the union at 34, each arm's post-`gameName` fields at 68 or later,
+  `GameInfo.isDirectConnect` the last byte at 470).
+- Every value is derived in a comment from the definition at pack(1), and checked by a probe on this
+  build. Armed: an expected 470 changed to 469 fails the compile.
+- The dead `CommandPacket` (whose size depends on `sizeof(GameMessage)`) and `ConnectionMessage` are
+  not asserted, as the recon said. MSVC now compiles these asserts too (a WINDOWS-DEBT row, medium): a
+  pack(1) layout that differed there fails the Windows build loudly, which is the point.
+
+**`#pragma comment`.** All 6 are under `_DEBUG`/`_INTERNAL` (GameMemory ×4, StackDump, W3DGranny),
+so there is no Release link dependency to make explicit.
