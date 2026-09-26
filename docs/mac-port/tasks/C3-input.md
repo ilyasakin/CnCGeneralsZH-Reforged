@@ -73,6 +73,47 @@ W3DGameClient off Windows, so that is where the platform choice goes.
    - Every table entry, text with non-ASCII and surrogates, and the mouse, each with an armed control.
    - The `.ANI` decoder against an independent ICO/BMP parse of every install file (read-only, rule 9).
 
+## C3a, 2026-09-26 (-47): what landed and what shows it
+
+- **Files:**
+  - `SdlDevice/GameClient/`: `SdlKeyTable`, `SdlKeyboard`, `SdlMouse`, `SdlInput` (dispatch, hints and the
+    IME hooks) and `AniCursor`.
+  - `GameClient/IMEManagerPosix.{h,cpp}`: the IME manager.
+  - `Platform/DoubleClickTime.h`: the macOS body.
+  - One line in -18's pump: `default: SdlInput_dispatch( event );`.
+- **Refinement to the approved design:** the engine draws the composition (`SDL_HINT_IME_IMPLEMENTED_UI`
+  set to "composition"), because W3DTextEntry already draws `getCompositionString` inline, as on Windows.
+  The platform draws only the candidate list.
+- **Focus:** WndProc's `WM_ACTIVATEAPP` told `Win32Mouse` it had lost the focus and put the cursor back
+  when it returned. SdlMouse reads the window's focus flag each frame instead, so -18's focus cases stay
+  as they are.
+- **Double-click time:** read from `NSEvent.doubleClickInterval` through `dlsym`'d ObjC runtime calls. So
+  gameengine links nothing new. A process without AppKit gets 500.
+- **`test_sdl_input`** (20 tests, 1,907 checks):
+  - DIKeyCodes.h, read as text: 107 codes, 105 reached from 106 scancodes, 2 unreachable with reasons.
+  - Every table entry goes through dispatch into the engine's key state, down and up.
+  - Modifiers, repeats dropped, caps, and the full queue.
+  - Text: "Abğüş€😀" arrives as its exact UTF-16 units; control characters are dropped. Enter and keypad
+    Enter send '\r' (armed: SDL's text never carries one). Composition and its cursor are counted in
+    code points and turned into UTF-16 units.
+  - Mouse: scaling and clamping, the button states, the click-count double click (1..4), X1 ignored,
+    the wheel with its carried fraction and natural scrolling left alone, the full ring, and the
+    confinement truth table.
+  - The double-click time against `defaults read -g com.apple.mouse.doubleClickThreshold`.
+  - All 52 install `.ANI` files are byte-identical to the test's own parse (296 frames, 325 steps, no
+    screen-inverting pixels), and all 52 became SDL cursors.
+- **Red on six mutations:** repeats forwarded, no Enter, every click after the first a double, control
+  characters kept, A mapped to S, and the wheel's fraction dropped.
+- **Found on the way:** the Steam install's exFAT volume holds a macOS `._X.ani` AppleDouble file beside
+  each cursor. The game opens cursors by name and never sees them; a directory listing does.
+- **Cannot see:**
+  - Real keyboards: JIS and ISO layouts, the Help key.
+  - A real input method session.
+  - macOS shortcuts taking keys first.
+  - The double-click value itself varying: the machine's setting is 500 ms, the same as the fallback.
+    The test shows only that NSEvent's class is present and asked.
+  - Edge scrolling and the radar drag in play, which need the game on screen (M4).
+
 ## Done when
 
 A skirmish is playable end to end with keyboard and mouse: select, order, attack-move, force fire,
