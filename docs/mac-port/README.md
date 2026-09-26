@@ -401,6 +401,18 @@ and height golden make the simulation's terrain independent of the render object
 which is worth having whichever class answers. M2's first slice therefore waits on A1 (W3DDevice
 links) as well as on T1.
 
+*Refined 2026-09-26: what `-headless` means off Windows.* On Windows, `-headless` is NOT device-less.
+`W3DDisplay` still creates a real D3D9 device on a hidden 100x100 window, and only drawing is skipped.
+The device-less path is a separate flag, `-nodevice`, which its own comment says "does not survive map
+load yet" (`CommandLine.cpp:1859`). Decided: **POSIX `-headless` creates decision 7's device with no
+window and no GPU**. Its resources are CPU-backed (phase A2), so it needs neither a display nor D4's
+draw. The W3D classes then see a device, exactly as under Windows' `-headless`, which is what
+`replay-check.ps1` runs, so E1 compares like with like. Rejected: making POSIX `-headless` mean
+`-nodevice`, which would put that flag's unfinished map-load path on M2's critical path, and match a
+Windows mode nobody records replays in; and a hidden SDL window with a GPU device, which contradicts
+"headless needs no display" and waits on D4. Consequence: M2's gate is A1 (W3DDevice links) plus A2
+(CPU-backed resources), with no A3.
+
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
 Added 2026-09-22 after two Windows-only breaks in one afternoon, both with the same shape and
