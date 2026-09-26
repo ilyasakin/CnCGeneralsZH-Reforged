@@ -176,5 +176,11 @@ double Sdl_Now_Ms()
 
 void Sdl_Creation_Log(const char *what, double started_ms, double took_ms, const char *detail)
 {
+	const double writing = Sdl_Now_Ms();
 	fprintf(stderr, "PosixDevice9 create: t %10.1f ms  %-9s %8.2f ms  %s\n", started_ms, what, took_ms, detail);
+	const double wrote = Sdl_Now_Ms() - writing;
+	if (wrote > 5.0) {
+		// PERF1's hitch hunt: the log's own write, unbuffered, to wherever stderr goes.
+		fprintf(stderr, "PosixDevice9 create: t %10.1f ms  logwrite  %8.2f ms  (the line above)\n", writing, wrote);
+	}
 }
