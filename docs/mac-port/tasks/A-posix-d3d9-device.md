@@ -605,5 +605,11 @@ Without `-quickstart` the intro movie plays through V1's Bink path.
 
 ![The Zero Hour shell map on Metal, present 900](../a3d-shell-map-metal.png)
 
+**Known gap, deferred with -18:** a partial *writing* `LockRect` of a GPU-owned render target keeps the
+CPU image, and the upload its version bump causes overwrites the GPU's pixels outside the locked rectangle.
+The engine does not lock render targets anywhere known (screenshots and smudges read through
+`GetRenderTargetData` into SYSTEMMEM). If a path turns up, the fix is a hook at the surface or texture
+`LockRect` (which knows its owner) that downloads first.
+
 The skirmish's empty radar is not the renderer's. Its draw callback, `W3DLeftHUDDraw`, is never called
 (lldb), so the question is the fork's HTML control bar and GUI. The PM has given it to -47.
