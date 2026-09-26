@@ -368,6 +368,9 @@ protected:
 	void Capture_Draw(const DrawCall &call, const std::string &signature, unsigned int stride, unsigned int reads,
 		unsigned int sampled_stages, unsigned int target_width, unsigned int target_height);
 	static void Capture_Report();
+	/// The name the engine registered a shader of this device's under (Platform/EngineShaderName.h), or
+	/// empty for one it never named (A3e).
+	static std::string Engine_Name_Of(const void *shader);
 
 	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
 	SdlGpuFrame *Gpu;					///< the SDL3 GPU frame, with a window only

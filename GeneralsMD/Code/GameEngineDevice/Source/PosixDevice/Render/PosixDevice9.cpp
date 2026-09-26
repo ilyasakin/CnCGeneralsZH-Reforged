@@ -21,6 +21,7 @@
 // PosixD3D9Caps.cpp).  See PosixDevice9.h for who owns what and how a device without a window behaves.
 
 #include "PosixDevice9.h"
+#include "Platform/EngineShaderName.h"
 #include "Platform/RendererName.h"
 #include "PosixImageOps.h"
 #include "PosixResources9.h"
@@ -34,6 +35,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <map>
+#include <mutex>
+#include <string>
 #include <vector>
 
 #include <SDL3/SDL.h>
@@ -48,9 +52,23 @@ static void Set_Renderer_Name(const char *driver);
 namespace
 {
 
+/// What every shader the device makes carries besides its tokens: the name the engine registered it under
+/// (Platform/EngineShaderName.h), which is what the draw reads (A3e).  Empty until it is named.
+class PosixShaderName
+{
+public:
+	std::string EngineName;
+};
+
+/// The shaders alive, by the interface pointer the engine holds, so a registration can find the object
+/// it names.  Each shader adds itself when made and leaves when destroyed, so an address the allocator
+/// hands out again never inherits a dead shader's name.
+std::mutex LiveShadersLock;
+std::map<const void *, PosixShaderName *> LiveShaders;
+
 /// A vertex or pixel shader's tokens, up to and including D3D's end token.
 template <class Interface>
-class PosixShader9 : public PosixRefCounted<Interface>
+class PosixShader9 : public PosixRefCounted<Interface>, public PosixShaderName
 {
 public:
 	explicit PosixShader9(const RenderUInt32 *function)
@@ -59,6 +77,13 @@ public:
 		do {
 			Tokens.push_back(*function);
 		} while (*function++ != END_TOKEN);
+		std::lock_guard<std::mutex> hold(LiveShadersLock);
+		LiveShaders[static_cast<Interface *>(this)] = this;
+	}
+	~PosixShader9() override
+	{
+		std::lock_guard<std::mutex> hold(LiveShadersLock);
+		LiveShaders.erase(static_cast<Interface *>(this));
 	}
 	std::vector<RenderUInt32> Tokens;
 };
@@ -757,6 +782,22 @@ RenderResult PosixDevice9::SetFVF(RenderUInt32 fvf)
 {
 	FVF = fvf;
 	return D3D_OK;
+}
+
+void PosixDevice_Name_Shader(const void *shader, const char *name)
+{
+	std::lock_guard<std::mutex> hold(LiveShadersLock);
+	std::map<const void *, PosixShaderName *>::iterator found = LiveShaders.find(shader);
+	if (found != LiveShaders.end() && name != NULL) {
+		found->second->EngineName = name;
+	}
+}
+
+std::string PosixDevice9::Engine_Name_Of(const void *shader)
+{
+	std::lock_guard<std::mutex> hold(LiveShadersLock);
+	std::map<const void *, PosixShaderName *>::const_iterator found = LiveShaders.find(shader);
+	return found != LiveShaders.end() ? found->second->EngineName : std::string();
 }
 
 RenderResult PosixDevice9::CreateVertexShader(const RenderUInt32 *function, IDirect3DVertexShader9 **shader)
