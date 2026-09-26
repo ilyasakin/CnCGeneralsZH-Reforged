@@ -792,10 +792,22 @@ void	Render2DTextClass::Draw_Char( WideChar ch, unsigned long color )
 void	Render2DTextClass::Draw_Text( const char * text, unsigned long color )
 {
 	WWMEMLOG(MEM_GEOMETRY);
+#if defined(_WIN32)
 	WideStringClass wide(0,true);
 	wide.Convert_From( text );
-	//	WideStringClass holds WCHAR, which is WideChar's two bytes on Windows - the only build that compiles WW3D2.
+	//	WideStringClass holds WCHAR, which is WideChar's two bytes on Windows.
 	Draw_Text( reinterpret_cast<const WideChar *>( wide.Peek_Buffer() ), color );
+#else
+	// WideStringClass converts through the Windows code page, which exists only there.  Each byte is
+	// widened as it stands instead, as UnicodeString::translate does: the same text for ASCII and for
+	// Latin-1, and different from Windows-1252 only for 0x80-0x9F (curly quotes, the euro sign).
+	DynamicVectorClass<WideChar> wide;
+	for (const char *p = text; *p != 0; ++p) {
+		wide.Add( (WideChar)(unsigned char)*p );
+	}
+	wide.Add( 0 );
+	Draw_Text( &wide[0], color );
+#endif
 }
 
 void	Render2DTextClass::Draw_Text( const WideChar * text, unsigned long color )

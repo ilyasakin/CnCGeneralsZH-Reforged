@@ -40,6 +40,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "dx8fvf.h"
+#include "bittype.h"		// uint32
 #include "wwstring.h"
 #include "d3dx9runtime.h"
 

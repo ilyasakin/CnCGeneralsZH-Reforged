@@ -90,7 +90,9 @@
 #include "camera.h"
 #include "scene.h"
 #include "texfcach.h"
+#if defined(_WIN32)
 #include "registry.h"
+#endif
 #include "segline.h"
 #include "shader.h"
 #include "vertmaterial.h"
@@ -678,6 +680,7 @@ void WW3D::Get_Device_Resolution(int & set_w,int & set_h,int & set_bits,bool & s
 }
 
 
+#if defined(_WIN32)	// the registry: Windows only
 /***********************************************************************************************
  * WW3D::Registry_Save_Render_Device -- Saves settings to Registry
  *                                                                                             *
@@ -750,6 +753,7 @@ bool WW3D::Registry_Load_Render_Device( const char * sub_key, char *device, int 
 {
 	return DX8Wrapper::Registry_Load_Render_Device(sub_key,device,device_len,width,height,depth,windowed,texture_depth);
 }
+#endif // _WIN32
 
 void WW3D::_Invalidate_Mesh_Cache()
 {
