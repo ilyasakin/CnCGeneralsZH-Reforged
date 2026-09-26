@@ -1155,11 +1155,14 @@ fixed-function draw of that shape is wrong there. Windows' trees escape only bec
 - The harness's new scenario, stage-1 texgen beside stage 0's set 0, fails without the fix and matches
   FFReference with it.
 
-**Direct3D 9 has it too, next commit.** -47 read the pages: with the fixed-function vertex pipeline
-feeding ps_1_1-1_3 or ps_2_0, texture register *tN* holds stage *N*'s processed coordinates, not set
-*k*'s. The citation is a chain, not one sentence: the ps_1_x registers page, `D3DTSS_TEXCOORDINDEX`,
-and shader model 3 making `TEXCOORDINDEX` ignored only from ps_3_0. So D3D9's always-on combiner shaders
-read the wrong register the same way. `WINDOWS-DEBT.md` has the row.
+**Direct3D 9 does not have it, by measurement.** Its combiner programs sit behind D3D9's own
+fixed-function vertex pipeline, whose register numbering was measured in bfb60e17 against a
+fixed-function frame. Reading the stage's own register instead of the set's took Flash Effect at frame
+400 from 0.25% to 0.81%, so D3D9 numbers by set. The shipping shroud agrees: stage 1 generates its
+coordinates and has been drawn through those programs, and it would sample stage 0's UVs if D3D9
+numbered by stage. -47's reading of the pages pointed toward stage, but by inference, not a quoted
+sentence. A commit following it (c6e52558) was reverted after -18's second read, and the D3D9 profile
+reads the set's register as before. The comment on `stage_register` records both. `WINDOWS-DEBT.md` has the row.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
