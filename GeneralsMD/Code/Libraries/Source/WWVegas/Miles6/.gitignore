@@ -12,6 +12,8 @@
 !include/Mss.h
 !include/MSS/
 !include/MSS/MSS.h
+# mss_ex_pcm.h: miniaudio's pushed-PCM voice for the movies (V1), declared beside it.
+!include/MSS/mss_ex_pcm.h
 !xaudio2/
 !xaudio2/miles_xaudio2.cpp
 !miniaudio/

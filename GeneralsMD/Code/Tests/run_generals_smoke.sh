@@ -6,8 +6,8 @@
 # SdlGameEngine starts GameEngine::init, which mounts no archives and stops, as generals.exe does on
 # Windows, with the "no base game" message and exit code 1.
 #
-# What it cannot see: anything past the archive check, which needs the game's data (and, past
-# createFunctionLexicon, T1 and D4).  Usage: run_generals_smoke.sh <generals>
+# What it cannot see: anything past the archive check, which needs the game's data; a run with the
+# data is E1's harness's.  Usage: run_generals_smoke.sh <generals>
 set -u
 GENERALS="$1"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/generals_smoke.XXXXXX")

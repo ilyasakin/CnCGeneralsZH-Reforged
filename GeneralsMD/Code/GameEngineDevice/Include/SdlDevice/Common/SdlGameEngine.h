@@ -25,12 +25,15 @@
 //     as WM_CLOSE and WM_ACTIVATEAPP are;
 //   - the window's title, through GameText's hook (GameClient/ApplicationWindowTitle.h);
 //   - the displays, as Monitors.h's table (SdlDisplays.h), while SDL's video is up;
-//   - MessageBoxWrapper's box, as SDL_ShowMessageBox over the window (SdlMessageBox.h).
-// Nothing draws into the window yet: the renderer is D4's.
+//   - MessageBoxWrapper's box, as SDL_ShowMessageBox over the window (SdlMessageBox.h);
+//   - W3DDevice's window calls, through its hooks (W3DWindowHooks.h): a change of window mode or
+//     resolution restyles, resizes and places the SDL window as W3DDisplay does ApplicationHWnd on
+//     Windows, and ApplicationHWnd itself is the SDL window.
+// Nothing draws into the window until A3; the device is decision 7's, made with no window under
+// -headless (decision 8, refined).
 //
-// The factories Windows answers with W3DDevice classes cannot be answered here yet, and each stops the
-// game with a message that names what it waits for rather than hand back something that is not the
-// game (PosixGameEngine.h says why for the logic and the module factory).  Audio is the exception:
+// The factories are Win32GameEngine's, the same W3D classes (decision 8), W3DGameClient's Bink video
+// player included since V1.  Audio is
 // MilesAudioManager, over the Miles surface on miniaudio (C4).
 
 #pragma once

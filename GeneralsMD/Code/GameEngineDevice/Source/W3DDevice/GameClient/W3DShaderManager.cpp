@@ -3394,6 +3394,13 @@ RenderResult W3DShaderManager::LoadAndCreateD3DVertexShader(const char* strFileP
 #define MIN_ACCEPTED_TEXTURE_MEMORY	(1024*1024*30)	//30 MB
 
 /**Hack to give gameengine access to this function*/
+#if defined(CPUDETECT_UNMEASURED_PROCESSOR_MHZ)
+/* The speed reported for a CPU cpudetect cannot time: 3049 is the fastest processor GameLODPresets.ini
+	 names (BenchProfile = P4 3049), so it meets every BenchProfile and LODPreset the shipped file has and
+	 is far above its ReallyLowMHz (600).  test_render_hooks checks that against the game's own file. */
+enum { UNMEASURED_CPU_REPORTED_MHZ = 3049 };
+#endif
+
 Bool testMinimumRequirements(ChipsetType *videoChipType, CpuType *cpuType, Int *cpuFreq, Int *numRAM, Real *intBenchIndex, Real *floatBenchIndex, Real *memBenchIndex)
 {
 	return W3DShaderManager::testMinimumRequirements(videoChipType,cpuType,cpuFreq,numRAM,intBenchIndex,floatBenchIndex,memBenchIndex);
@@ -3424,7 +3431,17 @@ Bool W3DShaderManager::testMinimumRequirements(ChipsetType *videoChipType, CpuTy
 	}
 
 	if (cpuFreq)
+	{
 		*cpuFreq=CPUDetectClass::Get_Processor_Speed();
+#if defined(CPUDETECT_UNMEASURED_PROCESSOR_MHZ)
+		// Decision 2 (B19, option (c)): a CPU cpudetect cannot time, as every arm64 one is, is treated
+		// as fast.  A first launch adopts a benchmark profile's speed and a later one takes this, and at
+		// cpudetect's honest 0 the later launch turned the shell map off where the first had left it on.
+		// cpudetect defines the macro only where it cannot time the CPU, so Windows on x86 never gets here.
+		if (*cpuFreq == CPUDETECT_UNMEASURED_PROCESSOR_MHZ)
+			*cpuFreq = UNMEASURED_CPU_REPORTED_MHZ;
+#endif
+	}
 
 	if (numRAM)
 		*numRAM=CPUDetectClass::Get_Total_Physical_Memory();
