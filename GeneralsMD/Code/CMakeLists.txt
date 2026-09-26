@@ -1038,6 +1038,16 @@ set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
 if(ZH_GAME_DATA)
   set_tests_properties(gametext_csf PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
 endif()
+
+# The replay header's wide strings as byte calls, sharing a stream with fwrite and fread (C1, PR (g)).
+# See Tests/test_widechar_file.cpp.
+add_executable(widechar_file_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_file.cpp
+  ${ZH_WIDECHAR_TEST_SUPPORT})
+target_include_directories(widechar_file_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+target_compile_definitions(widechar_file_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(widechar_file_selfcheck PROPERTIES CXX_STANDARD 17)
+target_link_libraries(widechar_file_selfcheck PRIVATE test_harness)
+add_test(NAME widechar_file_selfcheck COMMAND widechar_file_selfcheck)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   zh_widechar_gate(widechar_crc_gate_msvc_model)
   target_compile_options(widechar_crc_gate_msvc_model PRIVATE -fshort-wchar)
