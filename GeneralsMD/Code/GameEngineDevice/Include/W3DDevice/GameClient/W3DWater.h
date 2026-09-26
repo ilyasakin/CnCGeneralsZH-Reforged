@@ -40,6 +40,7 @@
 #include "Lib/BaseType.h"
 #include "Common/GameType.h"
 #include "Common/Snapshot.h"
+#include "GameLogic/WaterGridMotion.h"
 #include "Platform/RenderTypes.h"
 
 #define INVALID_WATER_HEIGHT 0.0f	///water height guaranteed to be below all terrain.
@@ -105,6 +106,7 @@ public:
 	void reset( void );  ///< reset any resources we need to
 	void load(void);	///< load/setup any map dependent features
 	void update( void ); ///< update phase of the water
+	void updateMeshMotion( UnsignedInt logicFrame );	///< the grid's motion, once per logic frame (WaterGridMotion.h)
 	void enableWaterGrid(Bool state);	///< used to active custom water for special maps. (i.e DAM).
 	void updateMapOverrides(void);	///< used to update any map specific map overrides for water appearance.
 	void setTimeOfDay(TimeOfDay tod); ///<change sky/water for time of day
@@ -186,15 +188,9 @@ protected:
 	enum WaterMeshStatus
 	{
 		AT_REST = 0x00,
-		IN_MOTION = 0x01
+		IN_MOTION = WaterGridMotion::IN_MOTION	///< 0x01, as it always was
 	};
-	struct WaterMeshData
-	{
-		Real height;										///< height of the 3D mesh at this point
-		Real velocity;									///< velocity in Z that this point is moving up and down
-		UnsignedByte status;						///< status for this grid point
-		UnsignedByte preferredHeight;		///< the hight we prefer to be
-	};
+	typedef WaterGridMotion::MeshPoint WaterMeshData;	///< moved, unchanged, with the step that moves it (T1c)
 	WaterMeshData *m_meshData;  ///< heightmap data for 3D Mesh based water.
 	UnsignedInt m_meshDataSize;	///< size of m_meshData 
 	Bool m_meshInMotion;				///< TRUE once we've messed with velocities and are in motion
