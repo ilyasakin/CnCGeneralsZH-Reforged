@@ -1605,6 +1605,17 @@ set_target_properties(test_userfolders PROPERTIES CXX_STANDARD 17)
 target_link_libraries(test_userfolders PRIVATE test_harness wwlib wwdebug)
 add_test(NAME test_userfolders COMMAND test_userfolders)
 
+# EarlyCommandLine.h off Windows: the options read before the parser exists, from the process's own
+# argv, before main and after (C2).  The arguments are the test's input; see the test file.
+add_executable(test_early_command_line ${TESTS}/test_early_command_line.cpp)
+target_include_directories(test_early_command_line PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+target_compile_definitions(test_early_command_line PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(test_early_command_line PROPERTIES CXX_STANDARD 17)
+target_link_libraries(test_early_command_line PRIVATE test_harness wwlib wwdebug)
+# test_harness takes the first argument as its name filter; the options follow it.
+add_test(NAME test_early_command_line COMMAND test_early_command_line early_command_line
+  -logPrefix pre -headless -root "/tmp/zh_ä" -jobthreads 3 -last)
+
 # The BIG archive reader on POSIX, against the real game data under rule 9 (C1 (f)): every path's
 # owning archive against an independent reading of the mount order, and the bytes of a sample against
 # an independent parser.  Built from the real sources, as test_posixlocalfilesystem is.  Needs
