@@ -162,7 +162,17 @@ public:
 	/// serialized run is a measurement, not a frame rate).  Take_Timing hands over, and zeroes, what was
 	/// spent since the last call: in mid-frame flushes, the fence waits, and how many flushes there were.
 	void Serialize_Submits(bool serialize) { SerializeSubmits = serialize; }
-	void Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms);
+	void Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms,
+		double & offscreen_ms);
+
+	/// -offscreen, the game with no window: Present draws the gamma pass into a display texture of the back
+	/// buffer's size, as it would into a swapchain's, and keeps at most two frames on the GPU, which a
+	/// swapchain otherwise does (SDL frees what a submit left only as the GPU finishes it; a loop that
+	/// never waits runs ahead without bound).  With hz, the frames are paced at hz a second, each on the
+	/// next tick as vsync would put it.  Both waits add up in offscreen_ms, not acquire_ms.  The tests'
+	/// offscreen frames never ask for this: their Present stays a flush and a copy to the front.
+	void Set_Offscreen_Presents(unsigned int hz);
+	bool Offscreen_Presents() const { return OffscreenPresents; }
 
 	/// Present into a texture of the caller's, of Target_Format(), instead of the window: the test's
 	/// window.  The back buffer's size must be the target's.
@@ -192,6 +202,14 @@ private:
 	double FenceMs;
 	unsigned int Flushes;
 	double AcquireMs;		///< waiting in SDL_WaitAndAcquireGPUSwapchainTexture: the display's pacing, not work
+	double OffscreenMs;		///< -offscreen's waits: frames in flight, and the pacer
+	bool OffscreenPresents;
+	unsigned int OffscreenHz;
+	SDL_GPUTexture * DisplayTexture;	///< -offscreen's stand-in for the swapchain's texture
+	struct SDL_GPUFence * InFlight[2];
+	unsigned int InFlightNext;
+	uint64_t NextTickNs;
+	bool Submit_Offscreen(struct SDL_GPUCommandBuffer * commands);
 
 	SdlGpuFrame();
 	bool Create_Targets(unsigned int width, unsigned int height);

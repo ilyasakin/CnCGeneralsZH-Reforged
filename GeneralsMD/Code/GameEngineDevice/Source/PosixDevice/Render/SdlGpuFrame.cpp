@@ -90,6 +90,12 @@ SdlGpuFrame::SdlGpuFrame() :
 	FenceMs(0.0),
 	Flushes(0),
 	AcquireMs(0.0),
+	OffscreenMs(0.0),
+	OffscreenPresents(false),
+	OffscreenHz(0),
+	DisplayTexture(NULL),
+	InFlightNext(0),
+	NextTickNs(0),
 	GpuDevice(NULL),
 	Window(NULL),
 	BackBuffer(NULL),
@@ -114,6 +120,7 @@ SdlGpuFrame::SdlGpuFrame() :
 {
 	LastConstants[0] = LastConstants[1] = LastConstantsSize[0] = LastConstantsSize[1] = 0;
 	memset(ClearPipelines, 0, sizeof(ClearPipelines));
+	InFlight[0] = InFlight[1] = NULL;
 	memset(&CurrentTarget, 0, sizeof(CurrentTarget));
 	TargetSet = false;
 }
@@ -153,6 +160,12 @@ SdlGpuFrame::~SdlGpuFrame()
 {
 	if (GpuDevice == NULL) {
 		return;
+	}
+	for (int i = 0; i < 2; ++i) {
+		if (InFlight[i] != NULL) {
+			SDL_WaitForGPUFences(GpuDevice, true, &InFlight[i], 1);
+			SDL_ReleaseGPUFence(GpuDevice, InFlight[i]);
+		}
 	}
 	Release_Targets();
 	Commands.clear();
@@ -199,9 +212,11 @@ void SdlGpuFrame::Release_Targets()
 	if (BackBuffer != NULL) SDL_ReleaseGPUTexture(GpuDevice, BackBuffer);
 	if (DepthStencil != NULL) SDL_ReleaseGPUTexture(GpuDevice, DepthStencil);
 	if (FrontCopy != NULL) SDL_ReleaseGPUTexture(GpuDevice, FrontCopy);
+	if (DisplayTexture != NULL) SDL_ReleaseGPUTexture(GpuDevice, DisplayTexture);
 	BackBuffer = NULL;
 	DepthStencil = NULL;
 	FrontCopy = NULL;
+	DisplayTexture = NULL;		// made again at the new size by the next offscreen Present
 }
 
 bool SdlGpuFrame::Resize(unsigned int width, unsigned int height)
@@ -263,12 +278,57 @@ bool SdlGpuFrame::Submit(SDL_GPUCommandBuffer * commands)
 	return waited;
 }
 
-void SdlGpuFrame::Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms)
+void SdlGpuFrame::Set_Offscreen_Presents(unsigned int hz)
+{
+	OffscreenPresents = true;
+	OffscreenHz = hz;
+}
+
+// -offscreen's submit: a fence for this frame, a wait for the one two frames back, then the pacer.
+bool SdlGpuFrame::Submit_Offscreen(SDL_GPUCommandBuffer * commands)
+{
+	if (SerializeSubmits) {
+		return Submit(commands);		// ZH_GPU_TIMING_SYNC: every submit waits for its fence already
+	}
+	SDL_GPUFence * fence = SDL_SubmitGPUCommandBufferAndAcquireFence(commands);
+	if (fence == NULL) {
+		return false;
+	}
+	const Uint64 start = SDL_GetTicksNS();
+	SDL_GPUFence *& oldest = InFlight[InFlightNext];
+	if (oldest != NULL) {
+		SDL_WaitForGPUFences(GpuDevice, true, &oldest, 1);
+		SDL_ReleaseGPUFence(GpuDevice, oldest);
+	}
+	oldest = fence;
+	InFlightNext = (InFlightNext + 1) % 2;
+	if (OffscreenHz > 0) {
+		// The next tick after the last one, as vsync puts a frame on the next refresh: a late frame waits
+		// for the tick after, and the ticks keep their phase.
+		const Uint64 period = 1000000000ull / OffscreenHz;
+		const Uint64 now = SDL_GetTicksNS();
+		if (NextTickNs == 0) {
+			NextTickNs = now;
+		}
+		NextTickNs += period;
+		if (NextTickNs < now) {
+			NextTickNs += ((now - NextTickNs) / period + 1) * period;
+		}
+		SDL_DelayPrecise(NextTickNs - now);
+	}
+	OffscreenMs += (double)(SDL_GetTicksNS() - start) / 1.0e6;
+	return true;
+}
+
+void SdlGpuFrame::Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms,
+	double & offscreen_ms)
 {
 	flush_ms = FlushMs;
 	fence_ms = FenceMs;
 	flushes = Flushes;
 	acquire_ms = AcquireMs;
+	offscreen_ms = OffscreenMs;
+	OffscreenMs = 0.0;
 	FlushMs = 0.0;
 	FenceMs = 0.0;
 	Flushes = 0;
@@ -469,6 +529,26 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 			ok = Present_Into(commands, swapchain, width, height, SDL_GetGPUSwapchainTextureFormat(GpuDevice, Window), ramp)
 				&& ok;
 		}
+	} else if (OffscreenPresents) {
+		if (DisplayTexture == NULL) {
+			SDL_GPUTextureCreateInfo info;
+			SDL_zero(info);
+			info.type = SDL_GPU_TEXTURETYPE_2D;
+			info.format = BACK_BUFFER_FORMAT;
+			info.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+			info.width = BackWidth;
+			info.height = BackHeight;
+			info.layer_count_or_depth = 1;
+			info.num_levels = 1;
+			info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+			DisplayTexture = SDL_CreateGPUTexture(GpuDevice, &info);
+		}
+		if (DisplayTexture != NULL) {
+			ok = Present_Into(commands, DisplayTexture, BackWidth, BackHeight, BACK_BUFFER_FORMAT, ramp) && ok;
+		}
+		const bool submitted = Submit_Offscreen(commands);
+		End_Batch();
+		return submitted && ok && DisplayTexture != NULL;
 	}
 	const bool submitted = Submit(commands);
 	End_Batch();
