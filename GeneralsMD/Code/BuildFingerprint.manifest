@@ -2691,6 +2691,7 @@ Tests/test_premain_strings.cpp
 Tests/test_production_input.inc
 Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
+Tests/test_road_buffer.cpp
 Tests/test_sdl_gpu_frame.cpp
 Tests/test_sdl_input.cpp
 Tests/test_sdl_pipeline_state.cpp
