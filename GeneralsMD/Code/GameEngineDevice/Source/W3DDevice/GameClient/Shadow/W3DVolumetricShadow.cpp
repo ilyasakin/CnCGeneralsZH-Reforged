@@ -67,6 +67,7 @@
 #include "WW3D2/dx11runtime.h"
 #include "WW3D2/sortingrenderer.h"
 #include "GameClient/View.h"
+#include "Platform/RenderTypes.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -143,7 +144,7 @@ struct SHADOW_STATIC_VOLUME_VERTEX	//vertex structure passed to D3D
 	struct SHADOW_DYNAMIC_VOLUME_VERTEX	//vertex structure passed to D3D
 	{
 			float x,y,z;
-			DWORD diffuse;
+			UnsignedInt diffuse;
 	}; 
 	#define SHADOW_DYNAMIC_VOLUME_FVF	D3DFVF_XYZ|D3DFVF_DIFFUSE
 #else
@@ -3757,7 +3758,7 @@ void W3DVolumetricShadowManager::renderStencilShadows( void )
 
 	struct _TRANSLITVERTEX {
 	    D3DXVECTOR4 p;
-		DWORD color;   // diffuse color    
+		UnsignedInt color;   // diffuse color    
 	} v[4];
 
 	Int xpos, ypos, width, height;
@@ -4053,7 +4054,7 @@ void W3DVolumetricShadowManager::renderShadows( Bool forceStencilFill )
 		DX8Wrapper::Set_DX8_Texture(0,NULL);
 		DX8Wrapper::Set_DX8_Texture(1,NULL);
 
-		DWORD oldColorWriteEnable=0x12345678;
+		RenderUInt32 oldColorWriteEnable=0x12345678;
 
 	#ifdef SV_DEBUG
 		DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHABLENDENABLE , TRUE);
@@ -4352,7 +4353,7 @@ Bool W3DVolumetricShadowManager::ReAcquireResources(void)
 
 	DEBUG_ASSERTCRASH(m_pDev, ("Trying to ReAquireResources on W3DVolumetricShadowManager without device"));
 
-	if (FAILED(m_pDev->CreateIndexBuffer
+	if (Render_Failed(m_pDev->CreateIndexBuffer
 	(
 		SHADOW_INDEX_SIZE*sizeof(WORD), 
 		D3DUSAGE_WRITEONLY|D3DUSAGE_DYNAMIC, 
@@ -4368,7 +4369,7 @@ Bool W3DVolumetricShadowManager::ReAcquireResources(void)
 	if (shadowVertexBufferD3D == NULL)
 	{	// Create vertex buffer
 
-		if (FAILED(m_pDev->CreateVertexBuffer
+		if (Render_Failed(m_pDev->CreateVertexBuffer
 		(
 			SHADOW_VERTEX_SIZE*sizeof(SHADOW_DYNAMIC_VOLUME_VERTEX),
 			D3DUSAGE_WRITEONLY|D3DUSAGE_DYNAMIC, 

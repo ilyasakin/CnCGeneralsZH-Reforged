@@ -730,10 +730,10 @@ void CameraClass::Apply(void)
 	WW3D::Get_Render_Target_Resolution(width,height,bits,windowed);
 	
 	D3DVIEWPORT9 vp;
-	vp.X = (DWORD)(Viewport.Min.X * (float)width);
-	vp.Y = (DWORD)(Viewport.Min.Y * (float)height);
-	vp.Width = (DWORD)((Viewport.Max.X - Viewport.Min.X) * (float)width);
-	vp.Height = (DWORD)((Viewport.Max.Y - Viewport.Min.Y) * (float)height);
+	vp.X = (uint32)(Viewport.Min.X * (float)width);
+	vp.Y = (uint32)(Viewport.Min.Y * (float)height);
+	vp.Width = (uint32)((Viewport.Max.X - Viewport.Min.X) * (float)width);
+	vp.Height = (uint32)((Viewport.Max.Y - Viewport.Min.Y) * (float)height);
 	vp.MinZ = ZBufferMin;
 	vp.MaxZ = ZBufferMax;
 	DX8Wrapper::Set_Viewport(&vp);

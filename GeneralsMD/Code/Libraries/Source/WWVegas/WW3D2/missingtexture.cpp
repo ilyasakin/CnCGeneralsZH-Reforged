@@ -84,7 +84,7 @@ void MissingTexture::_Init()
 		return;
 
 	D3DLOCKED_RECT locked_rect;
-	RECT rect;
+	RenderRect rect;
 	rect.left=0;
 	rect.right=missing_image_width;
 	rect.top=0;

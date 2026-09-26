@@ -51,7 +51,7 @@
 
 Random4Class rand4;
 
-inline DWORD F2DW( FLOAT f ) { return *((DWORD*)&f); }
+inline uint32 F2DW( float f ) { return *((uint32*)&f); }
 
 
 // HY 1/26/01
