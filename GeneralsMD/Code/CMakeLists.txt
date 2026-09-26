@@ -1689,6 +1689,16 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # L1's POSIX harness on itself: two headless copies on this machine play one seeded LAN match over
+  # 127.0.0.1 and a second local address, agree to frame 1800, and each replay plays back to it; a
+  # second copy on another seed is reported FAILED.  One machine, one compiler: see the script.  Skipped
+  # without game data, without a second address, or with the macOS application firewall on.
+  add_test(NAME net_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_net_check.sh $<TARGET_FILE:generals>)
+  set_tests_properties(net_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
+  if(ZH_GAME_DATA)
+    set_tests_properties(net_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # P1 step 3: the staged overlay, <build>/overlay - what the app bundle will copy verbatim and what the
   # harnesses pass with -overlay - and <build>/overlay-dev, the -scenario and -cinema folders that never
   # ship.  Tools/stage-overlay.sh is the one place the list lives.  Small (10 MB; the art is linked).
@@ -2174,6 +2184,10 @@ add_lib_test(test_ffreference ffreference)
 add_lib_test(test_ffprogram ffreference)
 # its assembler test reads the water's ps.1.1 text from the game's own source, so it cannot drift
 target_compile_definitions(test_ffprogram PRIVATE ZH_CODE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+# The engine's own D3D8 declarations in capture v3 against the device's D3D9 elements.  A tool, not a
+# test: captures are made on demand (ZH_GPU_CAPTURE) and never committed.  ffdecl_captures <dir>...
+add_executable(ffdecl_captures ${TESTS}/ffreference/ffdecl_captures.cpp)
+target_link_libraries(ffdecl_captures PRIVATE ffreference)
 if(ZH_GAME_DATA)
   set_tests_properties(test_ffprogram PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
 endif()
@@ -2368,7 +2382,7 @@ if(ZH_PLATFORM_POSIX)
 
   # The tests that build a farm of the install (a folder of links into it) never run at the same time:
   # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
-  foreach(_zh_test replay_check overlay_crc_check packaging_resolution_check root_readonly_check
+  foreach(_zh_test replay_check net_check overlay_crc_check packaging_resolution_check root_readonly_check
                    lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager)
     if(TEST ${_zh_test})
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
