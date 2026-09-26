@@ -1162,7 +1162,11 @@ if(ZH_PLATFORM_POSIX)
   add_library(d3dx9runtime STATIC
     ${WW}/WW3D2/d3dx9posix.cpp ${WW}/WW3D2/d3dx9posix_texture.cpp ${WW}/WW3D2/d3d8shadertranslate.cpp)
   set_target_properties(d3dx9runtime PROPERTIES CXX_STANDARD 17)
-  target_include_directories(d3dx9runtime PUBLIC ${WW}/WW3D2 ${ZH_POSIX_D3D9_INCLUDE})
+  target_include_directories(d3dx9runtime PUBLIC ${WW}/WW3D2 ${ZH_POSIX_D3D9_INCLUDE}
+    # The texture helpers are CPU work over the device's own images (a contributor's PosixImageOps), so they see
+    # the device's headers - privately: nothing else outside the device does.
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(d3dx9runtime PRIVATE posixd3d9)
 
   # The matrix functions and the FVF size against independent answers, and the binding's contract;
   # the header says what it does not prove.
