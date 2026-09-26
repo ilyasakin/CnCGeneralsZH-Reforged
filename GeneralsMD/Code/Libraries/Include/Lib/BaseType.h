@@ -345,8 +345,8 @@ __forceinline float fast_float_ceil(float f)
 #define INT_TO_REAL(x)						((Real) (x))
 
 // once we've ceiled/floored, trunc and round are identical, and currently, round is faster... (srj)
-#define REAL_TO_INT_CEIL(x)				(fast_float2long_round(fast_float_ceil(x)))
-#define REAL_TO_INT_FLOOR(x)			(fast_float2long_round(fast_float_floor(x)))
+#define REAL_TO_INT_CEIL(x)				((Int)fast_float2long_round(fast_float_ceil(x)))
+#define REAL_TO_INT_FLOOR(x)			((Int)fast_float2long_round(fast_float_floor(x)))
 
 #define FAST_REAL_TRUNC(x)        fast_float_trunc(x)
 #define FAST_REAL_CEIL(x)         fast_float_ceil(x)

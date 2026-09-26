@@ -526,5 +526,34 @@ enum Relationship
 // TheRelationShipNames is defined in Common/GameCommon.cpp
 extern const char *TheRelationshipNames[];
 
+// ------------------------------------------------------------------------
+/** strtoul( text, NULL, 10 ) as Windows answers it, where unsigned long is 32 bits: a number past
+	* 0xFFFFFFFF is 0xFFFFFFFF, and a negative one is its magnitude negated modulo 2^32.  A 64-bit
+	* unsigned long keeps the low 32 bits of a big number instead, so text from the network, a replay
+	* or a preferences file ("SC=4294967296") would give another amount off Windows. */
+#if defined(_WIN32)
+inline UnsignedInt strtoulAsWindows( const char *text )
+{
+	return strtoul( text, NULL, 10 );
+}
+#else
+inline UnsignedInt strtoulAsWindows( const char *text )
+{
+	while (*text == ' ' || (*text >= '\t' && *text <= '\r'))
+		++text;
+	Bool negative = FALSE;
+	if (*text == '+' || *text == '-')
+		negative = (*text++ == '-');
+	unsigned long long magnitude = 0;
+	for (; *text >= '0' && *text <= '9'; ++text)
+	{
+		magnitude = magnitude * 10 + (unsigned long long)(*text - '0');
+		if (magnitude > 0xFFFFFFFFull)
+			return 0xFFFFFFFFu;			// out of range, whatever the sign: ULONG_MAX
+	}
+	return negative ? 0u - (UnsignedInt)magnitude : (UnsignedInt)magnitude;
+}
+#endif
+
 #endif // _GAMECOMMON_H_
 
