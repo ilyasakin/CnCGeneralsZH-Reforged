@@ -3401,6 +3401,18 @@ RenderResult W3DShaderManager::LoadAndCreateD3DVertexShader(const char* strFileP
 enum { UNMEASURED_CPU_REPORTED_MHZ = 3049 };
 #endif
 
+#if !defined(_WIN32)
+/* The chipset reported for a device getChipset cannot place: the top of the table (R300), which every
+	 LODPreset any GameLODPresets.ini can name (GameLOD.cpp's VideoNames, XX to R300) meets.  Decision 2,
+	 extended to the GPU: the POSIX device answers no vendor or device ID the table knows, so getChipset
+	 says DC_UNKNOWN, GameLOD presumed a TNT2, and every shipped preset - LOW included - asks for a GF3
+	 or GF4, so a first launch fell to LOW on any Mac.  Only the preset choice sees this value: it is what
+	 testMinimumRequirements hands GameLOD, while the renderer keeps asking getChipset itself.  An
+	 override (-noshaders, GlobalData's ChipsetType) is not DC_UNKNOWN and is reported as it is.
+	 test_render_hooks checks the value against the game's own file. */
+enum { UNKNOWN_CHIPSET_REPORTED = DC_MAX - 1 };
+#endif
+
 Bool testMinimumRequirements(ChipsetType *videoChipType, CpuType *cpuType, Int *cpuFreq, Int *numRAM, Real *intBenchIndex, Real *floatBenchIndex, Real *memBenchIndex)
 {
 	return W3DShaderManager::testMinimumRequirements(videoChipType,cpuType,cpuFreq,numRAM,intBenchIndex,floatBenchIndex,memBenchIndex);
@@ -3409,7 +3421,15 @@ Bool testMinimumRequirements(ChipsetType *videoChipType, CpuType *cpuType, Int *
 Bool W3DShaderManager::testMinimumRequirements(ChipsetType *videoChipType, CpuType *cpuType, Int *cpuFreq, Int *numRAM, Real *intBenchIndex, Real *floatBenchIndex, Real *memBenchIndex)
 {
 	if (videoChipType)
+	{
 		*videoChipType = getChipset();
+#if !defined(_WIN32)
+		// Decision 2 for the GPU: a device the chipset table cannot place counts as meeting every preset.
+		// Windows' D3D9 names its adapter, and keeps the original presumption (GameLOD: a TNT2).
+		if (*videoChipType == DC_UNKNOWN)
+			*videoChipType = (ChipsetType)UNKNOWN_CHIPSET_REPORTED;
+#endif
+	}
 
 	if (cpuType)
 	{

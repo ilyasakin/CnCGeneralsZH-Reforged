@@ -19,24 +19,27 @@
 // The renderer's hooks gameengine calls, as the game links them off Windows: W3DDevice's own, now that
 // w3ddevice builds there (A1), where until C2's wiring PosixDevice had stand-ins.  Above all
 // W3DShaderManager's testMinimumRequirements, which is where decision 2 (B19, option (c)) lives: a CPU
-// cpudetect cannot time is treated as fast when GameLOD chooses the default detail preset.
+// cpudetect cannot time is treated as fast when GameLOD chooses the default detail preset, and (the
+// decision extended to the GPU) so is a device the chipset table cannot place.
 //
 // What it checks:
-//   1. testMinimumRequirements on this machine: an unknown CPU type (XX, so a first launch still runs
-//      the benchmark), a speed that is cpudetect's own when cpudetect measured one and the named fast
-//      figure when it did not, memory, and the benchmark library's indices.
+//   1. testMinimumRequirements on this machine: the top chipset (no device has been made, so getChipset
+//      cannot place one), an unknown CPU type (XX, so a first launch still runs the benchmark), a speed
+//      that is cpudetect's own when cpudetect measured one and the named fast figure when it did not,
+//      memory, and the benchmark library's indices.
 //   2. With ZH_DATA_DIR, against the game's own Data\INI\GameLODPresets.ini out of INIZH.big: that the
 //      speed reported for an unmeasured CPU meets every BenchProfile and every LODPreset the file names
 //      (GameLOD matches at 94% of a preset's MHz) and is above its ReallyLowMHz and GameLOD's default
 //      400 - so a later launch, which takes this speed, no longer turns the shell map off where the
-//      first launch, which took a benchmark profile's, left it on.  Without ZH_DATA_DIR that half says
+//      first launch, which took a benchmark profile's, left it on.  And that the chipset reported for
+//      an unplaced device meets every LODPreset's: before it, every Mac's first launch chose LOW.  Without ZH_DATA_DIR that half says
 //      "skip" and the test still runs the first half.
 //   3. The small hooks: doSkyBoxSet and oversizeTheTerrain run with nothing to act on (no GlobalData,
 //      no terrain render object), and the two DX8Wrapper globals start where dx8wrapper.cpp starts them.
 //
-// WHAT THIS DOES NOT PROVE: that GameLODManager, run for real on a first and a later launch, picks the
-// same preset and the same shell map setting.  That needs the engine (INI, OptionPreferences, the user
-// data directory) and is test_gameengine's to show once it links on macOS (B6).
+// WHAT THIS DOES NOT PROVE: that GameLODManager, run for real, picks the top preset.  That needs the
+// engine; Tools/lod-first-run-check.sh (ctest lod_first_run_check) runs the game's first launch and
+// reads Options.ini.
 
 #include "PreRTS.h"
 #include "Common/GameLOD.h"
@@ -47,6 +50,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <string>
 #include <vector>
 
@@ -106,6 +110,17 @@ static std::string readBigEntry( const std::string &path, const char *entryName 
 	return data;
 }
 
+/** A preset's chipset name as GameLOD.cpp's VideoNames numbers it (ChipsetType), or -1. */
+static int videoIndex( const char *name )
+{
+	static const char *const names[] = { "XX","V2","V3","V4","V5","TNT","TNT2","GF2","R100","PS11","GF3","GF4","PS14","R200","PS20","R300" };
+	static_assert( sizeof( names ) / sizeof( names[0] ) == DC_MAX, "one name per ChipsetType, as VideoNames has" );
+	for (int i = 0; i < (int)( sizeof( names ) / sizeof( names[0] ) ); ++i)
+		if (strcasecmp( name, names[i] ) == 0)
+			return i;
+	return -1;
+}
+
 int main( void )
 {
 	CPUDetectClass::Get_Processor_Speed();	// cpudetect initialises itself on first use
@@ -120,7 +135,7 @@ int main( void )
 	printf( "cpudetect: %s, %d MHz measured; reported: cpu %d, %d MHz, %d bytes, chip %d, bench %g/%g/%g\n",
 		CPUDetectClass::Get_Processor_Manufacturer_Name(), (int)measured, (int)cpu, (int)mhz, (int)ram, (int)chip,
 		(double)intIndex, (double)floatIndex, (double)memIndex );
-	CHECK( chip == DC_UNKNOWN, "chip %d, want DC_UNKNOWN: no device has been made to ask", (int)chip );
+	CHECK( chip == DC_MAX - 1, "chip %d, want %d, the top of the table: no device has been made, so getChipset cannot place one", (int)chip, (int)(DC_MAX - 1) );
 	CHECK( cpu == XX, "cpu type %d, want XX: CPUID is x86 under MSVC only, and XX is what sends a first launch to the benchmark", (int)cpu );
 	if (measured == CPUDETECT_UNMEASURED_PROCESSOR_MHZ)
 		CHECK( mhz > 0, "an unmeasured CPU reported %d MHz: decision 2 says treat it as fast", (int)mhz );
@@ -147,7 +162,7 @@ int main( void )
 	{
 		const std::string ini = readBigEntry( std::string( dir ) + "/zerohour/INIZH.big", "data\\ini\\gamelodpresets.ini" );
 		CHECK( !ini.empty(), "ZH_DATA_DIR is set but INIZH.big holds no Data\\INI\\GameLODPresets.ini" );
-		int presets = 0, profiles = 0, reallyLow = DEFAULT_REALLY_LOW_MHZ, fastest = 0;
+		int presets = 0, profiles = 0, reallyLow = DEFAULT_REALLY_LOW_MHZ, fastest = 0, toughestChip = 0;
 		size_t at = 0;
 		while (at < ini.size())
 		{
@@ -156,8 +171,15 @@ int main( void )
 				end = ini.size();
 			const std::string line = ini.substr( at, end - at );
 			at = end + 1;
-			char level[ 16 ], type[ 8 ];
+			char level[ 16 ], type[ 8 ], video[ 8 ];
 			int value = 0;
+			if (sscanf( line.c_str(), " LODPreset = %15s %7s %d %7s", level, type, &value, video ) == 4)
+			{
+				const int wanted = videoIndex( video );
+				CHECK( wanted > 0 && wanted <= (int)chip, "chipset %d does not meet \"%s\" (%s is %d)", (int)chip, line.c_str(), video, wanted );
+				if (wanted > toughestChip)
+					toughestChip = wanted;
+			}
 			if (sscanf( line.c_str(), " LODPreset = %15s %7s %d", level, type, &value ) == 3 ||
 					sscanf( line.c_str(), " BenchProfile = %7s %d", type, &value ) == 2)
 			{
@@ -171,8 +193,10 @@ int main( void )
 		}
 		CHECK( presets > 0 && profiles > 0, "read %d presets and %d profiles: the file was not what this test expects", presets, profiles );
 		CHECK( mhz >= reallyLow && mhz >= DEFAULT_REALLY_LOW_MHZ, "%d MHz is below ReallyLowMHz %d: a later launch would turn the shell map off", (int)mhz, reallyLow );
+		CHECK( toughestChip > DC_TNT2, "no preset asks for more than a TNT2 (%d): the chipset half proves nothing on this file", toughestChip );
 		printf( "GameLODPresets.ini: %d LODPresets and %d BenchProfiles, the fastest %d MHz, ReallyLowMHz %d; %d MHz meets all of them\n",
 			presets, profiles, fastest, reallyLow, (int)mhz );
+		printf( "GameLODPresets.ini: the toughest chipset asked for is %d; chipset %d meets every preset\n", toughestChip, (int)chip );
 	}
 
 	// 3. The small hooks.
@@ -186,6 +210,6 @@ int main( void )
 		printf( "render_hooks: %d failure(s)\n", failures );
 		return 1;
 	}
-	printf( "render_hooks: an unmeasured CPU is reported fast enough for every shipped preset\n" );
+	printf( "render_hooks: an unmeasured CPU and an unplaced device are reported good enough for every shipped preset\n" );
 	return 0;
 }
