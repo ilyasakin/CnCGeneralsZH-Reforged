@@ -53,7 +53,8 @@ struct TimingState
 	Uint64 FirstPresent;
 	Uint64 LastPresent;
 	bool Reported;
-	std::vector<double> Frame, Work, DrawMs, FlushMs, PresentMs, AcquireMs, FenceMs, Draws, Flushes;
+	std::vector<double> Frame, Work, DrawMs, FlushMs, PresentMs, AcquireMs, OffscreenMs, FenceMs, Draws, Flushes;
+	bool Offscreen;
 };
 
 TimingState &timing_state()
@@ -69,6 +70,7 @@ TimingState &timing_state()
 		state.FirstPresent = 0;
 		state.LastPresent = 0;
 		state.Reported = false;
+		state.Offscreen = false;
 	}
 	return state;
 }
@@ -105,9 +107,10 @@ void PosixDevice9::Timing_Present(double present_ms, unsigned int draws)
 {
 	TimingState &state = timing_state();
 	const Uint64 now = SDL_GetTicksNS();
-	double flush_ms = 0.0, fence_ms = 0.0, acquire_ms = 0.0;
+	double flush_ms = 0.0, fence_ms = 0.0, acquire_ms = 0.0, offscreen_ms = 0.0;
 	unsigned int flushes = 0;
-	Gpu->Take_Timing(flush_ms, fence_ms, flushes, acquire_ms);
+	Gpu->Take_Timing(flush_ms, fence_ms, flushes, acquire_ms, offscreen_ms);
+	state.Offscreen = Gpu->Offscreen_Presents();
 	if (state.FirstPresent == 0) {
 		state.FirstPresent = now;
 	}
@@ -115,8 +118,9 @@ void PosixDevice9::Timing_Present(double present_ms, unsigned int draws)
 	if (measuring && state.LastPresent != 0) {
 		const double frame_ms = (double)(now - state.LastPresent) / 1.0e6;
 		state.Frame.push_back(frame_ms);
-		state.Work.push_back(frame_ms - acquire_ms);
+		state.Work.push_back(frame_ms - acquire_ms - offscreen_ms);
 		state.AcquireMs.push_back(acquire_ms);
+		state.OffscreenMs.push_back(offscreen_ms);
 		state.Draws.push_back((double)draws);
 		state.DrawMs.push_back(TimingDrawMs);
 		state.FlushMs.push_back(flush_ms);
@@ -143,7 +147,13 @@ void PosixDevice9::Timing_Report()
 		state.Sync ? ", SERIALISED (every submit waits for its fence: GPU time, not frame rate)" : "");
 	report("frame", state.Frame, "ms");
 	report("work (no vsync)", state.Work, "ms");
-	report("swapchain wait", state.AcquireMs, "ms");
+	if (state.Offscreen) {
+		// -offscreen: there is no swapchain; its wait is the GPU's two frames in flight and the pacer.
+		fprintf(stderr, "PosixDevice9 timing: OFFSCREEN (no swapchain: no vsync, no drawable; see ZH_OFFSCREEN_HZ)\n");
+		report("offscreen wait", state.OffscreenMs, "ms");
+	} else {
+		report("swapchain wait", state.AcquireMs, "ms");
+	}
 	report("draws", state.Draws, "");
 	report("device draw", state.DrawMs, "ms");
 	report("device flush", state.FlushMs, "ms");
