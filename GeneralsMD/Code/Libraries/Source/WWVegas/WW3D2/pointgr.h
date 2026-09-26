@@ -46,7 +46,7 @@
 #include "vector4.h"
 #include "vector3.h"
 #include "vector2.h"
-#include "vector.h"
+#include "Vector.H"
 #include "matrix4.h"
 #include "dx8fvf.h"
 

@@ -43,7 +43,7 @@
 //			  and alpha.
 //-----------------------------------------------------------------------------
 
-#include "W3DDevice/GameClient/heightmap.h"
+#include "W3DDevice/GameClient/HeightMap.h"
 #include "Lib/Clock.h"
 #include "W3DDevice/GameClient/W3DWaterTracks.h"
 #include "W3DDevice/GameClient/W3DShaderManager.h"
@@ -51,9 +51,9 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/Water.h"
 #include "GameLogic/TerrainLogic.h"
-#include "common/GlobalData.h"
-#include "common/UnicodeString.h"
-#include "Common/File.h"
+#include "Common/GlobalData.h"
+#include "Common/UnicodeString.h"
+#include "Common/file.h"
 #include "Common/FileSystem.h"
 #include "texture.h"
 #include "colmath.h"
@@ -61,7 +61,7 @@
 #include "rinfo.h"
 #include "camera.h"
 #include "assetmgr.h"
-#include "WW3D2/DX8Wrapper.h"
+#include "WW3D2/dx8wrapper.h"
 #include "Platform/RenderTypes.h"
 
 //#pragma optimize("", off)
@@ -82,7 +82,7 @@ WaterTracksRenderSystem *TheWaterTracksRenderSystem=NULL;	///< singleton for tra
 
 static Bool pauseWaves=FALSE;
 
-enum waveType
+enum waveType : int
 {
 	WaveTypeFirst,
 	WaveTypePond=WaveTypeFirst,
@@ -907,7 +907,7 @@ void WaterTracksRenderSystem::update()
 }
 
 
-void TestWaterUpdate(void);
+static void TestWaterUpdate(void);	// static, as its definition is
 void setFPMode( void );
 
 //=============================================================================
@@ -1159,13 +1159,16 @@ void WaterTracksRenderSystem::loadTracks(void)
 Will need to move this code to an external editor at some pont. */
 #include "GameClient/Display.h"
 
+#if defined(_WIN32)
 extern HWND ApplicationHWnd;
+#endif
 
 //TODO: Fix editor so it actually draws the wave segment instead of line while editing
 //Could freeze all the water while editing?  Or keep setting elapsed time on current segment.
 //Have to make it so seamless merge of segments at final position.
 static void TestWaterUpdate(void)
 {
+#if defined(_WIN32)	// a developer's wave editor, polling the Win32 keyboard and cursor directly
 	static Int doInit=1;
 	static WaterTracksObj *track=NULL,*track2=NULL;
 	static Int trackEditMode=0;
@@ -1387,4 +1390,5 @@ static void TestWaterUpdate(void)
 //			OutputDebugString (buffer);
 		}
 	}
+#endif
 }

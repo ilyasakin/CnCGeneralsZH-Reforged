@@ -27,14 +27,14 @@
 // Author: Mark Wilczynski, June 2003
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "Lib/Basetype.h"
+#include "Lib/BaseType.h"
 #include "always.h"
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/W3DShaderManager.h"
 #include "Common/GameMemory.h"
 #include "Common/GlobalData.h"
-#include "GameClient/view.h"
-#include "GameClient/display.h"
+#include "GameClient/View.h"
+#include "GameClient/Display.h"
 #include "WW3D2/texture.h"
 #include "WW3D2/dx8indexbuffer.h"
 #include "WW3D2/dx8wrapper.h"

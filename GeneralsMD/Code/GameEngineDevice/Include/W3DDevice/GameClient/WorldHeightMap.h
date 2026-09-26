@@ -33,10 +33,10 @@
 #define WorldHeightMap_H
 
 #include "Lib/BaseType.h"
-#include "WWLib/RefCount.h"
-#include "WWMath/Vector3.h"
+#include "WWLib/refcount.h"
+#include "WWMath/vector3.h"
 #include "W3DDevice/GameClient/TileData.h"
-#include "../../gameengine/include/common/MapObject.h"
+#include "../../GameEngine/Include/Common/MapObject.h"
 #include "GameLogic/WorldHeightMapData.h"
 
 #include "Common/STLTypedefs.h"
@@ -88,6 +88,9 @@ class OutputStream;
 class DataChunkInput;
 struct DataChunkInfo;
 class AlphaEdgeTextureClass;
+class TerrainTextureClass;		// the friends below name these, which declares them for lookup only on MSVC
+class AlphaTerrainTextureClass;
+class W3DCustomEdging;
 
 #define NUM_ALPHA_TILES 12
 

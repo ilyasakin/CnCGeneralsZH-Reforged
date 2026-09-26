@@ -42,7 +42,7 @@
 #ifndef RDDESC_H
 #define RDDESC_H
 
-#include "vector.h"
+#include "Vector.H"
 #include "wwstring.h"
 #include <d3d9types.h>
 #include <d3d9caps.h>
@@ -67,9 +67,11 @@ class RenderDeviceDescClass
 
 public:
 
-	RenderDeviceDescClass(void) : DeviceName(NULL), DeviceVendor(NULL), DevicePlatform(NULL), 
-											DriverName(NULL), DriverVendor(NULL), DriverVersion(NULL),
-											HardwareName(NULL), HardwareVendor(NULL), HardwareChipset(NULL)
+	// Each StringClass empty.  MSVC read NULL as the int 0 and chose StringClass(int initial_len = 0),
+	// which is what the default constructor is; clang finds NULL ambiguous.
+	RenderDeviceDescClass(void) : DeviceName(), DeviceVendor(), DevicePlatform(), 
+											DriverName(), DriverVendor(), DriverVersion(),
+											HardwareName(), HardwareVendor(), HardwareChipset()
 	{
 	}
 

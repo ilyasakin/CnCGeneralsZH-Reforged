@@ -834,8 +834,10 @@ public:
 
 	static const DX8Caps*	Get_Current_Caps() { WWASSERT(CurrentCaps); return CurrentCaps; }
 
+#if defined(_WIN32)	// the registry: Windows only
 	static bool Registry_Save_Render_Device( const char * sub_key );
 	static bool Registry_Load_Render_Device( const char * sub_key, bool resize_window );
+#endif
 
 	static const char* Get_DX8_Render_State_Name(D3DRENDERSTATETYPE state);
 	static const char* Get_DX8_Texture_Stage_State_Name(D3DTEXTURESTAGESTATETYPE state);
@@ -900,8 +902,10 @@ protected:
 	static int	Get_Device_Resolution_Width(void) { return ResolutionWidth; }
 	static int	Get_Device_Resolution_Height(void) { return ResolutionHeight; }
 
+#if defined(_WIN32)	// the registry: Windows only
 	static bool Registry_Save_Render_Device( const char *sub_key, int device, int width, int height, int depth, bool windowed, int texture_depth);
 	static bool Registry_Load_Render_Device( const char * sub_key, char *device, int device_len, int &width, int &height, int &depth, int &windowed, int &texture_depth);
+#endif
 	static bool Is_Windowed(void) { return IsWindowed; }
 
 	static void	Set_Texture_Bitdepth(int depth)	{ WWASSERT(depth==16 || depth==32); TextureBitDepth = depth; }
@@ -1195,7 +1199,7 @@ WWINLINE void DX8Wrapper::Set_DX8_Light(int index, D3DLIGHT9* light)
 	if (light) {
 		DX8_RECORD_LIGHT_CHANGE();
 		DX8CALL(SetLight(index,light));
-		DX8CALL(LightEnable(index,TRUE));
+		DX8CALL(LightEnable(index,true));
 		CurrentDX8LightEnables[index]=true;
 		SNAPSHOT_SAY(("DX8 - SetLight %d\n",index));
 
@@ -1214,7 +1218,7 @@ WWINLINE void DX8Wrapper::Set_DX8_Light(int index, D3DLIGHT9* light)
 	else if (CurrentDX8LightEnables[index]) {
 		DX8_RECORD_LIGHT_CHANGE();
 		CurrentDX8LightEnables[index]=false;
-		DX8CALL(LightEnable(index,FALSE));
+		DX8CALL(LightEnable(index,false));
 		Direct3D11_Mirror_Light_Disabled(index);
 		SNAPSHOT_SAY(("DX8 - DisableLight %d\n",index));
 	}
@@ -1231,7 +1235,7 @@ WWINLINE void DX8Wrapper::Set_DX8_Render_State(D3DRENDERSTATETYPE state, unsigne
 		Get_DX8_Render_State_Value_Name(value_name,state,value);
 		SNAPSHOT_SAY(("DX8 - SetRenderState(state: %s, value: %s)\n",
 			Get_DX8_Render_State_Name(state),
-			value_name));
+			(const char *)value_name));	// a StringClass is not a vararg
 	}
 #endif
 
@@ -1262,7 +1266,7 @@ WWINLINE void DX8Wrapper::Set_DX8_Texture_Stage_State(unsigned stage, D3DTEXTURE
 		SNAPSHOT_SAY(("DX8 - SetTextureStageState(stage: %d, state: %s, value: %s)\n",
 			stage,
 			Get_DX8_Texture_Stage_State_Name(state),
-			value_name));
+			(const char *)value_name));	// a StringClass is not a vararg
 	}
 #endif
 
@@ -1290,7 +1294,7 @@ WWINLINE void DX8Wrapper::Set_DX8_Texture_Stage_State(unsigned stage, D3DSAMPLER
 		SNAPSHOT_SAY(("DX8 - SetSamplerState(stage: %d, state: %s, value: %s)\n",
 			stage,
 			Get_DX8_Sampler_State_Name(state),
-			value_name));
+			(const char *)value_name));	// a StringClass is not a vararg
 	}
 #endif
 
@@ -1416,7 +1420,7 @@ WWINLINE void DX8Wrapper::Set_Shader(const ShaderClass& shader)
 #ifdef MESH_RENDER_SNAPSHOT_ENABLED
 	StringClass str;
 #endif
-	SNAPSHOT_SAY(("DX8Wrapper::Set_Shader(%s)\n",shader.Get_Description(str)));
+	SNAPSHOT_SAY(("DX8Wrapper::Set_Shader(%s)\n",(const char *)shader.Get_Description(str)));
 }
 
 WWINLINE void DX8Wrapper::Set_Projection_Transform_With_Z_Bias(const Matrix4x4& matrix, float znear, float zfar)

@@ -34,10 +34,10 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "always.h"
 #include "GameClient/View.h"
-#include "WW3D2/Camera.h"
-#include "WW3D2/Light.h"
-#include "WW3D2/DX8Wrapper.h"
-#include "WW3D2/HLod.h"
+#include "WW3D2/camera.h"
+#include "WW3D2/light.h"
+#include "WW3D2/dx8wrapper.h"
+#include "WW3D2/hlod.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
 #include "WW3D2/assetmgr.h"
@@ -45,19 +45,19 @@
 #include "WW3D2/dx8renderer.h"
 #include "Lib/BaseType.h"
 #include "W3DDevice/GameClient/W3DGranny.h"
-#include "W3DDevice/GameClient/Heightmap.h"
+#include "W3DDevice/GameClient/HeightMap.h"
 #include "d3dx9math.h"
-#include "common/GlobalData.h"
+#include "Common/GlobalData.h"
 #include "W3DDevice/GameClient/W3DProjectedShadow.h"
 #include "WW3D2/statistics.h"
 #include "Common/Debug.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
-#include "GameClient/drawable.h"
+#include "GameClient/Drawable.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
-#include "W3DDevice/GameClient/Heightmap.h"
+#include "W3DDevice/GameClient/HeightMap.h"
 #include "Platform/RenderTypes.h"
 
 #ifdef _INTERNAL
@@ -547,7 +547,7 @@ Int W3DProjectedShadowManager::renderProjectedTerrainShadow(W3DProjectedShadow *
 		m_pDev->SetIndices(shadowIndexBufferD3D);
 		Direct3D11_Mirror_Indices(shadowIndexTwin);
 
-		m_pDev->SetTransform(D3DTS_WORLD,(_D3DMATRIX *)&mWorld);
+		m_pDev->SetTransform(D3DTS_WORLD,(D3DMATRIX *)&mWorld);
 		Direct3D11_Mirror_Transform(D3DTS_WORLD,(const float *)&mWorld);
 
 		m_pDev->SetStreamSource(0,shadowVertexBufferD3D,0,vertexStride);
@@ -800,7 +800,7 @@ void W3DProjectedShadowManager::flushDecals(W3DShadowTexture *texture, ShadowTyp
 	m_pDev->SetIndices(shadowDecalIndexBufferD3D);
 	Direct3D11_Mirror_Indices(shadowDecalIndexTwin);
 
-	m_pDev->SetTransform(D3DTS_WORLD,(_D3DMATRIX *)&mWorld);
+	m_pDev->SetTransform(D3DTS_WORLD,(D3DMATRIX *)&mWorld);
 	Direct3D11_Mirror_Transform(D3DTS_WORLD,(const float *)&mWorld);
 
 	m_pDev->SetStreamSource(0,shadowDecalVertexBufferD3D,0,sizeof(SHADOW_DECAL_VERTEX));

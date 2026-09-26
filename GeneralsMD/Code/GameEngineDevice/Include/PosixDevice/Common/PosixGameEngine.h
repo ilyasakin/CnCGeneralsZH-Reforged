@@ -49,7 +49,6 @@ public:
 	PosixGameEngine();
 	virtual ~PosixGameEngine();
 
-	virtual void init( void );
 	virtual void reset( void );
 	virtual void update( void );
 	virtual void serviceWindowsOS( void );		///< nothing here; the subclass with a window pumps its events

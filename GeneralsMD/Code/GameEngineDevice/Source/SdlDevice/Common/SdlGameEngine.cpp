@@ -78,8 +78,7 @@ SdlGameEngine::~SdlGameEngine()
 
 // The window exists before the engine starts, as WinMain creates it before GameMain: GameText names it
 // during GameEngine::init.
-// GameEngine::init( argc, argv ) directly: PosixGameEngine overrides only the argument-less init, which
-// GameEngine leaves empty and nothing calls.
+// GameMain calls init( argc, argv ); the argument-less init is empty in GameEngine and nothing calls it.
 void SdlGameEngine::init( int argc, char *argv[] )
 {
 	createWindow();

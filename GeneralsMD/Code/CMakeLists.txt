@@ -436,6 +436,51 @@ target_include_directories(wwsaveload PUBLIC ${WW}/WWSaveLoad
   PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
 target_link_libraries(wwsaveload PRIVATE wwdebug wwlib wwmath)
 
+# ---- WW3D2's sources, on every platform ------------------------------------
+# The renderer core is the same files on Windows and off it (decision 7: off Windows it speaks D3D9 to
+# a device of our own).  Three are Windows's alone, and its block adds them back: FramGrab.cpp (AVI
+# capture through vfw32), dx8webbrowser.cpp (the embedded browser, an MSVC #import) and dx11runtime.cpp
+# (the Direct3D 11 backend's switchboard; dx11runtime_posix.cpp answers for it off Windows).
+set(ZH_WW3D2_SOURCES
+  ${WW}/WW3D2/aabtree.cpp ${WW}/WW3D2/aabtreebuilder.cpp ${WW}/WW3D2/agg_def.cpp
+  ${WW}/WW3D2/animatedsoundmgr.cpp ${WW}/WW3D2/animobj.cpp ${WW}/WW3D2/assetmgr.cpp
+  ${WW}/WW3D2/assetstatus.cpp ${WW}/WW3D2/bitmaphandler.cpp ${WW}/WW3D2/bmp2d.cpp
+  ${WW}/WW3D2/boxrobj.cpp ${WW}/WW3D2/bwrender.cpp ${WW}/WW3D2/camera.cpp
+  ${WW}/WW3D2/collect.cpp ${WW}/WW3D2/coltest.cpp ${WW}/WW3D2/composite.cpp
+  ${WW}/WW3D2/dazzle.cpp ${WW}/WW3D2/ddsfile.cpp ${WW}/WW3D2/decalmsh.cpp
+  ${WW}/WW3D2/decalsys.cpp ${WW}/WW3D2/distlod.cpp ${WW}/WW3D2/dx8caps.cpp
+  ${WW}/WW3D2/dx8fvf.cpp ${WW}/WW3D2/dx8indexbuffer.cpp ${WW}/WW3D2/dx8polygonrenderer.cpp
+  ${WW}/WW3D2/dx8renderer.cpp ${WW}/WW3D2/dx8rendererdebugger.cpp ${WW}/WW3D2/dx8texman.cpp
+  ${WW}/WW3D2/dx8vertexbuffer.cpp ${WW}/WW3D2/dx8wrapper.cpp ${WW}/WW3D2/dynamesh.cpp
+  ${WW}/WW3D2/ffprobe.cpp ${WW}/WW3D2/ffshadercache.cpp ${WW}/WW3D2/font3d.cpp
+  ${WW}/WW3D2/formconv.cpp ${WW}/WW3D2/hanim.cpp ${WW}/WW3D2/hanimmgr.cpp
+  ${WW}/WW3D2/hcanim.cpp ${WW}/WW3D2/hlod.cpp ${WW}/WW3D2/hmdldef.cpp
+  ${WW}/WW3D2/hmorphanim.cpp ${WW}/WW3D2/hrawanim.cpp ${WW}/WW3D2/htree.cpp
+  ${WW}/WW3D2/htreemgr.cpp ${WW}/WW3D2/intersec.cpp ${WW}/WW3D2/layer.cpp
+  ${WW}/WW3D2/light.cpp ${WW}/WW3D2/lightenvironment.cpp ${WW}/WW3D2/line3d.cpp
+  ${WW}/WW3D2/linegrp.cpp ${WW}/WW3D2/mapper.cpp ${WW}/WW3D2/matinfo.cpp
+  ${WW}/WW3D2/matpass.cpp ${WW}/WW3D2/matrixmapper.cpp ${WW}/WW3D2/mesh.cpp
+  ${WW}/WW3D2/meshbuild.cpp ${WW}/WW3D2/meshdam.cpp ${WW}/WW3D2/meshgeometry.cpp
+  ${WW}/WW3D2/meshmatdesc.cpp ${WW}/WW3D2/meshmdl.cpp ${WW}/WW3D2/meshmdlio.cpp
+  ${WW}/WW3D2/metalmap.cpp ${WW}/WW3D2/missingtexture.cpp ${WW}/WW3D2/motchan.cpp
+  ${WW}/WW3D2/nullrobj.cpp ${WW}/WW3D2/part_buf.cpp ${WW}/WW3D2/part_emt.cpp
+  ${WW}/WW3D2/part_ldr.cpp ${WW}/WW3D2/pivot.cpp ${WW}/WW3D2/pointgr.cpp
+  ${WW}/WW3D2/polyinfo.cpp ${WW}/WW3D2/predlod.cpp ${WW}/WW3D2/prim_anim.cpp
+  ${WW}/WW3D2/projector.cpp ${WW}/WW3D2/proto.cpp ${WW}/WW3D2/render2d.cpp
+  ${WW}/WW3D2/render2dsentence.cpp ${WW}/WW3D2/renderobjectrecycler.cpp ${WW}/WW3D2/rendobj.cpp
+  ${WW}/WW3D2/rinfo.cpp ${WW}/WW3D2/ringobj.cpp ${WW}/WW3D2/scene.cpp
+  ${WW}/WW3D2/segline.cpp ${WW}/WW3D2/seglinerenderer.cpp ${WW}/WW3D2/shader.cpp
+  ${WW}/WW3D2/shattersystem.cpp ${WW}/WW3D2/snappts.cpp ${WW}/WW3D2/sortingrenderer.cpp
+  ${WW}/WW3D2/soundrobj.cpp ${WW}/WW3D2/sphereobj.cpp ${WW}/WW3D2/static_sort_list.cpp
+  ${WW}/WW3D2/statistics.cpp ${WW}/WW3D2/streak.cpp ${WW}/WW3D2/streakRender.cpp
+  ${WW}/WW3D2/stripoptimizer.cpp ${WW}/WW3D2/surfaceclass.cpp ${WW}/WW3D2/texfcach.cpp
+  ${WW}/WW3D2/texproject.cpp ${WW}/WW3D2/texture.cpp ${WW}/WW3D2/texturefilter.cpp
+  ${WW}/WW3D2/textureloader.cpp ${WW}/WW3D2/texturethumbnail.cpp ${WW}/WW3D2/txt.cpp
+  ${WW}/WW3D2/vertmaterial.cpp ${WW}/WW3D2/visrasterizer.cpp ${WW}/WW3D2/w3d_dep.cpp
+  ${WW}/WW3D2/w3d_util.cpp ${WW}/WW3D2/w3dexclusionlist.cpp ${WW}/WW3D2/ww3d.cpp
+  ${WW}/WW3D2/ww3dformat.cpp
+)
+
 # ===========================================================================
 # Windows only, from here down to dx9_smoke: every target in this block links d3d9, d3d11 or dxgi,
 # or is built out of something that does.  Nothing is removed and nothing is stubbed - tracks D2
@@ -559,45 +604,8 @@ target_link_libraries(dx11backend PUBLIC dx11device dx11state dx11layout dx11res
 # shd*bump* sources need shdpp/NVASM-generated headers.  Revisit at exe link.
 # dx8webbrowser.cpp stays inert (ENABLE_EMBEDDED_BROWSER unset).
 add_library(ww3d2 STATIC
-
-  ${WW}/WW3D2/FramGrab.cpp ${WW}/WW3D2/aabtree.cpp ${WW}/WW3D2/aabtreebuilder.cpp 
-  ${WW}/WW3D2/agg_def.cpp ${WW}/WW3D2/animatedsoundmgr.cpp ${WW}/WW3D2/animobj.cpp 
-  ${WW}/WW3D2/assetmgr.cpp ${WW}/WW3D2/assetstatus.cpp ${WW}/WW3D2/bitmaphandler.cpp 
-  ${WW}/WW3D2/bmp2d.cpp ${WW}/WW3D2/boxrobj.cpp ${WW}/WW3D2/bwrender.cpp 
-  ${WW}/WW3D2/camera.cpp ${WW}/WW3D2/collect.cpp ${WW}/WW3D2/coltest.cpp 
-  ${WW}/WW3D2/composite.cpp ${WW}/WW3D2/dazzle.cpp ${WW}/WW3D2/ddsfile.cpp 
-  ${WW}/WW3D2/decalmsh.cpp ${WW}/WW3D2/decalsys.cpp ${WW}/WW3D2/distlod.cpp 
-  ${WW}/WW3D2/dx8caps.cpp ${WW}/WW3D2/dx8fvf.cpp ${WW}/WW3D2/dx8indexbuffer.cpp 
-  ${WW}/WW3D2/dx8polygonrenderer.cpp ${WW}/WW3D2/dx8renderer.cpp ${WW}/WW3D2/dx8rendererdebugger.cpp 
-  ${WW}/WW3D2/dx8texman.cpp ${WW}/WW3D2/dx8vertexbuffer.cpp ${WW}/WW3D2/dx8webbrowser.cpp 
-  ${WW}/WW3D2/dx8wrapper.cpp ${WW}/WW3D2/dynamesh.cpp ${WW}/WW3D2/ffprobe.cpp
-  ${WW}/WW3D2/ffshadercache.cpp ${WW}/WW3D2/dx11runtime.cpp ${WW}/WW3D2/font3d.cpp
-  ${WW}/WW3D2/formconv.cpp ${WW}/WW3D2/hanim.cpp ${WW}/WW3D2/hanimmgr.cpp 
-  ${WW}/WW3D2/hcanim.cpp ${WW}/WW3D2/hlod.cpp ${WW}/WW3D2/hmdldef.cpp 
-  ${WW}/WW3D2/hmorphanim.cpp ${WW}/WW3D2/hrawanim.cpp ${WW}/WW3D2/htree.cpp 
-  ${WW}/WW3D2/htreemgr.cpp ${WW}/WW3D2/intersec.cpp ${WW}/WW3D2/layer.cpp 
-  ${WW}/WW3D2/light.cpp ${WW}/WW3D2/lightenvironment.cpp ${WW}/WW3D2/line3d.cpp 
-  ${WW}/WW3D2/linegrp.cpp ${WW}/WW3D2/mapper.cpp ${WW}/WW3D2/matinfo.cpp 
-  ${WW}/WW3D2/matpass.cpp ${WW}/WW3D2/matrixmapper.cpp ${WW}/WW3D2/mesh.cpp 
-  ${WW}/WW3D2/meshbuild.cpp ${WW}/WW3D2/meshdam.cpp ${WW}/WW3D2/meshgeometry.cpp 
-  ${WW}/WW3D2/meshmatdesc.cpp ${WW}/WW3D2/meshmdl.cpp ${WW}/WW3D2/meshmdlio.cpp 
-  ${WW}/WW3D2/metalmap.cpp ${WW}/WW3D2/missingtexture.cpp ${WW}/WW3D2/motchan.cpp 
-  ${WW}/WW3D2/nullrobj.cpp ${WW}/WW3D2/part_buf.cpp ${WW}/WW3D2/part_emt.cpp 
-  ${WW}/WW3D2/part_ldr.cpp ${WW}/WW3D2/pivot.cpp ${WW}/WW3D2/pointgr.cpp 
-  ${WW}/WW3D2/polyinfo.cpp ${WW}/WW3D2/predlod.cpp ${WW}/WW3D2/prim_anim.cpp 
-  ${WW}/WW3D2/projector.cpp ${WW}/WW3D2/proto.cpp ${WW}/WW3D2/render2d.cpp 
-  ${WW}/WW3D2/render2dsentence.cpp ${WW}/WW3D2/renderobjectrecycler.cpp ${WW}/WW3D2/rendobj.cpp 
-  ${WW}/WW3D2/rinfo.cpp ${WW}/WW3D2/ringobj.cpp ${WW}/WW3D2/scene.cpp 
-  ${WW}/WW3D2/segline.cpp ${WW}/WW3D2/seglinerenderer.cpp ${WW}/WW3D2/shader.cpp 
-  ${WW}/WW3D2/shattersystem.cpp ${WW}/WW3D2/snappts.cpp ${WW}/WW3D2/sortingrenderer.cpp 
-  ${WW}/WW3D2/soundrobj.cpp ${WW}/WW3D2/sphereobj.cpp ${WW}/WW3D2/static_sort_list.cpp 
-  ${WW}/WW3D2/statistics.cpp ${WW}/WW3D2/streak.cpp ${WW}/WW3D2/streakRender.cpp 
-  ${WW}/WW3D2/stripoptimizer.cpp ${WW}/WW3D2/surfaceclass.cpp ${WW}/WW3D2/texfcach.cpp 
-  ${WW}/WW3D2/texproject.cpp ${WW}/WW3D2/texture.cpp ${WW}/WW3D2/texturefilter.cpp 
-  ${WW}/WW3D2/textureloader.cpp ${WW}/WW3D2/texturethumbnail.cpp ${WW}/WW3D2/txt.cpp 
-  ${WW}/WW3D2/vertmaterial.cpp ${WW}/WW3D2/visrasterizer.cpp ${WW}/WW3D2/w3d_dep.cpp 
-  ${WW}/WW3D2/w3d_util.cpp ${WW}/WW3D2/w3dexclusionlist.cpp ${WW}/WW3D2/ww3d.cpp 
-  ${WW}/WW3D2/ww3dformat.cpp 
+  ${WW}/WW3D2/FramGrab.cpp ${WW}/WW3D2/dx8webbrowser.cpp ${WW}/WW3D2/dx11runtime.cpp
+  ${ZH_WW3D2_SOURCES}
 )
 target_include_directories(ww3d2
   PUBLIC ${WW}/WW3D2
@@ -1137,6 +1145,9 @@ endif()
 # so drive it with --target.
 if(ZH_PLATFORM_POSIX)
   file(GLOB_RECURSE POSIXDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/*.cpp)
+  # PosixDevice/Render is the Direct3D 9-shaped device (decision 7), a library of its own below: WW3D2
+  # links it the way it links d3d9.lib on Windows, and posixdevice needs none of it.
+  list(FILTER POSIXDEVICE_SOURCES EXCLUDE REGEX "/PosixDevice/Render/")
   # The BIG archive reader is Win32Device's own, built here as it is (C1 (f)): it has no Win32 in it but
   # ntohl and one message box, both behind #if, and one copy keeps the mount order - which archive wins
   # which path, and so the INI CRC - the same on every platform.
@@ -1162,6 +1173,73 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(posix_render_hooks_selfcheck PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+endif()
+
+# ===========================================================================
+# The renderer off Windows (decision 7): WW3D2 and W3DDevice against a Direct3D 9-shaped device
+# ===========================================================================
+# WW3D2 and W3DDevice compile unchanged in their D3D9 calls: <d3d9.h> is Platform/PosixD3D9's, which is
+# Platform/D3D9Posix.h, and the device behind it is posixd3d9.  Phase A1 builds and links them; the
+# device has no resources until A2 and no draw until A3.  All of it is in the default build, the link
+# probe included, so a change that breaks the renderer off Windows fails the Mac build.
+if(ZH_PLATFORM_POSIX)
+  set(ZH_POSIX_D3D9_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include/Platform/PosixD3D9)
+
+  # ---- d3dx9runtime: the same library name as Windows's, with d3dx9posix.cpp's bodies ---------------
+  # d3dx9posix_texture.cpp is A2's (-18's), d3dx9posix.cpp the rest (-a9's).
+  add_library(d3dx9runtime STATIC
+    ${WW}/WW3D2/d3dx9posix.cpp ${WW}/WW3D2/d3dx9posix_texture.cpp ${WW}/WW3D2/d3d8shadertranslate.cpp)
+  set_target_properties(d3dx9runtime PROPERTIES CXX_STANDARD 17)
+  target_include_directories(d3dx9runtime PUBLIC ${WW}/WW3D2 ${ZH_POSIX_D3D9_INCLUDE}
+    # The texture helpers are CPU work over the device's own images (-18's PosixImageOps), so they see
+    # the device's headers - privately: nothing else outside the device does.
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(d3dx9runtime PRIVATE posixd3d9)
+
+  # The matrix functions and the FVF size against independent answers, and the binding's contract;
+  # the header says what it does not prove.
+  add_executable(d3dx9posix_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_d3dx9posix.cpp)
+  set_target_properties(d3dx9posix_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(d3dx9posix_selfcheck PRIVATE ${WW}/WWLib ${WW}/WWDebug ${WW}/WWMath)
+  target_link_libraries(d3dx9posix_selfcheck PRIVATE d3dx9runtime)
+  add_test(NAME d3dx9posix_selfcheck COMMAND d3dx9posix_selfcheck)
+
+  # ---- posixd3d9: the device, in the place d3d9.lib has on Windows -----------------------------------
+  file(GLOB_RECURSE POSIXD3D9_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render/*.cpp)
+  add_library(posixd3d9 STATIC ${POSIXD3D9_SOURCES})
+  set_target_properties(posixd3d9 PROPERTIES CXX_STANDARD 17)
+  target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
+
+  # ---- ww3d2 -----------------------------------------------------------------------------------------
+  add_library(ww3d2 STATIC ${ZH_WW3D2_SOURCES} ${WW}/WW3D2/dx11runtime_posix.cpp)
+  set_target_properties(ww3d2 PROPERTIES CXX_STANDARD 17)
+  target_include_directories(ww3d2
+    PUBLIC ${WW}/WW3D2 ${ZH_POSIX_D3D9_INCLUDE}
+    PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/WWSaveLoad ${WW}/Wwutil
+            ${WW}/wwshade ${WW}/WWAudio ${WW}/Miles6/include)
+  target_link_libraries(ww3d2 PUBLIC posixd3d9 d3dx9runtime ffshader
+    PRIVATE wwlib wwmath wwdebug wwsaveload)
+
+  # ---- w3ddevice: GameEngineDevice's W3DDevice, gameenginedevice's renderer half ---------------------
+  file(GLOB_RECURSE W3DDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/*.cpp)
+  # W3DMouse is a Win32Mouse, the hardware cursor through the window procedure: the platform layer's
+  # input (C3), not the renderer.  W3DGameClient leaves its keyboard and mouse to the subclass off Windows.
+  list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DMouse\\.cpp$")
+  # W3DWebBrowser is the embedded browser as a COM object, which only Win32GameEngine makes; GameEngine
+  # has its own WebBrowser off Windows (B5).
+  list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DWebBrowser\\.cpp$")
+  add_library(w3ddevice STATIC ${W3DDEVICE_SOURCES})
+  set_target_properties(w3ddevice PROPERTIES CXX_STANDARD 17)
+  target_include_directories(w3ddevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs ${CMAKE_CURRENT_SOURCE_DIR}/Main
+            ${WW}/Miles6/include ${WW}/Bink/include)
+  target_link_libraries(w3ddevice PUBLIC gameengine ww3d2)
+
+  # A1's link checkpoint: all of w3ddevice and ww3d2, whole archive, against what the POSIX game links.
+  add_executable(w3d_link_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_link_probe.cpp)
+  set_target_properties(w3d_link_probe PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(w3d_link_probe PRIVATE
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,w3ddevice,ww3d2>" posixdevice gameengine)
 endif()
 
 # ===========================================================================
@@ -1879,6 +1957,7 @@ if(RELEASE_DEBUG_LOGGING)
     # under DEBUG_LOGGING (ScriptEngine's timing fields) has to be laid out alike in every TU that uses it.
     target_compile_definitions(posixdevice PRIVATE RELEASE_DEBUG_LOGGING)
     target_compile_definitions(sdldevice PRIVATE RELEASE_DEBUG_LOGGING)
+    target_compile_definitions(w3ddevice PRIVATE RELEASE_DEBUG_LOGGING)	# gameenginedevice's W3D half
     target_compile_definitions(generals PRIVATE RELEASE_DEBUG_LOGGING)
   endif()
 endif()

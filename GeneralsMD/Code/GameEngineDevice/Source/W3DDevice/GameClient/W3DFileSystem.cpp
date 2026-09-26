@@ -41,7 +41,7 @@
 // #define MAINTAIN_LEGACY_FILES
 
 #include "Common/Debug.h"
-#include "Common/File.h"
+#include "Common/file.h"
 #include "stringex.h"
 #include "Common/FileSystem.h"
 #include "Common/GlobalData.h"
@@ -50,7 +50,9 @@
 #include "W3DDevice/GameClient/W3DFileSystem.h"
 // DEFINES ////////////////////////////////////////////////////////////////////////////////////////
 
+#if defined(_WIN32)
 #include <io.h>
+#endif
 
 //-------------------------------------------------------------------------------------------------
 /** Game file access.  At present this allows us to access test assets, assets from

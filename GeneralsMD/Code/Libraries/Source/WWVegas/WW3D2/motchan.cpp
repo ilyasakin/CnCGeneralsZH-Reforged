@@ -47,7 +47,7 @@
 #include "motchan.h"
 #include "w3d_file.h"
 #include "chunkio.h"
-#include "vector.h"
+#include "Vector.H"
 #include "wwmath.h"
 #include "quat.h"
 #include "wwmath.h"
@@ -1309,7 +1309,7 @@ return;
 		value-=ValueOffset;
 		value*=inv_scale;
 		int ivalue=WWMath::Float_To_Int_Floor(value);
-		CompressedData[i]=unsigned short(ivalue);
+		CompressedData[i]=(unsigned short)(ivalue);
 
 		float new_scale=ValueScale/65535.0f;
 		float new_value=int(CompressedData[i]);

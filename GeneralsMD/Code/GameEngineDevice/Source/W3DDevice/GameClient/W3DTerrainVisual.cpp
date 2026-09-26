@@ -29,7 +29,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
@@ -57,14 +59,14 @@
 #include "W3DDevice/GameClient/W3DTerrainTracks.h"
 #include "W3DDevice/GameClient/W3DGranny.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
-#include "W3DDevice/GameClient/heightmap.h"
-#include "W3DDevice/GameClient/FlatHeightmap.h"
+#include "W3DDevice/GameClient/HeightMap.h"
+#include "W3DDevice/GameClient/FlatHeightMap.h"
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
-#include "WW3D2/Light.h"
-#include "WW3D2/RendObj.h"
-#include "WW3D2/ColType.h"
-#include "WW3D2/ColTest.h"
+#include "WW3D2/light.h"
+#include "WW3D2/rendobj.h"
+#include "WW3D2/coltype.h"
+#include "WW3D2/coltest.h"
 #include "WW3D2/assetmgr.h"
 
 

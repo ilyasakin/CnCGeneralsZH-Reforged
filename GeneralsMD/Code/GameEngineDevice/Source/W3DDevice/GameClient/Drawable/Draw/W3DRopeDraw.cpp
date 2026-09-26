@@ -29,7 +29,9 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include <stdlib.h>
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 #include "Common/Thing.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
@@ -40,7 +42,7 @@
 #include "GameLogic/GameLogic.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/Module/W3DRopeDraw.h"
-#include "WW3D2/Line3D.h"
+#include "WW3D2/line3d.h"
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "Common/GameState.h"
 

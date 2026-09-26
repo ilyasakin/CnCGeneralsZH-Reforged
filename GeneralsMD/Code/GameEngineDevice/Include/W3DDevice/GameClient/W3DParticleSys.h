@@ -31,10 +31,10 @@
 #define __W3DParticleSys_H_
 
 #include "GameClient/ParticleSys.h"
-#include "WW3D2/PointGr.h"
+#include "WW3D2/pointgr.h"
 #include "WW3D2/streak.h"
-#include "WW3D2/RInfo.h"
-#include "WWLib/BitType.h"
+#include "WW3D2/rinfo.h"
+#include "WWLib/bittype.h"
 
 #include <vector>
 
