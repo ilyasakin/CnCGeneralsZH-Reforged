@@ -24,7 +24,7 @@
 # (ZH_USER_DATA_DIR) is in the same folder, and the folder is removed at the end.  The logs go next to
 # the executable, as on Windows, each under its own -logPrefix, and are removed once read.
 #
-# Usage: replay-check.sh --generals <path> [--data <dir>] [--seeds "0 1"] [--players 2]
+# Usage: replay-check.sh --generals <path> | --app <.app> [--data <dir>] [--seeds "0 1"] [--players 2]
 #          [--aidiff brutal] [--maxframes 12000] [--cells <n>] [--extra "<args>"]
 #          [--control] [--extended] [--keep]
 #   --data            a folder holding zerohour/ (with the base game in zerohour/ZH_Generals, as the
@@ -42,7 +42,15 @@
 #   --extended        the wider backstop, not in ctest: seeds 2 to 5, each at 2 and at 4 players (eight
 #                     matches), at --maxframes (default 12000).  --seeds and --players are ignored
 #   --keep            leave the temporary folder and the logs, and say where
-# Exit status: the number of matches that failed (0 when all agree).  77 when there is no game data.
+#   --app <.app>      E1 on the bundle itself, "tests what ships" (P1 step 5): its Contents/MacOS/generals
+#                     runs with NO -root and NO -overlay, so the bundle's own discovery finds both - its
+#                     overlay in Contents/Resources, and the install through Registry.ini's InstallPath,
+#                     which names the farm (rule 9 as ever; HOME is an empty folder, so the known places
+#                     cannot find anything).  Its logs are the bundle's, in the user data's Logs/.  After
+#                     every run the bundle's signature must still verify --deep --strict: nothing may be
+#                     written into it.  Replaces --generals
+# Exit status: the number of matches that failed (0 when all agree), plus one for a broken seal (--app).
+# 77 when there is no game data.
 # 99 when the install changed during the run, or when that could not be checked: every file of it is
 # listed with its hash before the farm is built and again at the end (Tools/install-guard.sh). A
 # difference is "THE INSTALL CHANGED"; a listing that is missing or could not be made is "COULD NOT
@@ -51,6 +59,7 @@
 set -u
 
 GENERALS=""
+APP=""
 DATA="${ZH_DATA_DIR:-}"
 SEEDS="0 1"
 PLAYERS=2
@@ -64,6 +73,7 @@ KEEP=0
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
+		--app) APP="$(cd "$2" && pwd)"; GENERALS="$APP/Contents/MacOS/generals"; shift 2;;
 		--data) DATA="$2"; shift 2;;
 		--seeds) SEEDS="$2"; shift 2;;
 		--players) PLAYERS="$2"; shift 2;;
@@ -95,6 +105,7 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/replay-check.XXXXXX")"
 ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="rc$$_"		# every log this run writes starts with it
+[ -n "$APP" ] && EXEDIR="$USERDATA/Logs"		# a bundle writes its logs there (ExecutableDirectory.cpp)
 
 # The install, listed before anything else happens (RULE 9: a farm entry is a link into it, so a write
 # through one would change it).  Checked again on the way out, however the run ends.
@@ -146,9 +157,15 @@ mkdir -p "$ROOT" "$USERDATA"
 ( cd "$INSTALL" && find . -type d ! -name '._*' ) | while IFS= read -r d; do mkdir -p "$ROOT/$d"; done
 ( cd "$INSTALL" && find . -type f ! -name '._*' ) | while IFS= read -r f; do ln -s "$INSTALL/${f#./}" "$ROOT/$f"; done
 
-# The overlay as it ships (P1 step 3): its own folder, never written into the farm
+# The overlay as it ships (P1 step 3): its own folder, never written into the farm.  With --app it is
+# the bundle's own, found by the game; the install is the farm, through Registry.ini.
 OVERLAY="$WORK/overlay"
-"$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
+if [ -n "$APP" ]; then
+	mkdir -p "$WORK/home"
+	printf 'InstallPath = %s\n' "$ROOT" > "$USERDATA/Registry.ini"
+else
+	"$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
+fi
 
 
 # ---- a run ---------------------------------------------------------------------------------------
@@ -161,11 +178,23 @@ run_game() {	# run_game <log prefix> <switches...>
 	rm -f -- "$log"
 	# -noFPSLimit as replay-check.ps1 has it: nothing paces a headless run, and it cannot touch the
 	# logic.  -multiInstance so that a run does not wait on another copy's lock.
-	( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" "$GENERALS" -headless -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
-		-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" "$@" $EXTRA \
-		> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
+	if [ -n "$APP" ]; then
+		( cd "$WORK" && HOME="$WORK/home" ZH_USER_DATA_DIR="$USERDATA" "$GENERALS" -headless -quickstart -noshellmap \
+			-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" "$@" $EXTRA \
+			> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
+	else
+		( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" "$GENERALS" -headless -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
+			-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" "$@" $EXTRA \
+			> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
+	fi
 	RUN_STATUS=$?
 	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0; RUN_STATS=""
+	# --app: the bundle must have found its own overlay (PosixMain says so on stderr); a run that did not
+	# is reported as having no result
+	if [ -n "$APP" ] && ! grep -q -F "generals: overlay $APP/Contents/Resources/Overlay, searched before the install" "$WORK/${prefix}.err"; then
+		echo "(the bundle did not report its own overlay in $WORK/${prefix}.err) "
+		return
+	fi
 	[ -f "$log" ] || return
 	local line
 	line="$(grep -a 'HEADLESS CRC: 0x' "$log" | tail -1)"
@@ -238,11 +267,20 @@ for match in $MATCHES; do
 done
 
 echo
+if [ -n "$APP" ]; then
+	if codesign --verify --deep --strict "$APP" 2>/dev/null; then
+		echo "the bundle's signature still verifies --deep --strict: nothing was written into it"
+	else
+		echo "FAILED: the bundle's signature no longer verifies: something was written into it"
+		SEAL_BROKEN=1
+	fi
+fi
 if [ "$failures" -eq 0 ]; then
 	echo "$nseeds of $nseeds matches: each replay played back to the same world, and each seed played the same twice (this machine only)."
 else
 	echo "$failures of $nseeds matches did not agree with themselves on this machine."
 fi
+failures=$((failures + ${SEAL_BROKEN:-0}))		# the exit status counts a broken seal as one more failure
 if ! verify_install; then
 	KEEP=1
 	exit 99
