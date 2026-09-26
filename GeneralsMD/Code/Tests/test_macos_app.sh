@@ -12,12 +12,17 @@
 #   3. the licence check's control: a link line with a library the table does not cover is refused,
 #      naming it, and leaves no bundle;
 #   4. the seal's control: a file written into the signed bundle makes codesign --verify --deep --strict
-#      fail, so a pass after a run means nothing was written.
+#      fail, so a pass after a run means nothing was written;
+#   5. the oldest macOS (P2): the bundle's LSMinimumSystemVersion is the build's deployment target, and
+#      every object it ships is built for no newer one.  Two controls: a lower --min-macos than the
+#      build's is refused, naming libraries; a Mach-O built for a newer macOS planted in the overlay is
+#      refused by the bundle-side check, naming it.
 # What it cannot see: the art (built only by `ninja macos_app`, cloned), a quarantined download and
 # Gatekeeper (E2), the dialog of the root chooser (by hand).
-# Usage: test_macos_app.sh <generals> <staged overlay> <build dir>.  Exit 0, 1, or 77 off macOS.
+# Usage: test_macos_app.sh <generals> <staged overlay> <build dir> <deployment target>.
+# Exit 0, 1, or 77 off macOS.
 set -u
-GENERALS="$1" OVERLAY="$2" BUILD="$3"
+GENERALS="$1" OVERLAY="$2" BUILD="$3" TARGET="$4"
 if [ "$(uname -s)" != "Darwin" ] || ! command -v codesign >/dev/null 2>&1; then
 	echo "skip: not macOS, or no codesign"
 	exit 77
@@ -31,17 +36,17 @@ ID=io.github.example.check
 APP="$T/one/Zero Hour Reforged.app"
 
 # 1. the bundle
-out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$APP" --bundle-id "$ID" --no-art 2>&1)"; status=$?
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$APP" --bundle-id "$ID" --min-macos "$TARGET" --no-art 2>&1)"; status=$?
 check '[ $status -eq 0 ]' "it builds a bundle (exit $status: $out)"
 P="$APP/Contents/Info.plist"
 key() { plutil -extract "$1" raw -o - "$P" 2>/dev/null; }
 version="$(awk '/#define VERSION_MAJOR/ {a=$3} /#define VERSION_MINOR/ {b=$3} /#define VERSION_BUILDNUM/ {c=$3} END {print a"."b"."c}' "$BUILD/generated/BuildVersion.h")"
-minos="$(otool -l "$GENERALS" | awk '/LC_BUILD_VERSION/ {f=1} f && $1 == "minos" {print $2; exit}')"
+minos="$TARGET"
 check 'plutil -lint "$P" >/dev/null' "Info.plist lints"
 check '[ "$(key CFBundleExecutable)" = generals ] && [ "$(key CFBundleIdentifier)" = "$ID" ] && [ "$(key CFBundlePackageType)" = APPL ]' \
 	"Info.plist names the executable, the id and APPL"
 check '[ "$(key CFBundleShortVersionString)" = "$version" ] && [ "$(key LSMinimumSystemVersion)" = "$minos" ]' \
-	"and this build's version ($version) and the executable's minimum macOS ($minos)"
+	"and this build's version ($version) and its deployment target ($minos) as the minimum macOS"
 check '[ "$(key NSHighResolutionCapable)" = true ] && [ "$(key LSApplicationCategoryType)" = public.app-category.strategy-games ] && [ "$(key CFBundleIconFile)" = AppIcon ]' \
 	"high resolution, the strategy games category, and the icon"
 check '[ "$(cat "$APP/Contents/PkgInfo")" = "APPL????" ]' "PkgInfo"
@@ -66,7 +71,7 @@ check '! codesign --verify --deep --strict "$APP" 2>/dev/null' "a file written a
 mkdir -p "$T/overlay"
 for e in "$OVERLAY"/*; do case "$e" in *.big) ;; *) cp -R -L "$e" "$T/overlay/";; esac; done
 printf '\nGameData\n  ShowHudOverlay = No\nEnd\n' > "$T/overlay/Data/INI/HudOff.ini"
-out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$T/overlay" --build "$BUILD" --out "$T/two/Zero Hour Reforged.app" --bundle-id "$ID" --no-art 2>&1)"; status=$?
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$T/overlay" --build "$BUILD" --out "$T/two/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --no-art 2>&1)"; status=$?
 check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "HUD overlay must stay on" && printf "%s" "$out" | grep -q "HudOff.ini" && [ ! -e "$T/two/Zero Hour Reforged.app" ]' \
 	"an overlay turning the HUD off is refused, naming the file, and leaves no bundle (exit $status)"
 
@@ -77,8 +82,24 @@ text = open(sys.argv[1]).read()
 text = re.sub(r"(^build generals: CXX_EXECUTABLE_LINKER.*?\n  LINK_LIBRARIES = )", r"\1Libraries/libnolicence.a ", text, count=1, flags=re.S | re.M)
 open(sys.argv[2], "w").write(text)
 NINJA_EOF
-out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$T/three/Zero Hour Reforged.app" --bundle-id "$ID" --no-art --link-ninja "$T/build.ninja" 2>&1)"; status=$?
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$T/three/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --no-art --link-ninja "$T/build.ninja" 2>&1)"; status=$?
 check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "does not cover: nolicence" && [ ! -e "$T/three/Zero Hour Reforged.app" ]' \
 	"a linked library without a licence entry is refused, naming it, and leaves no bundle (exit $status)"
+
+# 5. the oldest macOS
+check 'otool -l "$APP/Contents/MacOS/generals" | awk "/LC_BUILD_VERSION/ {f=1} f && \$1 == \"minos\" {print \$2; exit}" | grep -qx "$TARGET"' \
+	"the executable is stamped for $TARGET"
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$T/four/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos 11.0 --no-art 2>&1)"; status=$?
+check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "linked libraries built for a newer macOS than 11.0" && printf "%s" "$out" | grep -q "libgameengine.a: minimum macOS $TARGET" && [ ! -e "$T/four/Zero Hour Reforged.app" ]' \
+	"a minimum below the build's is refused, naming the libraries, and leaves no bundle (exit $status)"
+printf 'int main(void) { return 0; }\n' > "$T/newer.c"
+if cc -mmacosx-version-min=26.0 -o "$T/overlay/newer-tool" "$T/newer.c" 2>/dev/null; then
+	rm -f "$T/overlay/Data/INI/HudOff.ini"
+	out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$T/overlay" --build "$BUILD" --out "$T/five/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --no-art 2>&1)"; status=$?
+	check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "the bundle.s executables built for a newer macOS" && printf "%s" "$out" | grep -q "newer-tool: minimum macOS 26.0" && [ ! -e "$T/five/Zero Hour Reforged.app" ]' \
+		"a Mach-O for a newer macOS inside the bundle is refused, naming it (exit $status)"
+else
+	check 'false' "cc could not build the control's newer-macOS Mach-O"
+fi
 
 exit $failed
