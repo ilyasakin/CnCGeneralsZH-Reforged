@@ -234,6 +234,7 @@ bool PosixDevice9::Build_Vertex_Description(VertexPipelineDescription &descripti
 	// Pretransformed vertices skip transform and lighting altogether.
 	description.LightingEnabled = RenderStates[D3DRS_LIGHTING] != 0 && (FVF & D3DFVF_POSITION_MASK) != D3DFVF_XYZRHW;
 	description.SpecularEnabled = RenderStates[D3DRS_SPECULARENABLE] != 0;
+	description.LocalViewer = RenderStates[D3DRS_LOCALVIEWER] != 0;
 	description.ColourVertexEnabled = RenderStates[D3DRS_COLORVERTEX] != 0;
 	const bool colour_vertex = description.ColourVertexEnabled;
 	description.DiffuseMaterialSource = material_source(RenderStates[D3DRS_DIFFUSEMATERIALSOURCE], FVF, colour_vertex);

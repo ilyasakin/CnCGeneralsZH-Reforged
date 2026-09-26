@@ -177,6 +177,9 @@ void DX11StateBlockClass::Reset_To_Defaults()
 	RenderStates[D3DRS_TEXTUREFACTOR] = 0xffffffff;
 	RenderStates[D3DRS_CLIPPING] = TRUE;
 	RenderStates[D3DRS_MULTISAMPLEANTIALIAS] = TRUE;
+	// Direct3D 9's default, which the engine relies on without ever setting it: every specular
+	// highlight is a local viewer's.
+	RenderStates[D3DRS_LOCALVIEWER] = TRUE;
 }
 
 void DX11StateBlockClass::Set_Render_State(D3DRENDERSTATETYPE state, DWORD value)

@@ -945,6 +945,19 @@ transform is padded (u, v, 1, 0). The shader dump shows exactly one program chan
 (`vs_extra_passthrough_count2`, the new case); every other program and every key is byte-identical. The
 harness's scrolled-transform scenario now matches FFReference. `WINDOWS-DEBT.md` has the row.
 
+**22. Fork-introduced: the generated vertex programs ignore `D3DRS_LOCALVIEWER` - fixed in the vertex
+program; not yet visible.** Direct3D 9's default for `D3DRS_LOCALVIEWER` is TRUE, and the engine never
+turns it off (the only sets are TRUE: `W3DWater.cpp:2617`, and Generals' `:2362`; `dx8wrapper.cpp:4496`'s
+is inside a comment). With it on, the specular halfway vector points towards the vertex's own direction
+to the eye ("Specular Lighting"). `ffvertex.cpp` always used the fixed (0, 0, 1), and its comment said
+the reverse ("the engine never turns it on"). The **Direct3D 11 renderer** and the SDL3 GPU device run
+these programs; Direct3D 9 does not. **Fixed in the vertex program:** a `LocalViewer` field in the
+description, read from the state by `dx11backend` and the SDL3 device. `dx11state` now starts
+`D3DRS_LOCALVIEWER` at Direct3D 9's TRUE, as it zeroed every state it did not list. Only a lit specular
+program's text and key change. **Not yet visible on screen:** the pixel programs never add the specular
+colour to the pixel (defect #25), so no generated program shows a lit highlight at all. This fix is what
+that highlight will be computed from. `WINDOWS-DEBT.md` has the row.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and

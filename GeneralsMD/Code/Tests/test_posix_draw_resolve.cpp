@@ -162,6 +162,15 @@ static void check_combiner(PosixDevice9 *device)
 	CHECK(vertex.SpecularMaterialSource == D3DMCS_MATERIAL && vertex.DiffuseMaterialSource == D3DMCS_MATERIAL);
 	device->SetFVF(D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE);
 	CHECK(device->Build_Vertex_Description(vertex) && vertex.DiffuseMaterialSource == D3DMCS_COLOR1);
+	// D3DRS_LOCALVIEWER, TRUE by default, reaches the description, and the key of a lit specular program.
+	device->SetRenderState(D3DRS_SPECULARENABLE, 1);
+	CHECK(device->Build_Vertex_Description(vertex) && vertex.LocalViewer);
+	CHECK(VertexShader_Key(vertex).find(":V") != std::string::npos);
+	device->SetRenderState(D3DRS_LOCALVIEWER, 0);
+	CHECK(device->Build_Vertex_Description(vertex) && !vertex.LocalViewer);
+	CHECK(VertexShader_Key(vertex).find(":V") == std::string::npos);
+	device->SetRenderState(D3DRS_LOCALVIEWER, 1);
+	device->SetRenderState(D3DRS_SPECULARENABLE, 0);
 	device->SetRenderState(D3DRS_FOGENABLE, 1);
 	device->SetRenderState(D3DRS_FOGTABLEMODE, D3DFOG_LINEAR);
 	std::string refusal;

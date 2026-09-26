@@ -319,8 +319,16 @@ public:
 			}
 			else {
 				++known_findings;
-				printf("KNOWN %-39s %s: %ld outside, worst %.0f/255\n", label, known, comparison.outside,
+				printf("KNOWN %-39s %s: %ld outside, worst %.0f/255", label, known, comparison.outside,
 					comparison.worst * 255.0);
+				const int x = comparison.worstX, y = comparison.worstY;
+				if (x >= 0) {
+					const FFRef::Color &n = Reference.color[y * SIZE + x];
+					const uint8_t *g = &rgba[(y * SIZE + x) * 4];
+					printf(" at (%d, %d): gpu %u %u %u, reference %.0f %.0f %.0f", x, y, g[0], g[1], g[2], n.r * 255,
+						n.g * 255, n.b * 255);
+				}
+				printf("\n");
 			}
 			return;
 		}
@@ -583,7 +591,7 @@ static void scenarios_cascade(Harness &h)
 	std::vector<V> quad = screen_quad(4, 4, 60, 60, CORNERS);
 	for (size_t k = 0; k < quad.size(); ++k) quad[k].specular = 0xFF402010;
 	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_SPECULAR, D3DPT_TRIANGLELIST, quad);
-	h.check("specular add (vertex specular)", false, "F6: vertex specular");
+	h.check("specular add (vertex specular)", false, "F6: no specular add");
 
 	h.begin(0xFF000000);
 	h.rs(D3DRS_SPECULARENABLE, 1);
@@ -608,7 +616,7 @@ static void scenarios_lighting(Harness &h)
 		{ "light specular, no local viewer", D3DLIGHT_DIRECTIONAL, true, false, 0.0f, NULL },
 		{ "light point, spot specular, no local viewer", D3DLIGHT_SPOT, true, false, 0.0f, NULL },
 		{ "light point with its own ambient", D3DLIGHT_POINT, false, true, 0.1f, "F1: per-light ambient" },
-		{ "light specular, local viewer", D3DLIGHT_DIRECTIONAL, true, true, 0.0f, "F2: LOCALVIEWER" } };
+		{ "light specular, local viewer", D3DLIGHT_DIRECTIONAL, true, true, 0.0f, "F2+F6: LOCALVIEWER, and no specular add" } };
 	for (size_t i = 0; i < sizeof(LIGHTS) / sizeof(LIGHTS[0]); ++i) {
 		h.begin(0xFF000000);
 		set_camera(h);
