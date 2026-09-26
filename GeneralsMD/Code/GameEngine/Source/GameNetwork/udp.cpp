@@ -134,7 +134,7 @@ AsciiString GetWSAErrorString( Int error )
 
 UDP::UDP()
 {
-  fd=0;
+  fd=-1;
 #if !defined(_WIN32)
   m_shareAddress=FALSE;
   m_broadcastsOnly=FALSE;
@@ -143,8 +143,17 @@ UDP::UDP()
 
 UDP::~UDP()
 {
-	if (fd)
+	closeSocket();
+}
+
+/* -1 is no socket: what socket() returns on failure (SOCKET_ERROR on Windows, mapped to -1 in Bind).  It
+   was 0, which is a valid descriptor off Windows, while a failed socket() left -1 for the destructor to
+   close. */
+void UDP::closeSocket(void)
+{
+	if (fd != -1)
 		closesocket(fd);
+	fd=-1;
 }
 
 Int UDP::Bind(const char *Host,UnsignedShort port)
@@ -178,6 +187,11 @@ Int UDP::Bind(UnsignedInt IP,UnsignedShort Port)
   addr.sin_family=AF_INET;
   addr.sin_port=Port;
   addr.sin_addr.s_addr=IP;
+  /* Each Bind makes a new socket, so the one before it goes first, and one whose bind fails is closed
+     below.  Transport::init retries Bind for up to a second while the port is taken, and every try left
+     its socket open: about 100,000 of them, on every platform, which on a Mac filled the whole system's
+     file table. */
+  closeSocket();
   fd=socket(AF_INET,SOCK_DGRAM,DEFAULT_PROTOCOL);
   #ifdef _WINDOWS
   if (fd==SOCKET_ERROR)
@@ -223,6 +237,7 @@ Int UDP::Bind(UnsignedInt IP,UnsignedShort Port)
   {
     status=GetStatus();
     //CERR("Bind failure (" << status << ") IP " << IP << " PORT " << Port )
+    closeSocket();
     return(status);
   }
 

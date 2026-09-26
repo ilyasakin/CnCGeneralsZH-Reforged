@@ -67,7 +67,7 @@ class UDP
 {
  // DATA
  private:
-  Int       fd; 
+  Int       fd; 	// -1 when there is no socket
   UnsignedInt       myIP;
   UnsignedShort       myPort;
   struct       sockaddr_in  addr;
@@ -100,6 +100,7 @@ class UDP
 // CODE
  private:
   Int           SetBlocking(Int block);
+  void          closeSocket(void);		///< closes fd, if open, and leaves it -1 (none)
 	
 	Int m_lastError;
 
