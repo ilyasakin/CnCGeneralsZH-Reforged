@@ -48,6 +48,7 @@
 #include "miniaudio.h"
 
 #include "MSS/MSS.h"
+#include "MSS/mss_ex_pcm.h"
 
 #ifndef WAVE_FORMAT_IMA_ADPCM
 #define WAVE_FORMAT_IMA_ADPCM 0x0011
@@ -280,13 +281,16 @@ unsigned int decodeAdpcm(const WaveImage &wave, std::vector<short> *out)
 
 struct VoiceMix
 {
-	VoiceMix() : resamplerReady(false), channels(0), gainLeft(0.0f), gainRight(0.0f), pending(0), pendingAt(0) {}
+	VoiceMix() : resamplerReady(false), channels(0), gainLeft(0.0f), gainRight(0.0f), passThrough(false), pending(0), pendingAt(0) {}
 
 	ma_resampler resampler;
 	bool resamplerReady;
 	unsigned channels;
 	float gainLeft;
 	float gainRight;
+	// An XAudio2 voice with the default matrix rather than a panned Miles one: left to left and right
+	// to right (a mono source to both), each at its gain.  The movies' voice (mss_ex_pcm.h).
+	bool passThrough;
 	// Frames already converted to float and not yet taken by the resampler, kept across mix passes
 	// so that nothing is dropped between them.
 	float input[MIX_CHUNK_FRAMES * 2];
@@ -357,7 +361,13 @@ bool mixVoice(VoiceMix *mix, SourceRead read, void *source, float *output, unsig
 		ma_resampler_process_pcm_frames(&mix->resampler, mix->input + (size_t)mix->pendingAt * mix->channels,
 			&inFrames, resampled, &outFrames);
 
-		for (ma_uint64 frame = 0; frame < outFrames; ++frame) {
+		for (ma_uint64 frame = 0; mix->passThrough && frame < outFrames; ++frame) {
+			const float left = resampled[frame * mix->channels];
+			const float right = mix->channels >= 2 ? resampled[frame * mix->channels + 1] : left;
+			output[(done + frame) * OUTPUT_CHANNELS + 0] += mix->gainLeft * left;
+			output[(done + frame) * OUTPUT_CHANNELS + 1] += mix->gainRight * right;
+		}
+		for (ma_uint64 frame = 0; !mix->passThrough && frame < outFrames; ++frame) {
 			// XAudio2's matrix row for each output speaker has every source channel at the same gain.
 			float sum = 0.0f;
 			for (unsigned channel = 0; channel < mix->channels; ++channel) {
@@ -443,6 +453,23 @@ struct Stream
 	VoiceMix mix;
 };
 
+// A movie's voice (mss_ex_pcm.h): PCM its owner pushes, mixed until the queue runs dry, and again
+// whenever more arrives.
+struct PcmVoice
+{
+	PcmVoice() : channels(0), rate(0), queuedAt(0), queuedFrames(0), sourceDry(false) {}
+
+	unsigned channels;
+	unsigned rate;
+	// Under mixLock: the chunks not yet mixed, how far into the front one the mix is, and how many
+	// frames that leaves.
+	std::deque<std::vector<short> > queued;
+	size_t queuedAt;
+	long long queuedFrames;
+	bool sourceDry;
+	VoiceMix mix;
+};
+
 struct Listener
 {
 	float positionX, positionY, positionZ;
@@ -493,6 +520,7 @@ struct Engine
 	std::atomic<bool> serviceRunning;
 	std::vector<Sample *> samples;
 	std::vector<Stream *> streams;
+	std::vector<PcmVoice *> pcmVoices;
 	Listener listener;
 	bool started;
 	unsigned deviceRate;
@@ -801,6 +829,29 @@ unsigned readStreamSource(void *source, float *out, unsigned maxFrames)
 	return given;
 }
 
+// Under mixLock.
+unsigned readPcmSource(void *source, float *out, unsigned maxFrames)
+{
+	PcmVoice *voice = (PcmVoice *)source;
+	unsigned given = 0;
+	while (given < maxFrames && !voice->queued.empty()) {
+		const std::vector<short> &chunk = voice->queued.front();
+		const size_t chunkFrames = chunk.size() / voice->channels;
+		const size_t take = chunkFrames - voice->queuedAt < maxFrames - given ? chunkFrames - voice->queuedAt : maxFrames - given;
+		for (size_t index = 0; index < take * voice->channels; ++index) {
+			out[(size_t)given * voice->channels + index] = (float)chunk[voice->queuedAt * voice->channels + index] / 32768.0f;
+		}
+		given += (unsigned)take;
+		voice->queuedAt += take;
+		if (voice->queuedAt >= chunkFrames) {
+			voice->queued.pop_front();
+			voice->queuedAt = 0;
+		}
+	}
+	voice->queuedFrames -= given;
+	return given;
+}
+
 // Called with the engine lock held.
 void serviceStream(Stream *stream, std::vector<AILSTREAMCB> *callbacks, std::vector<HSTREAM> *callbackHandles)
 {
@@ -1004,6 +1055,12 @@ void dataCallback(ma_device *, void *output, const void *, ma_uint32 frameCount)
 		stream->sourceDry = false;
 		mixVoice(&stream->mix, readStreamSource, stream, out, frameCount, &stream->sourceDry);
 	}
+	for (size_t i = 0; i < g_engine.pcmVoices.size(); ++i) {
+		PcmVoice *voice = g_engine.pcmVoices[i];
+		// Dry is only until the owner queues more, so it is asked afresh each pass, as a stream's is.
+		voice->sourceDry = false;
+		mixVoice(&voice->mix, readPcmSource, voice, out, frameCount, &voice->sourceDry);
+	}
 
 	if (g_engine.capture != NULL) {
 		writeCapture(g_engine.capture, out, frameCount);
@@ -1118,6 +1175,102 @@ S32 AILCALL AIL_ex_start_capture(const char *pathname)
 		delete previous;
 	}
 	return 1;
+}
+
+// =================================================================================================
+// The movies' voice (mss_ex_pcm.h)
+// =================================================================================================
+
+HEXPCM AILCALL AIL_ex_open_pcm(S32 rate, S32 channels)
+{
+	std::lock_guard<std::recursive_mutex> guard(g_engine.lock);
+	if (!g_engine.deviceReady || rate <= 0 || (channels != 1 && channels != 2)) {
+		return NULL;
+	}
+	PcmVoice *voice = new PcmVoice;
+	voice->channels = (unsigned)channels;
+	voice->rate = (unsigned)rate;
+	if (!prepareResampler(&voice->mix, voice->channels, voice->rate, g_engine.deviceRate)) {
+		delete voice;
+		return NULL;
+	}
+	voice->mix.passThrough = true;
+	voice->mix.gainLeft = voice->mix.gainRight = 1.0f;
+	std::lock_guard<std::mutex> mixGuard(g_engine.mixLock);
+	g_engine.pcmVoices.push_back(voice);
+	return (HEXPCM)voice;
+}
+
+void AILCALL AIL_ex_close_pcm(HEXPCM handle)
+{
+	PcmVoice *voice = (PcmVoice *)handle;
+	if (voice == NULL) {
+		return;
+	}
+	std::lock_guard<std::recursive_mutex> guard(g_engine.lock);
+	{
+		std::lock_guard<std::mutex> mixGuard(g_engine.mixLock);
+		for (size_t i = 0; i < g_engine.pcmVoices.size(); ++i) {
+			if (g_engine.pcmVoices[i] == voice) {
+				g_engine.pcmVoices.erase(g_engine.pcmVoices.begin() + (ptrdiff_t)i);
+				break;
+			}
+		}
+	}
+	if (voice->mix.resamplerReady) {
+		ma_resampler_uninit(&voice->mix.resampler, NULL);
+	}
+	delete voice;
+}
+
+S32 AILCALL AIL_ex_queue_pcm(HEXPCM handle, const S16 *data, S32 frames)
+{
+	PcmVoice *voice = (PcmVoice *)handle;
+	if (voice == NULL || data == NULL || frames <= 0) {
+		return 0;
+	}
+	std::vector<short> chunk(data, data + (size_t)frames * voice->channels);
+	std::lock_guard<std::recursive_mutex> guard(g_engine.lock);
+	std::lock_guard<std::mutex> mixGuard(g_engine.mixLock);
+	voice->queued.push_back(std::vector<short>());
+	voice->queued.back().swap(chunk);
+	voice->queuedFrames += frames;
+	return frames;
+}
+
+S32 AILCALL AIL_ex_pcm_queued_frames(HEXPCM handle)
+{
+	PcmVoice *voice = (PcmVoice *)handle;
+	if (voice == NULL) {
+		return 0;
+	}
+	std::lock_guard<std::mutex> mixGuard(g_engine.mixLock);
+	return (S32)voice->queuedFrames;
+}
+
+void AILCALL AIL_ex_flush_pcm(HEXPCM handle)
+{
+	PcmVoice *voice = (PcmVoice *)handle;
+	if (voice == NULL) {
+		return;
+	}
+	std::lock_guard<std::recursive_mutex> guard(g_engine.lock);
+	std::lock_guard<std::mutex> mixGuard(g_engine.mixLock);
+	voice->queued.clear();
+	voice->queuedAt = 0;
+	voice->queuedFrames = 0;
+	resetResampler(&voice->mix);
+}
+
+void AILCALL AIL_ex_set_pcm_volume(HEXPCM handle, F32 volume)
+{
+	PcmVoice *voice = (PcmVoice *)handle;
+	if (voice == NULL) {
+		return;
+	}
+	std::lock_guard<std::recursive_mutex> guard(g_engine.lock);
+	std::lock_guard<std::mutex> mixGuard(g_engine.mixLock);
+	voice->mix.gainLeft = voice->mix.gainRight = clampUnit(volume);
 }
 
 void AILCALL AIL_ex_stop_capture(void)

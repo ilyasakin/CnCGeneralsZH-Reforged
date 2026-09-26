@@ -48,3 +48,11 @@ result blocks a merge.
 
 - Do not make CI the only place tests run. The project's habit of proving a fix by putting the bug
   back and watching the test fail is worth more than a green badge, and it happens locally.
+
+## Packaging note from V1 (2026-09-26)
+
+The POSIX build links FFmpeg 8.1.2 statically (LGPL 2.1 or later; V1's task file has why that is
+compatible). Whatever packages the macOS app or a Linux build must ship FFmpeg's licence text
+(`<build>/ffmpeg/LICENSE.txt`, which the build installs) and a pointer to the source: the release
+tarball URL, the configure line in `Tools/ffmpeg-build-posix.sh`, and this repository for relinking.
+Windows ships its DLLs with `Libraries/Source/FFmpeg/dist/LICENSE.txt` beside them already.
