@@ -364,8 +364,8 @@ loose file to the game.
   before the copy.
 
 **E1 runs the shipped resolution.** `replay-check.sh` no longer copies `Code/Data` into its farm. It
-passes `-overlay <staged>`, the code path the bundle takes, and writes nothing into the farm. It also
-hashes the install before and after its runs. That ends E1's known limit that it ran without the
+passes `-overlay <staged>`, the code path the bundle takes, and writes nothing into the farm. (Its
+install hash check is -18's, on E1d.) That ends E1's known limit that it ran without the
 fork's `Reforged*.big`: they are in the staged overlay. The seeds' CRCs are unchanged, and
 `replay_check` passes.
 
