@@ -3,18 +3,33 @@
  * Formats' block layouts, mip chains, locks and their D3D9 rules, COM reference counting between a
  * texture and its surfaces, cube and volume textures, and buffers; and the pixel codec
  * (PosixPixelCodec) against hand-worked values of each format's bit layout and of DXT's blocks; and
- * the image operations (PosixImageOps): block copies, conversions, D3DX's filters, fills.  Run under ASan where it can be,
+ * the image operations (PosixImageOps): block copies, conversions, D3DX's filters, fills; and the device's
+ * A2 half (PosixDevice9Resources, PosixD3D9Caps): a device made with no window, as -headless makes it,
+ * its implicit surfaces, Clear read back, copies, and caps that claim exactly what the device and the
+ * fixed-function generator do.  Run under ASan where it can be,
  * since a reference count that is off shows up as a leak or a use after free, not as a wrong value.
  */
 #include "test_harness.h"
 
+#include "PosixD3D9Caps.h"
+#include "PosixDevice9.h"
 #include "PosixImageOps.h"
+#include "ffshader.h"
+#include "ffstate_values.h"
 #include "PosixPixelCodec.h"
 #include "PosixResources9.h"
 
 #include <string.h>
 
 namespace {
+
+// A COM object's count, read without changing it.
+template <class Object>
+uint32_t references_of(Object *object)
+{
+	object->AddRef();
+	return object->Release();
+}
 
 PosixFormatLayout layout_of(D3DFORMAT format)
 {
@@ -143,15 +158,15 @@ TEST(posix_block_format_locks_are_on_block_boundaries)
 TEST(posix_texture_surfaces_count_on_the_texture)
 {
 	PosixTexture9 *texture = PosixTexture9::create(32, 32, 0, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED);
-	CHECK_EQ(texture->references(), 1u);
+	CHECK_EQ(references_of(texture), 1u);
 	IDirect3DSurface9 *surface = NULL;
 	CHECK_EQ(texture->GetSurfaceLevel(1, &surface), D3D_OK);
 	CHECK(surface != NULL);
-	CHECK_EQ(texture->references(), 2u);
+	CHECK_EQ(references_of(texture), 2u);
 	IDirect3DSurface9 *same = NULL;
 	texture->GetSurfaceLevel(1, &same);
 	CHECK(same == surface);
-	CHECK_EQ(texture->references(), 3u);
+	CHECK_EQ(references_of(texture), 3u);
 	same->Release();
 
 	D3DSURFACE_DESC desc;
@@ -162,7 +177,7 @@ TEST(posix_texture_surfaces_count_on_the_texture)
 	void *container = NULL;
 	CHECK_EQ(surface->GetContainer(IID_IDirect3DTexture9, &container), D3D_OK);
 	CHECK(container == (IDirect3DTexture9 *)texture);
-	CHECK_EQ(texture->references(), 3u);
+	CHECK_EQ(references_of(texture), 3u);
 	((IDirect3DTexture9 *)container)->Release();
 	CHECK_EQ(surface->GetContainer(IID_IDirect3DCubeTexture9, &container), POSIX_D3D_NOINTERFACE);
 	CHECK(container == NULL);
@@ -507,4 +522,253 @@ TEST(posix_fills_colour_and_depth)
 	CHECK_EQ(posixFillDepth(depth, all, D3DCLEAR_ZBUFFER, 0.0f, 0), D3D_OK);		// the stencil stays
 	CHECK_EQ(argb_at(depth, 3, 3), 0x00000009u);
 	CHECK_EQ(posixFillDepth(target, all, D3DCLEAR_ZBUFFER, 0.0f, 0), D3DERR_INVALIDCALL);
+}
+
+namespace {
+
+D3DPRESENT_PARAMETERS headless_parameters()
+{
+	D3DPRESENT_PARAMETERS parameters;
+	memset(&parameters, 0, sizeof(parameters));
+	parameters.BackBufferWidth = 100;			// what -headless asks for (CommandLine.cpp's HEADLESS_RESOLUTION)
+	parameters.BackBufferHeight = 100;
+	parameters.BackBufferFormat = D3DFMT_X8R8G8B8;
+	parameters.BackBufferCount = 1;
+	parameters.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	parameters.Windowed = 1;
+	parameters.EnableAutoDepthStencil = 1;
+	parameters.AutoDepthStencilFormat = D3DFMT_D24S8;
+	return parameters;
+}
+
+// A device with no window, as -headless makes it; NULL (and a failed check) if it cannot be made.
+IDirect3DDevice9 *headless_device(PosixDirect3D9 **adapter_out)
+{
+	PosixDirect3D9 *adapter = new PosixDirect3D9;
+	D3DPRESENT_PARAMETERS parameters = headless_parameters();
+	IDirect3DDevice9 *device = NULL;
+	const RenderResult result = adapter->CreateDevice(0, D3DDEVTYPE_HAL, NULL, D3DCREATE_HARDWARE_VERTEXPROCESSING,
+		&parameters, &device);
+	CHECK_EQ(result, D3D_OK);
+	*adapter_out = adapter;
+	return device;
+}
+
+uint32_t pixel_of(IDirect3DSurface9 *surface, unsigned int x, unsigned int y)
+{
+	D3DLOCKED_RECT locked;
+	if (surface->LockRect(&locked, NULL, D3DLOCK_READONLY) != D3D_OK) return 0xdeadbeefu;
+	const uint32_t value = ((const uint32_t *)((const uint8_t *)locked.pBits + y * locked.Pitch))[x];
+	surface->UnlockRect();
+	return value;
+}
+
+} // namespace
+
+TEST(posix_device_without_a_window_has_its_implicit_surfaces)
+{
+	PosixDirect3D9 *adapter = NULL;
+	IDirect3DDevice9 *device = headless_device(&adapter);
+	if (device == NULL) { adapter->Release(); return; }
+
+	IDirect3DSurface9 *back = NULL, *target = NULL, *depth = NULL;
+	CHECK_EQ(device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &back), D3D_OK);
+	CHECK_EQ(device->GetRenderTarget(0, &target), D3D_OK);
+	CHECK(back == target);															// render target 0 is the back buffer
+	CHECK_EQ(device->GetDepthStencilSurface(&depth), D3D_OK);
+	D3DSURFACE_DESC desc;
+	back->GetDesc(&desc);
+	CHECK_EQ(desc.Width, 100u);
+	CHECK_EQ(desc.Format, D3DFMT_X8R8G8B8);
+	CHECK_EQ(desc.Usage, (RenderUInt32)D3DUSAGE_RENDERTARGET);
+	depth->GetDesc(&desc);
+	CHECK_EQ(desc.Format, D3DFMT_D24S8);
+	IDirect3DSurface9 *none = (IDirect3DSurface9 *)1;
+	CHECK_EQ(device->GetRenderTarget(1, &none), D3DERR_NOTFOUND);
+	CHECK(none == NULL);
+
+	// the renderer's headless init: W3DShaderManager::init asks for the render target and releases it
+	back->Release(); target->Release(); depth->Release();
+
+	// Reset makes them again, at the new size
+	D3DPRESENT_PARAMETERS bigger = headless_parameters();
+	bigger.BackBufferWidth = 320;
+	bigger.BackBufferHeight = 200;
+	CHECK_EQ(device->Reset(&bigger), D3D_OK);
+	CHECK_EQ(device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &back), D3D_OK);
+	back->GetDesc(&desc);
+	CHECK_EQ(desc.Width, 320u);
+	back->Release();
+	CHECK_EQ(device->Release(), 0u);
+	CHECK_EQ(adapter->Release(), 0u);
+}
+
+TEST(posix_device_clear_is_real_and_reads_back)
+{
+	PosixDirect3D9 *adapter = NULL;
+	IDirect3DDevice9 *device = headless_device(&adapter);
+	if (device == NULL) { adapter->Release(); return; }
+
+	CHECK_EQ(device->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0x00336699u, 1.0f, 7), D3D_OK);
+	// one rectangle, clipped by a viewport that starts at 10, 10
+	D3DVIEWPORT9 viewport = { 10, 10, 50, 50, 0.0f, 1.0f };
+	CHECK_EQ(device->SetViewport(&viewport), D3D_OK);
+	D3DRECT rect = { 0, 0, 20, 20 };
+	CHECK_EQ(device->Clear(1, &rect, D3DCLEAR_TARGET, 0x00ff0000u, 0.0f, 0), D3D_OK);
+
+	IDirect3DSurface9 *target = NULL, *copy = NULL;
+	device->GetRenderTarget(0, &target);
+	CHECK_EQ(device->CreateOffscreenPlainSurface(100, 100, D3DFMT_X8R8G8B8, D3DPOOL_SYSTEMMEM, &copy, NULL), D3D_OK);
+	CHECK_EQ(device->GetRenderTargetData(target, copy), D3D_OK);
+	CHECK_EQ(pixel_of(copy, 50, 50), 0xff336699u);
+	CHECK_EQ(pixel_of(copy, 15, 15), 0xffff0000u);	// inside both the rectangle and the viewport
+	CHECK_EQ(pixel_of(copy, 5, 5), 0xff336699u);		// inside the rectangle, outside the viewport
+	CHECK_EQ(pixel_of(copy, 25, 15), 0xff336699u);	// inside the viewport, outside the rectangle
+
+	IDirect3DSurface9 *depth = NULL;
+	device->GetDepthStencilSurface(&depth);
+	CHECK_EQ(pixel_of(depth, 0, 0), 0xffffff07u);		// depth 1, stencil 7
+
+	// a stencil clear needs a stencil: with D16 bound it is refused
+	IDirect3DSurface9 *d16 = NULL;
+	CHECK_EQ(device->CreateDepthStencilSurface(100, 100, D3DFMT_D16, D3DMULTISAMPLE_NONE, 0, 0, &d16, NULL), D3D_OK);
+	device->SetDepthStencilSurface(d16);
+	CHECK_EQ(device->Clear(0, NULL, D3DCLEAR_STENCIL, 0, 1.0f, 0), D3DERR_INVALIDCALL);
+	CHECK_EQ(device->Clear(0, NULL, D3DCLEAR_ZBUFFER, 0, 0.5f, 0), D3D_OK);
+
+	// SetRenderTarget(0) resets the viewport to the whole target
+	CHECK_EQ(device->SetRenderTarget(0, target), D3D_OK);
+	D3DVIEWPORT9 after;
+	device->GetViewport(&after);
+	CHECK_EQ(after.X, 0u);
+	CHECK_EQ(after.Width, 100u);
+	CHECK_EQ(device->SetRenderTarget(0, NULL), D3DERR_INVALIDCALL);
+
+	d16->Release(); depth->Release(); copy->Release(); target->Release();
+	CHECK_EQ(device->Release(), 0u);
+	adapter->Release();
+}
+
+TEST(posix_device_copies_textures_and_stretches_surfaces)
+{
+	PosixDirect3D9 *adapter = NULL;
+	IDirect3DDevice9 *device = headless_device(&adapter);
+	if (device == NULL) { adapter->Release(); return; }
+
+	IDirect3DTexture9 *system = NULL, *video = NULL;
+	CHECK_EQ(device->CreateTexture(8, 8, 0, 0, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &system, NULL), D3D_OK);
+	CHECK_EQ(device->CreateTexture(8, 8, 2, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &video, NULL), D3D_OK);
+	D3DLOCKED_RECT locked;
+	system->LockRect(1, &locked, NULL, 0);
+	((uint32_t *)locked.pBits)[0] = 0x11223344u;
+	system->UnlockRect(1);
+	CHECK_EQ(device->UpdateTexture(system, video), D3D_OK);		// the destination's two levels, from the top
+	IDirect3DSurface9 *level1 = NULL;
+	video->GetSurfaceLevel(1, &level1);
+	CHECK_EQ(pixel_of(level1, 0, 0), 0x11223344u);
+	CHECK_EQ(device->UpdateTexture(video, system), D3DERR_INVALIDCALL);	// more levels than the source has
+
+	// StretchRect: level 1 (4x4) into a 2x2 render target, point-filtered
+	IDirect3DSurface9 *small = NULL;
+	CHECK_EQ(device->CreateRenderTarget(2, 2, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, 0, &small, NULL), D3D_OK);
+	CHECK_EQ(device->StretchRect(level1, NULL, small, NULL, D3DTEXF_POINT), D3D_OK);
+	D3DSURFACE_DESC desc;
+	small->GetDesc(&desc);
+	CHECK_EQ(desc.Width, 2u);
+	level1->Release(); small->Release(); system->Release(); video->Release();
+	CHECK_EQ(device->Release(), 0u);
+	adapter->Release();
+}
+
+TEST(posix_device_creates_what_its_caps_offer_and_nothing_else)
+{
+	PosixDirect3D9 *adapter = NULL;
+	IDirect3DDevice9 *device = headless_device(&adapter);
+	if (device == NULL) { adapter->Release(); return; }
+
+	const D3DFORMAT formats[] = { D3DFMT_A8R8G8B8, D3DFMT_X8R8G8B8, D3DFMT_R5G6B5, D3DFMT_A1R5G5B5, D3DFMT_A4R4G4B4,
+		D3DFMT_R8G8B8, D3DFMT_X1R5G5B5, D3DFMT_L8, D3DFMT_A8, D3DFMT_A8L8, D3DFMT_P8, D3DFMT_V8U8, D3DFMT_X8L8V8U8,
+		D3DFMT_Q8W8V8U8, D3DFMT_DXT1, D3DFMT_DXT2, D3DFMT_DXT3, D3DFMT_DXT4, D3DFMT_DXT5, D3DFMT_YUY2, D3DFMT_D24S8 };
+	int offered = 0;
+	for (size_t i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i)
+	{
+		const bool check = adapter->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_TEXTURE, formats[i]) == D3D_OK;
+		IDirect3DTexture9 *texture = NULL;
+		const bool made = device->CreateTexture(16, 16, 1, 0, formats[i], D3DPOOL_MANAGED, &texture, NULL) == D3D_OK;
+		CHECK_EQ(check, made);
+		if (texture != NULL) texture->Release();
+		offered += check ? 1 : 0;
+	}
+	CHECK_EQ(offered, 13);		// the agreed texture list: 8 uncompressed and DXT1-5
+	CHECK(adapter->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_TEXTURE, D3DFMT_P8) != D3D_OK);
+	CHECK(adapter->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, 0, D3DRTYPE_TEXTURE, D3DFMT_V8U8) != D3D_OK);
+	CHECK_EQ(adapter->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_RENDERTARGET, D3DRTYPE_TEXTURE, D3DFMT_A8R8G8B8), D3D_OK);
+	CHECK(adapter->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_RENDERTARGET, D3DRTYPE_TEXTURE, D3DFMT_DXT1) != D3D_OK);
+	CHECK_EQ(adapter->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_SURFACE, D3DFMT_D24S8), D3D_OK);
+	CHECK(adapter->CheckDeviceFormat(0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8, D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_SURFACE, D3DFMT_D32) != D3D_OK);
+	IDirect3DTexture9 *texture = NULL;
+	CHECK_EQ(device->CreateTexture(16, 16, 0, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_DXT1, D3DPOOL_DEFAULT, &texture, NULL), D3DERR_INVALIDCALL);
+	void *shared = NULL;
+	CHECK_EQ(device->CreateTexture(16, 16, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &texture, &shared), D3DERR_INVALIDCALL);
+	CHECK_EQ(device->Release(), 0u);
+	adapter->Release();
+}
+
+TEST(posix_caps_name_no_vendor_and_no_shaders)
+{
+	PosixDirect3D9 *adapter = new PosixDirect3D9;
+	D3DADAPTER_IDENTIFIER9 identifier;
+	CHECK_EQ(adapter->GetAdapterIdentifier(0, 0, &identifier), D3D_OK);
+	CHECK_EQ(identifier.VendorId, 0u);
+	CHECK_EQ(identifier.DeviceId, 0u);
+	CHECK_STR(identifier.Driver, "posixd3d9");
+	D3DCAPS9 caps;
+	CHECK_EQ(adapter->GetDeviceCaps(0, D3DDEVTYPE_HAL, &caps), D3D_OK);
+	CHECK_EQ(caps.VertexShaderVersion, 0u);
+	CHECK_EQ(caps.PixelShaderVersion, 0u);
+	CHECK_EQ(caps.MaxSimultaneousTextures, 8u);
+	CHECK_EQ(caps.MaxTextureWidth, 8192u);
+	CHECK((caps.DevCaps & D3DDEVCAPS_HWTRANSFORMANDLIGHT) != 0);
+	CHECK((caps.DevCaps & D3DDEVCAPS_NPATCHES) == 0);
+	CHECK_EQ(caps.TextureOpCaps & (RenderUInt32)(D3DTEXOPCAPS_BUMPENVMAP | D3DTEXOPCAPS_BUMPENVMAPLUMINANCE | D3DTEXOPCAPS_PREMODULATE), 0u);
+	CHECK_EQ(adapter->GetDeviceCaps(1, D3DDEVTYPE_HAL, &caps), D3DERR_INVALIDCALL);
+	adapter->Release();
+}
+
+// The caps claim a stage operation exactly when the fixed-function generator can write it: A3 draws
+// every stage through that generator, so a claim it cannot honour would be a draw that fails.
+TEST(posix_caps_texture_ops_are_the_generators)
+{
+	PosixDirect3D9 *adapter = new PosixDirect3D9;
+	D3DCAPS9 caps;
+	adapter->GetDeviceCaps(0, D3DDEVTYPE_HAL, &caps);
+	adapter->Release();
+	int claimed = 0;
+	for (FixedFunctionValue op = FF_TOP_DISABLE; op <= FF_TOP_LERP; ++op)
+	{
+		CombinerDescription description;
+		memset(&description, 0, sizeof(description));
+		description.StageCount = 1;
+		CombinerStage &stage = description.Stages[0];
+		// DISABLE is not an operation the generator writes but the end of the chain: a colour DISABLE
+		// ends the description before the generator sees it (dx11backend.cpp's builder), and an alpha
+		// DISABLE keeps the alpha the stage before left.  So DISABLE is asked as an alpha operation.
+		const bool disable = (op == FF_TOP_DISABLE);
+		stage.ColourOperation = disable ? FF_TOP_SELECTARG1 : op;
+		stage.ColourArgument0 = FF_TA_CURRENT;
+		stage.ColourArgument1 = FF_TA_TEXTURE;
+		stage.ColourArgument2 = FF_TA_DIFFUSE;
+		stage.AlphaOperation = disable ? FF_TOP_DISABLE : FF_TOP_SELECTARG1;
+		stage.AlphaArgument1 = FF_TA_TEXTURE;
+		stage.TextureBound = true;
+		std::string hlsl;
+		const bool written = CombinerShader_Generate(description, COMBINER_SHADER_TARGET_SDL3_GPU, hlsl);
+		const bool claim = (caps.TextureOpCaps & (1u << (op - 1))) != 0;		// D3DTEXOPCAPS: D3DTOP_x is bit x - 1
+		if (written != claim)
+			printf("  stage op %u: the generator %s it, the caps %s it\n", (unsigned)op,
+				written ? "writes" : "refuses", claim ? "claim" : "do not claim");
+		CHECK_EQ(written, claim);
+		claimed += claim ? 1 : 0;
+	}
+	CHECK_EQ(claimed, 23);
 }

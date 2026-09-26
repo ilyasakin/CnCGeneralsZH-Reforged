@@ -45,6 +45,7 @@
 #define POSIXRESOURCES9_H
 
 #include "Platform/D3D9Posix.h"
+#include "PosixDevice9.h"		// PosixRefCounted, the device's COM counting
 
 #include <atomic>
 #include <stddef.h>
@@ -123,29 +124,6 @@ inline unsigned int posixMipSize( unsigned int size, unsigned int level )
 unsigned int posixFullChainLength( unsigned int width, unsigned int height, unsigned int depth );
 
 //-------------------------------------------------------------------------------------------------
-
-/** AddRef and Release for an object that owns its own count. */
-template <class Interface>
-class PosixRefCounted : public Interface
-{
-public:
-	virtual uint32_t AddRef() { return ++m_references; }
-	virtual uint32_t Release()
-	{
-		const uint32_t left = --m_references;
-		if (left == 0)
-			delete this;
-		return left;
-	}
-	uint32_t references() const { return m_references; }
-
-protected:
-	PosixRefCounted() : m_references( 1 ) {}
-	virtual ~PosixRefCounted() {}
-
-private:
-	std::atomic<uint32_t> m_references;
-};
 
 /** The resource properties every resource keeps. */
 struct PosixResourceInfo
