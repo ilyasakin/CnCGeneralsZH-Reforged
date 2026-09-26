@@ -25,9 +25,41 @@
 
 #include <SDL3/SDL.h>
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static SdlResourceMirrors * LiveMirrors = NULL;
+
+// A development aid until A3d's capture: ZH_GPU_DUMP_TEXTURES=<dir> writes level 0 of every texture at
+// least 256 wide, decoded to RGB, and its alpha as a second picture, each time it goes up.
+static void dump_texture_if_asked(const PosixImage & image, const void * owner, unsigned int upload)
+{
+	const char * dir = getenv("ZH_GPU_DUMP_TEXTURES");
+	if (dir == NULL || image.width() < 256) {
+		return;
+	}
+	std::vector<uint8_t> bgra((size_t)image.width() * image.height() * 4);
+	if (!Sdl_Convert_Level(image, false, &bgra[0])) {
+		return;
+	}
+	for (int alpha = 0; alpha < 2; ++alpha) {
+		char path[1024];
+		snprintf(path, sizeof(path), "%s/tex_%p_%u_%ux%u_fmt%u%s.ppm", dir, owner, upload, image.width(), image.height(),
+			(unsigned int)image.format(), alpha ? "_alpha" : "");
+		FILE * file = fopen(path, "wb");
+		if (file == NULL) {
+			return;
+		}
+		fprintf(file, "P6\n%u %u\n255\n", image.width(), image.height());
+		for (size_t i = 0; i < bgra.size(); i += 4) {
+			const uint8_t rgb[3] = { alpha ? bgra[i + 3] : bgra[i + 2], alpha ? bgra[i + 3] : bgra[i + 1],
+				alpha ? bgra[i + 3] : bgra[i] };
+			fwrite(rgb, 1, 3, file);
+		}
+		fclose(file);
+	}
+}
 
 bool Sdl_Texture_Format(D3DFORMAT format, unsigned int width, unsigned int height, bool bc_ok,
 	unsigned int & sdl_format, bool & native)
@@ -253,6 +285,7 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 	if (stale) {
 		Prepare_Update(copy);
 		copy.Versions.resize(levels);
+		dump_texture_if_asked(texture->level(0), texture, TexturesUploaded);
 		for (unsigned int level = 0; level < levels; ++level) {
 			const PosixImage & image = texture->level(level);
 			uint32_t offset = 0;

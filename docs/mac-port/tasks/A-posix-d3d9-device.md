@@ -542,3 +542,34 @@ passing, so the list cannot go stale. F1-F4 and F6 are in D3's shared generator 
 
 Not findings: table fog (refused by name; the engine never sets it), and N6 (lit specular only with
 SPECULARENABLE, which the GPU matches).
+
+### The first windowed skirmish on Metal (2026-09-26)
+
+![The first windowed skirmish on macOS, SDL3 GPU on Metal, frame 599](../a3c-first-skirmish-metal.png)
+
+`generals -root <farm> -randommap 1234 2 small -autoskirmish 2 -seed 1234 -maxframes 600` without
+`-headless`, on a rule-9 symlink farm with `Code/Data` overlaid.
+
+Result: exit 0 at the frame limit. 2,893 presents and 1,991,434 draws were recorded on Metal (M3 Pro).
+There was one refusal reason: "a render target other than the back buffer (A3d)", 24,157 draws. No
+program, pipeline, texture, sampler or format was refused. The picture is present 599, taken before
+the gamma ramp by the `ZH_GPU_DUMP_FRAMES` aid.
+
+It took one fix outside the renderer first: particle orientation was an undefined float→byte cast,
+which ARM64 turned into a read 190 GB past the table. See the latent-UB list in the README.
+
+**The picture was replaced after defect #27.** The first dump had the trees as black silhouettes.
+`ZH_GPU_TRACE` showed their shroud stage (stage 1, camera-space texgen, set 0) sampling with stage 0's
+coordinates. That was a generator mismatch, which Windows' D3D11 renderer has too. D3D9's combiner shaders do not,
+by bfb60e17's measurement (README #27). The picture above is the same run after the fix, where the pale patches are the blossom trees,
+textured and shrouded. The run: exit 0, 2,440 presents, 1,633,250 draws, and the same single refusal
+reason (20,281 render-target draws).
+
+**#27 was the terrain's fault too.** The trace of the terrain draws shows the blend-tile pass using
+stage 0 with `TEXCOORDINDEX` 1 (the blend tile's own set) and alpha blending on. Before #27 its pixel
+program sampled `TexCoord[1]`, which is stage 1's slot. Stage 1 is disabled there, so that slot held
+(0, 0), and every blend tile was one texel of the atlas: the blotchy, blocky patches. In the picture
+above the tiles blend with soft edges. It has not been compared with a Windows frame; that needs E4's
+CrossOver run.
+
+**Known wrong in this picture:** the radar is empty. It is a render target, which is A3d.
