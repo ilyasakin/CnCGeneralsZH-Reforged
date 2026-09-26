@@ -1219,7 +1219,7 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
   # A3: with a window the device draws through SDL3 GPU, and compiles its own small programs (the gamma
   # pass) the way the generated ones are compiled.
-  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile)
+  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile ffshader ffvertex)
 
   # A3a's frame: a clear read back, and the gamma pass through a picture that shows any flip.  Needs a GPU
   # but no window; exits 77 (skipped, and ctest says so) where SDL has no GPU device to give.
@@ -1229,6 +1229,15 @@ if(ZH_PLATFORM_POSIX)
     ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
   target_link_libraries(sdl_gpu_frame_selfcheck PRIVATE posixd3d9 SDL3::SDL3-static)
   add_test(NAME sdl_gpu_frame_selfcheck COMMAND sdl_gpu_frame_selfcheck)
+
+  # A3c's resolve: the device's state into the generators' descriptions and the constants their
+  # programs read, on a headless device.  No GPU.
+  add_executable(posix_draw_resolve_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_draw_resolve.cpp)
+  set_target_properties(posix_draw_resolve_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(posix_draw_resolve_selfcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(posix_draw_resolve_selfcheck PRIVATE posixd3d9 ffshader ffvertex)
+  add_test(NAME posix_draw_resolve_selfcheck COMMAND posix_draw_resolve_selfcheck)
   set_tests_properties(sdl_gpu_frame_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
   # A2's half of the device (a contributor): the resources, the pixel codec, the image operations, the device's
