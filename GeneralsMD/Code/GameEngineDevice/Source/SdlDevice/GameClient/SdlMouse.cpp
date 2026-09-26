@@ -233,6 +233,11 @@ void SdlMouse::setVisibility( Bool visible )
 
 void SdlMouse::initCursorResources( void )
 {
+	/* Windows' LoadCursorFromFile needs no display, so a -headless run there loads the cursors too.  SDL's
+		 cursors need SDL's video, which -headless never starts: every one would fail, each a
+		 DEBUG_ASSERTCRASH in a debug build.  A headless run has no pointer to dress (C3b). */
+	if (!SDL_WasInit( SDL_INIT_VIDEO ))
+		return;
 	for (Int cursor = FIRST_CURSOR; cursor < NUM_MOUSE_CURSORS; cursor++)
 	{
 		for (Int direction = 0; direction < m_cursorInfo[cursor].numDirections; direction++)

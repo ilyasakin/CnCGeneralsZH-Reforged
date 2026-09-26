@@ -39,6 +39,10 @@
 
 #include "W3DDevice/Common/W3DConvert.h"
 #include "W3DDevice/GameClient/W3DMouse.h"
+#if !defined(_WIN32)
+#include "SdlDevice/GameClient/SdlInput.h"
+#include <SDL3/SDL_mouse.h>
+#endif
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/W3DScene.h"
@@ -67,7 +71,11 @@ static class MouseThreadClass : public ThreadClass
 {
 
 public:
+#if defined(_WIN32)
 	MouseThreadClass::MouseThreadClass() : ThreadClass() {}
+#else
+	MouseThreadClass() : ThreadClass() {}	// a qualified name inside its own class is MSVC's leniency, not C++
+#endif
 
 	void Thread_Function();
 
@@ -391,7 +399,11 @@ void W3DMouse::setCursor( MouseCursor cursor )
 	//make sure Windows didn't reset our cursor
 	if (m_currentRedrawMode == RM_DX8)
 	{
+#if defined(_WIN32)
 		SetCursor(NULL);	//Kill Windows Cursor
+#else
+		SDL_HideCursor();	// the platform's pointer, as SetCursor(NULL) hid Windows' (C3b)
+#endif
 
 		LPDIRECT3DDEVICE9 m_pDev=DX8Wrapper::_Get_D3D_Device();
 		Bool doImageChange=FALSE;
@@ -414,7 +426,7 @@ void W3DMouse::setCursor( MouseCursor cursor )
 		//it didn't change.  This is needed to prevent the cursor from flickering.
 		if (doImageChange)
 		{
-			HRESULT res;
+			RenderResult res;
 			m_currentHotSpot = m_cursorInfo[cursor].hotSpotPosition;
 			m_currentFMS = m_cursorInfo[cursor].fps/1000.0f;
 			m_currentAnimFrame = 0;	//reset animation when cursor changes
@@ -427,7 +439,11 @@ void W3DMouse::setCursor( MouseCursor cursor )
 	}
 	else if (m_currentRedrawMode == RM_POLYGON)
 	{
+#if defined(_WIN32)
 		SetCursor(NULL);	//Kill Windows Cursor
+#else
+		SDL_HideCursor();	// the platform's pointer, as SetCursor(NULL) hid Windows' (C3b)
+#endif
 		m_currentD3DCursor=NONE;
 		m_currentW3DCursor=NONE;
 		m_currentPolygonCursor = cursor;
@@ -435,7 +451,11 @@ void W3DMouse::setCursor( MouseCursor cursor )
 	}
 	else if (m_currentRedrawMode == RM_W3D)
 	{
+#if defined(_WIN32)
 		SetCursor(NULL);	//Kill Windows Cursor
+#else
+		SDL_HideCursor();	// the platform's pointer, as SetCursor(NULL) hid Windows' (C3b)
+#endif
 		m_currentD3DCursor=NONE;
 		m_currentPolygonCursor=NONE;
 		if (cursor != m_currentW3DCursor)
@@ -474,7 +494,9 @@ void W3DMouse::setCursor( MouseCursor cursor )
 
 }  // end setCursor
 
+#if defined(_WIN32)
 extern HWND ApplicationHWnd;
+#endif
 
 void W3DMouse::draw(void)
 {
@@ -495,11 +517,21 @@ void W3DMouse::draw(void)
 
 			if (TheDisplay && !TheDisplay->getWindowed())
 			{	//if we're full-screen, need to manually move cursor image
+#if defined(_WIN32)
 				POINT ptCursor;
 
 				GetCursorPos( &ptCursor );
 				ScreenToClient( ApplicationHWnd, &ptCursor );
 				m_pDev->SetCursorPosition( ptCursor.x, ptCursor.y, D3DCURSOR_IMMEDIATE_UPDATE);
+#else
+				// where the pointer is over the window, in the game's pixels, as GetCursorPos and
+				// ScreenToClient gave it in the window's (C3b)
+				float windowX = 0, windowY = 0;
+				SDL_GetMouseState( &windowX, &windowY );
+				Int x, y;
+				SdlInput_toGamePixels( windowX, windowY, x, y );
+				m_pDev->SetCursorPosition( x, y, D3DCURSOR_IMMEDIATE_UPDATE);
+#endif
 			}
 			//Check if animated cursor and new frame
 			if (m_currentFrames > 1)

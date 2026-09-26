@@ -157,15 +157,178 @@ a machine where Direct3D 11 failed to start.
   `D3DTOP_DISABLE`, the D3DX oracle comparison.
 
 **Findings on the way, not changed:**
-- W3DDisplay's Windows `CreateBMPFile` reads `(w+7)/8*h*24` bytes from a `3*w*h` image: an over-read on
-  every screenshot. The POSIX writer is correct; the Windows one is left, and reported.
+- W3DDisplay's Windows `CreateBMPFile` read `(w+7)/8*h*24` bytes from a `3*w*h` image: an over-read
+  whenever the width is not a multiple of 8, and a skewed picture when it is not a multiple of 4.
+  Defect #18, fixed after A1 by making the POSIX writer the one writer.
 - `d3dx9math.h`'s Windows `D3DXMatrixInverseFunction` returns `HRESULT` where D3DX returns a
   `D3DXMATRIX *`; nobody reads the result, so nothing breaks today.
 - `dx8fvf.h`'s `VertexFormatXYZNUV2DMAP` is 48 bytes against its FVF's 52; nothing sizes a buffer by
   either.
 - CMake's comment calls `dx8webbrowser.cpp` inert; its header sets `ENABLE_EMBEDDED_BROWSER` to 1.
-- Two pointer truncations (`surfaceclass.cpp`, `assetmgr.cpp`) were real on x64 and are fixed.
+- Two pointer truncations, fixed because clang refuses them, neither reachable by a player:
+  `surfaceclass.cpp`'s would fault above 4 GB but only `Font3D`, which the game never creates, calls it;
+  `assetmgr.cpp`'s subtracts two truncated pointers, which is right modulo 2^32. Both are in the
+  README's latent list. (An earlier report of mine called both shipping defects; that was wrong.)
 
 **Windows:** every changed `.cpp` compiles under MinGW-w64 against the Windows headers with no error it
 did not have before; the Windows `ww3d2` source set is unchanged. Not compiled with MSVC: WINDOWS-DEBT
 has the row.
+
+## A3 design: the draw on SDL3 GPU (approved 2026-09-26)
+
+Not code yet. What A3 builds, in what order, and how a draw is proven right. It is `dx11backend`'s
+design (resolve D3D9 state at the draw into cached programs, pipelines and state objects) on SDL3 GPU,
+with D3's generators and D3's slot contract (`WW3D2/sdl3target.h`), inside the POSIX device.
+
+### Where it runs, and where it does not
+
+- **Only with a window.** Under `-headless` the device has no window and makes no `SDL_GPUDevice`
+  at all; draws succeed and do nothing, and A2's CPU resources are the whole story (decision 8's
+  refinement). With a window, `CreateDevice` makes the `SDL_GPUDevice` (SPIR-V or MSL, as the spike
+  does) and claims C2's window (`RenderWindow` cast back to `SDL_Window *`, in one place).
+- **One thread.** Every SDL GPU call is on the main thread. The texture loader thread creates and
+  fills CPU resources only (A2); their upload happens at the draw that first uses them.
+- **Files** (`PosixDevice/Render/`, library `posixd3d9`, mine): `SdlGpuDevice` (device, swap chain,
+  frame, present), `SdlDrawResolve` (D3D9 state to generator descriptions and keys; the counterpart of
+  `dx11backend`'s `Build_*_Description`), `SdlProgramCache`, `SdlPipelineCache`, `SdlSamplerCache`,
+  `SdlResourceMirror` (GPU copies of A2's images and buffers), `SdlConstants` (the constant blocks).
+  Each is a class with a unit test, as `dx11*` is.
+
+### The frame: a recorded draw list, flushed in two passes
+
+SDL3 GPU uploads in a copy pass and draws in a render pass, and a copy pass cannot open inside a
+render pass. D3D9 lets the engine write a buffer between two draws of one scene (dynamic buffers
+with `DISCARD`/`NOOVERWRITE`, `DrawPrimitiveUP`). So a draw is **recorded**, not issued:
+
+- At `Draw*`: resolve the pipeline, sampler set and constant blocks (below), and **snapshot what the
+  draw reads that can still change this frame**: the vertex range `[min_vertex, min_vertex +
+  vertex_count)` of each dynamic or transient stream, the index range, `DrawPrimitiveUP`'s data, and
+  the constant blocks. The snapshot is a copy into a per-frame staging ring (CPU memory); the record
+  holds offsets into it. A static (managed) texture or buffer is referenced by its A2 object and its
+  `version()` at record time.
+- At a flush point (`EndScene`... strictly: `Present`, a render-target or depth-surface change,
+  `GetRenderTargetData`/a lock of a render target, or the ring filling), one **copy pass** uploads the
+  ring into a transient GPU buffer and every static resource whose GPU copy is older than the version
+  a record needs, then one **render pass** per render target replays the records in order.
+- **A static resource written again after a draw used it, in the same frame** (a managed texture
+  updated mid-scene): the record's version no longer matches, so that draw's copy of it goes through
+  the ring too. Each draw sees what D3D9 would have shown it. Counted, since it should be rare.
+
+Uniforms are pushed with `SDL_PushGPU*UniformData` only when the block's bytes differ from the last
+push in that command buffer (SDL3: "subsequent draw calls in this command buffer will use this
+uniform data"). Clears become the render pass's `CLEAR` load op when a whole target is cleared first,
+and a clear draw otherwise.
+
+### Programs: generated, compiled once, cached on disk
+
+- **Descriptions and keys** exactly as `dx11backend` builds them: `CombinerDescription` walked until
+  `COLOROP == DISABLE`, `VertexPipelineDescription` with the enabled lights packed, the same memset
+  discipline so descriptions compare with `memcmp`, and D3's own keys (`VertexShader_Key`,
+  `CombinerShader_Key`). Target `SDL3_GPU`.
+- **Stage-0 colour `DISABLE`** (the generator refuses it, since dx11backend ends the chain there):
+  D3D9 defines it as "no texturing, the diffuse colour"; resolved as a one-stage `SELECTARG1(DIFFUSE)`
+  combiner with the alpha op kept. Checked by the reference below.
+- **Program cache:** key string to `SDL_GPUShader` plus its binding table: the sampler and uniform
+  counts from `SDL3_Shader_Slots`, and the `// SDL3 slot N: texture tT, sampler state sS` lines,
+  parsed once, which say which texture and which sampler state go to slot N. A refused description
+  goes in a negative cache and the draw is refused and counted by reason, as dx11backend does: never
+  approximated.
+- **Compile ahead of need** (decision 4: Metal takes 50-225 ms a program at first use). SPIR-V (and
+  MSL on Metal) is cached on disk under the user data directory, keyed by a hash of the HLSL and the
+  compiler versions; a warm-up list of the keys seen in earlier runs is compiled at start, before the
+  shell map. A miss at the draw compiles synchronously, is counted, and logged once per key.
+- **Engine shaders** (`.vso`/`.pso` and the water programs) wait: with caps at VS/PS 0.0 the engine
+  never loads them, and every path is fixed-function. A3's last step raises the caps and registers
+  them: off Windows `Direct3D11_Register_Engine_Shader` forwards to the device, and the water
+  programs, whose D3D9 assembly never happens, are recognised by their source through a
+  `D3DXAssembleShader` that returns a token naming the source instead of bytecode. Designed then, not
+  now.
+
+### Pipelines and samplers
+
+- **Pipeline key**, a packed POD compared and hashed by its bytes: vertex program and pixel program
+  (indices into the program cache), the vertex layout (FVF and stride; `D3DCOLOR` as `UBYTE4_NORM`
+  per D3's contract, the program swaps `.bgra`), the primitive type, and the state SDL3 bakes in:
+  blend enable, source, destination and operation for colour and for alpha (D3D9's
+  `SEPARATEALPHABLENDENABLE` or the colour ones), colour write mask, depth enable, write and compare,
+  stencil enable, compare, the three operations, read and write masks (both faces for two-sided
+  stencil), cull mode (D3D9's `CULL_CCW` culls counter-clockwise, so front face is clockwise and cull
+  is back), fill mode, depth bias and slope scale, and the target's colour format, depth format and
+  sample count. Stencil reference, viewport and scissor are dynamic and not in it. A last-key fast
+  path, then a hash map, as dx11state's objects are.
+- **Primitive types:** list, strip, line list, line strip, point list map directly. **Fans do not
+  exist in SDL3 GPU**: a fan is expanded into a triangle list's indices in the ring at record time.
+- **Samplers:** key = min, mag and mip filter, U/V/W address modes, max anisotropy, mip LOD bias,
+  max mip level, border colour; one `SDL_GPUSampler` per key, created once. Slot n is texture n with
+  sampler n unless the program's slot lines say otherwise; an unbound slot gets the 1x1 white texture.
+- **Viewport:** D3D9's pixel centres, with the same half-pixel shift dx11backend makes.
+- **Depth:** D32S8 where D24S8 is missing (Apple; D2's probe), and the depth bias scaled for the
+  format.
+
+### Resources on the GPU
+
+- **Mirror** per A2 object: GPU texture or buffer, and the version last uploaded. Uploaded whole in
+  the flush's copy pass when older than a record needs (ranges later, if the counts say so).
+- **Texture formats:** BC1, BC2 and BC3 go up as they are (D5: sampled directly on the M3 Pro;
+  M1/M2 untested), `A8R8G8B8` as `B8G8R8A8_UNORM`. Everything else is expanded to `B8G8R8A8` on
+  upload with A2's codec, because SDL3 GPU has no component swizzle: `X8R8G8B8` has to read alpha 1,
+  `L8`/`A8L8` replicate luminance, and the 16-bit formats are not everywhere. Correct first, compact
+  later if the memory says so. -18's measurement: the install is DXT1/3/5 plus 24- and 32-bit TGA, so
+  the expansion path is small.
+- **Render targets** (shadow maps, water reflection, the back buffer): with a window, their contents
+  live on the GPU. A2's CPU image is then stale, and a lock or `GetRenderTargetData` downloads it
+  (`SDL_DownloadFromGPUTexture` and a fence) after a flush. `Clear` with a window clears the GPU
+  target; -18's CPU fill stays the headless path. **Agreed with A2 (approved 2026-09-26):** with a
+  window a render target's pixels are the GPU's, and A2's `Clear`, lock and read-back paths check the
+  mode (a lock or `GetRenderTargetData` flushes and downloads first, and a download does not bump
+  `version()`); headless, A2's CPU fill and copies are the whole story.
+- **Present:** the back buffer is an offscreen target (as the spike's); `Present` flushes, acquires the
+  swap-chain texture and blits it, with `SetGammaRamp`'s curve applied in that pass. Present mode from
+  the present parameters' interval: vsync or immediate, the two D2 found everywhere.
+
+### Correctness: every draw against the fixed-function formulas on the CPU
+
+Decision 7 has no Windows frame to compare against, so the reference is D3D9's documented
+fixed-function pipeline, computed on the CPU:
+
+- **`FFReference`**, a CPU implementation written from Direct3D 9's documentation of the fixed-function
+  pipeline, **not** from `ffshader`/`ffvertex`, the way `D3D9Posix.h` was written from the published
+  values and checked against someone else's (the checker's principle: two independent readings). In
+  double precision: transform to clip space, the D3D9 lighting equations (directional, point, spot;
+  material sources; specular), fog (vertex linear, exp, exp2; the D3D9 factor), texture coordinate
+  generation and transforms, then per pixel the perspective-correct interpolation, the texture read
+  (point, bilinear and mip selection, from A2's CPU images), the stage combiner (every op the
+  generator implements), alpha test, fog, and the blend with the destination.
+- **Unit layer (ctest, no game data):** synthetic draws built in code, each isolating one thing: every
+  combiner op and argument modifier, each light type, each fog mode, each TCI mode, each blend and
+  compare function, fans, `DrawPrimitiveUP`, the stage-0 `DISABLE`. Each is drawn through the real A3
+  path into an offscreen target cleared to a known pattern (and a depth buffer to known values), read
+  back, and compared pixel by pixel with `FFReference` away from triangle edges. Tolerances are
+  per quantity and stated: ±2/255 for arithmetic, wider for filtered reads, and the distribution is
+  printed, not just a pass. An armed control (a deliberately wrong combiner op in the reference) must
+  fail. Needs a GPU but no window: SDL3 GPU renders offscreen without one.
+- **Capture layer (with game data, skipping visibly without):** `-drawcapture N` makes the device
+  write the next N draws' complete state (every render, stage and sampler state, transforms, lights,
+  material, viewport, program keys, constants) and the vertex, index and texel data they read, to the
+  user data directory. The ctest runs the engine on the symlink farm (rule 9) to the shell map,
+  captures, then replays each captured draw alone through A3 and through `FFReference`, as the unit
+  layer does. Captures are made at test time from the user's install and never committed.
+- **Coverage:** every pipeline key seen in a capture run is reported with whether a draw of it was
+  checked, and every refusal by reason. A3 is done when the shell map and a skirmish's first minute
+  draw with **no refusals** and **every key they use checked**, not when it looks right.
+
+### Order
+
+1. **A3a** the frame with a window: device, claimed window, offscreen back buffer, `Clear`,
+   `Present` and the gamma pass. Checked: a cleared frame's read-back.
+2. **A3b** `FFReference` and the unit layer's harness (offscreen, read-back, compare), before any
+   draw goes through A3, so the first draw is checked when it lands.
+3. **A3c** fixed-function draws: resolve, programs, pipelines, samplers, mirrors, the recorded list
+   and the flush. The unit layer goes green one feature at a time.
+4. **A3d** render targets, read-back, screenshots (the one writer now exists), `-drawcapture` and the
+   capture layer; then the shell map.
+5. **A3e** engine shaders: caps up, registration, the water programs; the pipeline pairs D3 found
+   (Trees with ffshader programs, engine `.pso` programs with ffvertex ones).
+
+**Depends on:** A2 merged (its image and buffer versions are the mirrors' invalidation); C2's window
+(`RenderWindow`); C3 not at all. **Leaves to others:** the display-mode change of the window (C2).

@@ -94,6 +94,25 @@
 - armed controls: without the install there is no file; without `SA_ONSTACK` the overflow writes
   nothing.
 
+### As built (2026-09-26)
+
+- **POSIX frame lines, a stated difference for whoever ports the launcher.** POSIX uses
+  `  <module>(0) : <symbol>+0x<offset> 0x<address>`, and `  <module>(0) : <module>+0x<offset>
+  0x<address>` for a raw frame. It is Windows' shape, with the module where the file goes and line 0,
+  because in-process there is no line table. `atos -o <module> -l <load address> <address>` gives the
+  line offline. Accepted by the PM; the launcher (the upstream Electron app) has no macOS build to
+  check it against.
+- **Retry in the Debug assertion box** (`breakIntoDebugger()`, `raise(SIGTRAP)` off Windows). With no
+  debugger attached it is a crash: the handler writes the report and the process dies of SIGTRAP, as
+  `DebugBreak` without a debugger is an unhandled exception on Windows. `test_crash_reporting`'s
+  "break" child checks that. With lldb attached (measured by hand, `lldb -- test_crash_reporting
+  --crash break`): lldb stops with "stop reason = signal SIGTRAP" in `__pthread_kill`, and at that
+  moment no ReleaseCrashInfo.txt exists. The debugger takes the break before the handler runs, which
+  is what Retry is for.
+- **macOS's crash reporter** is muted in the test's children only, by `task_set_exception_ports` for
+  `EXC_MASK_CRASH | EXC_MASK_CORPSE_NOTIFY`. `EXC_MASK_CRASH` alone still let some reports through
+  (26 `.ips` files over the first runs, since deleted). With both masks a full run leaves none.
+
 ## Why
 
 "When the game crashes, the launcher sends the report without asking you for anything" is a feature

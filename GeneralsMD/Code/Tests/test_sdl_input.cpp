@@ -39,6 +39,8 @@
 #include "SdlDevice/GameClient/SdlKeyTable.h"
 #include "SdlDevice/GameClient/SdlKeyboard.h"
 #include "SdlDevice/GameClient/SdlMouse.h"
+#include "Common/FileSystem.h"
+#include "PosixDevice/Common/PosixLocalFileSystem.h"
 
 #include <SDL3/SDL.h>
 
@@ -56,13 +58,23 @@ namespace {
 
 SDL_Window *theWindow = NULL;
 
+void bootMemory( void )
+{
+	static bool booted = false;
+	if (!booted)
+	{
+		booted = true;
+		initMemoryManager();
+	}
+}
+
 bool start( void )
 {
 	static bool started = false, ok = false;
 	if (!started)
 	{
 		started = true;
-		initMemoryManager();
+		bootMemory();
 		SDL_SetHint( SDL_HINT_VIDEO_DRIVER, "offscreen" );
 		ok = SDL_Init( SDL_INIT_VIDEO );
 		if (ok)
@@ -137,6 +149,52 @@ std::map<unsigned, std::string> engineKeyCodes( void )
 }  // namespace
 
 // ---- Keys ----------------------------------------------------------------------------------------
+
+// ---- Headless: no SDL video, so no cursors to load (first, before anything starts SDL's video) ----
+
+namespace {
+
+class CountingLocalFileSystem : public PosixLocalFileSystem
+{
+public:
+	int opens;
+	CountingLocalFileSystem( void ) : opens( 0 ) {}
+	virtual File *openFile( const Char *filename, Int access = 0 ) { ++opens; return PosixLocalFileSystem::openFile( filename, access ); }
+};
+
+class OneCursorMouse : public SdlMouse
+{
+public:
+	OneCursorMouse( void )
+	{
+		m_cursorInfo[ ARROW ].textureName = "SCCPointer";
+		m_cursorInfo[ ARROW ].numDirections = 1;
+	}
+};
+
+}  // namespace
+
+TEST(without_sdl_video_the_mouse_loads_no_cursors_as_a_headless_run_has_none)
+{
+	bootMemory();
+	CHECK( !SDL_WasInit( SDL_INIT_VIDEO ) );
+	CountingLocalFileSystem *files = NEW CountingLocalFileSystem;
+	TheLocalFileSystem = files;
+	TheFileSystem = NEW FileSystem;
+	{
+		OneCursorMouse mouse;
+		mouse.initCursorResources();
+		CHECK_EQ( files->opens, 0 );		// not one cursor file asked for: each would fail, and assert in a debug build
+		// armed: with SDL's video the same call does go for the file
+		CHECK( start() );
+		mouse.initCursorResources();
+		CHECK( files->opens > 0 );
+	}
+	delete TheFileSystem;
+	TheFileSystem = NULL;
+	delete files;
+	TheLocalFileSystem = NULL;
+}
 
 TEST(every_engine_key_code_is_mapped_or_listed_unreachable)
 {

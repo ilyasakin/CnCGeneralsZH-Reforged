@@ -79,12 +79,17 @@ __inline void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info ) {}
 
 /* Hooks this thread's structured exceptions to DumpExceptionInfo, so that a crash in it leaves a stack
 	 dump: _set_se_translator on Windows, as each GameSpy thread always called it first thing.  Elsewhere
-	 there are no structured exceptions, so this does nothing; what a crashing thread reports there is
-	 C5's (signals). */
+	 a crash is a signal, whose handler is process-wide (Common/CrashHandler.h); what a thread needs of
+	 its own is an alternate stack, so that a stack overflow in it is reported too. */
+#if !defined(_WIN32)
+#include "Common/CrashHandler.h"
+#endif
 inline void InstallThreadExceptionTranslator( void )
 {
 #if defined(_WIN32)
 	_set_se_translator( DumpExceptionInfo );
+#else
+	installThreadCrashStack();
 #endif
 }
 
