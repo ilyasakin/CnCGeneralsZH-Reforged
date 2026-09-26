@@ -951,8 +951,9 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 #    Registry.ini.  On Windows they come from wwdownload itself.  B6.
 #  - IMEManager.cpp: the IMM32 input method editor (Chinese, Japanese and Korean text entry).  Its
 #    only exports are TheIMEManager and CreateIMEManagerInterface; GameClient::init handles a NULL
-#    manager and every other caller tests for one, and no test calls it.  IMEManagerPosix.cpp answers
-#    NULL.  IME text entry off Windows is C3's.  (IMECandidate.cpp, whose window callbacks .wnd files
+#    manager and every other caller tests for one, and no test calls it.  IMEManagerPosix.cpp is the
+#    manager off Windows, over the device's text events (C3): every typed character reaches a text
+#    field through the IME manager, on Windows too.  (IMECandidate.cpp, whose window callbacks .wnd files
 #    name through FunctionLexicon, is a different file and is built everywhere.)
 if(ZH_PLATFORM_WINDOWS)
   list(REMOVE_ITEM GAMEENGINE_SOURCES
@@ -1350,6 +1351,22 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(test_sdl_platform PROPERTIES CXX_STANDARD 17)
   target_link_libraries(test_sdl_platform PRIVATE sdldevice test_harness)
   add_test(NAME test_sdl_platform COMMAND test_sdl_platform)
+
+  # C3a: input on SDL3's offscreen driver - the scancode table against DIKeyCodes.h, keys into the
+  # engine's key state, text into the IME manager, the mouse, and the install's .ANI cursors (read only,
+  # ZH_DATA_DIR; said when absent).
+  # test_gameengine_stubs.cpp: the names the executable supplies (gAppPrefix, the .csf/.str paths).
+  add_executable(test_sdl_input ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_input.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gameengine_stubs.cpp)
+  target_include_directories(test_sdl_input PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(test_sdl_input PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+    DIKEYCODES_H="${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include/GameClient/DIKeyCodes.h")
+  set_target_properties(test_sdl_input PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_sdl_input PRIVATE sdldevice test_harness)
+  add_test(NAME test_sdl_input COMMAND test_sdl_input)
+  if(ZH_GAME_DATA)
+    set_tests_properties(test_sdl_input PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
 
   # The entry sequence without game data: see the script.
   add_test(NAME generals_smoke
