@@ -324,6 +324,8 @@ protected:
 	/// what can still change staged.  Headless, nothing.
 	RenderResult Gpu_Draw(const DrawCall &call);
 	void Refuse_Draw(const std::string &reason);
+	/// ZH_GPU_DUMP_FRAMES' frames to ZH_GPU_DUMP_DIR, a development aid until A3d's capture.
+	void Dump_Frame_If_Asked();
 
 	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
 	SdlGpuFrame *Gpu;					///< the SDL3 GPU frame, with a window only
@@ -332,6 +334,7 @@ protected:
 	SdlSamplerCache *Samplers;
 	SdlResourceMirrors *Mirrors;
 	unsigned int DrawsRecorded;
+	unsigned int PresentCount;
 	std::map<std::string, unsigned int> DrawRefusals;
 	RenderWindow Window;				///< null under -headless
 	D3DPRESENT_PARAMETERS Parameters;

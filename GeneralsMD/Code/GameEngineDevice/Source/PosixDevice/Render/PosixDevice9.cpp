@@ -27,6 +27,7 @@
 #include "SdlResourceMirror.h"
 
 #include <stddef.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -81,6 +82,7 @@ PosixDevice9::PosixDevice9(PosixDirect3D9 *adapter, RenderWindow window, const D
 	Samplers(NULL),
 	Mirrors(NULL),
 	DrawsRecorded(0),
+	PresentCount(0),
 	Window(window),
 	Parameters(parameters),
 	BackBuffer(NULL),
@@ -140,6 +142,13 @@ PosixDevice9::~PosixDevice9()
 	Posix_Bind(Declaration, (IDirect3DVertexDeclaration9 *)NULL);
 	Posix_Bind(VertexShader, (IDirect3DVertexShader9 *)NULL);
 	Posix_Bind(PixelShader, (IDirect3DPixelShader9 *)NULL);
+	// With a GPU, what the draws came to: the count, and each refusal's reason once with its count.
+	if (Gpu != NULL) {
+		fprintf(stderr, "PosixDevice9: %u draws recorded, %u presents\n", DrawsRecorded, PresentCount);
+		for (std::map<std::string, unsigned int>::const_iterator it = DrawRefusals.begin(); it != DrawRefusals.end(); ++it) {
+			fprintf(stderr, "PosixDevice9:   refused %u: %s\n", it->second, it->first.c_str());
+		}
+	}
 	// The GPU objects before the device that made them; the pipelines before their shaders.
 	delete Pipelines;
 	delete Samplers;
@@ -313,6 +322,8 @@ RenderResult PosixDevice9::Present(const RenderRect *, const RenderRect *, Rende
 	}
 	static_assert(offsetof(D3DGAMMARAMP, green) == 512 && offsetof(D3DGAMMARAMP, blue) == 1024,
 		"D3DGAMMARAMP is the three ramps back to back, as SdlGpuFrame::Present reads it");
+	++PresentCount;
+	Dump_Frame_If_Asked();
 	if (!Gpu->Present(reinterpret_cast<const uint16_t (*)[256]>(&GammaRamp))) {
 		static bool said = false;
 		if (!said) {
@@ -322,6 +333,47 @@ RenderResult PosixDevice9::Present(const RenderRect *, const RenderRect *, Rende
 		return D3DERR_DRIVERINTERNALERROR;
 	}
 	return D3D_OK;
+}
+
+// A development aid until A3d's capture: ZH_GPU_DUMP_FRAMES="100,300" writes those presents' back
+// buffers to ZH_GPU_DUMP_DIR (default the working directory) as frame_<n>.ppm, before the gamma ramp.
+void PosixDevice9::Dump_Frame_If_Asked()
+{
+	const char *frames = getenv("ZH_GPU_DUMP_FRAMES");
+	if (frames == NULL) {
+		return;
+	}
+	bool wanted = false;
+	for (const char *p = frames; *p != '\0' && !wanted; ) {
+		char *end = NULL;
+		const unsigned long frame = strtoul(p, &end, 10);
+		if (end == p) break;
+		wanted = frame == PresentCount;
+		p = (*end == ',') ? end + 1 : end;
+	}
+	if (!wanted) {
+		return;
+	}
+	std::vector<uint8_t> bgra;
+	const unsigned int width = Gpu->Width(), height = Gpu->Height();
+	if (!Gpu->Read_Back(Gpu->Back_Buffer(), width, height, bgra)) {
+		fprintf(stderr, "PosixDevice9: frame %u could not be read back\n", PresentCount);
+		return;
+	}
+	const char *dir = getenv("ZH_GPU_DUMP_DIR");
+	char path[1024];
+	snprintf(path, sizeof(path), "%s/frame_%u.ppm", dir != NULL ? dir : ".", PresentCount);
+	FILE *file = fopen(path, "wb");
+	if (file == NULL) {
+		return;
+	}
+	fprintf(file, "P6\n%u %u\n255\n", width, height);
+	for (size_t i = 0; i < bgra.size(); i += 4) {
+		const uint8_t rgb[3] = { bgra[i + 2], bgra[i + 1], bgra[i] };
+		fwrite(rgb, 1, 3, file);
+	}
+	fclose(file);
+	fprintf(stderr, "PosixDevice9: frame %u written to %s\n", PresentCount, path);
 }
 
 void PosixDevice9::SetGammaRamp(unsigned int, RenderUInt32, const D3DGAMMARAMP *ramp)
