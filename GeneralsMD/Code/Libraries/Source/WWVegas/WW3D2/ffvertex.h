@@ -119,8 +119,8 @@ struct VertexPipelineDescription
 	// say, which is how a lit draw with a colour in its vertices still comes out unlit by it.
 	bool ColourVertexEnabled;
 
-	// D3DMCS_MATERIAL or D3DMCS_COLOR, one each.  D3DMCS_COLOR2 is the specular vertex colour and
-	// nothing in the game selects it.
+	// D3DMCS_MATERIAL, D3DMCS_COLOR1 or D3DMCS_COLOR2, one each: the material's colour, or the
+	// vertex's diffuse or specular one where the format has it and COLORVERTEX is on.
 	FixedFunctionValue DiffuseMaterialSource;
 	FixedFunctionValue AmbientMaterialSource;
 	FixedFunctionValue EmissiveMaterialSource;

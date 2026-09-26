@@ -66,6 +66,11 @@ static bool has_diffuse(FixedFunctionValue fvf)
 	return (fvf & FF_FVF_DIFFUSE) != 0;
 }
 
+static bool has_specular(FixedFunctionValue fvf)
+{
+	return (fvf & FF_FVF_SPECULAR) != 0;
+}
+
 static bool is_pretransformed(FixedFunctionValue fvf)
 {
 	return (fvf & FF_FVF_POSITION_MASK) == FF_FVF_XYZRHW;
@@ -92,6 +97,17 @@ static bool material_source_expression(FixedFunctionValue source, const char * m
 	case FF_MCS_COLOR1:
 		if (has_diffuse(description.FVF) && description.ColourVertexEnabled) {
 			expression = "input.Diffuse";
+		}
+		else {
+			expression = material_constant;
+		}
+		return true;
+
+	case FF_MCS_COLOR2:
+		// The vertex's specular colour, where it has one and COLORVERTEX is on; the material's
+		// otherwise, as D3DMCS_COLOR1 does with the diffuse ("D3DMATERIALCOLORSOURCE").
+		if (has_specular(description.FVF) && description.ColourVertexEnabled) {
+			expression = "input.Specular";
 		}
 		else {
 			expression = material_constant;
@@ -411,6 +427,9 @@ static bool generate_pretransformed(const VertexPipelineDescription & descriptio
 	if (has_diffuse(description.FVF)) {
 		hlsl += "    float4 Diffuse  : COLOR0;\n";
 	}
+	if (has_specular(description.FVF)) {
+		hlsl += "    float4 Specular : COLOR1;\n";
+	}
 	append_input_coordinate_sets(hlsl, coordinate_sets);
 	hlsl +=
 		"};\n"
@@ -453,8 +472,11 @@ static bool generate_pretransformed(const VertexPipelineDescription & descriptio
 		hlsl += "    output.Diffuse = float4(1.0, 1.0, 1.0, 1.0);\n";
 	}
 
+	// An unlit vertex's specular colour is its own, which the pixel adds with D3DRS_SPECULARENABLE.
+	hlsl += has_specular(description.FVF)
+		? "    output.Specular = input.Specular;\n"
+		: "    output.Specular = float4(0.0, 0.0, 0.0, 0.0);\n";
 	hlsl +=
-		"    output.Specular = float4(0.0, 0.0, 0.0, 0.0);\n"
 		"    output.Fog = 1.0;\n"
 		"    return output;\n"
 		"}\n";
@@ -593,7 +615,11 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 		else {
 			body += "    output.Diffuse = float4(1.0, 1.0, 1.0, 1.0);\n";
 		}
-		body += "    output.Specular = float4(0.0, 0.0, 0.0, 0.0);\n";
+		// And the specular colour is the vertex's where there is one, which the pixel adds with
+		// D3DRS_SPECULARENABLE (dx8renderer.cpp gives a mesh with a second colour array one).
+		body += has_specular(description.FVF)
+			? "    output.Specular = input.Specular;\n"
+			: "    output.Specular = float4(0.0, 0.0, 0.0, 0.0);\n";
 	}
 
 	if (description.FogEnabled) {
@@ -660,6 +686,9 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 	}
 	if (has_diffuse(description.FVF)) {
 		hlsl += "    float4 Diffuse  : COLOR0;\n";
+	}
+	if (has_specular(description.FVF)) {
+		hlsl += "    float4 Specular : COLOR1;\n";
 	}
 	append_input_coordinate_sets(hlsl, coordinate_sets);
 	hlsl +=

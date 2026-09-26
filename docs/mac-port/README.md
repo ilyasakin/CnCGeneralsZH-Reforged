@@ -1058,7 +1058,9 @@ specific pages. Found by A3b's harness: defect #22 changed the program key and n
 - `CombinerDescription::SpecularAdd`, set from `D3DRS_SPECULARENABLE` by `ffshadercache` (the D3D9
   path), `dx11backend` and the SDL3 device, adds `input.Specular.rgb` after the stages, before the fog
   and the alpha test, as D3D9 orders them.
-- The normal-mapped program, D3D11's own per-pixel highlight, is left as it was.
+- A normal-mapped draw with `D3DRS_SPECULARENABLE` gets D3D11's own per-pixel highlight **instead of**
+  the vertex one, not as well: adding both would count the highlight twice (-18's second read). That
+  program is the fork's, with no Direct3D 9 frame to match.
 - Shader dump: every existing program is byte-identical. The new case `ps_extra_specular_add` is
   `ps_op_modulate` plus exactly that line, in all three targets.
 - The harness's lit-specular scenario, with #22's local viewer, now matches FFReference.
@@ -1066,6 +1068,29 @@ specific pages. Found by A3b's harness: defect #22 changed the program key and n
 Still open: an **unlit** draw's vertex specular colour (meshes with a second colour array get
 `D3DFVF_SPECULAR`, `dx8renderer.cpp:715`). The vertex programs don't pass it through, so the add has
 nothing to add there yet. `WINDOWS-DEBT.md` has the row.
+
+**26. Fork-introduced: under Direct3D 11 a mesh's second vertex colour is ignored - fixed.** A W3D mesh with
+a second colour array is drawn with `D3DFVF_SPECULAR` (`dx8renderer.cpp:715`, `wwshade/shdsubmesh.cpp:148`),
+and Direct3D 9 uses that colour two ways:
+- **Unlit:** it is the specular colour the pixel adds with `D3DRS_SPECULARENABLE` (defect #25).
+- **Lit:** it is what `D3DMCS_COLOR2` names. A W3D material may take its diffuse, ambient or emissive
+  colour from it (`vertmaterial.cpp:355-377`).
+
+The generated vertex programs declared no such input. Unlit, they wrote a black specular. Lit, they
+refused a `COLOR2` source outright, so the **Direct3D 11 renderer** left those draws out of the frame.
+`dx11layout.cpp:104-105` was already handing the vertex's `COLOR1` to the input assembler, as
+B8G8R8A8 like the diffuse, but no program declared it; it was checked, not assumed. The SDL3 device's
+layout skipped it. Direct3D 9 is untouched: it runs no generated vertex programs.
+
+**Fixed:**
+- The vertex program declares `Specular : COLOR1` when the format has it.
+- Unlit, it passes the colour through, pretransformed included.
+- `D3DMCS_COLOR2` reads it where COLORVERTEX is on, and the material otherwise, as `COLOR1` does with the
+  diffuse.
+- The SDL3 layout feeds location 3, which its retarget swaps like the diffuse.
+- Shader dump: every existing program is byte-identical. The two new unlit cases gain the input and the
+  pass-through (and the SDL3 swap), and the lit `COLOR2` case goes from refused to generated.
+- The harness's unlit vertex-specular scenario now matches FFReference. `WINDOWS-DEBT.md` has the row.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
