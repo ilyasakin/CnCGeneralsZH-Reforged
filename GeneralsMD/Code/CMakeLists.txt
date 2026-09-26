@@ -1472,7 +1472,7 @@ set(ZH_POSIXLFS_SOURCES
   ${GE}/Source/Common/System/SubsystemInterface.cpp ${GE}/Source/Common/System/AsciiString.cpp
   ${GE}/Source/Common/System/WideCharFns.cpp ${GE}/Source/Common/System/File.cpp
   ${GE}/Source/Common/System/LocalFile.cpp ${GE}/Source/Common/System/LocalFileSystem.cpp
-  ${GE}/Source/Common/System/RAMFile.cpp
+  ${GE}/Source/Common/System/RAMFile.cpp ${GE}/Source/Common/System/registry.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFileSystem.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFile.cpp)
 add_executable(test_posixlocalfilesystem ${ZH_POSIXLFS_SOURCES})
@@ -1493,7 +1493,7 @@ add_executable(test_userfolders ${TESTS}/test_userfolders.cpp)
 target_include_directories(test_userfolders PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
 target_compile_definitions(test_userfolders PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
 set_target_properties(test_userfolders PROPERTIES CXX_STANDARD 17)
-target_link_libraries(test_userfolders PRIVATE test_harness)
+target_link_libraries(test_userfolders PRIVATE test_harness wwlib wwdebug)
 add_test(NAME test_userfolders COMMAND test_userfolders)
 
 # The POSIX half of the Wine listing oracle (Tests/fs_oracle.cpp; its Windows half is built with
