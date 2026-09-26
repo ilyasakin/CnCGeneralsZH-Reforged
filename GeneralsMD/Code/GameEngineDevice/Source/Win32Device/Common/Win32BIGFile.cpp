@@ -75,6 +75,10 @@ File* Win32BIGFile::openFile( const Char *filename, Int access )
 	if (ramFile->openFromArchive(m_file, fileInfo->m_filename, fileInfo->m_offset, fileInfo->m_size) == FALSE) {
 		ramFile->close();
 		ramFile = NULL;
+		// the archive was readable when it was opened: if its drive has gone since, say so and stop
+		// (GameDataGone), rather than hand the caller a missing file it has no reason to expect
+		if (m_file != NULL && m_file->deviceGone())
+			GameDataGone(m_file->getName());
 		return NULL;
 	}
 

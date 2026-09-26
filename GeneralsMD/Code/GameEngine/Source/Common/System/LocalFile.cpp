@@ -58,6 +58,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <ctype.h>
 
 #include "Common/LocalFile.h"
@@ -165,6 +166,24 @@ static int closeFile(int handle) { return ::close(handle); }
 
 #endif
 
+/* A read or a seek that failed because the file's device went away while it was open: the drive holding
+	 the game's data disconnected, ejected, or put to sleep (the lid-close crash, README's latent list).
+	 Off Windows the call fails with EIO (measured on macOS 26, HFS+ and exFAT disk images detached under an
+	 open file); ENXIO and ENODEV are the same loss on other devices and systems.  On Windows the CRT's
+	 _read and _lseek leave the system's error in _doserrno; the codes below are the device-gone ones, not
+	 yet measured on Windows. */
+#if defined(_WIN32)
+static inline int lastFileError(void) { return (int)_doserrno; }
+static Bool errorMeansDeviceGone(int error)
+{
+	return error == ERROR_DEVICE_NOT_CONNECTED || error == ERROR_NOT_READY || error == ERROR_DEV_NOT_EXIST ||
+		error == ERROR_FILE_INVALID;
+}
+#else
+static inline int lastFileError(void) { return errno; }
+static Bool errorMeansDeviceGone(int error) { return error == EIO || error == ENXIO || error == ENODEV; }
+#endif
+
 //=================================================================
 // LocalFile::LocalFile
 //=================================================================
@@ -175,6 +194,7 @@ LocalFile::LocalFile()
 #else
 	: m_handle(-1)
 #endif
+	, m_lastError(0)
 {
 }
 
@@ -228,6 +248,7 @@ Bool LocalFile::open( const Char *filename, Int access )
 	{
 		return FALSE;
 	}
+	m_lastError = 0;
 
 	/* here we translate WSYS file access to the std C equivalent */
 #ifdef USE_BUFFERED_IO
@@ -393,6 +414,8 @@ Int LocalFile::read( void *buffer, Int bytes )
 	Int ret = fread(buffer, 1, bytes, m_file);
 #else
 	Int ret = readFile( m_handle, buffer, bytes, (m_access & TEXT) != 0 );
+	if (ret < 0)
+		m_lastError = lastFileError();
 #endif
 
 	return ret;
@@ -451,8 +474,19 @@ Int LocalFile::seek( Int pos, seekMode mode)
 		return -1;
 #else
 	Int ret = seekFile( m_handle, pos, lmode );
+	if (ret < 0)
+		m_lastError = lastFileError();
 #endif
 	return ret;
+}
+
+//=================================================================
+// LocalFile::deviceGone
+//=================================================================
+
+Bool LocalFile::deviceGone( void ) const
+{
+	return m_lastError != 0 && errorMeansDeviceGone( m_lastError );
 }
 
 //=================================================================

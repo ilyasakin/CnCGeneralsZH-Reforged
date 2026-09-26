@@ -2627,6 +2627,7 @@ Tests/glyph_rasteriser_golden.inc
 Tests/miles_listen.cpp
 Tests/miles_smoke.cpp
 Tests/replay_wide_oracle.cpp
+Tests/run_data_gone_check.sh
 Tests/run_generals_smoke.sh
 Tests/run_mission_check.sh
 Tests/run_net_check.sh
