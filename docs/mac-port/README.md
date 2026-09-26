@@ -1196,6 +1196,24 @@ reads the set's register as before. The comment on `stage_register` records both
   together (capture layer, 2026-09-26). If a real draw ever does, this becomes a shared-generator defect,
   numbered and fixed like #21 to #27.
 
+### Known rendering differences on the Mac (not defects)
+
+**Level of detail beside an edge shared by an index buffer (C1).**
+- **What happens:** Metal on Apple silicon forms a 2x2 derivative quad across an edge two triangles of one
+  indexed draw share. A pixel beside that edge can take its neighbour's texture derivatives, and so its
+  mip level. D3D9-era hardware formed quads per primitive.
+- **How it was found:** -47's interpreter flagged four small, minified models in the captures, with 2 to 20
+  pixels up to 51/255 off.
+- **Proof it's the GPU:**
+  - On the device, one indexed call differs from one call per triangle (by 9, 34 and 66 pixels on three
+    of them).
+  - One call of the same triangles *unindexed* matches the per-triangle picture exactly.
+  - `posix_gpu_draw_selfcheck` repeats it in miniature: two triangles sharing an indexed edge, 16 of 32
+    pixels along it at the other triangle's level.
+- **Size:** a few pixels along the edges of small, strongly minified models.
+- **Not fixed:** the fix would be drawing every indexed mesh unindexed, which throws away vertex reuse
+  across the game. It may differ on other GPUs.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
