@@ -1419,6 +1419,25 @@ endif()  # ZH_PLATFORM_WINDOWS - Windows-only support library tests
 # Phase 3 checkpoint: boots the memory manager, name keys and file system, then
 # runs a real INI file through the parser.
 add_lib_test(test_gameengine gameengine)
+# T1's terrain golden against the moved code (GameLogic/WorldHeightMapData, TerrainHeightSampling):
+# nine shipped maps out of the install's archives, which must sample exactly as Tests/terrain_golden.txt
+# says the original W3D code did.  Needs ZH_GAME_DATA; Skipped (77) without it.
+add_lib_test(test_terrain_golden gameengine)
+target_compile_definitions(test_terrain_golden PRIVATE
+  TERRAIN_GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/Tests/terrain_golden.txt")
+set_target_properties(test_terrain_golden PROPERTIES CXX_STANDARD 17)
+set_tests_properties(test_terrain_golden PROPERTIES SKIP_RETURN_CODE 77)
+# test_gameengine's stubs: the exe's names everywhere, and on Windows the device layer's stand-ins,
+# which off Windows PosixDevice has for real.
+target_sources(test_terrain_golden PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
+if(ZH_PLATFORM_POSIX)
+  target_link_libraries(test_terrain_golden PRIVATE posixdevice)
+endif()
+# GlobalData asks for the user data directory: keep it in the build tree, as test_gameengine does.
+if(ZH_GAME_DATA)
+  set_tests_properties(test_terrain_golden PROPERTIES
+    ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA};ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data")
+endif()
 # Off Windows the device layer's hooks (render stand-ins, the CD manager) are PosixDevice's, where on
 # Windows the test's own stubs stand in for gameenginedevice, which it does not link (B6).
 if(ZH_PLATFORM_POSIX)

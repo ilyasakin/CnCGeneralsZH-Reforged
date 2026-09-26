@@ -180,32 +180,18 @@ public:
 #undef TERRAIN_ORACLE_DEFINITIONS
 
 // ---- Driving it -----------------------------------------------------------------------------------
+#include "terrain_grid.h"
+
 namespace {
 
-unsigned fnv( unsigned hash, const void *data, size_t size )
+struct OriginalSampler
 {
-	const unsigned char *p = (const unsigned char *)data;
-	for (size_t i = 0; i < size; ++i)
-		hash = (hash ^ p[i]) * 0x01000193u;
-	return hash;
-}
-
-unsigned bitsOf( Real value )
-{
-	unsigned bits;
-	memcpy( &bits, &value, sizeof( bits ) );
-	return bits;
-}
-
-struct Section { const char *name; unsigned hash; unsigned count; };
-
-void note( Section &s, unsigned value, Bool dump, Real x, Real y )
-{
-	s.hash = fnv( s.hash, &value, sizeof( value ) );
-	++s.count;
-	if (dump)
-		printf( "%s %08x %08x %08x\n", s.name, bitsOf( x ), bitsOf( y ), value );
-}
+	BaseHeightMapRenderObjClass *terrain;
+	Real height( Real x, Real y, Coord3D *normal ) { return terrain->getHeightMapHeight( x, y, normal ); }
+	Bool cliff( Real x, Real y ) { return terrain->isCliffCell( x, y ); }
+	Real maxcell( Real x, Real y ) { return terrain->getMaxCellHeight( x, y ); }
+	Bool sight( const Coord3D &a, const Coord3D &b ) { return terrain->isClearLineOfSight( a, b ); }
+};
 
 }  // namespace
 
@@ -285,50 +271,8 @@ int main( int argc, char **argv )
 	terrain.findMinMaxHeights( &map );
 	s_terrainVisual.m_logicHeightMap = &map;
 
-	printf( "map %d x %d border %d boundaries %d maxheight %08x\n", (int)map.m_width, (int)map.m_height,
-		(int)map.m_borderSize, (int)map.m_boundaries.size(), bitsOf( terrain.m_maxHeight ) );
-
-	Section height = { "height", 0x811C9DC5u, 0 }, bare = { "bare", 0x811C9DC5u, 0 },
-		cliff = { "cliff", 0x811C9DC5u, 0 }, maxcell = { "maxcell", 0x811C9DC5u, 0 },
-		sight = { "sight", 0x811C9DC5u, 0 };
-
-	const Real step = 7.25f, margin = 60.0f;
-	const Real extentX = (Real)(map.m_width - 2 * map.m_borderSize) * MAP_XY_FACTOR;
-	const Real extentY = (Real)(map.m_height - 2 * map.m_borderSize) * MAP_XY_FACTOR;
-	const Int columns = (Int)((extentX + 2 * margin) / step) + 1;
-	const Int rows = (Int)((extentY + 2 * margin) / step) + 1;
-	for (Int j = 0; j < rows; ++j)
-	{
-		const Real y = (Real)j * step - margin;
-		for (Int i = 0; i < columns; ++i)
-		{
-			const Real x = (Real)i * step - margin;
-			Coord3D normal;
-			const Real h = terrain.getHeightMapHeight( x, y, &normal );
-			note( height, bitsOf( h ), dump, x, y );
-			note( height, bitsOf( normal.x ), dump, x, y );
-			note( height, bitsOf( normal.y ), dump, x, y );
-			note( height, bitsOf( normal.z ), dump, x, y );
-			note( bare, bitsOf( terrain.getHeightMapHeight( x, y, NULL ) ), dump, x, y );
-			note( cliff, terrain.isCliffCell( x, y ) ? 1u : 0u, dump, x, y );
-			note( maxcell, bitsOf( terrain.getMaxCellHeight( x, y ) ), dump, x, y );
-
-			// Lines of sight from every fifth point: to a point further along both axes, eyes a unit
-			// and a half above the ground at one end and three units above at the other.
-			if (i % 5 == 0 && j % 5 == 0)
-			{
-				Coord3D from, to;
-				from.x = x; from.y = y; from.z = h + 1.5f;
-				to.x = x + 237.5f; to.y = y + 113.25f;
-				to.z = terrain.getHeightMapHeight( to.x, to.y, NULL ) + 3.0f;
-				note( sight, terrain.isClearLineOfSight( from, to ) ? 1u : 0u, dump, x, y );
-				note( sight, terrain.isClearLineOfSight( to, from ) ? 1u : 0u, dump, x, y );
-			}
-		}
-	}
-
-	const Section *all[] = { &height, &bare, &cliff, &maxcell, &sight };
-	for (const Section *s : all)
-		printf( "%s %08x %u\n", s->name, s->hash, s->count );
+	OriginalSampler sampler = { &terrain };
+	printf( "%s", terrain_grid::run( sampler, (int)map.m_width, (int)map.m_height, (int)map.m_borderSize,
+		(int)map.m_boundaries.size(), terrain.m_maxHeight, MAP_XY_FACTOR, dump != FALSE ).c_str() );
 	return 0;
 }
