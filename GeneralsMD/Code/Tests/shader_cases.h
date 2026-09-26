@@ -152,6 +152,15 @@ inline std::vector<ShaderCase> Shader_Cases()
 		cases.push_back(c);
 	}
 	{
+		// The trees' shape (W3DTreeBuffer with the shroud on stage 1): stage 1 generates its coordinates
+		// from the camera-space position, and its TEXCOORDINDEX's set bits are 0.
+		ShaderCase c = combiner("ps_extra_texgen_on_stage_1", false);
+		c.Combiner.StageCount = 2;
+		c.Combiner.Stages[0] = one_stage(FF_TOP_MODULATE, FF_TA_TEXTURE, FF_TA_DIFFUSE, FF_TOP_MODULATE, FF_TA_TEXTURE, FF_TA_DIFFUSE, 0, true);
+		c.Combiner.Stages[1] = one_stage(FF_TOP_MODULATE, FF_TA_TEXTURE, FF_TA_CURRENT, FF_TOP_SELECTARG2, FF_TA_TEXTURE, FF_TA_CURRENT, FF_TSS_TCI_CAMERASPACEPOSITION, true);
+		cases.push_back(c);
+	}
+	{
 		ShaderCase c = combiner("ps_shroud_widest", true);
 		c.Combiner.StageCount = 2;
 		c.Combiner.Stages[0] = one_stage(FF_TOP_MULTIPLYADD, FF_TA_TEXTURE, FF_TA_DIFFUSE, FF_TOP_SELECTARG1, FF_TA_TEXTURE, FF_TA_CURRENT, 0, true);

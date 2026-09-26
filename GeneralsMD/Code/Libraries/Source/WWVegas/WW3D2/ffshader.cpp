@@ -49,6 +49,19 @@ static unsigned coordinate_register(FixedFunctionValue texture_coordinate_index)
 	return static_cast<unsigned>(texture_coordinate_index & COORDINATE_SET_MASK);
 }
 
+// Which interpolated coordinate a stage samples with.  On the D3D11 profile, SDL3's included, the vertex
+// half is ffvertex, which writes each STAGE's coordinates to TexCoord[stage] after the stage's set
+// selection, generation and transform (ffvertex.cpp, "output.TexCoord%u = generated%u.xy").  So a
+// stage reads its own register, whatever set its TEXCOORDINDEX names: reading the set's instead gave
+// a stage that generates its coordinates (the shroud, TCI camera-space position, set 0) the first
+// stage's texture coordinates, and the trees drew black (defect #27).  On the D3D9 profile the
+// vertex half is D3D9's own fixed function, whose numbering is still to be confirmed from the
+// documentation, so it keeps the set's register until then.
+static unsigned stage_register(CombinerShaderTarget target, unsigned stage, FixedFunctionValue texture_coordinate_index)
+{
+	return target == COMBINER_SHADER_TARGET_D3D11 ? stage : coordinate_register(texture_coordinate_index);
+}
+
 // "current" is initialised to the diffuse colour, which is what the device gives D3DTA_CURRENT at
 // stage 0, so the two need no distinguishing here.
 static bool argument_expression(FixedFunctionValue argument, std::string & expression)
@@ -290,7 +303,7 @@ bool CombinerShader_Generate(const CombinerDescription & description, CombinerSh
 
 		char line[256];
 		if (source.TextureBound) {
-			const unsigned register_index = coordinate_register(source.TextureCoordinateIndex);
+			const unsigned register_index = stage_register(target, stage, source.TextureCoordinateIndex);
 			if (register_index >= DECLARED_COORDINATE_SETS) {
 				return false;
 			}
@@ -463,7 +476,7 @@ bool CombinerShader_Generate(const CombinerDescription & description, CombinerSh
 		"    float4 texel;\n";
 	if (description.NormalMapped) {
 		append_normal_mapped_lighting(hlsl,
-			coordinate_register(description.Stages[0].TextureCoordinateIndex));
+			stage_register(target, 0, description.Stages[0].TextureCoordinateIndex));
 	}
 	hlsl += "    float4 current = input.Diffuse;\n";
 	hlsl += body;

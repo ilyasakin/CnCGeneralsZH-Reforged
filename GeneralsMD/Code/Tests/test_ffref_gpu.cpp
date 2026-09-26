@@ -576,6 +576,34 @@ static void scenarios_cascade(Harness &h)
 	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX2, D3DPT_TRIANGLELIST, screen_quad(-0.5f, -0.5f, 63.5f, 63.5f, CORNERS, 1, 1));
 	h.check("two stages, texture coordinate set 1");
 
+	// The shroud's shape: stage 0 reads the vertex's set 0, stage 1 generates its own coordinates from
+	// the camera-space position (TCI set bits 0) through a COUNT2 transform.  Each stage has to read
+	// its own coordinates, not the set its TCI's low bits name.
+	h.begin(0xFF000000);
+	h.rs(D3DRS_LIGHTING, 0);
+	set_camera(h);
+	h.texture(0, 4, 4, 1, gradient);
+	h.texture(1, 4, 4, 1, checker);
+	h.ss(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+	// Linear, as the shroud is sampled (the trees' trace: min and mag LINEAR).  Point sampling put two
+	// generated coordinates on a texel boundary within float precision, a tie rather than the fault.
+	h.ss(1, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+	h.ss(1, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+	h.ss(1, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
+	h.ss(1, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
+	h.tss(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+	h.tss(1, D3DTSS_COLOROP, D3DTOP_MODULATE);
+	h.tss(1, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	h.tss(1, D3DTSS_COLORARG2, D3DTA_CURRENT);
+	h.tss(1, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
+	h.tss(1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION);
+	h.tss(1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT2);
+	D3DMATRIX shroud = identity();
+	shroud._11 = 0.37f; shroud._22 = 0.37f; shroud._41 = 0.5f; shroud._42 = 0.5f;
+	h.transform((D3DTRANSFORMSTATETYPE)(D3DTS_TEXTURE0 + 1), shroud);
+	h.draw(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1, D3DPT_TRIANGLELIST, grid(3, -2, 2, -2, 2, 3, 6, 0));
+	h.check("stage 1 texgen beside stage 0's set 0");
+
 	h.begin(0xFF000000);
 	h.tss(0, D3DTSS_COLOROP, D3DTOP_DISABLE);
 	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE, D3DPT_TRIANGLELIST, screen_quad(4, 4, 60, 60, CORNERS));
