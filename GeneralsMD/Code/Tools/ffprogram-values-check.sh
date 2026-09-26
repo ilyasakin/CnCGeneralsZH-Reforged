@@ -74,6 +74,7 @@ EOF
 cat > "$WORK/d3d9.cpp" <<'EOF'
 #include <windows.h>
 #include <d3d9types.h>
+#include <stddef.h>
 #include "ffreference/ffprogram.h"
 using namespace FFRef::Token;
 #define SAME(a, b) static_assert((uint32_t)(a) == (uint32_t)(b), #a " != " #b)
@@ -89,6 +90,16 @@ SAME(RESULTSHIFT_SHIFT, D3DSP_DSTSHIFT_SHIFT); SAME(SWIZZLE_SHIFT, D3DVS_SWIZZLE
 SAME(ADDRESS_RELATIVE, D3DVS_ADDRMODE_RELATIVE);
 SAME(COISSUE, D3DSI_COISSUE);
 SAME(VERSION_PIXEL | 0x0101, D3DPS_VERSION(1, 1)); SAME(VERSION_VERTEX | 0x0101, D3DVS_VERSION(1, 1));
+namespace Decl = FFRef::Declaration;
+SAME(Decl::FLOAT1, D3DDECLTYPE_FLOAT1); SAME(Decl::FLOAT2, D3DDECLTYPE_FLOAT2); SAME(Decl::FLOAT3, D3DDECLTYPE_FLOAT3);
+SAME(Decl::FLOAT4, D3DDECLTYPE_FLOAT4); SAME(Decl::D3DCOLOR, D3DDECLTYPE_D3DCOLOR); SAME(Decl::UBYTE4, D3DDECLTYPE_UBYTE4);
+SAME(Decl::SHORT2, D3DDECLTYPE_SHORT2); SAME(Decl::SHORT4, D3DDECLTYPE_SHORT4);
+SAME(Decl::POSITION, D3DDECLUSAGE_POSITION); SAME(Decl::BLENDWEIGHT, D3DDECLUSAGE_BLENDWEIGHT);
+SAME(Decl::BLENDINDICES, D3DDECLUSAGE_BLENDINDICES); SAME(Decl::NORMAL, D3DDECLUSAGE_NORMAL); SAME(Decl::PSIZE, D3DDECLUSAGE_PSIZE);
+SAME(Decl::TEXCOORD, D3DDECLUSAGE_TEXCOORD); SAME(Decl::COLOR, D3DDECLUSAGE_COLOR);
+static_assert(sizeof(FFRef::DeclarationElement) == sizeof(D3DVERTEXELEMENT9), "one element, eight bytes");
+static_assert(offsetof(FFRef::DeclarationElement, offset) == offsetof(D3DVERTEXELEMENT9, Offset), "Offset");
+static_assert(offsetof(FFRef::DeclarationElement, usageIndex) == offsetof(D3DVERTEXELEMENT9, UsageIndex), "UsageIndex");
 EOF
 
 compile() {	# compile <unit> [<control text>]
@@ -103,7 +114,7 @@ else
 	echo "FAIL: against d3d8types.h:"; grep -m5 "error" "$WORK/err.txt"; status=1
 fi
 if compile d3d9.cpp; then
-	echo "ok: and d3d9types.h's (the 11-bit register number, the fields, relative addressing)"
+	echo "ok: and d3d9types.h's (the 11-bit register number, the fields, relative addressing, the declaration types, usages and element layout)"
 else
 	echo "FAIL: against d3d9types.h:"; grep -m5 "error" "$WORK/err.txt"; status=1
 fi

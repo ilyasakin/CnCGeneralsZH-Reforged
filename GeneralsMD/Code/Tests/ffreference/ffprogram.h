@@ -132,6 +132,31 @@ bool decodeProgram( const uint32_t *tokens, size_t count, Program &out );
 /// anything the census does not hold.  (A second reading of what D3DXAssembleShader produces.)
 bool assemblePixelProgram( const std::string &text, std::vector<uint32_t> &tokens, std::string &error );
 
+// ---- a vertex declaration --------------------------------------------------------------------------
+/*
+ * One D3DVERTEXELEMENT9, as capture v2 records the declaration bound at a draw.  Types and usages by the
+ * values the D3DDECLTYPE and D3DDECLUSAGE pages give.  Each element's usage names the vN it feeds by the
+ * D3D8 register convention the port's device converts the engine's D3D8 declarations with (a contributor, capture
+ * v2): POSITION0 v0, BLENDWEIGHT0 v1, BLENDINDICES0 v2, NORMAL0 v3, PSIZE0 v4, COLOR0 v5, COLOR1 v6,
+ * TEXCOORD0-7 v7-v14, POSITION1 v15.  That table is the device's, taken as given: the capture holds the
+ * D3D9 elements, not the engine's D3D8 declaration tokens.
+ */
+struct DeclarationElement
+{
+	uint16_t stream, offset;
+	uint8_t type, method, usage, usageIndex;
+};
+namespace Declaration {
+	enum Type : uint8_t { FLOAT1 = 0, FLOAT2 = 1, FLOAT3 = 2, FLOAT4 = 3, D3DCOLOR = 4, UBYTE4 = 5, SHORT2 = 6, SHORT4 = 7 };
+	enum Usage : uint8_t { POSITION = 0, BLENDWEIGHT = 1, BLENDINDICES = 2, NORMAL = 3, PSIZE = 4, TEXCOORD = 5, COLOR = 10 };
+}
+/// v0-v15 of one vertex from its stream bytes.  `present`: bit n set for each vN an element fed.  A
+/// register no element feeds, and the channels a type leaves out, are (0, 0, 0, 1)'s (D3DDECLTYPE's
+/// expansions; "Input Register - vs": partial (0, 0, 0, 1)).  FALSE with `error` for a type, stream,
+/// method or usage outside what the game declares.
+bool declarationInputs( const uint8_t *vertex, const DeclarationElement *elements, int count,
+	double inputs[16][4], unsigned &present, std::string &error );
+
 // ---- running a vertex program ---------------------------------------------------------------------
 /*
  * Plain double precision, as FFReference's fixed-function vertex stage is; the GPU's single precision
