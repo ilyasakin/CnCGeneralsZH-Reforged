@@ -1069,3 +1069,45 @@ TEST(ffref_bilinear_and_lod_freedoms_widen_the_envelope)
 	CHECK_NEAR( t.lo[0].r, 0.5 - 1.0 / 128.0, 1e-9 );
 	CHECK_NEAR( t.hi[0].r, 0.5 + 1.0 / 128.0, 1e-9 );
 }
+
+TEST(ffref_lod_freedom_reaches_every_level_inside_its_window)
+{
+	// Trilinear at lambda 1.5 over levels whose red is 0, 1, 0, 0, 0: nominal .5.  The +-0.6 window
+	// [0.9, 2.1] has red .9 and 0 at its ends, but passes through level 1 itself at lambda 1, so the
+	// envelope must reach 1.0 (F11: endpoints alone were not a superset of the narrower window).
+	const double reds[5] = { 0.0, 1.0, 0.0, 0.0, 0.0 };
+	Texture t = solidLevels( reds, 5, 16 );
+	DrawState s = screenState( 8, 8 );
+	s.texCoordSets = 1;
+	s.textures[0] = &t;
+	s.stageState[0][TSS_COLOROP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_ALPHAOP] = TOP_SELECTARG1;
+	s.samplerState[0][SAMP_MAGFILTER] = s.samplerState[0][SAMP_MINFILTER] = TEXF_LINEAR;
+	s.samplerState[0][SAMP_MIPFILTER] = TEXF_LINEAR;
+	const double size = 16.0 / pow( 2.0, 1.5 );		// 2^1.5 texels a pixel: lambda 1.5 everywhere
+	Vertex v[4];
+	const double xy[4][2] = { { 0, 0 }, { size, 0 }, { size, size }, { 0, size } };
+	for (int i = 0; i < 4; ++i)
+	{
+		v[i] = screenVertex( xy[i][0], xy[i][1], 0.5, 1, rgba( 1, 1, 1, 1 ) );
+		v[i].tex[0][0] = xy[i][0] / size;
+		v[i].tex[0][1] = xy[i][1] / size;
+	}
+	const uint32_t idx[6] = { 0, 1, 2, 0, 2, 3 };
+	Target tg = exactTarget( 8, 8 );
+	Report r;
+	CHECK( draw( s, PT_TRIANGLELIST, v, 4, idx, 6, tg, &r ) );
+	const size_t i = 2 * 8 + 3;		// pixel (3, 2): inside, off the diagonal
+	CHECK_NEAR( r.minLod, 1.5, 1e-6 );
+	CHECK_NEAR( tg.color[i].r, 0.5, 1e-9 );
+	CHECK_NEAR( tg.hi[i].r, 1.0, 1e-9 );
+	CHECK_NEAR( tg.lo[i].r, 0.0, 1e-9 );
+	CHECK( (tg.zones[i] & ZONE_LOD) != 0 );
+	// armed: at the old +-0.2 the window [1.3, 1.7] holds no integer, and the envelope is its ends
+	Freedoms narrow;
+	narrow.lodDelta = 0.2;
+	Target tn = exactTarget( 8, 8 );
+	CHECK( draw( s, PT_TRIANGLELIST, v, 4, idx, 6, tn, 0, 0, narrow ) );
+	CHECK_NEAR( tn.hi[i].r, 0.7, 1e-9 );		// lambda 1.3: .7 of level 1
+	CHECK_NEAR( tn.lo[i].r, 0.3, 1e-9 );
+}
