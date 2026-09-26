@@ -1155,26 +1155,11 @@ fixed-function draw of that shape is wrong there. Windows' trees escape only bec
 - The harness's new scenario, stage-1 texgen beside stage 0's set 0, fails without the fix and matches
   FFReference with it.
 
-**Direct3D 9 has it too - fixed in the following commit.** Its combiner shaders are always on
-(`W3DDisplay.cpp:1072`), are compiled `ps_2_0` (`ffshadercache.cpp:31`), and sit behind D3D9's
-fixed-function vertex pipeline. -47 read the pages: feeding ps_1_1-1_3 or ps_2_0, texture register *tN*
-holds stage *N*'s processed coordinates, after its own `TEXCOORDINDEX`, generation and
-`TEXTURETRANSFORMFLAGS`. The citation chain:
-- "ps_1_1..ps_1_4 Registers": the coordinates are "associated with a specific texture stage".
-- `D3DTSS_TEXCOORDINDEX` is "the texture coordinate set to use with this texture stage".
-- "Shader model 3" ignores `TEXCOORDINDEX` only from ps_3_0.
-
-Two caveats from the same reading:
-- No page says outright that the generated or transformed coordinates are what *tN* receives; it is
-  inferred from the stage association.
-- ps_1_4 decouples stage from register, which doesn't apply to ps_2_0.
-
-So D3D9's programs read *tk* where they should read *tN*, and the engine's texgen stages above 0 were
-wrong there too. Those are the terrain shaders' cloud, noise and shroud stages (`W3DShaderManager.cpp`:
-stage 1 at `:1973` and `:2550`, stage 2 at `:2286` and `:2577`, stage 3 at `:2313`; `TerrainTex.cpp`). It
-applies wherever such a draw runs fixed function with no engine pixel shader bound. The shader dump for
-that commit changes the new case's d3d9 text alone, one line (`tex2D(Sampler1, input.TexCoord0)` to
-`TexCoord1`). `WINDOWS-DEBT.md` has the row.
+**Direct3D 9 has it too, next commit.** -47 read the pages: with the fixed-function vertex pipeline
+feeding ps_1_1-1_3 or ps_2_0, texture register *tN* holds stage *N*'s processed coordinates, not set
+*k*'s. The citation is a chain, not one sentence: the ps_1_x registers page, `D3DTSS_TEXCOORDINDEX`,
+and shader model 3 making `TEXCOORDINDEX` ignored only from ps_3_0. So D3D9's always-on combiner shaders
+read the wrong register the same way. `WINDOWS-DEBT.md` has the row.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
