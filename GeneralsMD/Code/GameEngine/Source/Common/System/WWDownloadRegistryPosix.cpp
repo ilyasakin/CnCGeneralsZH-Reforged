@@ -95,10 +95,8 @@ bool GetUnsignedIntFromRegistry(std::string path, std::string key, unsigned int&
 }
 
 /* An empty value clears the setting on Windows (an empty REG_SZ, which every caller reads as "none":
-	 the HTTP proxy box, cleared).  Registry.ini cannot yet hold one - RegistryFile.h refuses a write that
-	 would not read back as written, and an empty value reads as missing - so until the protocol has a
-	 way to clear a key this returns false for "" and leaves the old value in place.  Raised with
-	 RegistryFile.h's owner (B5). */
+	 the HTTP proxy box, cleared).  Registry.ini writes it as "key =", which reads as missing, and
+	 missing is "none" to the same callers (RegistryFile.h). */
 bool SetStringInRegistry(std::string path, std::string key, std::string val)
 {
 	return writeRegistryFile( registryFileKey( "", AsciiString( path.c_str() ), AsciiString( key.c_str() ) ),

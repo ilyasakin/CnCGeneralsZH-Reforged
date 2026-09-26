@@ -133,18 +133,16 @@ TEST(wwdownload_registry_paths_below_the_game_key_are_part_of_the_key)
 	CHECK(!GetStringFromRegistry(std::string(""), std::string(""), value));
 }
 
-TEST(wwdownload_registry_cannot_clear_a_value_yet)
+TEST(wwdownload_registry_clears_a_value_with_an_empty_string)
 {
 	/* Windows stores an empty string, which the proxy box's readers take as "no proxy".  Registry.ini
-		 cannot hold an empty value (it reads as missing), and RegistryFile.h has no way to clear a key
-		 yet, so the write is refused and the old value stays.  This pins that until it can; when it
-		 can, this test changes to expect the value gone. */
+		 writes "Proxy =", which reads as missing, and those readers take missing as "no proxy" too. */
 	start_empty();
 	CHECK(SetStringInRegistry("", "Proxy", "proxy.example:8080"));
-	CHECK(!SetStringInRegistry("", "Proxy", ""));
+	CHECK(SetStringInRegistry("", "Proxy", ""));
 	std::string value;
-	CHECK(GetStringFromRegistry(std::string(""), std::string("Proxy"), value));
-	CHECK(value == "proxy.example:8080");
+	CHECK(!GetStringFromRegistry(std::string(""), std::string("Proxy"), value));
+	CHECK(read_registry().find("proxy.example") == std::string::npos);
 }
 
 TEST(format_url_from_registry_is_urlbuilders_on_an_empty_registry_and_follows_it)
