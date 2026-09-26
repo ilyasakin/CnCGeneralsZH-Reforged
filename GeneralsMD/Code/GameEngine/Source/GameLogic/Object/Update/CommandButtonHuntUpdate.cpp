@@ -51,6 +51,7 @@
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/ScriptEngine.h"
+#include "Platform/MsvcFloatCasts.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -349,7 +350,7 @@ Object* CommandButtonHuntUpdate::scanClosestTarget(void)
 				if (info) curPriority = info->getPriority(other->getTemplate());
 				if (curPriority == 0) 
 					continue; // don't attack 0 priority targets.
-				Int modifier = dist/TheAI->getAiData()->m_attackPriorityDistanceModifier;
+				Int modifier = floatToIntAsMsvc(dist/TheAI->getAiData()->m_attackPriorityDistanceModifier);
 				Int modPriority = curPriority-modifier;
 				if (modPriority < 1) 
 					modPriority = 1;

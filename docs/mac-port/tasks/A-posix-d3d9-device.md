@@ -932,7 +932,7 @@ a0 loaded before relative use, and r0 fully written.
 
 | | Choice | Why |
 | --- | --- | --- |
-| P1 | `mov a0` rounds to nearest, ties away from zero, from the swizzle's x component. A vertex whose .x and .w differ is REPORTED. | The page's pseudocode rounds `src.w`. |
+| P1 | `mov a0` rounds to nearest, ties away from zero, from the swizzle's x component. A vertex whose .x and .w differ is REPORTED. | The page's pseudocode rounds `src.w`. **Settled by data (capture v2, 2026-09-26):** Trees.vso's `mov a0.x, v1` reads a FLOAT3 whose .w is always 1. Its .x runs 1-10 over 21,028 vertices, and the engine fills exactly c8-c18. Component-wise indexing reaches c9-c18; `.w` would read c9 for every tree and leave c10-c18 unused. So the pseudocode's `.w` is a documentation error. The report still fires on every tree vertex, kept as the trail. |
 | P2 | `rcp(0)` gives FLT_MAX, and the vertex is REPORTED. | The pseudocode says FLT_MAX; the text says infinity. |
 | P3 | Reading a vertex output that was never written is refused. | Its default is "None". |
 | P4 | The ps range cap is at least 1. The nominal value clamps at 1; the envelope's interval covers every cap. | D3DCAPS9 requires data *within* the cap to pass unclamped, and says nothing beyond it. |

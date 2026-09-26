@@ -63,6 +63,20 @@
 
 //static PerfTimer s_particleSys("ParticleSys::update", false, PERFMETRICS_LOGIC_STARTFRAME, PERFMETRICS_LOGIC_STOPFRAME);
 //-------------------------------------------------------------------------------------------------
+/* An INI timer, in frames.  A negative one (no shipped particle system has one) never runs out, as the
+	 Windows build is understood to behave; C leaves converting it to an unsigned count undefined, and
+	 ARM64 made it 0: a system that started at once, and a negative BurstDelay that burst every frame.
+	 "Never" is 2^24 frames, six days, small enough that the burst delay's LOD coefficient cannot push
+	 it out of range.  Anything from -1 up converts as it always did. */
+static UnsignedInt particleTimerFrames( Real value )
+{
+	const UnsignedInt never = 1u << 24;
+	if( !(value > -1.0f) || !(value < (Real)never) )
+		return never;
+	return (UnsignedInt)value;
+}
+
+//-------------------------------------------------------------------------------------------------
 
 // the singleton
 ParticleSystemManager *TheParticleSystemManager = NULL;
@@ -1325,7 +1339,7 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 
 	m_isOneShot = sysTemplate->m_isOneShot;
 
-	m_delayLeft = (UnsignedInt)sysTemplate->m_initialDelay.getValue();
+	m_delayLeft = particleTimerFrames( sysTemplate->m_initialDelay.getValue() );
 
 	m_startTimestamp = TheGameClient->getFrame();
 	m_systemLifetimeLeft = sysTemplate->m_systemLifetime;
@@ -2036,7 +2050,7 @@ const ParticleInfo *ParticleSystem::generateParticleInfo( Int particleNum, Int p
 	info.m_angleZ = m_angleZ.getValue();
 	info.m_angularRateZ = m_angularRateZ.getValue();
 
-	info.m_lifetime = (UnsignedInt)m_lifetime.getValue();
+	info.m_lifetime = particleTimerFrames( m_lifetime.getValue() );
 
 	info.m_size = m_startSize.getValue()*m_sizeCoeff*TheGlobalData->m_particleScale;
 	info.m_sizeRate = m_sizeRate.getValue()*m_sizeCoeff*TheGlobalData->m_particleScale;
@@ -2275,7 +2289,7 @@ Bool ParticleSystem::updateEmission( Int localPlayerIndex, Bool *keepSystem )
 					}
 						
 					// compute next burst delay
-					m_burstDelayLeft = (UnsignedInt)m_burstDelay.getValue();
+					m_burstDelayLeft = particleTimerFrames( m_burstDelay.getValue() );
 					m_burstDelayLeft *= m_delayCoeff;
 				}
 				else

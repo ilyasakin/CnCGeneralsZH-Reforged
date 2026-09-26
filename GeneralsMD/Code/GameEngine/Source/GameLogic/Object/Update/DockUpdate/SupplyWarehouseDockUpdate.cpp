@@ -37,6 +37,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/AIPathfind.h"
+#include "Platform/MsvcFloatCasts.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -308,7 +309,7 @@ Int SupplyWarehouseDockUpdate::getSupplyCashValue( void ) const
 void SupplyWarehouseDockUpdate::setCashValue( Int cashValue )
 {
 	// A script can tell us our set value, and we need to figure out the boxes needed to provide that.
-	m_boxesStored = ceil(cashValue / (float)TheGlobalData->m_baseValuePerSupplyBox);
+	m_boxesStored = floatToIntAsMsvc((float)ceil(cashValue / (float)TheGlobalData->m_baseValuePerSupplyBox));
 	Drawable *draw = getObject()->getDrawable();
 	if( draw )
 	{

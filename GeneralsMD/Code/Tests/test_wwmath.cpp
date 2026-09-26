@@ -14,6 +14,8 @@
  */
 #include "test_harness.h"
 
+#include <limits>
+
 #include "wwmath.h"
 #include "vector2.h"
 #include "vector3.h"
@@ -1300,6 +1302,28 @@ TEST(dettrig_DEFECT_atan2_ignores_the_sign_of_a_zero_y)
 	   so this is pinned rather than special-cased - a future change to it should
 	   be a decision. */
 	CHECK_EQ(DetTrig::ATan2(-0.0f, -1.0f), DetTrig::ATan2(0.0f, -1.0f));
+}
+
+// A NaN or an infinity has no angle.  fixedAngle takes it as 0, and arcTanUnit takes a NaN ratio as 0,
+// explicitly now, where both used to go through an undefined conversion.  These are the answers that
+// conversion gave on ARM64 and on x86 alike (measured: this test passes without the guards on both), so
+// the test cannot catch the old code; it pins the answers against a future change.  Locomotor feeds
+// Sin/Cos a NaN whenever a missile's nose is already on its goal.
+TEST(dettrig_nan_and_infinity_have_the_answers_arm64_always_gave)
+{
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	const float inf = std::numeric_limits<float>::infinity();
+	CHECK_EQ(DetTrig::Sin(nan), DetTrig::Sin(0.0f));
+	CHECK_EQ(DetTrig::Cos(nan), DetTrig::Cos(0.0f));
+	CHECK_EQ(DetTrig::Sin(inf), DetTrig::Sin(0.0f));
+	CHECK_EQ(DetTrig::Cos(-inf), DetTrig::Cos(0.0f));
+	CHECK_EQ(DetTrig::Tan(nan), DetTrig::Tan(0.0f));
+	CHECK_EQ(DetTrig::ATan2(inf, inf), 0.0f);							// inf / inf is a NaN ratio
+	CHECK_EQ(DetTrig::ATan2(nan, 1.0f), DetTrig::ATan2(-1.0f, 0.0f));	// the quadrant tests all fail
+	CHECK_EQ(DetTrig::ATan2(1.0f, nan), DetTrig::ATan2(1.0f, 0.0f));	// x >= 0 fails, y >= 0 holds
+	CHECK_EQ(DetTrig::ACos(nan), -DetTrig::ACos(-1.0f));
+	CHECK_EQ(DetTrig::ASin(nan), DetTrig::ATan2(-1.0f, 0.0f));
+	CHECK_EQ(DetTrig::ATan(nan), DetTrig::ATan2(-1.0f, 0.0f));
 }
 
 TEST(dettrig_acos_and_asin_track_the_reference)

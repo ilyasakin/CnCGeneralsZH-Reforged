@@ -620,6 +620,46 @@ TEST(ffprogram_draws_as_the_fixed_function_pipeline_it_mirrors)
 	CHECK_EQ( rb.programVerticesReported, 0L );
 }
 
+TEST(ffprogram_vertex_program_with_the_fixed_function_pixel_stage)
+{
+	// Trees.vso's case (capture v2): a vertex program, and the texture cascade behind it reading oD0 and oT0
+	const Program vs = decoded( { VS11,
+		ins( OP_M4x4 ), dst( REG_RASTOUT, RASTOUT_POSITION ), src( REG_INPUT, 0 ), src( REG_CONST, 0 ),
+		ins( OP_MOV ), dst( REG_ATTROUT, 0 ), src( REG_INPUT, 1 ),
+		ins( OP_MOV ), dst( REG_TEXCRDOUT, 0 ), src( REG_INPUT, 2 ), END } );
+	Texture tex = solid( rgbaOf( 0, 0, 0, 1 ) );
+	for (int i = 0; i < 16; ++i)
+		tex.levels[0].texels[i] = rgbaOf( (i % 4) / 4.0 + 0.125, (i / 4) / 4.0 + 0.125, 1.0, 1.0 );
+	Vertex v[ 6 ];
+	quad( v, rgbaOf( 0.5, 0.5, 0.25, 1 ) );
+	DrawState ff = plainState();
+	ff.samplerState[0][SAMP_MAGFILTER] = ff.samplerState[0][SAMP_MINFILTER] = TEXF_POINT;
+	ff.textures[0] = &tex;
+	Target a = exactTarget( 4, 4 );
+	CHECK( draw( ff, PT_TRIANGLELIST, v, 6, NULL, 6, a ) );
+	DrawState pr = ff;
+	pr.vertexProgram = &vs;
+	for (int i = 0; i < 4; ++i)
+		pr.vertexConstants[i][i] = 1.0;
+	pr.vertexInput[0] = INPUT_POSITION; pr.vertexInputSize[0] = 3;
+	pr.vertexInput[1] = INPUT_DIFFUSE; pr.vertexInputSize[1] = 4;
+	pr.vertexInput[2] = INPUT_TEXCOORD0; pr.vertexInputSize[2] = 2;
+	Target b = exactTarget( 4, 4 );
+	Report r;
+	const bool drew = draw( pr, PT_TRIANGLELIST, v, 6, NULL, 6, b, &r );
+	if (!r.refusals.empty())
+		printf( "  refused: %s\n", r.refusals[0].c_str() );
+	CHECK( drew );
+	int same = 0;
+	for (size_t i = 0; i < a.color.size(); ++i)
+		same += fabs( a.color[i].r - b.color[i].r ) < 1e-9 && fabs( a.color[i].g - b.color[i].g ) < 1e-9 ? 1 : 0;
+	CHECK_EQ( same, (int)a.color.size() );
+	// the documented rule: a vertex program needs each stage's coordinate index at its default
+	pr.stageState[0][TSS_TEXCOORDINDEX] = 1;
+	Report refused;
+	CHECK( !draw( pr, PT_TRIANGLELIST, v, 6, NULL, 6, b, &refused ) );
+}
+
 TEST(ffprogram_refusals_inside_draw)
 {
 	const Program ps = decoded( { PS11, ins( OP_TEX ), dst( REG_TEXTURE, 1 ), ins( OP_MOV ), dst( REG_TEMP, 0 ), src( REG_TEXTURE, 1 ), END } );
@@ -659,4 +699,43 @@ TEST(ffprogram_refusals_inside_draw)
 			printf( "  expected a refusal naming \"%s\"; got %s\n", cases[i].what, r.refusals.empty() ? "none" : r.refusals[0].c_str() );
 		CHECK( !drew && named );
 	}
+}
+
+TEST(ffprogram_declaration_inputs_expand_as_the_pages_say)
+{
+	// One vertex: FLOAT3 position at 0 (v0), D3DCOLOR 0x80FF4020 at 12 (COLOR0, v5), FLOAT2 at 16
+	// (TEXCOORD0, v7), SHORT2 -3, 7 at 24 (BLENDWEIGHT0, v1), UBYTE4 1, 2, 3, 4 at 28 (BLENDINDICES0, v2)
+	uint8_t bytes[ 32 ] = {};
+	const float pos[ 3 ] = { 1.5f, -2.0f, 3.25f }, uv[ 2 ] = { 0.25f, 0.75f };
+	memcpy( bytes, pos, 12 );
+	const uint32_t colour = 0x80FF4020u;		// stored little-endian: B, G, R, A
+	memcpy( bytes + 12, &colour, 4 );
+	memcpy( bytes + 16, uv, 8 );
+	const int16_t shorts[ 2 ] = { -3, 7 };
+	memcpy( bytes + 24, shorts, 4 );
+	const uint8_t ubytes[ 4 ] = { 1, 2, 3, 4 };
+	memcpy( bytes + 28, ubytes, 4 );
+	const DeclarationElement e[] = { { 0, 0, Declaration::FLOAT3, 0, Declaration::POSITION, 0 },
+		{ 0, 12, Declaration::D3DCOLOR, 0, Declaration::COLOR, 0 }, { 0, 16, Declaration::FLOAT2, 0, Declaration::TEXCOORD, 0 },
+		{ 0, 24, Declaration::SHORT2, 0, Declaration::BLENDWEIGHT, 0 }, { 0, 28, Declaration::UBYTE4, 0, Declaration::BLENDINDICES, 0 } };
+	double in[ 16 ][ 4 ];
+	unsigned present = 0;
+	std::string error;
+	CHECK( declarationInputs( bytes, e, 5, in, present, error ) );
+	CHECK_EQ( present, (1u << 0) | (1u << 5) | (1u << 7) | (1u << 1) | (1u << 2) );
+	const double v0[ 4 ] = { 1.5, -2.0, 3.25, 1 }, v5[ 4 ] = { 1.0, 64 / 255.0, 32 / 255.0, 128 / 255.0 },
+		v7[ 4 ] = { 0.25, 0.75, 0, 1 }, v1[ 4 ] = { -3, 7, 0, 1 }, v2[ 4 ] = { 1, 2, 3, 4 }, v3[ 4 ] = { 0, 0, 0, 1 };
+	for (int c = 0; c < 4; ++c)
+	{
+		CHECK_NEAR( in[0][c], v0[c], 0.0 ); CHECK_NEAR( in[5][c], v5[c], 1e-12 ); CHECK_NEAR( in[7][c], v7[c], 0.0 );
+		CHECK_NEAR( in[1][c], v1[c], 0.0 ); CHECK_NEAR( in[2][c], v2[c], 0.0 ); CHECK_NEAR( in[3][c], v3[c], 0.0 );
+	}
+	const DeclarationElement stream1 = { 1, 0, Declaration::FLOAT3, 0, Declaration::POSITION, 0 };
+	const DeclarationElement tangent = { 0, 0, Declaration::FLOAT3, 0, 6, 0 };
+	const DeclarationElement normal1 = { 0, 0, Declaration::FLOAT3, 0, Declaration::NORMAL, 1 };
+	const DeclarationElement ubyte4n = { 0, 0, 8, 0, Declaration::POSITION, 0 };
+	CHECK( !declarationInputs( bytes, &stream1, 1, in, present, error ) );
+	CHECK( !declarationInputs( bytes, &tangent, 1, in, present, error ) );
+	CHECK( !declarationInputs( bytes, &normal1, 1, in, present, error ) );
+	CHECK( !declarationInputs( bytes, &ubyte4n, 1, in, present, error ) );
 }

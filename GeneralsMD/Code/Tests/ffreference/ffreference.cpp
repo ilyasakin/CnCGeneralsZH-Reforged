@@ -154,7 +154,9 @@ VOut processVertex( const Context &ctx, const Vertex &v )
 		// A3e: the declaration's elements into v0-v15, (0, 0, 0, 1) where a stream stops short ("Input
 		// Register - vs"); the program's outputs out (oPos as the clip position, oTn for stage n)
 		double inputs[ 16 ][ 4 ];
-		for (int k = 0; k < 16; ++k)
+		for (int k = 0; k < 16 && s.programInputsGiven; ++k)
+			memcpy( inputs[k], v.programInput[k], sizeof( inputs[k] ) );
+		for (int k = 0; k < 16 && !s.programInputsGiven; ++k)
 		{
 			static const double partial[ 4 ] = { 0, 0, 0, 1 };
 			double element[ 4 ] = { 0, 0, 0, 1 };
@@ -1229,12 +1231,44 @@ void validatePrograms( const DrawState &s, Report &report )
 		if (!s.vertexProgram->refusals.empty() || s.vertexProgram->kind != PROGRAM_VERTEX)
 			refuse( report, "a vertex program outside the census: "
 				+ (s.vertexProgram->refusals.empty() ? std::string( "not a vertex program" ) : s.vertexProgram->refusals[0]) );
-		if (s.pixelProgram == NULL) refuse( report, "a vertex program with the fixed-function pixel stage (not in the census)" );
 		if (s.pretransformed) refuse( report, "a vertex program with pretransformed vertices" );
+		if (s.programInputsGiven)
+			for (size_t i = 0; i < s.vertexProgram->code.size(); ++i)
+				for (int k = 0; k < s.vertexProgram->code[i].sources; ++k)
+				{
+					const Operand &o = s.vertexProgram->code[i].src[k];
+					if (o.type == Token::REG_INPUT && !(s.programInputPresent & (1u << o.index)))
+						refuse( report, "a vertex program reads an input no declaration element feeds" );
+				}
 		if (rs[RS_FOGENABLE]) refuse( report, "fog with a vertex program (oFog is not in the census)" );
 		for (int st = 0; st < MAX_STAGES; ++st)
 			if (s.stageState[st][TSS_TEXTURETRANSFORMFLAGS] != 0 || (s.stageState[st][TSS_TEXCOORDINDEX] & 0xFFFF0000u) != 0)
 				refuse( report, stageText( st, "a texture transform or generation with a vertex program (not in the census)" ) );
+		if (s.pixelProgram == NULL)
+		{
+			// The fixed-function pixel stage behind a vertex program (Trees.vso, capture v2): D3DTSS_TEXCOORDINDEX,
+			// "When rendering using vertex shaders, each stage's texture coordinate index must be set to its
+			// default value", which is the stage's own number, so stage n reads oTn.  What the cascade reads
+			// must have been written (P3): oD0 (it starts from the diffuse), oD1 under SPECULARENABLE, oTn at
+			// every stage it samples.
+			unsigned colours = 0, coordinates = 0;
+			for (size_t i = 0; i < s.vertexProgram->code.size(); ++i)
+			{
+				const Operand &d = s.vertexProgram->code[i].dst;
+				if (d.type == Token::REG_ATTROUT) colours |= 1u << d.index;
+				if (d.type == Token::REG_TEXCRDOUT) coordinates |= 1u << d.index;
+			}
+			if (!(colours & 1u)) refuse( report, "the fixed-function pixel stage reads a diffuse the vertex program never wrote" );
+			if (rs[RS_SPECULARENABLE] && !(colours & 2u))
+				refuse( report, "a specular add of a specular the vertex program never wrote" );
+			for (int st = 0; st < MAX_STAGES && s.stageState[st][TSS_COLOROP] != TOP_DISABLE; ++st)
+			{
+				if ((s.stageState[st][TSS_TEXCOORDINDEX] & 0xFFFF) != (uint32_t)st)
+					refuse( report, stageText( st, "a coordinate index other than the stage's own with a vertex program (D3DTSS_TEXCOORDINDEX)" ) );
+				if (s.textures[st] != NULL && !(coordinates & (1u << st)))
+					refuse( report, stageText( st, "sampled at coordinates the vertex program never wrote" ) );
+			}
+		}
 	}
 	if (s.pixelProgram != NULL)
 	{
