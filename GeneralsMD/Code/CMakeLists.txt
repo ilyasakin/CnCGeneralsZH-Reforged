@@ -1689,7 +1689,17 @@ if(ZH_PLATFORM_POSIX)
   endif()
   # Their install check (Tools/install-guard.sh) on a made-up install: a change, and a check that could not
   # be made, are told apart.  No game data.
+  # The stager keeps the HUD overlay on: it refuses a staged ShowHudOverlay = No, loose or in an archive.
+  add_test(NAME stage_overlay_hud_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_stage_overlay_hud.sh)
   add_test(NAME install_guard_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_guard.sh)
+  # Decision 2 for the GPU: a first launch chooses the top detail preset (High), a later one keeps it, and
+  # -noshaders (a Voodoo2, below every preset) chooses Low.  Read from Options.ini after real runs.
+  add_test(NAME lod_first_run_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/lod-first-run-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(lod_first_run_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(lod_first_run_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   add_test(NAME root_readonly_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/root-readonly-check.sh --generals $<TARGET_FILE:generals>)
   set_tests_properties(root_readonly_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
@@ -2299,7 +2309,7 @@ if(ZH_PLATFORM_POSIX)
   # The tests that build a farm of the install (a folder of links into it) never run at the same time:
   # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
   foreach(_zh_test replay_check overlay_crc_check packaging_resolution_check root_readonly_check
-                   test_bigfilesystem test_install_textures test_milesaudiomanager)
+                   lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager)
     if(TEST ${_zh_test})
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
     endif()
