@@ -990,6 +990,7 @@ static OrderCursorArt s_orderCursorArt[ Mouse::NUM_MOUSE_CURSORS ];
 //-------------------------------------------------------------------------------------------------
 static const Image *loadOrderCursorImage( Mouse::MouseCursor cursor, ICoord2D *hotSpot )
 {
+#if defined(_WIN32)	// the .ANI cursor through Win32's cursor API; off Windows the cursor is C3's
 	const AsciiString& name = TheMouse->m_cursorInfo[ cursor ].textureName;
 	if( name.isEmpty() )
 		return NULL;
@@ -1085,6 +1086,11 @@ static const Image *loadOrderCursorImage( Mouse::MouseCursor cursor, ICoord2D *h
 		DeleteObject( info.hbmMask );
 
 	return result;
+#else
+	(void)cursor;
+	(void)hotSpot;
+	return NULL;
+#endif
 }
 
 //-------------------------------------------------------------------------------------------------

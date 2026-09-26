@@ -3304,7 +3304,11 @@ static const RenderUInt32* readShaderBytecode(const char* strFilePath)
 	TheFileSystem->getFileInfo(AsciiString(strFilePath), &fileInfo);
 	const UnsignedInt dwFileSize = fileInfo.sizeLow;
 
+#if defined(_WIN32)
 	const RenderUInt32* pShader = (RenderUInt32*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwFileSize);
+#else
+	const RenderUInt32* pShader = (RenderUInt32*)calloc(1, dwFileSize);	// zeroed, as HEAP_ZERO_MEMORY is
+#endif
 	if (pShader != NULL)
 	{
 		file->read((void *)pShader, dwFileSize);
@@ -3327,7 +3331,11 @@ RenderResult W3DShaderManager::LoadAndCreateD3DPixelShader(const char* strFilePa
 	std::string source;
 	const RenderResult hr = Create_Translated_Pixel_Shader(DX8Wrapper::_Get_D3D_Device(), pShader, shader,
 		&source);
+#if defined(_WIN32)
 	HeapFree(GetProcessHeap(), 0, (void*)pShader);
+#else
+	free((void*)pShader);
+#endif
 	dumpEngineShaderSource(strFilePath, source);
 
 	if (Render_Failed(hr))
@@ -3357,7 +3365,11 @@ RenderResult W3DShaderManager::LoadAndCreateD3DVertexShader(const char* strFileP
 	std::string source;
 	const RenderResult hr = Create_Translated_Vertex_Shader(DX8Wrapper::_Get_D3D_Device(),
 		pDeclaration, pShader, shader, declaration, &source);
+#if defined(_WIN32)
 	HeapFree(GetProcessHeap(), 0, (void*)pShader);
+#else
+	free((void*)pShader);
+#endif
 	dumpEngineShaderSource(strFilePath, source);
 
 	if (Render_Failed(hr))
