@@ -45,6 +45,8 @@
 #include <SDL3/SDL.h>
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // WinMain's DEFAULT_XRESOLUTION and DEFAULT_YRESOLUTION: the window's size until W3DDisplay sizes it to
 // the game's resolution when the device is made, as dx8wrapper does on Windows (W3DWindowHooks.h).
@@ -286,7 +288,21 @@ Radar *SdlGameEngine::createRadar( void )
 	return NEW W3DRadar;
 }
 
+/* The rule: no sound and no windows in automated runs.  A hidden window (-hiddenwindow, or
+	 ZH_HIDDEN_WINDOW) is a harness or automated run, so it is silent exactly as -noaudio makes it, and
+	 the audio device is never opened.  ZH_ALLOW_AUDIO=1 keeps the sound for a deliberate audio check.
+	 This is the place: after the command line is parsed, before TheAudio opens its device. */
 AudioManager *SdlGameEngine::createAudioManager( void )
 {
+	const char *allow = getenv( "ZH_ALLOW_AUDIO" );
+	const Bool allowed = allow != NULL && allow[0] != '\0' && strcmp( allow, "0" ) != 0;
+	if (m_request.hidden && !allowed && TheWritableGlobalData != NULL)
+	{
+		TheWritableGlobalData->m_audioOn = FALSE;
+		TheWritableGlobalData->m_speechOn = FALSE;
+		TheWritableGlobalData->m_soundsOn = FALSE;
+		TheWritableGlobalData->m_musicOn = FALSE;
+		DEBUG_LOG(( "Audio off: a hidden window is an automated or harness run (ZH_ALLOW_AUDIO=1 keeps it)\n" ));
+	}
 	return NEW MilesAudioManager;
 }

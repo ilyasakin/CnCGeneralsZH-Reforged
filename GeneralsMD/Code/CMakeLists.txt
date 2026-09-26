@@ -2431,13 +2431,18 @@ endif()
 # 2026-09-26 lost a replay_check's work folder mid-run while other sessions' harnesses, of several
 # versions, ran in the same folder.  A test's temporary trees are its own now, and whatever is left
 # behind stays in this build, where it can be seen.
+#
+# And every test on miniaudio's null backend (ZH_AUDIO_BACKEND=null, honoured where the one audio device
+# is opened, AIL_quick_startup in miles_miniaudio.cpp): the rule of no sound and no windows in automated runs.  It reaches the games a test script starts too, so no ctest can make a sound, whatever
+# its switches.  The null device still mixes in real time, which is what the audio tests measure.
 if(ZH_PLATFORM_POSIX)
   get_property(_zh_tests DIRECTORY PROPERTY TESTS)
   foreach(_zh_test IN LISTS _zh_tests)
     file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/test-tmp/${_zh_test})
     set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT
       "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data/${_zh_test}"
-      "TMPDIR=${CMAKE_BINARY_DIR}/test-tmp/${_zh_test}")
+      "TMPDIR=${CMAKE_BINARY_DIR}/test-tmp/${_zh_test}"
+      "ZH_AUDIO_BACKEND=null")
   endforeach()
 
   # The tests that build a farm of the install (a folder of links into it) never run at the same time:
