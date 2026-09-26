@@ -25,6 +25,7 @@
 #include "Common/FileSystem.h"
 #include "Common/GameMemory.h"
 #include "Common/LocalFile.h"
+#include "Common/Registry.h"
 #include "Common/STLTypedefs.h"
 #include "PosixDevice/Common/PosixLocalFileSystem.h"
 
@@ -332,6 +333,39 @@ void remove_tree(const std::string & root)
 }
 
 } // namespace
+
+// registry.cpp's POSIX half: Registry.ini in the user data directory, whose path is spelled the
+// Windows way and opened through zh_fopen (C1 (d)).  Before (d) a raw fopen read nothing here.  The
+// directory is the test's own: ZH_USER_DATA_DIR is set before anything asks for it.
+TEST(registry_values_come_from_registry_ini_in_the_user_data_directory)
+{
+	boot_memory();
+	const std::string root = temp_root("test_posixlocalfilesystem_userdata");
+	setenv("ZH_USER_DATA_DIR", root.c_str(), 1);
+	make_directory(root);
+	write_file(root + "/Registry.ini",
+		"Language = german\n"
+		"Version = 65540\n"
+		"MapPackVersion = not a number\n"
+		"ergc\\Proxy = 1\n"
+		"Generals\\InstallPath = /games/generals\n"
+		"language = polish\n");			// the last of two keys differing only in case wins
+
+	AsciiString text;
+	CHECK(GetStringFromRegistry("", "Language", text));
+	CHECK_STR(text.str(), "polish");
+	CHECK(GetStringFromRegistry("\\ergc", "Proxy", text));
+	CHECK_STR(text.str(), "1");
+	CHECK(GetStringFromGeneralsRegistry("", "InstallPath", text));
+	CHECK_STR(text.str(), "/games/generals");
+	CHECK(!GetStringFromRegistry("", "SKU", text));
+	CHECK_EQ(GetRegistryVersion(), 65540u);
+	CHECK_EQ(GetRegistryMapPackVersion(), 65536u);			// not a whole number: the default
+	CHECK_STR(GetRegistryGameName().str(), "GeneralsMPTest");
+
+	unsetenv("ZH_USER_DATA_DIR");
+	remove_tree(root);
+}
 
 TEST(posixlocalfile_pool_is_sized_like_win32localfile)
 {

@@ -44,6 +44,7 @@
 #include <unistd.h>
 #endif
 #include "Platform/MSVCCompat.h"	// strcasecmp and strncasecmp, taught to MSVC
+#include "zhio.h"		// zh_fopen: the user data directory's path is spelled the Windows way (C1, D4)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -333,6 +334,22 @@ inline bool findUserDataDirectory( char *out, size_t outSize )
 	return true;
 }
 
+/** Registry.ini, which stands in for the registry off Windows (registry.cpp): the user data directory
+	* plus the leaf, spelled as the engine spells paths.  Open it with zh_fopen.  Every reader and writer
+	* of the file takes its path from here (C1 (d), agreed with registry.cpp's and WWDownload's owners). */
+inline bool findRegistryFile( char *out, size_t outSize )
+{
+	if (!findUserDataDirectory( out, outSize ))
+		return false;
+	if (::strlen( out ) + ::strlen( "Registry.ini" ) + 1 > outSize)
+	{
+		out[0] = 0;
+		return false;
+	}
+	::strcat( out, "Registry.ini" );		// the directory ends in its separator, as on Windows
+	return true;
+}
+
 /** The value of `key` (XDG_DESKTOP_DIR and the like) in an open xdg-user-dirs file, with a leading
 	* "$HOME" replaced by `home`.  The file's lines are `KEY="$HOME/Desktop"` or `KEY="/absolute"`.
 	* Split out so a test can hand it a file of its own. */
@@ -492,7 +509,7 @@ inline bool findEarlyOptionValue( const char *key, char *out, size_t outSize )
 		return false;
 	::strncat( path, "Options.ini", sizeof( path ) - ::strlen( path ) - 1 );
 
-	FILE *fp = ::fopen( path, "r" );
+	FILE *fp = zh_fopen( path, "r" );
 	if (fp == NULL)
 		return false;	// no preferences file yet, which is the state every fresh install is in
 

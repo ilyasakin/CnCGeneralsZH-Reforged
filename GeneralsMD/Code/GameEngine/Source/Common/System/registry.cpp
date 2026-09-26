@@ -30,7 +30,7 @@
 
 #include "Common/Registry.h"
 #if !defined(_WIN32)
-#include "Common/EarlyOptions.h"	// findUserDataDirectory, findEarlyOptionValueIn
+#include "Common/EarlyOptions.h"	// findRegistryFile, findEarlyOptionValueIn, and zh_fopen through it
 #include <stdio.h>
 #include <stdlib.h>
 #endif
@@ -203,7 +203,7 @@ Bool GetUnsignedIntFromRegistry(AsciiString path, AsciiString key, UnsignedInt& 
 /** The value of one key in a Registry.ini file already chosen; FALSE if the file or the key is not there. */
 static Bool readRegistryFileAt( const char *file, const AsciiString &name, AsciiString &val )
 {
-	FILE *fp = fopen( file, "r" );
+	FILE *fp = zh_fopen( file, "r" );		// the path is spelled as the engine spells paths (C1 (d))
 	if (fp == NULL)
 		return FALSE;
 	char value[ 256 ];
@@ -216,12 +216,10 @@ static Bool readRegistryFileAt( const char *file, const AsciiString &name, Ascii
 
 static Bool readRegistryFile( const AsciiString &name, AsciiString &val )
 {
-	char directory[ 1024 ];
-	if (!findUserDataDirectory( directory, sizeof( directory ) ))
+	char file[ 1024 ];
+	if (!findRegistryFile( file, sizeof( file ) ))		// every reader and writer takes the path from there
 		return FALSE;
-	AsciiString file;
-	file.format( "%sRegistry.ini", directory );		// the directory ends in its separator, as on Windows
-	return readRegistryFileAt( file.str(), name, val );
+	return readRegistryFileAt( file, name, val );
 }
 
 /** "Generals\\" or "", then the path below the game's key without its leading backslashes, then the name. */
