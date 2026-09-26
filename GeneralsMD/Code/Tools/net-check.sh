@@ -70,7 +70,11 @@
 #   net-check.sh --generals <exe> --peer <slot> --hosts <addr0>,<addr1> [--replay-out <file>] ...
 #               plays the one copy for <slot> (its address must be this machine's), plays its own replay
 #               back, copies the replay to --replay-out, and prints one line:
-#               PEER-RESULT slot= crc= frame= mismatches= built= ended= back_crc= back_frame= aligned="" oos=""
+#               PEER-RESULT slot= crc= frame= mismatches= dropped= built= ended= back_crc= back_frame= aligned="" oos=""
+#               dropped counts the players this copy disconnected.  A copy whose partner never came (or left)
+#               does not stop: after NetworkDisconnectTime and the disconnect screen it drops the other slot
+#               and plays on alone to a clean end with no mismatch (measured, 2026-09-27: a lone peer 1
+#               logged "disconnecting slot 0 on frame 30" and still reached --frames).  So dropped must be 0.
 #   net-check.sh --generals <exe> --play <replay file> [--frames N]
 #               plays a replay recorded elsewhere (the other host's) and prints
 #               PLAY-RESULT crc= frame= aligned="" oos=""
@@ -455,6 +459,7 @@ if [ -n "$PEER" ]; then
 	echo "  the match: $(( $(date +%s) - started )) s (ended $ended: 0 by itself, 1 time, 2 CRC mismatch, 3 descriptors${FD_REPORT:+: $FD_REPORT})"
 	log="$(log_of 0 "live$S")"
 	mism=$(grep -a -c 'CRC Mismatch' "$log" 2>/dev/null); mism=${mism:-0}
+	dropped=$(grep -a -c 'ConnectionManager::disconnectPlayer - disconnecting slot' "$log" 2>/dev/null); dropped=${dropped:-0}
 	built=$(grep -a -c 'AI BUILT frame [1-9]' "$log" 2>/dev/null); built=${built:-0}
 	read -r crc frame <<< "$(crc_of "$log")"
 	rep="$WORK/user-live$S/Replays/00000000.rep"
@@ -472,9 +477,9 @@ if [ -n "$PEER" ]; then
 			oos="$(grep -a -m1 'Replay has gone out of sync' "$blog" 2>/dev/null | sed 's/.*Replay has gone //')"
 		fi
 	fi
-	echo "PEER-RESULT slot=$S crc=${crc:-none} frame=${frame:-none} mismatches=$mism built=$built ended=$ended back_crc=${back_crc:-none} back_frame=${back_frame:-none} aligned=\"$aligned\" oos=\"$oos\""
+	echo "PEER-RESULT slot=$S crc=${crc:-none} frame=${frame:-none} mismatches=$mism dropped=$dropped built=$built ended=$ended back_crc=${back_crc:-none} back_frame=${back_frame:-none} aligned=\"$aligned\" oos=\"$oos\""
 	status=1
-	[ "$ended" -eq 0 ] && [ "$mism" -eq 0 ] && [ "${frame:-}" = "$FRAMES" ] && [ "${back_crc:-none}" = "${crc:-x}" ] && [ -z "$oos" ] && status=0
+	[ "$ended" -eq 0 ] && [ "$mism" -eq 0 ] && [ "$dropped" -eq 0 ] && [ "${frame:-}" = "$FRAMES" ] && [ "${back_crc:-none}" = "${crc:-x}" ] && [ -z "$oos" ] && status=0
 	verify_install || { KEEP=1; exit 99; }
 	exit $status
 fi
