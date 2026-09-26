@@ -193,18 +193,18 @@ you start. That commit is the lock.
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | done: `Float_To_Long` goes through `Lib/DetRound.h`, no SSE2 header left in WWMath (was -21) | |
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | done: merged (was -21) | |
 | E4 | [Windows under CrossOver](tasks/E4-windows-under-crossover.md) | M1 | — | blocked: no game executable for stage 1 (release channel unpublished); stage 2 needs the user to accept Microsoft's licence | -a9 |
-| T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | done: T1a merged, T1c (defect 17) on its branch; T1b and T1d dropped by decision 8 | -47 |
+| T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | done: T1a (height data and maths in gameengine, three-way golden) and T1c (defect 17 fixed) merged; T1b and T1d dropped by decision 8 | -47 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | done: path resolver, POSIX local and BIG file systems, file operations, user-data dir, replay stream, PosixGameEngine (abstract until T1); `test_bigfilesystem` byte-identical over 25,293 files | -a9 |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | claimed | -18 |
-| C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | C3a in progress (SDL3, decision 3); C3b with A1 | -47 |
-| C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | lower half merged (-a9); upper half, MilesAudioManager over miniaudio, on its branch (-47) | -a9, -47 |
-| C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | claimed | -18 |
+| C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | C3a merged (SDL3 keyboard, mouse, IME, .ANI cursors, decision 3); C3b (W3DGameClient's factory lines, W3DMouse's base) unblocked by A1 | -47 |
+| C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | done on macOS: lower half (the Miles API on miniaudio, -a9) and upper half (MilesAudioManager, -47) merged; not yet heard by a person | -a9, -47 |
+| C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | done: merged; macOS arm64 measured, x86_64 and Linux written but unexecuted | -18 |
 | D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | in progress: recon and PR1 merged; PRs 2-8 need Windows (was -8d) | |
 | D2 | [Abstract the backend interface](tasks/D2-backend-interface.md) | M3 | D1 | not started | |
 | D3 | [Shader generators target SDL3 GPU](tasks/D3-shader-generators-ir.md) (decision 4) | M3 | — | done: SDL3 target, compile seam, POSIX twin test and D4's contract; 49/49 on Metal and Vulkan (-a9) | |
 | D4 | [SDL3 GPU backend](tasks/D4-metal-backend.md) (file keeps its old name) | M4 | D3 | not started | |
 | D5 | [Texture formats](tasks/D5-texture-formats.md) | M4 | D4 | not started | |
-| D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | D6a (rasteriser, FreeType, test) on its branch; D6b with or after A1 | -47 |
+| D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | D6a merged (FreeType 2.14.3 rasteriser at GDI's metrics); D6b (render2dsentence and GlobalLanguage) unblocked by A1 | -47 |
 | D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done — merged; the Crusader on Metal and on Vulkan (lavapipe); D3's route taken as decision 4 | -a9 |
 | V1 | [Video playback off Windows](tasks/V1-video-playback.md) | M4 | A1 | not started | |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | not started | |

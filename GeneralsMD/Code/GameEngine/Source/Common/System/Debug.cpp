@@ -55,6 +55,7 @@
 #ifdef DEBUG_THREADSAFE
 #include "Common/CriticalSection.h"
 #endif
+#include "Common/CrashHandler.h"
 #include "Common/Debug.h"
 #include "Common/EarlyCommandLine.h"
 #include "Common/MessageBoxFlags.h"
@@ -474,6 +475,10 @@ void DebugInit(int flags)
 
 		const int rotated = zh_rename(curbuf, prevbuf);
 		theLogFile = zh_fopen(curbuf, "w");
+#if !defined(_WIN32)
+		// The crash handler writes its report into the log too, and may only use the descriptor.
+		setCrashLogDescriptor(theLogFile != NULL ? fileno(theLogFile) : -1);
+#endif
 		if (theLogFile != NULL)
 		{
 			DebugLog("Log %s opened: %s\n", curbuf, getCurrentTimeString());
@@ -614,6 +619,9 @@ void DebugShutdown()
 	if (theLogFile)
 	{
 		DebugLog("Log closed: %s\n", getCurrentTimeString());
+#if !defined(_WIN32)
+		setCrashLogDescriptor(-1);
+#endif
 		fclose(theLogFile);
 	}
 	theLogFile = NULL;
@@ -881,9 +889,17 @@ void ReleaseCrash(const char *reason)
 
 #endif
 #else
-	// No window to own a box until C2; the release-crash log above is the report, and this is the line
-	// someone at a terminal sees.
-	fprintf(stderr, "Technical Difficulties...: a serious error occurred (%s)\n", reason);
+	// The same box, through MessageBoxWrapper: SDL's when there is a window and this is its thread (C2),
+	// otherwise a line on stderr.  (A crash signal never gets here; C5's handler writes the file itself.)
+	{
+		char text[ 1024 ];
+#if defined(_DEBUG) || defined(_INTERNAL)
+		snprintf(text, sizeof(text), "Sorry, a serious error occurred. (%s)", reason);
+#else
+		snprintf(text, sizeof(text), "You have encountered a serious error.  Serious errors can be caused by many things including viruses, overheated hardware and hardware that does not meet the minimum specifications for the game. Please visit the forums at www.generals.ea.com for suggested courses of action or consult your manual for Technical Support contact information. (%s)", reason);
+#endif
+		MessageBoxWrapper(text, "Technical Difficulties...", MSGBOX_OK | MSGBOX_ICONERROR | MSGBOX_TASKMODAL);
+	}
 #endif
 
 	_exit(1);
