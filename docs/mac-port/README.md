@@ -356,6 +356,36 @@ metric-compatible Liberation Sans and Serif (OFL). Metric compatibility matters 
 decides where the UI wraps lines. Text is display only and never reaches the simulation, so
 mismatched glyph metrics are a cosmetic risk, not a determinism one.
 
+**7. The renderer reaches POSIX through a D3D9-shaped device, and Windows keeps its own (taken
+2026-09-26, from `RENDERER-ROUTE-RECON.md`).** D1's funnel stalled because its call-site moves
+change Windows rendering and need a Windows A/B that nobody here can run. The recon measured why
+the old sequence (D1 → D2 → D4) cannot work without one. The engine does not just CALL Direct3D, it
+SPEAKS it: 477 D3D names and ~5,000 uses outside the wrapper, 3,778 of them fixed-function constants.
+`dx11backend` also MIRRORS a real D3D9 device rather than replacing one, so off Windows there is
+nothing for it to mirror. Decided: **route A.** On POSIX only, WW3D2 and W3DDevice compile against a
+D3D9-shaped device (~95 methods) whose resources are CPU-backed, and whose draws resolve at draw time
+into cached SDL3 GPU pipelines. That is `dx11backend`'s design on a new base, with D3's generators
+producing the shaders. Calls that escape the wrapper need no funnel, because they reach this device
+directly. Windows keeps D3D9 and the D3D11 mirror, untouched. Phases: **A0** (the only
+Windows-visible one) fixes three header lines and removes Win32 scalar types from WW3D2 and
+W3DDevice, B5's way; **A1** a POSIX-only header of the D3D9 names and interfaces, with loud-failing
+bodies, so both libraries compile and link; **A2** CPU-backed resources: every texture of the
+install loads and reads back; **A3** the draw, in frames. About 7-8k new POSIX-only lines.
+Rejected: finishing D1 on POSIX (it still needs A0-A2, and its site moves are the Windows A/B that
+stalled it), and a new renderer interface under WW3D2 (a rewrite of all 5,000 uses, visible on
+Windows throughout). D1 PRs 2-8 are deferred until a Windows machine exists. D2's "interface" is
+the D3D9-shaped device itself, and D4 is A3.
+- **Names.** This is a deliberate exception to "engine-own names" (FF_*, MSGBOX_*): on POSIX we
+  implement the D3D9 device the renderer already speaks, so its names ARE the interface. They go in
+  ONE POSIX-only header that `#error`s on Windows, written from the published values (never copied
+  from Wine's LGPL headers), static_asserted against mingw-w64's headers in a checker TU, as B5 did
+  for the DIK codes, and reviewed under the second-reader rule. It contains no Win32 scalar types:
+  A0 removes DWORD, HRESULT and HWND from the renderer first.
+- **Reference images.** There is no Windows frame to compare against. Correctness is checked per
+  draw on the CPU against the fixed-function formulas, as D3's generator tests do. A visual reference
+  can come later from the retail game under CrossOver, run on a COPY of the install (rule 9 applies
+  there too: the INIZH.big delete is EA's code).
+
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
 Added 2026-09-22 after two Windows-only breaks in one afternoon, both with the same shape and
