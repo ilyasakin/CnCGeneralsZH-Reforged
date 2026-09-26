@@ -835,6 +835,33 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(sdl3shadercompile PUBLIC SDL3::SDL3-static
     PRIVATE sdl3_shadercross glslang::glslang glslang::glslang-default-resource-limits)
 
+  # ---- Text off Windows (decision 6, D6) -----------------------------------------------------------
+  # FreeType 2.14.3, fetched and pinned by vendor.sh, with none of its optional dependencies: the game's
+  # fonts are plain TrueType files, and zlib, bzip2, PNG, HarfBuzz and Brotli only matter to compressed,
+  # colour or shaped fonts.  Its gzip module uses its own zlib copy.  EXCLUDE_FROM_ALL, like the shader
+  # compilers: what links it is what builds it.
+  function(zh_add_freetype)
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(BUILD_SHARED_LIBS OFF)
+    foreach(_ft_dep ZLIB BZIP2 PNG HARFBUZZ BROTLI)
+      set(FT_DISABLE_${_ft_dep} ON)
+    endforeach()
+    set(SKIP_INSTALL_ALL ON)
+    add_subdirectory(${LIBSRC}/freetype ${CMAKE_CURRENT_BINARY_DIR}/freetype EXCLUDE_FROM_ALL)
+  endfunction()
+  zh_add_freetype()
+
+  # What FontCharsClass asks GDI for, from FreeType: the fonts, their metrics, the glyphs.  Its own
+  # library, outside ww3d2's list, so it builds and is tested before WW3D2 does off Windows (D6a).
+  # Linux finds Liberation through fontconfig; macOS reads fixed files and needs nothing more.
+  add_library(glyphrasteriser STATIC ${WW}/WW3D2/glyphrasteriser.cpp)
+  target_include_directories(glyphrasteriser PUBLIC ${WW}/WW3D2)
+  target_link_libraries(glyphrasteriser PRIVATE freetype)
+  if(ZH_PLATFORM_LINUX)
+    find_package(Fontconfig REQUIRED)
+    target_link_libraries(glyphrasteriser PRIVATE Fontconfig::Fontconfig)
+  endif()
+
   # The Miles 6.5 surface on miniaudio (C4): the same library name as the XAudio2 one on Windows, so
   # that gameenginedevice, once it builds off Windows, links milesaudio on either and
   # MilesAudioManager.cpp compiles unchanged against it.  Today only the tests below link it here.
@@ -1714,6 +1741,10 @@ add_lib_test(test_shader_sdl ffvertex engineshader sdl3shadercompile)
 if(ZH_SPIRV_VAL)
   set_tests_properties(test_shader_sdl PROPERTIES ENVIRONMENT "ZH_SPIRV_VAL=${ZH_SPIRV_VAL}")
 endif()
+
+# D6a: the glyph rasteriser against the font files' own hdmx, VDMX and gasp, read by the test's own
+# parser, plus a regression golden keyed to the files' versions.  macOS's fonts; Linux later.
+add_lib_test(test_glyph_rasteriser glyphrasteriser)
 
 # The golden dump behind D3's byte-identical proof: every program in Tests/shader_cases.h, every
 # target, one file each.  A tool, not a test: two runs are compared with diff -r.

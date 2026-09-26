@@ -540,6 +540,24 @@ install_shadercross() {
   step "SDL_shadercross 1ff05bec -> Libraries/Source/SDL_shadercross"
 }
 
+# --- FreeType 2.14.3 (released 2026-03-22; the newest stable tag on 2026-09-26), pinned to the
+# release's commit 0a0221a1: the glyph rasteriser under render2dsentence off Windows (decision 6, D6).
+# POSIX only; Windows draws text with GDI. Its TrueType interpreter v35 is what reproduces GDI's
+# advance widths (D6's task file). Copied without tests/, subprojects/ and the other build systems.
+install_freetype() {
+  local destination="$libraries/Source/freetype"
+  if [ -e "$destination/src/truetype/ttinterp.c" ] && [ -z "$force" ]; then return 0; fi
+  local archive source
+  archive=$(get_file 'https://github.com/freetype/freetype/archive/0a0221a1347e2f1e07c395263540026e9a0aa7c7.zip' "$work/freetype-2.14.3.zip")
+  source=$(expand_source "$archive" 'freetype')
+  copy_entries "$source" "$destination" CMakeLists.txt builds include src LICENSE.TXT README docs
+  if ! grep -q 'define FREETYPE_PATCH  3' "$destination/include/freetype/freetype.h"; then
+    echo "[vendor] freetype unpacked, but not as 2.14.3 - not the tree this build expects" >&2
+    exit 1
+  fi
+  step "FreeType 2.14.3 -> Libraries/Source/freetype"
+}
+
 get_channel_url() {
   if [ -n "${ZHR_CHANNEL_URL:-}" ]; then printf '%s/\n' "${ZHR_CHANNEL_URL%/}"; return 0; fi
   local launcher
@@ -645,5 +663,6 @@ install_miniaudio
 install_glslang
 install_spirv_cross
 install_shadercross
+install_freetype
 install_art
 step 'everything the build needs is in place'
