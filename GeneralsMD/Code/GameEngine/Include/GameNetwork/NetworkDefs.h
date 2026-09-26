@@ -63,6 +63,18 @@ struct TransportMessageHeader
 };
 #pragma pack(pop)
 
+/* The network's packed structs (this header, TransportMessage's header; FirewallHelper.h's
+	 ManglerData; LANAPI.h's LANMessage) go on the wire as they sit in memory: their sizes are
+	 checked where they are declared, and their integers are in the host's byte order, which is
+	 little-endian on every machine the game has run on.  A big-endian port would need a byte swap at
+	 every read and write of them.  MSVC's targets are all little-endian; other compilers say. */
+static_assert(sizeof(TransportMessageHeader) == 6, "TransportMessageHeader is 6 bytes on the wire");
+#if defined(__BYTE_ORDER__)
+static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "the network structs are sent in little-endian byte order");
+#elif !defined(_MSC_VER)
+#error "unknown byte order: the network structs are sent in little-endian byte order"
+#endif
+
 // 2003's answer was a 512 byte datagram: UDP (8 bytes) + IP header (28 bytes) = 36, so 476 of
 // payload.  That is a quarter of what any link today carries, and it is the reason a busy frame
 // needs four or five datagrams where it could need one - every extra datagram is another chance to

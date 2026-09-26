@@ -35,6 +35,12 @@
 //#include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/udp.h"
 
+#if !defined(_WIN32)
+#include <string.h>		// strerror, for GetWSAErrorString's POSIX half
+// winsock's name for closing a socket; POSIX closes it like any descriptor (ControlServer.cpp does the same)
+#define closesocket close
+#endif
+
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -49,6 +55,12 @@
 
 AsciiString GetWSAErrorString( Int error )
 {
+#if !defined(_WIN32)
+	// Off Windows the error is errno's, and the C library names it.
+	AsciiString ret;
+	ret.format("%s (%d)", strerror(error), error);
+	return ret;
+#else
 	switch (error)
 	{
 		CASE(WSABASEERR)
@@ -111,6 +123,7 @@ AsciiString GetWSAErrorString( Int error )
 		}
 	}
 	return AsciiString::TheEmptyString; // will not be hit, ever.
+#endif
 }
 
 #undef CASE
@@ -178,6 +191,10 @@ Int UDP::Bind(UnsignedInt IP,UnsignedShort Port)
 		m_lastError = WSAGetLastError();
 	}
   #endif
+#if !defined(_WIN32)
+  if (retval==-1)
+    m_lastError = errno;		// the UNIX half never set it, so GetStatus() read a failed bind as OK
+#endif
   if (retval==-1)
   {
     status=GetStatus();
@@ -185,7 +202,11 @@ Int UDP::Bind(UnsignedInt IP,UnsignedShort Port)
     return(status);
   }
 
+#if defined(_WIN32)
   int namelen=sizeof(addr);
+#else
+  socklen_t namelen=sizeof(addr);
+#endif
   getsockname(fd, (struct sockaddr *)&addr, &namelen); 
 
   myIP=ntohl(addr.sin_addr.s_addr);
@@ -263,6 +284,10 @@ Int UDP::Write(const unsigned char *msg,UnsignedInt len,UnsignedInt IP,UnsignedS
 		DEBUG_ASSERTLOG(errCount++ > 100, ("UDP::Write() - WSA error is %s\n", GetWSAErrorString(WSAGetLastError()).str()));
 	}
   #endif
+#if !defined(_WIN32)
+  if (retval==-1)
+    m_lastError = errno;
+#endif
   
   return(retval);
 }
@@ -270,7 +295,11 @@ Int UDP::Write(const unsigned char *msg,UnsignedInt len,UnsignedInt IP,UnsignedS
 Int UDP::Read(unsigned char *msg,UnsignedInt len,sockaddr_in *from)
 {
   Int retval;
+#if defined(_WIN32)
   int    alen=sizeof(sockaddr_in);
+#else
+  socklen_t alen=sizeof(sockaddr_in);
+#endif
 
   if (from!=NULL)
   {
@@ -292,6 +321,15 @@ Int UDP::Read(unsigned char *msg,UnsignedInt len,sockaddr_in *from)
 			}
 		}
     #endif
+#if !defined(_WIN32)
+    if (retval==-1)
+    {
+      if (errno==EWOULDBLOCK || errno==EAGAIN)
+        retval=0;		// nothing waiting on a non-blocking socket, as Windows' WSAEWOULDBLOCK above
+      else
+        m_lastError=errno;
+    }
+#endif
   }
   else
   {
@@ -313,6 +351,15 @@ Int UDP::Read(unsigned char *msg,UnsignedInt len,sockaddr_in *from)
 			}
 		}
     #endif
+#if !defined(_WIN32)
+    if (retval==-1)
+    {
+      if (errno==EWOULDBLOCK || errno==EAGAIN)
+        retval=0;		// nothing waiting on a non-blocking socket, as Windows' WSAEWOULDBLOCK above
+      else
+        m_lastError=errno;
+    }
+#endif
   }
   return(retval);
 }
@@ -484,7 +531,12 @@ Int UDP::SetOutputBuffer(UnsignedInt bytes)
 
 int UDP::GetInputBuffer(void)
 {
+#if defined(_WIN32)
    int retval,arg=0,len=sizeof(int);
+#else
+   int retval,arg=0;
+   socklen_t len=sizeof(int);
+#endif
 
    retval=getsockopt(fd,SOL_SOCKET,SO_RCVBUF,
      (char *)&arg,&len);
@@ -494,7 +546,12 @@ int UDP::GetInputBuffer(void)
 
 int UDP::GetOutputBuffer(void)
 {
+#if defined(_WIN32)
    int retval,arg=0,len=sizeof(int);
+#else
+   int retval,arg=0;
+   socklen_t len=sizeof(int);
+#endif
 
    retval=getsockopt(fd,SOL_SOCKET,SO_SNDBUF,
      (char *)&arg,&len);
@@ -504,8 +561,13 @@ int UDP::GetOutputBuffer(void)
 Int UDP::AllowBroadcasts(Bool status)
 {
 	int retval;
+#if defined(_WIN32)
 	BOOL val = status;
 	retval = setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *)&val, sizeof(BOOL));
+#else
+	int val = status;		// SO_BROADCAST takes an int
+	retval = setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *)&val, sizeof(int));
+#endif
 	if (retval == 0)
 		return TRUE;
 	else

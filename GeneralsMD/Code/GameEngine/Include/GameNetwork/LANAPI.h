@@ -435,6 +435,8 @@ struct LANMessage
 // The lobby broadcast is read at fixed offsets out of one datagram, so it has to fit in one.
 static_assert(sizeof(LANMessage) <= MAX_LANAPI_PACKET_SIZE,
 	"LANMessage must fit in a single LAN datagram");
+// And its layout is the wire format, shared with every other build of the game (see NetworkDefs.h).
+static_assert(sizeof(LANMessage) == 471, "LANMessage is 471 bytes on the wire");
 
 
 #endif // _LANAPI_H_

@@ -98,6 +98,8 @@ Bool Transport::init( AsciiString ip, UnsignedShort port )
 Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 {
 	// ----- Initialize Winsock -----
+	// (Windows only: POSIX sockets need no start-up, so m_winsockInit stays false there.)
+#if defined(_WIN32)
 	if (!m_winsockInit)
 	{
 		WORD verReq = MAKEWORD(2, 2);
@@ -114,6 +116,7 @@ Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 		}
 		m_winsockInit = true;
 	}
+#endif
 
 	// ------- Bind our port --------
 	if (m_udpsock)
@@ -182,11 +185,13 @@ void Transport::reset( void )
 		m_udpsock = NULL;
 	}
 
+#if defined(_WIN32)
 	if (m_winsockInit)
 	{
 		WSACleanup();
 		m_winsockInit = false;
 	}
+#endif
 }
 
 Bool Transport::update( void )
@@ -196,12 +201,12 @@ Bool Transport::update( void )
 	{
 		retval = FALSE;
 	}
-	DEBUG_ASSERTLOG(retval, ("WSA error is %s\n", GetWSAErrorString(WSAGetLastError()).str()));
+	DEBUG_ASSERTLOG(retval, ("WSA error is %s\n", GetWSAErrorString(lastSocketError()).str()));
 	if (doSend() == FALSE && m_udpsock && m_udpsock->GetStatus() == UDP::ADDRNOTAVAIL)
 	{
 		retval = FALSE;
 	}
-	DEBUG_ASSERTLOG(retval, ("WSA error is %s\n", GetWSAErrorString(WSAGetLastError()).str()));
+	DEBUG_ASSERTLOG(retval, ("WSA error is %s\n", GetWSAErrorString(lastSocketError()).str()));
 	return retval;
 }
 
@@ -329,7 +334,7 @@ Bool Transport::doRecv()
 		}
 
 		// Something there; stick it somewhere
-//		DEBUG_LOG(("Saw %d bytes from %d:%d\n", len, ntohl(from.sin_addr.S_un.S_addr), ntohs(from.sin_port)));
+//		DEBUG_LOG(("Saw %d bytes from %d:%d\n", len, ntohl(from.sin_addr.s_addr), ntohs(from.sin_port)));
 		m_incomingPackets[m_statisticsSlot]++;
 		m_incomingBytes[m_statisticsSlot] += len;
 
@@ -346,7 +351,7 @@ Bool Transport::doRecv()
 						TheGlobalData->m_latencyPeriod,
 						GameClientRandomValue(-TheGlobalData->m_latencyNoise, TheGlobalData->m_latencyNoise) );
 					m_delayedInBuffer[i].message.length = incomingMessage.length;
-					m_delayedInBuffer[i].message.addr = ntohl(from.sin_addr.S_un.S_addr);
+					m_delayedInBuffer[i].message.addr = ntohl(from.sin_addr.s_addr);
 					m_delayedInBuffer[i].message.port = ntohs(from.sin_port);
 					memcpy(&m_delayedInBuffer[i].message, buf, len);
 					break;
@@ -358,7 +363,7 @@ Bool Transport::doRecv()
 				{
 					// Empty slot; use it
 					m_inBuffer[i].length = incomingMessage.length;
-					m_inBuffer[i].addr = ntohl(from.sin_addr.S_un.S_addr);
+					m_inBuffer[i].addr = ntohl(from.sin_addr.s_addr);
 					m_inBuffer[i].port = ntohs(from.sin_port);
 					memcpy(&m_inBuffer[i], buf, len);
 					break;

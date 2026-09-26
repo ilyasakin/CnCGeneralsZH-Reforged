@@ -40,6 +40,7 @@
 //#define write _write
 
 #else  //UNIX
+#include <errno.h>		// errno and its E* codes: <errno.h> above hangs off _UNIX, which is never defined
 #include <netdb.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -127,5 +128,16 @@ class UDP
 #ifdef DEBUG_LOGGING
 AsciiString GetWSAErrorString( Int error );
 #endif
+
+/* The last socket call's error, for the logs: winsock's on Windows, errno elsewhere.  GetWSAErrorString
+	 (udp.cpp) names either. */
+inline int lastSocketError( void )
+{
+#if defined(_WIN32)
+	return WSAGetLastError();
+#else
+	return errno;
+#endif
+}
 
 #endif
