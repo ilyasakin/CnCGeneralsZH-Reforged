@@ -603,7 +603,9 @@ CrossOver run.
 - the main menu without the shell map (`-quickstart`): 3,635 presents and 1,398,108 draws.
 Without `-quickstart` the intro movie plays through V1's Bink path.
 
-![The Zero Hour main menu on Metal, present 900 (-quickstart: whether it shows the 3D shell map is being re-checked)](../a3d-shell-map-metal.png)
+![The Zero Hour main menu on Metal, present 900, with -quickstart: the menu over its still background, not the shell map](../a3d-main-menu-quickstart-metal.png)
+
+**Corrected after re-checking (A3e):** this picture is not the shell map. `-quickstart` turns the shell map off, and what shows behind the menu is the menu's still background: the plaza battle. The real 3D shell map is the naval battle in A3e's record below. A3d's numbers above are for that menu screen.
 
 The diagnostic overlay is not drawn in the shell by design; see the in-game pictures for the renderer and frame.
 
@@ -1011,3 +1013,24 @@ environment water, has no transcription and is refused. What is wrong is the tra
 "every ps_1_1 instruction clamps its result to zero and one". It is to be corrected in engineshader.cpp,
 a comment-only change to shared code, under the generator-fix process. -47's interpreter holds the
 signed range, and the replay above passing is the measured half of this reading.
+
+### The real shell map, re-checked (2026-09-26)
+
+The run: hidden window, 800x600, `-nologo`, no `-quickstart`, 300 s.
+- 33,134,072 draws in 34,820 presents, about 950 draws a present, and no refusals.
+- Draws per engine program:
+
+| Program | Draws |
+|---|---|
+| terrainnoise2 | 2,617,100 |
+| roadnoise2 | 235,539 |
+| trees | 101,154 |
+| trapezoid water | 26,171 |
+| water reflection | 26,171 |
+
+![The Zero Hour shell map on Metal: the naval battle behind the menu, 800x600, hidden window, shell pass 600](../a3e-shell-map-metal.png)
+
+- This is the 3D shell map: the naval battle, drawn through the engine's terrain, road, tree and water programs.
+- The diagnostic overlay is not drawn in the shell, by design; the in-game pictures show the renderer and frame.
+- The plaza battle in A3d's picture is the menu's still background, which `-quickstart` shows in its place.
+- **Still open:** the capture set labelled "the main menu without the shell map (`-quickstart`)" holds 3D draws. They were made before the day's merge of feature/mac-port, and they aren't explained by the still background.
