@@ -391,3 +391,24 @@ fixed-function pipeline, computed on the CPU:
 
 **Depends on:** A2 merged (its image and buffer versions are the mirrors' invalidation); C2's window
 (`RenderWindow`); C3 not at all. **Leaves to others:** the display-mode change of the window (C2).
+
+## A3a: the frame (2026-09-26)
+
+`PosixDevice/Render/SdlGpuFrame.{h,cpp}`: the `SDL_GPUDevice`, C2's window claimed (the one
+`RenderWindow` to `SDL_Window *` cast), the offscreen back buffer (`B8G8R8A8`) and depth-stencil (D24S8,
+else D32S8). A whole-target clear is recorded and becomes the next pass's load operations. `Present`
+blits to the swap chain, or, when the ramp is not D3D9's identity (`i * 257`), runs a pass that looks
+each channel up in its ramp (a 256 x 1 `R16G16B16A16` texture, point-sampled at entry centres, uploaded
+when it changes). The device makes the frame only with a window (`Create_Gpu_Frame`, called by
+`CreateDevice`; a window with no GPU device fails the device, loudly), and sends `Present` and `Reset`
+through it. `Gpu_Clear` is the seam's hook for A2's `Clear`: the whole back buffer now, anything else
+refused, loudly, until A3c's clear draw.
+
+**Checked** (`sdl_gpu_frame_selfcheck`, Metal on the M3 Pro; exits 77, reported skipped, with no GPU):
+a colour clear read back as D3D9's ARGB in every pixel; a depth-only clear keeps the colour; the gamma
+pass exact (±1 level) on a picture where every pixel and channel differs, with an armed control that
+differs in all 3,072 pixels; the identity ramp's blit returns the picture byte for byte. A mutation
+that flips the pass's vertical texture coordinate fails every pixel. **Not checked:** presenting to a
+real window (ctest has no display), and a device made through `CreateDevice` with a window, which needs
+A2's implicit surfaces (merged separately) and a display. POSIX-only files: nothing a Windows build
+compiles changes.

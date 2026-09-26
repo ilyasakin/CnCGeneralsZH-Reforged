@@ -1217,6 +1217,19 @@ if(ZH_PLATFORM_POSIX)
   add_library(posixd3d9 STATIC ${POSIXD3D9_SOURCES})
   set_target_properties(posixd3d9 PROPERTIES CXX_STANDARD 17)
   target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
+  # A3: with a window the device draws through SDL3 GPU, and compiles its own small programs (the gamma
+  # pass) the way the generated ones are compiled.
+  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile)
+
+  # A3a's frame: a clear read back, and the gamma pass through a picture that shows any flip.  Needs a GPU
+  # but no window; exits 77 (skipped, and ctest says so) where SDL has no GPU device to give.
+  add_executable(sdl_gpu_frame_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gpu_frame.cpp)
+  set_target_properties(sdl_gpu_frame_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(sdl_gpu_frame_selfcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(sdl_gpu_frame_selfcheck PRIVATE posixd3d9 SDL3::SDL3-static)
+  add_test(NAME sdl_gpu_frame_selfcheck COMMAND sdl_gpu_frame_selfcheck)
+  set_tests_properties(sdl_gpu_frame_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
   # A2's half of the device (-18): the resources, the pixel codec, the image operations, the device's
   # resource methods and Clear, the caps, and D3DX's texture helpers, against D3D9's and D3DX's rules.  See Tests/test_posix_resources.cpp.
