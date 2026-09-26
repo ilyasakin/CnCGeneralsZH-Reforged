@@ -435,6 +435,25 @@ install_sdl3() {
   step "SDL3 3.4.16 -> Libraries/Source/SDL3"
 }
 
+# --- The fork's one change to SDL3, Libraries/Source/sdl3-metal-windowless.patch: METAL_PrepareDriver
+# also accepts ZH_SDL_GPU_METAL_WINDOWLESS, so -offscreen makes a Metal GPU device on a host with no
+# window server (the patch's header says why, what upstream has, and when it goes). Hint-gated: every
+# run without the hint is upstream's. Checked by the marker, for the reason install_litehtml_patch gives.
+install_sdl3_patch() {
+  local destination="$libraries/Source/SDL3"
+  local source="$destination/src/gpu/metal/SDL_gpu_metal.m"
+  if grep -q 'ZH_SDL_GPU_METAL_WINDOWLESS' "$source" 2>/dev/null; then return 0; fi
+  local patch="$libraries/Source/sdl3-metal-windowless.patch"
+  GIT_CEILING_DIRECTORIES="$libraries/Source" \
+    git -C "$destination" -c core.autocrlf=false apply "$patch" || true
+  if ! grep -q 'ZH_SDL_GPU_METAL_WINDOWLESS' "$source" 2>/dev/null; then
+    echo "[vendor] sdl3-metal-windowless.patch did not apply to Libraries/Source/SDL3" >&2
+    echo "[vendor] ($source still lacks ZH_SDL_GPU_METAL_WINDOWLESS)" >&2
+    exit 1
+  fi
+  step "sdl3-metal-windowless.patch -> Libraries/Source/SDL3"
+}
+
 # --- miniaudio 0.11.25, the one header and its one implementation file: audio beneath C4's port of
 # MilesAudioManager (decision 3). POSIX only, like SDL3. Copied file by file, like nanosvg, so its
 # committed .gitignore is never disturbed; upstream's CMakeLists builds extras this does not want.
@@ -681,6 +700,7 @@ install_litehtml
 install_litehtml_patch
 install_nanosvg
 install_sdl3
+install_sdl3_patch
 install_miniaudio
 install_glslang
 install_spirv_cross

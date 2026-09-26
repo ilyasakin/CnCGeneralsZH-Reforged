@@ -22,7 +22,10 @@
 #include "PosixDevice9.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+#include <SDL3/SDL.h>
 
 // DX8Wrapper::Init calls this directly off Windows, where Windows loads d3d9.dll and looks it up.
 IDirect3D9 * Direct3DCreate9(unsigned int sdk_version)
@@ -120,7 +123,14 @@ RenderResult PosixDirect3D9::CreateDevice(unsigned int adapter, D3DDEVTYPE type,
 	}
 
 	PosixDevice9 *created = new PosixDevice9(this, window, *parameters);
-	RenderResult result = created->Create_Gpu_Frame();
+	// -offscreen (SdlGameEngine::startOffscreen): no window, and still a GPU frame, drawn into its own target
+	// and "presented" into a texture of its own.  Without the hint no window is -headless: no GPU device.
+	const bool offscreen = window == NULL && SDL_GetHintBoolean("ZH_OFFSCREEN_FRAMES", false);
+	RenderResult result = created->Create_Gpu_Frame(offscreen);
+	if (Render_Succeeded(result) && offscreen) {
+		const char *hz = SDL_GetHint("ZH_OFFSCREEN_HZ");
+		created->Present_Offscreen(hz != NULL ? (unsigned int)strtoul(hz, NULL, 10) : 0);
+	}
 	if (Render_Succeeded(result)) {
 		result = created->Create_Implicit_Surfaces();
 	}
