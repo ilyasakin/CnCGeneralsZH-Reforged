@@ -3,7 +3,7 @@
 - **Milestone:** M2
 - **Depends on:** C1
 - **Blocks:** C3
-- **Status:** not started
+- **Status:** claimed (-18, 2026-09-26)
 - **Size:** `Main/WinMain.cpp` is ~1,400 lines with `WinMain.h` and `RTS.RC`
 
 > **Decision 3 (2026-09-25, `docs/mac-port/README.md`) applies here.** The entry point is `SDL3`-based, one `main` for macOS and Linux, in plain C++ (`PosixMain.cpp` or similar). The `MacMain.mm` / Cocoa option below is withdrawn: SDL3 owns the window and the event loop at M4.
@@ -17,6 +17,53 @@
 > seconds (`%X`), because `strftime` has no "this locale's format without seconds" and Windows
 > passes `TIME_NOSECONDS`. `nl_langinfo(T_FMT)` with the seconds removed would match, if anyone
 > cares.
+
+## The design, 2026-09-26 (PM's C2 brief; the PosixGameEngine shape agreed with C1 (f) and adopted)
+
+- **`Main/PosixMain.cpp`**, one `main` for macOS and Linux on SDL3. In order, it:
+  - hands `argv` to the engine: EarlyCommandLine's POSIX body reads it instead of "not given";
+  - sets `LC_TIME` only (the locale note above);
+  - sets the install root with ONE `chdir`, from a `-root` option or else the executable's
+    directory (WinMain's `SetCurrentDirectory` to the exe's folder). Rule 9 applies: never the real
+    install on `/Volumes/External`. Nothing changes the directory afterwards; C1's Roots paragraph
+    relies on that;
+  - does the rest of WinMain's pre-engine sequence that C1 does not already cover: the critical
+    sections, `DEBUG_INIT` then `initMemoryManager`, `TheVersion`, the one-copy guard and
+    `-multiInstance`, the `-win`/`-fullscreen`/`-borderless`/`-headless` pre-parse, and the
+    `GameMain(argc, argv)` call with the same teardown and the same catch-alls into `RELEASE_CRASH`.
+  - C1 covers the user data directory, the Options.ini and Registry.ini reads through `zh_fopen`,
+    the file systems, and the joins after `getExecutableDirectory` (-a9, 2026-09-26).
+- **`CreateGameEngine()`** is defined in `PosixMain.cpp` and returns `NEW SdlGameEngine`. C1 does not
+  define it; a C1 test that needs one defines its own.
+- **`SdlGameEngine : PosixGameEngine`**, in C2's device folder. `PosixGameEngine` (C1 (f)) is
+  abstract: its file systems, network and browser are implemented, `serviceWindowsOS` is an empty
+  virtual, and every factory is virtual and non-final. `SdlGameEngine` does four things:
+  - overrides `serviceWindowsOS` to pump SDL events, with focus into `m_isActive` as
+    `WM_ACTIVATEAPP` does;
+  - owns the SDL window, with no renderer (D4 attaches one);
+  - routes the window title through `setApplicationWindowTitle` to `SDL_SetWindowTitle`;
+  - gives `Monitors` SDL's display list, replacing the 800x600 fallback, and `test_gameengine`'s
+    `GetSystemMetrics` shim follows it.
+  `MessageBoxWrapper`'s POSIX body uses `SDL_ShowMessageBox` when a window exists. The renderer,
+  logic and audio factories stay C1's pure virtuals until T1, D4 and C4 fill them.
+- **`-headless` initialises no SDL video subsystem at all.** It must run on a machine with no
+  display, as E1's replay runs will.
+- **`gAppPrefix`, `g_csfFile` and `g_strFile`** get their real definitions here, with WinMain's
+  values. They move out of the test stubs and drivers.
+- **Out of scope:** input mapping (C3), audio wiring (C4's upper half), the app bundle (M5).
+
+**Done when** (M2's first slice, which also needs C1 (f) and T1): `generals -headless` on macOS,
+rooted at a COPY of the game data, boots, mounts the `.big` files, runs a skirmish on a random map
+(`-randommap ... -autoskirmish`, as `replay-check.ps1` does) for N frames, writes a replay, and exits
+0. The windowed build opens an empty SDL window and closes cleanly on quit.
+
+**Known UX point, for the LAN screens (B5, 2026-09-26).** IPEnumeration lists the machine's IPv4
+addresses lowest first, as Windows does. The LAN lobby, direct connect and Options take the first
+one when no preference is saved. On a Mac with Parallels and Tailscale the lowest is the Parallels
+host-only adapter (10.37.129.2), not the LAN (192.168.1.103), and a Tailscale 100.x sits between
+them. So a first run hosts on a VM adapter until the player picks another address in Options.
+Windows does the same with VirtualBox or VPN adapters: parity, and deliberately not changed (PM
+decision). A later UX pass could prefer the default-route interface on both platforms.
 
 ## Why
 
