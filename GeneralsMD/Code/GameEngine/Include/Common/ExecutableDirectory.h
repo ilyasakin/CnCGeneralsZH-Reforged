@@ -37,3 +37,12 @@
 	 Safe before main: nothing from the engine's allocator, no engine state.  MemoryInit calls it
 	 before the memory manager exists, and Debug.cpp from a static constructor. */
 void getExecutableDirectory( char *buf, size_t size, Bool keepTrailingSeparator );
+
+#if !defined(_WIN32)
+/* Where the debug logs go (P1 step 2): the executable's directory, as on Windows, except when the
+	 executable is inside a macOS app bundle (".app/Contents/MacOS"): writing there would break the
+	 bundle's code signature, so the logs go to the user data directory's Logs folder instead.  "" when
+	 even that cannot be had, which leaves a log unwritten rather than written into the bundle.  The
+	 same trailing-separator rule as getExecutableDirectory.  Safe before main. */
+void getLogDirectory( char *buf, size_t size, Bool keepTrailingSeparator );
+#endif

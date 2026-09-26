@@ -39,7 +39,9 @@
 	 rule 9 applies to how this is RUN: GameEngine::init deletes Data\INI\INIZH.big from the root, as it
 	 does in a player's install, so a development run must be rooted at a copy of the game data.
 	 The fork's own data is an overlay searched before that root (P1, decision 9): "-overlay <dir>", or
-	 the one a package puts beside the executable.  See chooseOverlays. */
+	 the one a package puts beside the executable.  See chooseOverlays.  Since P1 step 2 every root is
+	 read-only: a relative write, that deletion included, is refused and logged, so rule 9 holds by
+	 construction as well as by how the game is run. */
 
 #include <SDL3/SDL_main.h>	// SDL3's main: on macOS and Linux an ordinary main
 
@@ -215,6 +217,16 @@ int main( int argc, char *argv[] )
 		PosixPath_Set_Overlays( overlays );
 		for (size_t i = 0; i < overlays.size(); ++i)
 			fprintf( stderr, "generals: overlay %s, searched before the install\n", overlays[i].c_str() );
+		// The roots are read-only (P1 step 2): nothing the engine addresses relative to the install, the
+		// Data\INI\INIZH.big deletion in GameEngine::init included, can change it.  -writableRoot is a
+		// harness's armed control, never a player's switch.
+		Bool writableRoot = FALSE;
+		for (int i = 1; i < argc; ++i)
+			if (strcasecmp( argv[i], "-writableRoot" ) == 0)
+				writableRoot = TRUE;
+		PosixPath_Set_Root_Read_Only( !writableRoot );
+		if (writableRoot)
+			fprintf( stderr, "generals: -writableRoot: the install root is WRITABLE for this run\n" );
 
 		// The window mode, as WinMain settles it: Options.ini's saved mode, then the command line over it.
 		{

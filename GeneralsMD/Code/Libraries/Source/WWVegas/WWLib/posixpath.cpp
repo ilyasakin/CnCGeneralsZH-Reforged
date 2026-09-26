@@ -26,6 +26,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -71,6 +72,14 @@ std::vector<std::string> & overlays()			// P1: read roots before the current dir
 {
 	static std::vector<std::string> s_overlays;
 	return s_overlays;
+}
+
+bool g_root_read_only = false;					// P1 step 2; set once, before the engine starts
+
+std::set<std::string> & refused()				// relative writes already logged, under g_lock
+{
+	static std::set<std::string> s_refused;
+	return s_refused;
 }
 
 bool is_separator(char c)
@@ -282,6 +291,18 @@ void PosixPath_Set_Overlays(const std::vector<std::string> & real_directories)
 std::vector<std::string> PosixPath_Overlays()
 {
 	return overlays_now();
+}
+
+void PosixPath_Set_Root_Read_Only(bool read_only)
+{
+	std::lock_guard<std::mutex> guard(g_lock);
+	g_root_read_only = read_only;
+}
+
+bool PosixPath_Root_Read_Only()
+{
+	std::lock_guard<std::mutex> guard(g_lock);
+	return g_root_read_only;
 }
 
 void PosixPath_Forget_Directory(const char * real_directory)
@@ -501,12 +522,41 @@ void forget_parent(const std::string & real)
 	PosixPath_Forget_Directory(parent_of(real).c_str());
 }
 
+// P1 step 2: true (and errno EROFS) when `path` is relative and the roots are read-only.  Said once a
+// path, in the debug log, so the audit's two known writers - GameEngine::init's Data\INI\INIZH.big
+// and the patch check's PatchAccessTest.txt - show up as refused, and any writer the audit missed too.
+bool refuses_write(const char * path, const char * what)
+{
+	if (path == NULL || path[0] == '\0' || is_separator(path[0])) {
+		return false;
+	}
+	bool first;
+	{
+		std::lock_guard<std::mutex> guard(g_lock);
+		if (!g_root_read_only) {
+			return false;
+		}
+		first = refused().insert(path).second;
+	}
+	if (first) {
+		// stderr as well as the debug log: WWDEBUG_WARNING is compiled out of a release build, and a
+		// refusal is what the harness (root-readonly-check.sh) and a bug report need to see
+		fprintf(stderr, "generals: refused to %s \"%s\": the install root is read-only (P1)\n", what, path);
+		WWDEBUG_WARNING(("PosixPath: refused to %s \"%s\": the install root is read-only (P1)\n", what, path));
+	}
+	errno = EROFS;
+	return true;
+}
+
 } // namespace
 
 FILE * zh_fopen(const char * path, const char * mode)
 {
 	const bool creates = mode != NULL && (mode[0] == 'w' || mode[0] == 'a');
 	const bool writes = mode != NULL && strchr(mode, '+') != NULL;
+	if ((creates || writes) && refuses_write(path, "write")) {
+		return NULL;
+	}
 	std::string real;
 	if (!resolve_or_fail(path, creates ? POSIX_PATH_CREATE_LEAF : (writes ? POSIX_PATH_EXISTING_IN_ROOT : POSIX_PATH_EXISTING), real)) {
 		return NULL;
@@ -522,6 +572,9 @@ int zh_open(const char * path, int flags, int permissions)
 {
 	const bool creates = (flags & O_CREAT) != 0;
 	const bool writes = (flags & (O_WRONLY | O_RDWR | O_TRUNC | O_APPEND)) != 0;
+	if ((creates || writes) && refuses_write(path, "write")) {
+		return -1;
+	}
 	std::string real;
 	if (!resolve_or_fail(path, creates ? POSIX_PATH_CREATE_LEAF : (writes ? POSIX_PATH_EXISTING_IN_ROOT : POSIX_PATH_EXISTING), real)) {
 		return -1;
@@ -544,6 +597,9 @@ int zh_access(const char * path, int mode)
 
 int zh_remove(const char * path)
 {
+	if (refuses_write(path, "remove")) {
+		return -1;
+	}
 	std::string real;
 	if (!resolve_or_fail(path, POSIX_PATH_EXISTING_IN_ROOT, real)) {
 		return -1;
@@ -557,6 +613,9 @@ int zh_remove(const char * path)
 
 int zh_unlink(const char * path)
 {
+	if (refuses_write(path, "delete")) {
+		return -1;
+	}
 	std::string real;
 	if (!resolve_or_fail(path, POSIX_PATH_EXISTING_IN_ROOT, real)) {
 		return -1;
@@ -570,6 +629,9 @@ int zh_unlink(const char * path)
 
 int zh_rename(const char * from, const char * to)
 {
+	if (refuses_write(from, "rename") || refuses_write(to, "rename onto")) {
+		return -1;
+	}
 	std::string real_from, real_to;
 	if (!resolve_or_fail(from, POSIX_PATH_EXISTING_IN_ROOT, real_from) || !resolve_or_fail(to, POSIX_PATH_CREATE_LEAF, real_to)) {
 		return -1;
@@ -584,6 +646,9 @@ int zh_rename(const char * from, const char * to)
 
 int zh_mkdir(const char * path)
 {
+	if (refuses_write(path, "create the directory")) {
+		return -1;
+	}
 	std::string real;
 	if (!resolve_or_fail(path, POSIX_PATH_CREATE_LEAF, real)) {
 		return -1;
