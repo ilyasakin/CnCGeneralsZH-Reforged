@@ -1540,4 +1540,7 @@ protected:
 // the singleton
 extern InGameUI *TheInGameUI;
 
+/// How many rings of the blind-spot grid a defence's reach needs, capped by the map's width plus height.
+Int blindSpotRingCount( Real radius, Real mapSpan );
+
 #endif // _IN_GAME_UI_H_

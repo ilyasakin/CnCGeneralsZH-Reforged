@@ -1792,7 +1792,11 @@ static Real templatePlacementRange( const ThingTemplate *tmpl )
 static Real templateReach( const ThingTemplate *tmpl )
 {
 	const Real range = templatePlacementRange( tmpl );
-	return range > 0.0f ? range + tmpl->getTemplateGeometryInfo().getBoundingCircleRadius() : 0.0f;
+	// an AttackRange of inf (sscanf takes it, and 1e39, from a mod's INI) has no circle to draw: its
+	// outline went NaN, and Windows' INT_MIN for a NaN angle read the outline out of bounds
+	if( !( range > 0.0f && range <= FLT_MAX ) )
+		return 0.0f;
+	return range + tmpl->getTemplateGeometryInfo().getBoundingCircleRadius();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2757,6 +2761,23 @@ static Bool templateNeedsLineOfSight( const ThingTemplate *tmpl )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** How many rings a blind-spot view of this radius is cut into.  Never more than the map is long corner
+	* to corner (mapSpan: its width plus its height), so a range longer than any map - 1e6 already held
+	* hundreds of megabytes and froze every platform, and inf gave ARM64 2^31 rings whose 180-a-ring grid
+	* overflowed Int - costs no more than the map does.  Converted as Windows converts; never negative. */
+//-------------------------------------------------------------------------------------------------
+Int blindSpotRingCount( Real radius, Real mapSpan )
+{
+	Int rings = floatToIntAsMsvc( ceil( radius / BLIND_SPOT_RING_WIDTH ) );
+	Int most = ( INT_MAX / BLIND_SPOT_RAYS ) - 1;		// never a grid Int cannot count
+	if( mapSpan > 0.0f && mapSpan < (Real)most * BLIND_SPOT_RING_WIDTH )
+		most = floatToIntAsMsvc( ceil( mapSpan / BLIND_SPOT_RING_WIDTH ) ) + 1;
+	if( rings > most )
+		rings = most;
+	return rings < 0 ? 0 : rings;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Fill in which cells of the grid a defence cannot see from eyeZ.  Along one sector the walk keeps
 	* the steepest terrain seen so far, which is the horizon: a target whose top sits under that slope
 	* is behind a hill.  Everything from the first building cell outwards is behind that building, the
@@ -2764,7 +2785,10 @@ static Bool templateNeedsLineOfSight( const ThingTemplate *tmpl )
 //-------------------------------------------------------------------------------------------------
 static void lookRoundReach( ReachView &view, Real eyeZ, ObjectID self )
 {
-	view.rings = (Int)ceil( view.radius / BLIND_SPOT_RING_WIDTH );
+	Region3D extent;
+	extent.zero();
+	TheTerrainLogic->getExtent( &extent );
+	view.rings = blindSpotRingCount( view.radius, extent.width() + extent.height() );
 	view.blocked.assign( BLIND_SPOT_RAYS * view.rings, FALSE );
 
 	for( Int ray = 0; ray < BLIND_SPOT_RAYS; ray++ )
@@ -2801,7 +2825,7 @@ static Bool reachViewHits( const ReachView &view, Real x, Real y )
 	const Real dx = x - view.center.x;
 	const Real dy = y - view.center.y;
 	const Real distance = sqrtf( sqr( dx ) + sqr( dy ) );
-	if( distance >= view.radius )
+	if( !( distance < view.radius ) )		// a NaN distance is outside, not let through
 		return FALSE;
 
 	Real angle = atan2( dy, dx );
@@ -3139,7 +3163,7 @@ static void traceReachCircle( ReachCircle &circle, const ThingTemplate *tmpl )
 static Real reachAtAngle( const ReachCircle &circle, Real angle )
 {
 	const Real at = angle * REACH_OUTLINE_SEGMENTS / ( 2.0f * PI );
-	const Int from = min( (Int)at, REACH_OUTLINE_SEGMENTS - 1 );
+	const Int from = at >= 0.0f ? min( (Int)at, REACH_OUTLINE_SEGMENTS - 1 ) : 0;	// NaN: the first corner
 	const Real part = at - from;
 	return circle.outline[ from ] * ( 1.0f - part ) + circle.outline[ ( from + 1 ) % REACH_OUTLINE_SEGMENTS ] * part;
 }
@@ -3149,7 +3173,7 @@ static Bool insideReach( const ReachCircle &circle, Real x, Real y )
 	const Real dx = x - circle.center.x;
 	const Real dy = y - circle.center.y;
 	const Real distanceSqr = sqr( dx ) + sqr( dy );
-	if( distanceSqr >= sqr( circle.radius ) )
+	if( !( distanceSqr < sqr( circle.radius ) ) )		// a NaN distance is outside, not let through
 		return FALSE;
 
 	Real angle = atan2( dy, dx );

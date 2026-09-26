@@ -16,6 +16,8 @@
 
 #include "test_harness.h"
 
+#include <limits>
+
 #include "Common/AsciiString.h"
 #include "Common/CommandLine.h"
 #include "Common/UnicodeString.h"
@@ -14063,6 +14065,23 @@ TEST(the_spectator_page_has_its_pieces_and_no_option_clicks)
 #include "test_camera_behavior.inc"
 #include "test_observer_camera.inc"
 #include "test_production_input.inc"
+// A defence's blind-spot grid is cut into rings half a pathfind cell wide.  A range longer than the map
+// asks for no more rings than the map is long corner to corner: a mod's AttackRange of 1e6 held hundreds of
+// megabytes and froze every platform, and inf gave ARM64 2^31 rings, whose 180-a-ring grid overflowed Int.
+TEST(blind_spot_rings_never_outgrow_the_map)
+{
+	const Real ring = PATHFIND_CELL_SIZE_F * 0.5f;
+	const Real span = 2.0f * 4000.0f;							// a 4,000-unit square map: width plus height
+	CHECK_EQ(blindSpotRingCount(0.0f, span), 0);
+	CHECK_EQ(blindSpotRingCount(ring, span), 1);
+	CHECK_EQ(blindSpotRingCount(300.0f, span), (Int)ceil(300.0f / ring));	// every real reach: as before
+	CHECK_EQ(blindSpotRingCount(1.0e6f, span), (Int)ceil(span / ring) + 1);	// capped by the map
+	CHECK_EQ(blindSpotRingCount(std::numeric_limits<float>::infinity(), span), 0);	// Windows' INT_MIN, floored
+	CHECK_EQ(blindSpotRingCount(std::numeric_limits<float>::quiet_NaN(), span), 0);
+	// no extent known: never a grid whose ring count times 180 rays overflows Int
+	CHECK((long long)blindSpotRingCount(1.0e9f, 0.0f) * 180 <= INT_MAX);
+}
+
 // The rank walk.  RankPoints is ten Int thresholds followed by five Real multipliers, and the menus walked
 // it with `while (points >= m_ranks[i + 1]) ++i`, unbounded.  This models that walk over the struct's own
 // fifteen words, with the shipped thresholds and multipliers and Windows' float-to-int conversion for the
