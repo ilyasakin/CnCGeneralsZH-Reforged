@@ -2132,6 +2132,8 @@ add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp ${TESTS}/ffr
 target_include_directories(ffreference PUBLIC ${TESTS})
 add_lib_test(test_ffreference ffreference)
 add_lib_test(test_ffprogram ffreference)
+# its assembler test reads the water's ps.1.1 text from the game's own source, so it cannot drift
+target_compile_definitions(test_ffprogram PRIVATE ZH_CODE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 if(ZH_GAME_DATA)
   set_tests_properties(test_ffprogram PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
 endif()
