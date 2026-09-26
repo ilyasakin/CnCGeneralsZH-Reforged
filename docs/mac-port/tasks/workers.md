@@ -69,3 +69,32 @@ Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wid
   - The PM chose -a9's `-offscreen` mode (option 3). A GUI login for zhr (option 1) is with the user;
     running in finer's own session (option 2) was declined.
 
+## thinkerer (`ssh zhr@thinkerer`): the Linux build and test host
+
+Arch Linux (rolling, kernel 7.1.4), x86_64 i5-8350U with 4 cores and 8 threads, 62 GB, 247 GB free on
+btrfs at the start. It already had cmake 4.4.2, ninja, clang 22.1.8, gcc 16.2.1, python3, rsync and
+docker, and every development package the Linux check installs (X11, Wayland, ALSA, Pulse, Vulkan,
+spirv-tools, ...), so nothing was installed system-wide. No firewall is active (iptables policy
+ACCEPT; firewalld and ufw inactive). It is on the Macs' LAN as `wlan0` 192.168.1.21, and has other
+interfaces (a wired 10.99.0.1, tailscale, a VPN tun0, docker bridges).
+
+The host's own services are not touched: vaultwarden, pihole (192.168.1.21:53 and 5053), dnscrypt,
+uptime-kuma and the tailscale-* sidecars.
+
+Everything is under `/home/zhr/zhr-worker` unless noted:
+
+| what | where | how it got there | undo |
+|:--|:--|:--|:--|
+| the worker folder | `~/zhr-worker` | `mkdir` (-47) | `rm -rf ~/zhr-worker` removes everything below |
+| `zheavy` and `hashtree.py` | `~/zhr-worker/bin/` | `scp`, the same files as finer's (-47) | in the folder |
+| the game data (4.6 GB) | `~/zhr-worker/data` | `rsync -a` from this Mac (-47) | in the folder |
+| the vendored sources git ignores | `~/zhr-worker/vendor` | `rsync --files-from` (-47) | in the folder |
+| the art archives | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
+| the repository | `~/zhr-worker/repo`, from `~/zhr-worker/bundles/fmp.bundle` (feature/mac-port 9d1c8895) | `git bundle` here, `scp`, `git clone` (-47) | in the folder |
+| worktree and build for -47 | `~/zhr-worker/wt-47` (branch `agent-47`, vendor copied in with `cp --reflink=auto`), `~/zhr-worker/build-47` | `git worktree add`, cmake/ninja via `zheavy` (-47) | in the folder |
+
+**Not created: the Windows VM.** The user approved it (relayed by the PM), but this session's permission
+classifier refused its setup as "Unauthorized Persistence" (an auto-started SSH server keyed to this Mac
+inside the VM). Nothing was created for it. It waits for the user to approve it in -47's session, or for
+someone else to set it up.
+
