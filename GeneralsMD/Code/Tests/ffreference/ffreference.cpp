@@ -1094,6 +1094,8 @@ void rasterTriangle( Raster &r, Triangle t )
 			{
 				PixelDetail &d = tg.detail[idx];
 				d.primitive = r.primitive;
+				if (d.layers < 8)
+					d.writers[d.layers] = r.primitive;
 				++d.layers;
 				d.source = src;
 				d.alphaPassed = alphaNominal;

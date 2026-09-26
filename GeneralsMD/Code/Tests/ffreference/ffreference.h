@@ -330,6 +330,7 @@ struct PixelDetail
 {
 	int primitive;			///< its index among the draw's primitives; -1 when none wrote the pixel
 	int layers;				///< how many of the draw's triangles nominally wrote the pixel
+	int writers[8];			///< the first eight of them, by primitive index, in the order they wrote
 	Color source;			///< its colour before the blend; its alpha is the one the alpha test read
 	bool alphaPassed;
 	double uv[2][2];		///< stages 0 and 1: the coordinates sampled

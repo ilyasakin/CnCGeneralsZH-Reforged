@@ -1277,6 +1277,7 @@ TEST(ffref_pixel_detail_names_the_last_writer)
 	CHECK_EQ( t.detail.size(), (size_t)4 );
 	CHECK_EQ( t.detail[3].primitive, 1 );
 	CHECK_EQ( t.detail[3].layers, 2 );
+	CHECK( t.detail[3].writers[0] == 0 && t.detail[3].writers[1] == 1 );
 	CHECK_NEAR( t.detail[3].source.a, 0.25, EPS );
 	CHECK( t.detail[3].alphaPassed );
 	CHECK_NEAR( t.detail[3].screen[1][0], 300.0, EPS );
