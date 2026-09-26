@@ -877,6 +877,7 @@ struct Raster
 	Target &target;
 	Report &report;
 	int x0, y0, x1, y1;		///< pixel bounds, exclusive ends: viewport, target, scissor
+	int primitive;			///< the primitive being drawn, for Target::detail
 };
 
 bool alphaPasses( const uint32_t *rs, double alpha )
@@ -1089,6 +1090,29 @@ void rasterTriangle( Raster &r, Triangle t )
 			}
 
 			Color result = dstNominal;
+			if (writeNominal && tg.recordDetail)
+			{
+				PixelDetail &d = tg.detail[idx];
+				d.primitive = r.primitive;
+				++d.layers;
+				d.source = src;
+				d.alphaPassed = alphaNominal;
+				for (int st = 0; st < 2; ++st)
+				{
+					d.uv[st][0] = in.uv[st][0];
+					d.uv[st][1] = in.uv[st][1];
+					d.lod[st] = nominalOut.sampled[st] ? nominalOut.lod[st] : -1e9;
+					const Texture *tex = s.textures[st];
+					const double w = tex && !tex->levels.empty() ? tex->levels[0].width : 0, h = tex && !tex->levels.empty() ? tex->levels[0].height : 0;
+					d.axes[st][0] = sqrt( in.dx[st][0] * w * in.dx[st][0] * w + in.dx[st][1] * h * in.dx[st][1] * h );
+					d.axes[st][1] = sqrt( in.dy[st][0] * w * in.dy[st][0] * w + in.dy[st][1] * h * in.dy[st][1] * h );
+				}
+				for (int k = 0; k < 3; ++k)
+				{
+					d.screen[k][0] = t.v[k].X;
+					d.screen[k][1] = t.v[k].Y;
+				}
+			}
 			if (writeNominal)
 			{
 				result = writeMasked( blend( s, src, dstNominal, tg.hasAlpha, ctx.mutations ), dstNominal, writeMask );
@@ -1498,6 +1522,8 @@ void Target::create( int w, int h, bool alpha, int bits )
 	depth.assign( (size_t)w * h, 1.0 );
 	stencil.assign( (size_t)w * h, 0 );
 	zones.assign( (size_t)w * h, 0 );
+	recordDetail = false;
+	detail.clear();
 	depthAmbiguous.assign( (size_t)w * h, 0 );
 	stencilAmbiguous.assign( (size_t)w * h, 0 );
 }
@@ -1515,6 +1541,7 @@ void Target::clear( Color c, double z, uint32_t s )
 	std::fill( zones.begin(), zones.end(), 0u );
 	std::fill( depthAmbiguous.begin(), depthAmbiguous.end(), 0 );
 	std::fill( stencilAmbiguous.begin(), stencilAmbiguous.end(), 0 );
+	detail.clear();		// sized again, empty, by the next draw that records
 }
 
 Freedoms::Freedoms()
@@ -1799,7 +1826,14 @@ bool draw( const DrawState &state, int primitiveType, const Vertex *vertices, in
 		report.programVerticesReported += processed[i].programReported ? 1 : 0;
 	}
 
-	Raster r = { ctx, target, report, 0, 0, target.width, target.height };
+	Raster r = { ctx, target, report, 0, 0, target.width, target.height, -1 };
+	if (target.recordDetail && target.detail.size() != target.color.size())
+	{
+		PixelDetail none;
+		memset( &none, 0, sizeof( none ) );
+		none.primitive = -1;
+		target.detail.assign( target.color.size(), none );
+	}
 	const Viewport &vp = state.viewport;
 	r.x0 = std::max( r.x0, (int)ceil( vp.x ) );
 	r.y0 = std::max( r.y0, (int)ceil( vp.y ) );
@@ -1834,6 +1868,7 @@ bool draw( const DrawState &state, int primitiveType, const Vertex *vertices, in
 			a.diffuse = b.diffuse = c.diffuse = p.diffuse;
 			a.specular = b.specular = c.specular = p.specular;
 		}
+		r.primitive = t;
 		drawTriangle( r, a, b, c );
 	}
 	return true;
