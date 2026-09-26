@@ -560,8 +560,8 @@ which ARM64 turned into a read 190 GB past the table. See the latent-UB list in 
 
 **The picture was replaced after defect #27.** The first dump had the trees as black silhouettes.
 `ZH_GPU_TRACE` showed their shroud stage (stage 1, camera-space texgen, set 0) sampling with stage 0's
-coordinates. That was a generator mismatch, which D3D11 and D3D9's combiner shaders have too (README
-#27). The picture above is the same run after the fix, where the pale patches are the blossom trees,
+coordinates. That was a generator mismatch, which Windows' D3D11 renderer has too. D3D9's combiner shaders do not,
+by bfb60e17's measurement (README #27). The picture above is the same run after the fix, where the pale patches are the blossom trees,
 textured and shrouded. The run: exit 0, 2,440 presents, 1,633,250 draws, and the same single refusal
 reason (20,281 render-target draws).
 
