@@ -47,8 +47,8 @@ struct SDL_GPUShader;
 
 /// A flexible vertex format as SDL3 vertex attributes, at D3's locations (sdl3target.h): position 0,
 /// normal 1, the diffuse colour 2 (bytes B, G, R, A, read as UBYTE4_NORM and swapped by the program),
-/// texture coordinate set n at 4 + n.  Only what the generated program declares is an attribute: the
-/// point size and the specular colour are skipped over, and sets past the fourth.
+/// the specular colour 3, texture coordinate set n at 4 + n.  Only what the generated program declares
+/// is an attribute: the point size is skipped over, and sets past the fourth.
 struct SdlVertexLayout
 {
 	enum { MAXIMUM_ATTRIBUTES = 8 };

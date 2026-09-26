@@ -299,6 +299,23 @@ inline std::vector<ShaderCase> Shader_Cases()
 		cases.push_back(vertex("vs_extra_lit_no_colour", false, description));
 	}
 	{
+		// A mesh with a second colour array (D3DFVF_SPECULAR, dx8renderer.cpp) drawn unlit, and the
+		// same pretransformed, and lit with its specular material read from that colour.
+		VertexPipelineDescription description = plain_vertex();
+		description.FVF = FF_FVF_XYZ | FF_FVF_DIFFUSE | FF_FVF_SPECULAR | FF_FVF_TEX1;
+		cases.push_back(vertex("vs_extra_unlit_vertex_specular", false, description));
+		description.FVF = FF_FVF_XYZRHW | FF_FVF_DIFFUSE | FF_FVF_SPECULAR | FF_FVF_TEX1;
+		cases.push_back(vertex("vs_extra_pretransformed_vertex_specular", false, description));
+		description.FVF = FF_FVF_XYZ | FF_FVF_NORMAL | FF_FVF_DIFFUSE | FF_FVF_SPECULAR | FF_FVF_TEX1;
+		description.LightingEnabled = true;
+		description.SpecularEnabled = true;
+		description.ColourVertexEnabled = true;
+		description.SpecularMaterialSource = FF_MCS_COLOR2;
+		description.LightCount = 1;
+		description.Lights[0].Type = FF_LIGHT_DIRECTIONAL;
+		cases.push_back(vertex("vs_extra_lit_specular_from_vertex", false, description));
+	}
+	{
 		// Specular with D3D9's default local viewer, as every lit specular draw of the engine's is.
 		VertexPipelineDescription description = plain_vertex();
 		description.LightingEnabled = true;

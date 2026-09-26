@@ -587,7 +587,7 @@ static void scenarios_cascade(Harness &h)
 	std::vector<V> quad = screen_quad(4, 4, 60, 60, CORNERS);
 	for (size_t k = 0; k < quad.size(); ++k) quad[k].specular = 0xFF402010;
 	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_SPECULAR, D3DPT_TRIANGLELIST, quad);
-	h.check("specular add (vertex specular)", false, "F6b: no unlit vertex specular");
+	h.check("specular add (vertex specular)");
 
 	h.begin(0xFF000000);
 	h.rs(D3DRS_SPECULARENABLE, 1);
