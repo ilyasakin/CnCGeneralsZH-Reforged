@@ -591,6 +591,78 @@ bool assemblePixelProgram( const std::string &text, std::vector<uint32_t> &token
 	return true;
 }
 
+// ---- a vertex declaration --------------------------------------------------------------------------
+bool declarationInputs( const uint8_t *vertex, const DeclarationElement *elements, int count,
+	double inputs[16][4], unsigned &present, std::string &error )
+{
+	present = 0;
+	for (int k = 0; k < 16; ++k)
+	{
+		inputs[k][0] = inputs[k][1] = inputs[k][2] = 0.0;
+		inputs[k][3] = 1.0;
+	}
+	for (int i = 0; i < count; ++i)
+	{
+		const DeclarationElement &e = elements[i];
+		int reg = -1;
+		switch (e.usage)
+		{
+			case Declaration::POSITION: reg = e.usageIndex == 0 ? 0 : (e.usageIndex == 1 ? 15 : -1); break;
+			case Declaration::BLENDWEIGHT: reg = e.usageIndex == 0 ? 1 : -1; break;
+			case Declaration::BLENDINDICES: reg = e.usageIndex == 0 ? 2 : -1; break;
+			case Declaration::NORMAL: reg = e.usageIndex == 0 ? 3 : -1; break;
+			case Declaration::PSIZE: reg = e.usageIndex == 0 ? 4 : -1; break;
+			case Declaration::COLOR: reg = e.usageIndex <= 1 ? 5 + e.usageIndex : -1; break;
+			case Declaration::TEXCOORD: reg = e.usageIndex <= 7 ? 7 + e.usageIndex : -1; break;
+		}
+		char what[ 96 ];
+		if (reg < 0 || e.stream != 0 || e.method != 0)
+		{
+			snprintf( what, sizeof( what ), "element %d: usage %u.%u, stream %u, method %u outside the D3D8 registers",
+				i, (unsigned)e.usage, (unsigned)e.usageIndex, (unsigned)e.stream, (unsigned)e.method );
+			error = what;
+			return false;
+		}
+		const uint8_t *p = vertex + e.offset;
+		double *v = inputs[reg];
+		switch (e.type)
+		{
+			case Declaration::FLOAT1: case Declaration::FLOAT2: case Declaration::FLOAT3: case Declaration::FLOAT4:
+				// "One/Two/Three/Four-component float expanded to (float, 0, 0, 1)" ... "(float, float, float, float)"
+				for (int c = 0; c <= e.type - Declaration::FLOAT1; ++c)
+				{
+					float f;
+					memcpy( &f, p + 4 * c, 4 );
+					v[c] = f;
+				}
+				break;
+			case Declaration::D3DCOLOR:
+				// "packed, unsigned bytes mapped to 0 to 1 range.  Input is a D3DCOLOR and is expanded to RGBA
+				// order": the DWORD 0xAARRGGBB, stored B, G, R, A
+				v[0] = p[2] / 255.0; v[1] = p[1] / 255.0; v[2] = p[0] / 255.0; v[3] = p[3] / 255.0;
+				break;
+			case Declaration::UBYTE4:		// "Four-component, unsigned byte"
+				for (int c = 0; c < 4; ++c)
+					v[c] = p[c];
+				break;
+			case Declaration::SHORT2: case Declaration::SHORT4:		// "signed short expanded to (value, value, 0, 1)"
+				for (int c = 0; c < (e.type == Declaration::SHORT2 ? 2 : 4); ++c)
+				{
+					int16_t h;
+					memcpy( &h, p + 2 * c, 2 );
+					v[c] = h;
+				}
+				break;
+			default:
+				snprintf( what, sizeof( what ), "element %d: type %u, not one the game declares", i, (unsigned)e.type );
+				error = what;
+				return false;
+		}
+		present |= 1u << reg;
+	}
+	return true;
+}
+
 // ---- the vertex program ---------------------------------------------------------------------------
 namespace {
 

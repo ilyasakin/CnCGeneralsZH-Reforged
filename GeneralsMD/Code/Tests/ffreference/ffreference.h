@@ -283,6 +283,10 @@ struct DrawState
 	double pixelConstants[8][4];		///< c0-c7 (a program's def overrides, as it runs)
 	int vertexInput[16];				///< the declaration: the Vertex element each vN reads (VertexInput)
 	int vertexInputSize[16];			///< how many components it supplies; the rest are (0, 0, 0, 1)'s
+	/// Or, the declaration decoded from each vertex's own bytes (declarationInputs): Vertex::programInput
+	/// holds v0-v15, and bit n here says an element fed vN
+	bool programInputsGiven;
+	unsigned programInputPresent;
 
 	// The vertex format (what the FVF or declaration supplies)
 	bool pretransformed;				///< D3DFVF_XYZRHW: position is (X, Y, Z, RHW) on screen
@@ -305,6 +309,7 @@ struct Vertex
 	double normal[3];
 	Color diffuse, specular;
 	double tex[MAX_STAGES][4];	///< by coordinate set
+	double programInput[16][4];	///< v0-v15, when DrawState::programInputsGiven (declarationInputs)
 };
 
 // ---- the target -----------------------------------------------------------------------------------
