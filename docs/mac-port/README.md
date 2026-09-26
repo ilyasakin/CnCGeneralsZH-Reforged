@@ -1140,6 +1140,22 @@ Not defects a Windows player can hit today: MSVC does the intended thing. But a 
 C library are free not to, and when they don't, the result looks like a platform bug. **If you are
 hunting a crash or corruption that only one platform shows, look here first.**
 
+- **A float converted to an unsigned byte out of its range - the particles' orientation; fixed.**
+  `W3DParticleSys.cpp` turns a particle's angle into an index into `PointGroupClass`'s 256-row
+  orientation table with `(uint8)(angle * 255 / 2π)`. For a negative angle, or one past a turn, that
+  conversion is undefined. MSVC lowers it to `cvttss2si` (toward zero into a 32-bit int) and keeps the
+  low byte, so -11 wrapped to 245 and the code came to rely on the wrap. ARM64's clang lowered it to
+  `fcvtzs` and used the unmasked result as the index. The first windowed macOS skirmish, and the first
+  run anywhere off Windows to draw particles, died with SIGBUS in `fillBillboards` (the fork's
+  job-pool fill): a particle at about -0.28 rad reads 0xFFFFFFF5 rows of 48 bytes past the table,
+  about 190 GB (found under lldb from `umaddl x0, w17, w14, x13`). The original path's
+  `angleArray[count] = (uint8)...` (`:399`) doesn't crash, but it saturated negative angles to 0 instead
+  of wrapping, so rotated particles would have faced the wrong way. **Fixed** with
+  `Platform/MsvcFloatCasts.h`'s `floatToByteAsMsvc`, which is MSVC's result computed with defined
+  operations only. Windows computes the same bytes as before (`test_msvc_float_casts` also checks
+  MSVC's own cast against it there). The same class can hide anywhere a float meets an unsigned type,
+  including the simulation, where it would desync ARM64 against x86. -18's sweep, a static search plus
+  UBSan's `float-cast-overflow` over replays, uses the same helper.
 - **Overlapping `strcpy`.** `WWLib/trim.cpp`'s `strtrim` and `wcstrim` shifted a string left over
   itself with `strcpy`/`wcscpy`. Copying between overlapping regions is undefined. MSVC's copy
   evidently runs forwards and gets away with it, and every INI line in the game goes through
