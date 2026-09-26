@@ -334,6 +334,7 @@ struct PixelDetail
 	bool alphaPassed;
 	double uv[2][2];		///< stages 0 and 1: the coordinates sampled
 	double lod[2];			///< and the LOD they were sampled at (bias included); -1e9 when not sampled
+	double axes[2][2];		///< the footprint's two axes there, level-0 texels per pixel along x and y
 	double screen[3][2];	///< the triangle's vertices on screen
 };
 

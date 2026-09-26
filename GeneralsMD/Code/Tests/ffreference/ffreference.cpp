@@ -1102,6 +1102,10 @@ void rasterTriangle( Raster &r, Triangle t )
 					d.uv[st][0] = in.uv[st][0];
 					d.uv[st][1] = in.uv[st][1];
 					d.lod[st] = nominalOut.sampled[st] ? nominalOut.lod[st] : -1e9;
+					const Texture *tex = s.textures[st];
+					const double w = tex && !tex->levels.empty() ? tex->levels[0].width : 0, h = tex && !tex->levels.empty() ? tex->levels[0].height : 0;
+					d.axes[st][0] = sqrt( in.dx[st][0] * w * in.dx[st][0] * w + in.dx[st][1] * h * in.dx[st][1] * h );
+					d.axes[st][1] = sqrt( in.dy[st][0] * w * in.dy[st][0] * w + in.dy[st][1] * h * in.dy[st][1] * h );
 				}
 				for (int k = 0; k < 3; ++k)
 				{

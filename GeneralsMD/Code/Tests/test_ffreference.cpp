@@ -1282,6 +1282,21 @@ TEST(ffref_pixel_detail_names_the_last_writer)
 	CHECK_NEAR( t.detail[3].screen[1][0], 300.0, EPS );
 	t.clear( rgba( 0, 0, 0, 0 ) );		// cleared with the pixels
 	CHECK( t.detail.empty() );
+	// the footprint: a 4x4 texture across the 2x2 target is 2 level-0 texels per pixel on each axis
+	Texture tex = ramp4();
+	DrawState ts = screenState( 2, 2 );
+	ts.textures[0] = &tex;
+	ts.texCoordSets = 1;
+	ts.texCoordSize[0] = 2;
+	Vertex tv[3] = { screenVertex( 0, 0, 0.5, 1, rgba( 1, 1, 1, 1 ) ), screenVertex( 4, 0, 0.5, 1, rgba( 1, 1, 1, 1 ) ),
+		screenVertex( 0, 4, 0.5, 1, rgba( 1, 1, 1, 1 ) ) };
+	tv[1].tex[0][0] = 2.0;		// u 0..2 over 4 pixels: .5 per pixel, 2 texels of a 4-wide level 0
+	tv[2].tex[0][1] = 2.0;
+	Target tt = exactTarget( 2, 2 );
+	tt.recordDetail = true;
+	CHECK( draw( ts, PT_TRIANGLELIST, tv, 3, 0, 3, tt ) );
+	CHECK_NEAR( tt.detail[0].axes[0][0], 2.0, EPS );
+	CHECK_NEAR( tt.detail[0].axes[0][1], 2.0, EPS );
 	// and nothing is recorded unless asked
 	Target quiet = exactTarget( 2, 2 );
 	CHECK( draw( s, PT_TRIANGLELIST, v, 6, 0, 6, quiet ) );
