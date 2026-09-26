@@ -620,6 +620,46 @@ TEST(ffprogram_draws_as_the_fixed_function_pipeline_it_mirrors)
 	CHECK_EQ( rb.programVerticesReported, 0L );
 }
 
+TEST(ffprogram_vertex_program_with_the_fixed_function_pixel_stage)
+{
+	// Trees.vso's case (capture v2): a vertex program, and the texture cascade behind it reading oD0 and oT0
+	const Program vs = decoded( { VS11,
+		ins( OP_M4x4 ), dst( REG_RASTOUT, RASTOUT_POSITION ), src( REG_INPUT, 0 ), src( REG_CONST, 0 ),
+		ins( OP_MOV ), dst( REG_ATTROUT, 0 ), src( REG_INPUT, 1 ),
+		ins( OP_MOV ), dst( REG_TEXCRDOUT, 0 ), src( REG_INPUT, 2 ), END } );
+	Texture tex = solid( rgbaOf( 0, 0, 0, 1 ) );
+	for (int i = 0; i < 16; ++i)
+		tex.levels[0].texels[i] = rgbaOf( (i % 4) / 4.0 + 0.125, (i / 4) / 4.0 + 0.125, 1.0, 1.0 );
+	Vertex v[ 6 ];
+	quad( v, rgbaOf( 0.5, 0.5, 0.25, 1 ) );
+	DrawState ff = plainState();
+	ff.samplerState[0][SAMP_MAGFILTER] = ff.samplerState[0][SAMP_MINFILTER] = TEXF_POINT;
+	ff.textures[0] = &tex;
+	Target a = exactTarget( 4, 4 );
+	CHECK( draw( ff, PT_TRIANGLELIST, v, 6, NULL, 6, a ) );
+	DrawState pr = ff;
+	pr.vertexProgram = &vs;
+	for (int i = 0; i < 4; ++i)
+		pr.vertexConstants[i][i] = 1.0;
+	pr.vertexInput[0] = INPUT_POSITION; pr.vertexInputSize[0] = 3;
+	pr.vertexInput[1] = INPUT_DIFFUSE; pr.vertexInputSize[1] = 4;
+	pr.vertexInput[2] = INPUT_TEXCOORD0; pr.vertexInputSize[2] = 2;
+	Target b = exactTarget( 4, 4 );
+	Report r;
+	const bool drew = draw( pr, PT_TRIANGLELIST, v, 6, NULL, 6, b, &r );
+	if (!r.refusals.empty())
+		printf( "  refused: %s\n", r.refusals[0].c_str() );
+	CHECK( drew );
+	int same = 0;
+	for (size_t i = 0; i < a.color.size(); ++i)
+		same += fabs( a.color[i].r - b.color[i].r ) < 1e-9 && fabs( a.color[i].g - b.color[i].g ) < 1e-9 ? 1 : 0;
+	CHECK_EQ( same, (int)a.color.size() );
+	// the documented rule: a vertex program needs each stage's coordinate index at its default
+	pr.stageState[0][TSS_TEXCOORDINDEX] = 1;
+	Report refused;
+	CHECK( !draw( pr, PT_TRIANGLELIST, v, 6, NULL, 6, b, &refused ) );
+}
+
 TEST(ffprogram_refusals_inside_draw)
 {
 	const Program ps = decoded( { PS11, ins( OP_TEX ), dst( REG_TEXTURE, 1 ), ins( OP_MOV ), dst( REG_TEMP, 0 ), src( REG_TEXTURE, 1 ), END } );
