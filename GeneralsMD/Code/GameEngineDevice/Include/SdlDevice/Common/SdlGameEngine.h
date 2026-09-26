@@ -23,7 +23,9 @@
 //     so a headless run needs no display (E1's replay runs are on machines without one);
 //   - the event pump (serviceWindowsOS), with a close request and the application's focus handled
 //     as WM_CLOSE and WM_ACTIVATEAPP are;
-//   - the window's title, through GameText's hook (GameClient/ApplicationWindowTitle.h).
+//   - the window's title, through GameText's hook (GameClient/ApplicationWindowTitle.h);
+//   - the displays, as Monitors.h's table (SdlDisplays.h), while SDL's video is up;
+//   - MessageBoxWrapper's box, as SDL_ShowMessageBox over the window (SdlMessageBox.h).
 // Nothing draws into the window yet: the renderer is D4's.
 //
 // The factories Windows answers with W3DDevice classes cannot be answered here yet, and each stops the

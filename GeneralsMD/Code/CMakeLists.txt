@@ -1316,6 +1316,14 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
   set_target_properties(generals PROPERTIES CXX_STANDARD 17)
   target_link_libraries(generals PRIVATE sdldevice)
+  # C2's SDL side of Monitors.h and MessageBoxWrapper, on SDL's offscreen video driver.
+  add_executable(test_sdl_platform ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_platform.cpp)
+  target_include_directories(test_sdl_platform PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(test_sdl_platform PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+  set_target_properties(test_sdl_platform PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_sdl_platform PRIVATE sdldevice test_harness)
+  add_test(NAME test_sdl_platform COMMAND test_sdl_platform)
+
   # The entry sequence without game data: see the script.
   add_test(NAME generals_smoke
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_generals_smoke.sh $<TARGET_FILE:generals>)
