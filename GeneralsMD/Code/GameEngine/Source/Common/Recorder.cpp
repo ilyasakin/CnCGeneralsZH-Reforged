@@ -23,6 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 
 #include "Lib/WideCharFns.h"
 #include "Common/Recorder.h"
@@ -101,7 +102,7 @@ void RecorderClass::logGameStart(AsciiString options)
 			TheFileSystem->createDirectory(statsFile);
 			statsFile.concat(computerName);
 			statsFile.concat(".txt");
-			FILE *logFP = fopen(statsFile.str(), "a+");
+			FILE *logFP = zh_fopen(statsFile.str(), "a+");
 			if (!logFP)
 			{
 				// try again locally
@@ -109,7 +110,7 @@ void RecorderClass::logGameStart(AsciiString options)
 				statsFile = TheGlobalData->m_baseStatsDir;
 				statsFile.concat(computerName);
 				statsFile.concat(".txt");
-				logFP = fopen(statsFile.str(), "a+");
+				logFP = zh_fopen(statsFile.str(), "a+");
 			}
 			if (logFP)
 			{
@@ -159,7 +160,7 @@ void RecorderClass::logPlayerDisconnect(UnicodeString player, Int slot)
 		AsciiString statsFile = TheGlobalData->m_baseStatsDir;
 		statsFile.concat(computerName);
 		statsFile.concat(".txt");
-		FILE *logFP = fopen(statsFile.str(), "a+");
+		FILE *logFP = zh_fopen(statsFile.str(), "a+");
 		if (logFP)
 		{
 			time_t t;
@@ -205,7 +206,7 @@ void RecorderClass::logCRCMismatch( void )
 		AsciiString statsFile = TheGlobalData->m_baseStatsDir;
 		statsFile.concat(computerName);
 		statsFile.concat(".txt");
-		FILE *logFP = fopen(statsFile.str(), "a+");
+		FILE *logFP = zh_fopen(statsFile.str(), "a+");
 		if (logFP)
 		{
 			time_t t;
@@ -260,7 +261,7 @@ void RecorderClass::logGameEnd( void )
 			AsciiString statsFile = TheGlobalData->m_baseStatsDir;
 			statsFile.concat(computerName);
 			statsFile.concat(".txt");
-			FILE *logFP = fopen(statsFile.str(), "a+");
+			FILE *logFP = zh_fopen(statsFile.str(), "a+");
 			if (logFP)
 			{
 				struct tm *t2 = localtime(&t);
@@ -307,7 +308,7 @@ void RecorderClass::cleanUpReplayFile( void )
 		debugFname.removeLastChar();
 		debugFname.concat("txt");
 		UnsignedInt fileSize = 0;
-		FILE *fp = fopen(DEBUG_FILE_NAME, "rb");
+		FILE *fp = zh_fopen(DEBUG_FILE_NAME, "rb");
 		if (fp)
 		{
 			fseek(fp, 0, SEEK_END);
@@ -326,8 +327,8 @@ void RecorderClass::cleanUpReplayFile( void )
 		else
 		{
 			DEBUG_LOG(("manual copy of %s\n", DEBUG_FILE_NAME));
-			FILE *ifp = fopen(DEBUG_FILE_NAME, "rb");
-			FILE *ofp = fopen(debugFname.str(), "wb");
+			FILE *ifp = zh_fopen(DEBUG_FILE_NAME, "rb");
+			FILE *ofp = zh_fopen(debugFname.str(), "wb");
 			if (ifp && ofp)
 			{
 				fseek(ifp, fileSize-MAX_DEBUG_SIZE, SEEK_SET);
@@ -563,7 +564,7 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	m_fileName = getLastReplayFileName();
 	m_fileName.concat(getReplayExtention());
 	filepath.concat(m_fileName);
-	m_file = fopen(filepath.str(), "wb");
+	m_file = zh_fopen(filepath.str(), "wb");
 	if (m_file == NULL) {
 		DEBUG_ASSERTCRASH(m_file != NULL, ("Failed to create replay file"));
 		return;
@@ -863,7 +864,7 @@ Bool RecorderClass::readReplayHeader(ReplayHeader& header)
 {
 	AsciiString filepath = getReplayDir();
 	filepath.concat(header.filename.str());
-	m_file = fopen(filepath.str(), "rb");
+	m_file = zh_fopen(filepath.str(), "rb");
 	if (m_file == NULL)
 	{
 		DEBUG_LOG(("Can't open %s (%s)\n", filepath.str(), header.filename.str()));
@@ -1646,7 +1647,7 @@ AsciiString RecorderClass::getLastReplayFileName()
 			testString.format("%s%s%s", getReplayDir().str(), full.str(), replayExtention);
 
 			FILE *fp;
-			fp = fopen(testString.str(), "rb");
+			fp = zh_fopen(testString.str(), "rb");
 			if (fp)
 			{
 				fclose(fp);
@@ -1660,7 +1661,7 @@ AsciiString RecorderClass::getLastReplayFileName()
 			{
 				fullPlusNum.format("%s_%d", full.str(), test);
 				testString.format("%s%s%s", getReplayDir().str(), fullPlusNum.str(), replayExtention);
-				fp = fopen(testString.str(), "rb");
+				fp = zh_fopen(testString.str(), "rb");
 				if (fp)
 				{
 					fclose(fp);

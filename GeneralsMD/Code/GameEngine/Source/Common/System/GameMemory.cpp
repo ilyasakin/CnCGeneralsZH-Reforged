@@ -43,6 +43,7 @@
 // ----------------------------------------------------------------------------
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 
 // SYSTEM INCLUDES
 #ifndef _WIN32
@@ -3038,7 +3039,7 @@ void MemoryPoolFactory::memoryPoolUsageReport( const char* filename, FILE *appen
 		char tmp[256];
 		strlcpy(tmp, filename, ARRAY_SIZE(tmp));
 		strlcat(tmp, ".csv", ARRAY_SIZE(tmp));
-		perfStatsFile = fopen(tmp, "w");
+		perfStatsFile = zh_fopen(tmp, "w");
 	}
 	else
 	{

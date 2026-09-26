@@ -29,6 +29,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
@@ -468,14 +469,14 @@ const char *outFilenameStringFile	= "thingString.txt";
 
 void resetReportFile( void )
 {
-	FILE *fp = fopen(outFilenameINI, "w");
+	FILE *fp = zh_fopen(outFilenameINI, "w");
 	if (fp)
 	{
 		fprintf(fp, "-- ThingTemplate INI Report --\n\n");
 		fclose(fp);
 	}
 
-	fp = fopen(outFilenameStringFile, "w");
+	fp = zh_fopen(outFilenameStringFile, "w");
 	if (fp)
 	{
 		fprintf(fp, "-- ThingTemplate String File Report --\n\n");
@@ -497,7 +498,7 @@ void reportMissingNameInStringFile( AsciiString templateName )
 void dumpMissingStringNames( void )
 {
 	missingStrings.sort();
-	FILE *fp = fopen(outFilenameStringFile, "w");
+	FILE *fp = zh_fopen(outFilenameStringFile, "w");
 	if (fp)
 	{
 		fprintf(fp, "-- ThingTemplate String File Report --\n\n");
@@ -519,7 +520,7 @@ void reportMissingNameInTemplate( AsciiString templateName )
 
 	missingNames.push_back(templateName);
 
-	FILE *fp = fopen(outFilenameINI, "a+");
+	FILE *fp = zh_fopen(outFilenameINI, "a+");
 	if (fp)
 	{
 		fprintf(fp, "  DisplayName      = OBJECT:%s\n", templateName.str());
