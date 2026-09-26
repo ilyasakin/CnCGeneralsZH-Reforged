@@ -102,6 +102,11 @@ static void sizeWindow( Int mode, Int width, Int height, const MonitorRect &scre
 		y += ((int)(screen.bottom - screen.top) - height) / 2;
 	}
 	SDL_SetWindowPosition( window, x, y );
+
+	int pixelWidth = 0, pixelHeight = 0;
+	SDL_GetWindowSizeInPixels( window, &pixelWidth, &pixelHeight );
+	DEBUG_LOG(( "SdlGameEngine: mode %d at %dx%d; the window is %dx%d pixels\n", mode, width, height,
+		pixelWidth, pixelHeight ));
 }
 
 SdlGameEngine::SdlGameEngine( const WindowRequest &request )
