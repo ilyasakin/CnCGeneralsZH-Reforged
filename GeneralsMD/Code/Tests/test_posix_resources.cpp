@@ -2,11 +2,13 @@
  * Decision 7's A2: the D3D9-shaped device's resources in memory (PosixDevice/Render/PosixResources9).
  * Formats' block layouts, mip chains, locks and their D3D9 rules, COM reference counting between a
  * texture and its surfaces, cube and volume textures, and buffers; and the pixel codec
- * (PosixPixelCodec) against hand-worked values of each format's bit layout and of DXT's blocks.  Run under ASan where it can be,
+ * (PosixPixelCodec) against hand-worked values of each format's bit layout and of DXT's blocks; and
+ * the image operations (PosixImageOps): block copies, conversions, D3DX's filters, fills.  Run under ASan where it can be,
  * since a reference count that is off shows up as a leak or a use after free, not as a wrong value.
  */
 #include "test_harness.h"
 
+#include "PosixImageOps.h"
 #include "PosixPixelCodec.h"
 #include "PosixResources9.h"
 
@@ -391,4 +393,118 @@ TEST(posix_codec_writes_depth_and_stencil)
 	CHECK(!posixEncodeDepth(D3DFMT_A8R8G8B8, 1.0f, 0, out));
 	const PosixColor c = posixColorFromD3DColor(0x80ff4000u);
 	CHECK(near(c.a, 128 / 255.0f) && near(c.r, 1) && near(c.g, 64 / 255.0f) && near(c.b, 0));
+}
+
+namespace {
+
+PosixImage image_of(D3DFORMAT format, unsigned int width, unsigned int height)
+{
+	PosixImage image;
+	image.create(format, width, height, 1);
+	return image;
+}
+
+uint32_t argb_at(const PosixImage &image, unsigned int x, unsigned int y)
+{
+	const uint8_t *p = image.bytes() + (size_t)y * image.rowPitch() + x * 4;
+	return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+void set_argb(PosixImage &image, unsigned int x, unsigned int y, uint32_t value)
+{
+	uint8_t *p = image.bytes() + (size_t)y * image.rowPitch() + x * 4;
+	p[0] = (uint8_t)value; p[1] = (uint8_t)(value >> 8); p[2] = (uint8_t)(value >> 16); p[3] = (uint8_t)(value >> 24);
+}
+
+} // namespace
+
+TEST(posix_copy_moves_dxt_blocks_unchanged)
+{
+	PosixImage source = image_of(D3DFMT_DXT1, 16, 16), dest = image_of(D3DFMT_DXT1, 16, 16);
+	for (size_t i = 0; i < source.size(); ++i) source.bytes()[i] = (uint8_t)(i * 31 + 7);
+	const PosixRegion from = { 4, 4, 12, 12 }, to = { 0, 8, 8, 16 };
+	CHECK_EQ(posixCopyImage(dest, to, source, from, POSIX_FILTER_NONE), D3D_OK);
+	for (unsigned int row = 0; row < 2; ++row)		// two rows of two blocks, eight bytes each
+		CHECK_MEM(dest.bytes() + (2 + row) * dest.rowPitch(), source.bytes() + (1 + row) * source.rowPitch() + 8, 16);
+	CHECK_EQ(dest.bytes()[0], 0);									// what was not copied to is untouched
+	CHECK_EQ(dest.version(), 1u);
+	// a region DXT cannot address, and a conversion into DXT, are refused
+	const PosixRegion off_block = { 1, 0, 9, 8 };
+	CHECK_EQ(posixCopyImage(dest, to, source, off_block, POSIX_FILTER_NONE), D3DERR_INVALIDCALL);
+	PosixImage argb = image_of(D3DFMT_A8R8G8B8, 8, 8);
+	const PosixRegion whole8 = { 0, 0, 8, 8 };
+	CHECK_EQ(posixCopyImage(dest, to, argb, whole8, POSIX_FILTER_NONE), D3DERR_INVALIDCALL);
+}
+
+TEST(posix_copy_converts_between_formats)
+{
+	// DXT1 decoded into A8R8G8B8: one red block
+	PosixImage dxt = image_of(D3DFMT_DXT1, 4, 4), argb = image_of(D3DFMT_A8R8G8B8, 4, 4);
+	const uint8_t red_block[8] = { 0x00, 0xf8, 0x00, 0xf8, 0, 0, 0, 0 };
+	memcpy(dxt.bytes(), red_block, 8);
+	const PosixRegion whole = { 0, 0, 4, 4 };
+	CHECK_EQ(posixCopyImage(argb, whole, dxt, whole, POSIX_FILTER_NONE), D3D_OK);
+	CHECK_EQ(argb_at(argb, 3, 3), 0xffff0000u);
+	// A8R8G8B8 into R5G6B5: 0xff00ff00 is pure green, 0x07e0
+	set_argb(argb, 0, 0, 0xff00ff00u);
+	PosixImage rgb565 = image_of(D3DFMT_R5G6B5, 4, 4);
+	CHECK_EQ(posixCopyImage(rgb565, whole, argb, whole, POSIX_FILTER_POINT), D3D_OK);
+	CHECK_EQ((uint32_t)rgb565.bytes()[0] | ((uint32_t)rgb565.bytes()[1] << 8), 0x07e0u);
+	CHECK_EQ((uint32_t)rgb565.bytes()[2] | ((uint32_t)rgb565.bytes()[3] << 8), 0xf800u);
+}
+
+TEST(posix_copy_scales_with_d3dx_filters)
+{
+	PosixImage two = image_of(D3DFMT_A8R8G8B8, 2, 2);
+	set_argb(two, 0, 0, 0xff000000u); set_argb(two, 1, 0, 0xff00007fu);
+	set_argb(two, 0, 1, 0xff0000ffu); set_argb(two, 1, 1, 0xff00003fu);
+	PosixImage one = image_of(D3DFMT_A8R8G8B8, 1, 1);
+	const PosixRegion two_whole = { 0, 0, 2, 2 }, one_whole = { 0, 0, 1, 1 };
+	CHECK_EQ(posixCopyImage(one, one_whole, two, two_whole, POSIX_FILTER_BOX), D3D_OK);
+	// blue channel: (0 + 127 + 255 + 63) / 4 = 111.25, written as 111 (POINT would give 63)
+	CHECK_EQ(argb_at(one, 0, 0), 0xff00006fu);
+
+	// NONE into a larger destination: what the source does not cover is transparent black
+	PosixImage four = image_of(D3DFMT_A8R8G8B8, 4, 4);
+	for (unsigned int y = 0; y < 4; ++y) for (unsigned int x = 0; x < 4; ++x) set_argb(four, x, y, 0x12345678u);
+	const PosixRegion four_whole = { 0, 0, 4, 4 };
+	CHECK_EQ(posixCopyImage(four, four_whole, two, two_whole, POSIX_FILTER_NONE), D3D_OK);
+	CHECK_EQ(argb_at(four, 1, 1), 0xff00003fu);
+	CHECK_EQ(argb_at(four, 3, 3), 0x00000000u);
+
+	// POINT doubling: each source pixel becomes a 2x2 square
+	CHECK_EQ(posixCopyImage(four, four_whole, two, two_whole, POSIX_FILTER_POINT), D3D_OK);
+	CHECK_EQ(argb_at(four, 0, 3), 0xff0000ffu);
+	CHECK_EQ(argb_at(four, 3, 0), 0xff00007fu);
+
+	// LINEAR across a 2-pixel gradient into 4: the inner pixels blend
+	PosixImage ramp = image_of(D3DFMT_A8R8G8B8, 2, 1), wide = image_of(D3DFMT_A8R8G8B8, 4, 1);
+	set_argb(ramp, 0, 0, 0xff000000u); set_argb(ramp, 1, 0, 0xff0000ffu);
+	const PosixRegion ramp_whole = { 0, 0, 2, 1 }, wide_whole = { 0, 0, 4, 1 };
+	CHECK_EQ(posixCopyImage(wide, wide_whole, ramp, ramp_whole, POSIX_FILTER_LINEAR), D3D_OK);
+	CHECK_EQ(argb_at(wide, 0, 0), 0xff000000u);
+	CHECK_EQ(argb_at(wide, 1, 0) & 0xff, 0x40u);		// u = 0.25: a quarter of the way
+	CHECK_EQ(argb_at(wide, 2, 0) & 0xff, 0xbfu);		// u = 0.75
+	CHECK_EQ(argb_at(wide, 3, 0), 0xff0000ffu);
+}
+
+TEST(posix_fills_colour_and_depth)
+{
+	PosixImage target = image_of(D3DFMT_X8R8G8B8, 8, 8);
+	const PosixRegion part = { 2, 2, 4, 4 };
+	CHECK_EQ(posixFillImage(target, part, posixColorFromD3DColor(0x00336699u)), D3D_OK);
+	CHECK_EQ(argb_at(target, 2, 2), 0xff336699u);		// X8: the unused byte written as 0xff
+	CHECK_EQ(argb_at(target, 1, 1), 0u);
+	PosixImage dxt = image_of(D3DFMT_DXT1, 8, 8);
+	CHECK_EQ(posixFillImage(dxt, part, posixColorFromD3DColor(0)), D3DERR_INVALIDCALL);
+
+	PosixImage depth = image_of(D3DFMT_D24S8, 4, 4);
+	const PosixRegion all = { 0, 0, 4, 4 };
+	CHECK_EQ(posixFillDepth(depth, all, D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 1.0f, 3), D3D_OK);
+	CHECK_EQ(argb_at(depth, 0, 0), 0xffffff03u);
+	CHECK_EQ(posixFillDepth(depth, all, D3DCLEAR_STENCIL, 0.0f, 9), D3D_OK);	// the depth stays
+	CHECK_EQ(argb_at(depth, 3, 3), 0xffffff09u);
+	CHECK_EQ(posixFillDepth(depth, all, D3DCLEAR_ZBUFFER, 0.0f, 0), D3D_OK);		// the stencil stays
+	CHECK_EQ(argb_at(depth, 3, 3), 0x00000009u);
+	CHECK_EQ(posixFillDepth(target, all, D3DCLEAR_ZBUFFER, 0.0f, 0), D3DERR_INVALIDCALL);
 }
