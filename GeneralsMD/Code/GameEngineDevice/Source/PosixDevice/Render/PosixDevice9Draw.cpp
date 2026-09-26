@@ -34,7 +34,9 @@
 #include "ffvertex.h"
 
 #include <math.h>
+#include <set>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 //-------------------------------------------------------------------------------------------------
@@ -478,6 +480,95 @@ void PosixDevice9::Refuse_Draw(const std::string &reason)
 	}
 }
 
+// A development aid until A3d's capture: ZH_GPU_TRACE="1024x1024" prints the state of each draw whose
+// stage-0 texture is that size, once per distinct program pair and texture, with its first vertices.
+void PosixDevice9::Trace_Draw_If_Asked(const DrawCall &call, const std::string &programs,
+	PosixVertexBuffer9 *vertex_buffer, unsigned int stride)
+{
+	static const char *trace = getenv("ZH_GPU_TRACE");
+	if (trace == NULL || Textures[0] == NULL || Textures[0]->GetType() != D3DRTYPE_TEXTURE) {
+		return;
+	}
+	if (strcmp(trace, "alphatest") == 0) {
+		// Every alpha-tested draw: the trees, the foliage, the cut-out models.
+		if (RenderStates[D3DRS_ALPHATESTENABLE] == 0) {
+			return;
+		}
+	}
+	else {
+		unsigned int width = 0, height = 0;
+		if (sscanf(trace, "%ux%u", &width, &height) != 2) {
+			return;
+		}
+		D3DSURFACE_DESC desc;
+		static_cast<IDirect3DTexture9 *>(Textures[0])->GetLevelDesc(0, &desc);
+		if (desc.Width != width || desc.Height != height) {
+			return;
+		}
+	}
+	static std::set<std::string> seen;
+	char texture_name[32];
+	snprintf(texture_name, sizeof(texture_name), "%p", (void *)Textures[0]);
+	if (!seen.insert(programs + " " + texture_name).second || seen.size() > 64) {
+		return;
+	}
+	fprintf(stderr, "TRACE draw: type %u, %u primitives, FVF 0x%x, stride %u, programs %s\n", (unsigned)call.Type,
+		call.PrimitiveCount, (unsigned)FVF, stride, programs.c_str());
+	for (unsigned int stage = 0; stage < 3; ++stage) {
+		const RenderUInt32 *ts = TextureStageStates[stage];
+		unsigned int w = 0, h = 0, format = 0;
+		if (Textures[stage] != NULL && Textures[stage]->GetType() == D3DRTYPE_TEXTURE) {
+			D3DSURFACE_DESC d;
+			static_cast<IDirect3DTexture9 *>(Textures[stage])->GetLevelDesc(0, &d);
+			w = d.Width; h = d.Height; format = d.Format;
+		}
+		fprintf(stderr, "TRACE   stage %u: colour op %u (%x,%x,%x) alpha op %u (%x,%x,%x) tci 0x%x ttff %u; texture %ux%u fmt %u;"
+			" sampler u%u v%u min%u mag%u mip%u\n", stage, (unsigned)ts[D3DTSS_COLOROP], (unsigned)ts[D3DTSS_COLORARG0],
+			(unsigned)ts[D3DTSS_COLORARG1], (unsigned)ts[D3DTSS_COLORARG2], (unsigned)ts[D3DTSS_ALPHAOP],
+			(unsigned)ts[D3DTSS_ALPHAARG0], (unsigned)ts[D3DTSS_ALPHAARG1], (unsigned)ts[D3DTSS_ALPHAARG2],
+			(unsigned)ts[D3DTSS_TEXCOORDINDEX], (unsigned)ts[D3DTSS_TEXTURETRANSFORMFLAGS], w, h, format,
+			(unsigned)SamplerStates[stage][D3DSAMP_ADDRESSU], (unsigned)SamplerStates[stage][D3DSAMP_ADDRESSV],
+			(unsigned)SamplerStates[stage][D3DSAMP_MINFILTER], (unsigned)SamplerStates[stage][D3DSAMP_MAGFILTER],
+			(unsigned)SamplerStates[stage][D3DSAMP_MIPFILTER]);
+	}
+	const RenderUInt32 *rs = RenderStates;
+	fprintf(stderr, "TRACE   lighting %u colorvertex %u sources d%u a%u e%u s%u; blend %u %u/%u op %u; alphatest %u ref %u func %u;"
+		" z %u/%u; cull %u; fog %u; tfactor 0x%08x; ambient 0x%08x; specular %u\n", (unsigned)rs[D3DRS_LIGHTING],
+		(unsigned)rs[D3DRS_COLORVERTEX], (unsigned)rs[D3DRS_DIFFUSEMATERIALSOURCE], (unsigned)rs[D3DRS_AMBIENTMATERIALSOURCE],
+		(unsigned)rs[D3DRS_EMISSIVEMATERIALSOURCE], (unsigned)rs[D3DRS_SPECULARMATERIALSOURCE], (unsigned)rs[D3DRS_ALPHABLENDENABLE],
+		(unsigned)rs[D3DRS_SRCBLEND], (unsigned)rs[D3DRS_DESTBLEND], (unsigned)rs[D3DRS_BLENDOP], (unsigned)rs[D3DRS_ALPHATESTENABLE],
+		(unsigned)rs[D3DRS_ALPHAREF], (unsigned)rs[D3DRS_ALPHAFUNC], (unsigned)rs[D3DRS_ZENABLE], (unsigned)rs[D3DRS_ZWRITEENABLE],
+		(unsigned)rs[D3DRS_CULLMODE], (unsigned)rs[D3DRS_FOGENABLE], (unsigned)rs[D3DRS_TEXTUREFACTOR], (unsigned)rs[D3DRS_AMBIENT],
+		(unsigned)rs[D3DRS_SPECULARENABLE]);
+	fprintf(stderr, "TRACE   material diffuse %.2f %.2f %.2f %.2f ambient %.2f %.2f %.2f emissive %.2f %.2f %.2f; lights on:",
+		Material.Diffuse.r, Material.Diffuse.g, Material.Diffuse.b, Material.Diffuse.a, Material.Ambient.r, Material.Ambient.g,
+		Material.Ambient.b, Material.Emissive.r, Material.Emissive.g, Material.Emissive.b);
+	for (unsigned int i = 0; i < LIGHT_COUNT; ++i) {
+		if (LightsEnabled[i]) fprintf(stderr, " %u(type %u diffuse %.2f %.2f %.2f)", i, (unsigned)Lights[i].Type,
+			Lights[i].Diffuse.r, Lights[i].Diffuse.g, Lights[i].Diffuse.b);
+	}
+	fprintf(stderr, "\n");
+	const uint8_t *bytes = NULL;
+	if (call.UserVertices != NULL) {
+		bytes = (const uint8_t *)call.UserVertices;
+	}
+	else if (vertex_buffer != NULL) {
+		const unsigned int first = call.Indexed ? (unsigned int)call.BaseVertex + call.MinVertex : call.StartVertex;
+		bytes = vertex_buffer->storage().bytes() + StreamOffsets[0] + (size_t)first * stride;
+	}
+	for (unsigned int v = 0; bytes != NULL && v < 3; ++v) {
+		fprintf(stderr, "TRACE   vertex %u:", v);
+		for (unsigned int word = 0; word < stride / 4; ++word) {
+			uint32_t bits;
+			memcpy(&bits, bytes + (size_t)v * stride + word * 4, 4);
+			float value;
+			memcpy(&value, &bits, 4);
+			fprintf(stderr, " %08x(%g)", bits, value);
+		}
+		fprintf(stderr, "\n");
+	}
+}
+
 RenderResult PosixDevice9::DrawPrimitive(D3DPRIMITIVETYPE type, unsigned int start_vertex, unsigned int primitive_count)
 {
 	DrawCall call;
@@ -741,6 +832,9 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	else {
 		draw.Count = reads;
 	}
+
+	Trace_Draw_If_Asked(call, vertex_program.Key + " | " + pixel_program.Key,
+		vertex_buffer, stride);
 
 	// The constants, pushed only when they change.
 	SdlVertexConstants vertex_constants;
