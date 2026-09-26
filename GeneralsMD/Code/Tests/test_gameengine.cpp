@@ -14094,6 +14094,25 @@ TEST(death_and_veterancy_flags_put_value_zero_at_bit_31_as_windows_does)
 	}
 }
 
+// strtoul( text, NULL, 10 ) as Windows' 32-bit unsigned long answers it: the starting cash in a game's
+// options string (SC=) and the lobby's version numbers go through it.  Past 0xFFFFFFFF it saturates;
+// a 64-bit unsigned long would keep the low bits instead ("4294967296" would be 0).
+TEST(unsigned_text_parses_as_windows_32_bit_strtoul)
+{
+	CHECK_EQ(strtoulAsWindows("10000"), 10000u);
+	CHECK_EQ(strtoulAsWindows("  42abc"), 42u);
+	CHECK_EQ(strtoulAsWindows("+7"), 7u);
+	CHECK_EQ(strtoulAsWindows("4294967295"), 0xFFFFFFFFu);
+	CHECK_EQ(strtoulAsWindows("4294967296"), 0xFFFFFFFFu);		// the low bits would be 0
+	CHECK_EQ(strtoulAsWindows("99999999999999999999999"), 0xFFFFFFFFu);
+	CHECK_EQ(strtoulAsWindows("-1"), 0xFFFFFFFFu);
+	CHECK_EQ(strtoulAsWindows("-5"), 0xFFFFFFFBu);
+	CHECK_EQ(strtoulAsWindows("-4294967296"), 0xFFFFFFFFu);
+	CHECK_EQ(strtoulAsWindows(""), 0u);
+	CHECK_EQ(strtoulAsWindows("x1"), 0u);
+	CHECK_EQ(strtoulAsWindows("-"), 0u);
+}
+
 #include "test_minimap_input.inc"
 #include "test_selection_priority.inc"
 #include "test_widechar_width.inc"
