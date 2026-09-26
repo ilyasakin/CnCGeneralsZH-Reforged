@@ -134,8 +134,8 @@ static void drawFramerateBar(void);
 // The window the device draws into: C2's, and null under -headless.  On Windows, WinMain's HWND, which
 // RenderWindow is there.
 extern RenderWindow ApplicationHWnd;
-#include "zhio.h"		// zh_fopen, zh_remove, zh_mkdir: the engine's Windows-spelled paths (C1)
 #endif
+#include "zhio.h"		// zh_fopen, zh_remove, zh_mkdir: the engine's Windows-spelled paths (C1)
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -3579,82 +3579,14 @@ void W3DDisplay::setShroudLevel( Int x, Int y, CellShroudStatus setting )
 
 //=============================================================================
 ///Utility function to dump data into a .BMP file
-static void CreateBMPFile(char *pszFile, char *image, Int width, Int height)	// LPTSTR is char * here
-{ 
-#if defined(_WIN32)
-     HANDLE hf;                 // file handle 
-    BITMAPFILEHEADER hdr;       // bitmap file-header 
-    PBITMAPINFOHEADER pbih;     // bitmap info-header 
-    LPBYTE lpBits;              // memory pointer 
-    UnsignedInt dwTotal;              // total count of bytes 
-    UnsignedInt cb;                   // incremental count of bytes 
-    BYTE *hp;                   // byte pointer 
-    DWORD dwTmp; 
-
-    PBITMAPINFO pbmi; 
-
-    pbmi = (PBITMAPINFO) LocalAlloc(LPTR,sizeof(BITMAPINFOHEADER));
-    pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER); 
-    pbmi->bmiHeader.biWidth = width; 
-    pbmi->bmiHeader.biHeight = height; 
-    pbmi->bmiHeader.biPlanes = 1; 
-    pbmi->bmiHeader.biBitCount = 24;
-    pbmi->bmiHeader.biCompression = BI_RGB;
-    pbmi->bmiHeader.biSizeImage = (pbmi->bmiHeader.biWidth + 7) /8 * pbmi->bmiHeader.biHeight * 24;
-    pbmi->bmiHeader.biClrImportant = 0; 
-
-
-    pbih = (PBITMAPINFOHEADER) pbmi; 
-    lpBits = (LPBYTE) image;
-
-    // Create the .BMP file. 
-    hf = CreateFile(pszFile, 
-                   GENERIC_READ | GENERIC_WRITE, 
-                   (UnsignedInt) 0, 
-                    NULL, 
-                   CREATE_ALWAYS, 
-                   FILE_ATTRIBUTE_NORMAL, 
-                   (HANDLE) NULL); 
-    if (hf == INVALID_HANDLE_VALUE) 
-		return;
-    hdr.bfType = 0x4d42;        // 0x42 = "B" 0x4d = "M" 
-    // Compute the size of the entire file. 
-    hdr.bfSize = (UnsignedInt) (sizeof(BITMAPFILEHEADER) + 
-                 pbih->biSize + pbih->biClrUsed 
-                 * sizeof(RGBQUAD) + pbih->biSizeImage); 
-    hdr.bfReserved1 = 0; 
-    hdr.bfReserved2 = 0; 
-
-    // Compute the offset to the array of color indices. 
-    hdr.bfOffBits = (UnsignedInt) sizeof(BITMAPFILEHEADER) + 
-                    pbih->biSize + pbih->biClrUsed 
-                    * sizeof (RGBQUAD); 
-
-    // Copy the BITMAPFILEHEADER into the .BMP file. 
-    if (!WriteFile(hf, (LPVOID) &hdr, sizeof(BITMAPFILEHEADER), 
-        (LPDWORD) &dwTmp,  NULL)) 
-		return;
-
-    // Copy the BITMAPINFOHEADER and RGBQUAD array into the file. 
-    if (!WriteFile(hf, (LPVOID) pbih, sizeof(BITMAPINFOHEADER) + pbih->biClrUsed * sizeof (RGBQUAD),(LPDWORD) &dwTmp, NULL)) 
-		return;
-
-    // Copy the array of color indices into the .BMP file. 
-    dwTotal = cb = pbih->biSizeImage; 
-    hp = lpBits; 
-    if (!WriteFile(hf, (LPSTR) hp, (int) cb, (LPDWORD) &dwTmp,NULL)) 
-		return;
-
-    // Close the .BMP file. 
-     if (!CloseHandle(hf))
-		 return;
-
-    // Free memory. 
-	LocalFree( (HLOCAL) pbmi);
-#else
-	// A 24-bit bottom-up .bmp written by hand: the two headers are little-endian fields, put a byte at a
-	// time.  Unlike the Windows body, each row is padded to four bytes, as the format requires, and only
-	// the image's own 3 * width * height bytes are read.
+static void CreateBMPFile(char *pszFile, char *image, Int width, Int height)
+{
+	// A 24-bit bottom-up .bmp written by hand, on every platform: the two headers are little-endian
+	// fields, put a byte at a time.  Each row is padded to four bytes, as the format requires, and only
+	// the image's own 3 * width * height bytes are read.  The Windows writer this replaces sized the image
+	// (width + 7) / 8 * height * 24 bytes and wrote that many out of a 3 * width * height buffer: past its
+	// end whenever the width is not a multiple of 8 (a 1366-wide screen), and with unpadded rows, so a
+	// skewed picture, whenever it is not a multiple of 4 (defect #18).
 	FILE *fp = zh_fopen(pszFile, "wb");
 	if (fp == NULL)
 		return;
@@ -3684,7 +3616,6 @@ static void CreateBMPFile(char *pszFile, char *image, Int width, Int height)	// 
 		fwrite(pad, 1, stride - rowBytes, fp);
 	}
 	fclose(fp);
-#endif
 }
 
 // A system-memory copy of the back buffer (32-bit, not multisampled), NULL when that is

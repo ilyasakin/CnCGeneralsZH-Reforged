@@ -919,6 +919,17 @@ and x86_64); the original under the same catch-up schedules is the armed control
 Windows this changes grid heights on water-grid maps whenever the catch-up runs, back to EA's count.**
 Headless runs (one logic frame a pass) step as before. `WINDOWS-DEBT.md` has the row.
 
+**18. A screenshot reads past the end of its image when the width is not a multiple of 8 - fixed.**
+`W3DDisplay.cpp`'s `CreateBMPFile`, which writes every F12 screenshot and every `-video` frame, set
+`biSizeImage` to `(width + 7) / 8 * height * 24` and wrote that many bytes out of a buffer both callers
+allocate as `3 * width * height`. At a width that is a multiple of 8 the two agree; at any other, a
+1366x768 screen or a window of any size, it reads `3 * height * (8 * ceil(width / 8) - width)` bytes
+past the end (4,608 at 1366x768), and since it never pads a row to four bytes, a width that is not a
+multiple of 4 gives a skewed picture as well. Found writing A1's POSIX branch. **Fixed:** the portable
+writer A1 wrote, which reads exactly the image and pads each row, is the one writer on every platform
+(checked on a 5x3 image under AddressSanitizer and by macOS's own decoder). `WINDOWS-DEBT.md` has the
+row.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
@@ -975,6 +986,24 @@ hunting a crash or corruption that only one platform shows, look here first.**
   `test_premain_unicode` build each string type first in a static constructor. **The general rule:**
   anything reachable from a static constructor must not depend on another file's statics; on Windows
   the link order happens to work.
+- **A pointer truncated to 32 bits and dereferenced - fixed, and unreachable in the game.**
+  `WW3D2/surfaceclass.cpp`'s `SurfaceClass::FindBB` and `Is_Transparent_Column` computed a row's
+  address as `(unsigned char *)((unsigned int)lock_rect.pBits + offset)`, which on x64 drops the top 32
+  bits of the locked pointer and faults whenever the driver maps the surface above 4 GB. Their only
+  caller is `font3d.cpp`, and nothing in the game creates a `Font3DDataClass` (`Get_Font3DInstance`
+  has no caller outside WW3D2's asset manager), so no player reaches it. Clang refuses the cast; A1
+  made it plain pointer arithmetic.
+- **Two pointers truncated before they are subtracted - fixed, and correct in practice.**
+  `WW3D2/assetmgr.cpp` and `W3DAssetManager.cpp` sized a name as `((int)mesh_name) - ((int)name) + 1`.
+  The difference of two truncated addresses is the true difference modulo 2^32, so a name shorter than
+  2 GB comes out right, and it did; clang refuses the casts. Now `(int)(mesh_name - name) + 1`.
+- **A D3DX entry point declared with the wrong return type.** `d3dx9math.h`'s Windows
+  `D3DXMatrixInverseFunction` returns `HRESULT` where `D3DXMatrixInverse` returns a `D3DXMATRIX *`:
+  on x64 the pointer comes back truncated to its low 32 bits. No call site reads the result, so
+  nothing is wrong today; the first one that tests it against null would be.
+- **A vertex format and its structure disagree.** `dx8fvf.h`'s `DX8_FVF_XYZNUV2DMAP` declares three
+  texture sets (one, four and two floats, 52 bytes a vertex) and `VertexFormatXYZNUV2DMAP` holds only
+  the last two (48). Nothing sizes a buffer by either; `dx8fvf.cpp` only prints the format's name.
 
 ### "ctest is green" was not what it looked like
 
