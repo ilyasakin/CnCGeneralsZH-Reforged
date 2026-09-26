@@ -29,3 +29,9 @@
 
 #define INSTANTIATE_WELL_KNOWN_KEYS
 #include "Common/WellKnownKeys.h"
+
+// The keys must be constant-initialized (see WellKnownKeys.h and StaticNameKey), and this is the check
+// every compiler makes, MSVC included: a constexpr StaticNameKey compiles only if its constructor can
+// run at compile time on a string literal, which is exactly what each DEFINE_KEY above asks of it.
+static constexpr StaticNameKey s_constantInitProbe( "constantInitProbe" );
+
