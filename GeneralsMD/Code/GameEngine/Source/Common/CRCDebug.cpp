@@ -135,7 +135,15 @@ void outputCRCDumpLines( void )
 
 static AsciiString getFname(AsciiString path)
 {
-	return path.reverseFind('\\') + 1;
+	// __FILE__ is backslashed under MSVC and forward-slashed elsewhere.  reverseFind answers NULL for a
+	// separator that is not there, and NULL + 1 was the whole of the old answer off Windows: the first
+	// dump of a -DebugCRCFromFrame run took strlen of address 1.
+	const char *back = path.reverseFind('\\');
+	const char *forward = path.reverseFind('/');
+	const char *last = back;
+	if (forward != NULL && (last == NULL || forward > last))
+		last = forward;
+	return last != NULL ? AsciiString(last + 1) : path;
 }
 
 Int lastCRCDebugFrame = 0;
