@@ -1938,6 +1938,13 @@ add_lib_test(test_fontchars ww3d2 glyphrasteriser wwsaveload wwlib wwmath wwdebu
 add_executable(ffshader_dump ${TESTS}/ffshader_dump.cpp)
 target_include_directories(ffshader_dump PRIVATE ${TESTS})
 target_link_libraries(ffshader_dump PRIVATE ffvertex engineshader)
+
+# A3b: FFReference, D3D9's fixed-function pipeline in double precision from Microsoft's documentation
+# alone - the oracle A3's harness compares the GPU's fixed-function draws against.  Independent of
+# ffshader/ffvertex by construction: it shares no code or headers with them (see ffreference.h).
+add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp)
+target_include_directories(ffreference PUBLIC ${TESTS})
+add_lib_test(test_ffreference ffreference)
 endif()  # ZH_PLATFORM_POSIX - shader generator checks
 
 # Tools/bigfile.py reads and writes the game's BIG archives (that is how the shipped INIs
