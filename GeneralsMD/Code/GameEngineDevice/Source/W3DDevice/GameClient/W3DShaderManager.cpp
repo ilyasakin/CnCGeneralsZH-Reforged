@@ -240,7 +240,7 @@ static Bool createBloomTargets(IDirect3DTexture9 *sceneTexture)
 	if (s_bloomTexture[0] && s_bloomTexture[1]) return TRUE;
 
 	D3DSURFACE_DESC desc;
-	if (FAILED(sceneTexture->GetLevelDesc(0, &desc))) return FALSE;
+	if (Render_Failed(sceneTexture->GetLevelDesc(0, &desc))) return FALSE;
 	s_bloomWidth  = desc.Width  / BLOOM_DOWNSAMPLE;
 	s_bloomHeight = desc.Height / BLOOM_DOWNSAMPLE;
 	if (s_bloomWidth < 1 || s_bloomHeight < 1) return FALSE;
@@ -248,9 +248,9 @@ static Bool createBloomTargets(IDirect3DTexture9 *sceneTexture)
 	LPDIRECT3DDEVICE9 pDev = DX8Wrapper::_Get_D3D_Device();
 	for (Int i = 0; i < 2; i++)
 	{
-		if (FAILED(pDev->CreateTexture(s_bloomWidth, s_bloomHeight, 1, D3DUSAGE_RENDERTARGET,
+		if (Render_Failed(pDev->CreateTexture(s_bloomWidth, s_bloomHeight, 1, D3DUSAGE_RENDERTARGET,
 																	 desc.Format, D3DPOOL_DEFAULT, &s_bloomTexture[i], NULL))
-				|| FAILED(s_bloomTexture[i]->GetSurfaceLevel(0, &s_bloomSurface[i])))
+				|| Render_Failed(s_bloomTexture[i]->GetSurfaceLevel(0, &s_bloomSurface[i])))
 		{
 			releaseBloomTargets();
 			DEBUG_LOG(("Bloom: could not create %dx%d render targets - disabled\n", s_bloomWidth, s_bloomHeight));
@@ -265,11 +265,11 @@ static Bool createBloomTargets(IDirect3DTexture9 *sceneTexture)
 /** One screen-aligned quad covering the given rectangle of the current render target, sampling
 	[u0,v0]..[u1,v1] of whatever texture is in stage 0, modulated by colour. */
 static void drawBloomQuad(Real x, Real y, Real w, Real h,
-													Real u0, Real v0, Real u1, Real v1, DWORD color)
+													Real u0, Real v0, Real u1, Real v1, UnsignedInt color)
 {
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
-		DWORD color;
+		UnsignedInt color;
 		Real u, v;
 	} v[4];
 
@@ -297,7 +297,7 @@ static void renderBloom(IDirect3DTexture9 *sceneTexture, Real x, Real y, Real w,
 
 	LPDIRECT3DDEVICE9 pDev = DX8Wrapper::_Get_D3D_Device();
 	IDirect3DSurface9 *oldTarget = NULL, *oldDepth = NULL;
-	if (FAILED(pDev->GetRenderTarget(PRIMARY_RENDER_TARGET, &oldTarget)) || oldTarget == NULL) return;
+	if (Render_Failed(pDev->GetRenderTarget(PRIMARY_RENDER_TARGET, &oldTarget)) || oldTarget == NULL) return;
 	pDev->GetDepthStencilSurface(&oldDepth);	//can legitimately be NULL
 
 	//Bright pass.  Anything darker than the threshold subtracts away to black and what survives
@@ -404,7 +404,7 @@ Bool ScreenDefaultFilter::postRender(enum FilterModes mode, Coord2D &scrollDelta
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
-		DWORD color;   // diffuse color    
+		UnsignedInt color;   // diffuse color    
 		float	u;
 		float	v;
 	} v[4];
@@ -498,7 +498,7 @@ W3DFilterInterface *ScreenBWFilterList[]=
 Int ScreenBWFilter::init(void)
 {
 	Int res;
-	HRESULT hr;
+	RenderResult hr;
 
 	m_dwBWPixelShader = NULL;
 	m_curFadeFrame = 0;
@@ -514,7 +514,7 @@ Int ScreenBWFilter::init(void)
 		{
 			//this shader needs some assets that need to be loaded
 			//shader decleration
-			DWORD Declaration[]=
+			RenderUInt32 Declaration[]=
 			{
 				(D3DVSD_STREAM(0)),
 				(D3DVSD_REG(0, D3DVSDT_FLOAT3)), // Position
@@ -525,7 +525,7 @@ Int ScreenBWFilter::init(void)
 
 			//Monochrome pixel shader.
 			hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\monochrome.pso", &m_dwBWPixelShader);
-			if (FAILED(hr))
+			if (Render_Failed(hr))
 				return FALSE;
 
 			W3DFilters[FT_VIEW_BW_FILTER]=&screenBWFilter;
@@ -553,7 +553,7 @@ Bool ScreenBWFilter::postRender(enum FilterModes mode, Coord2D &scrollDelta,Bool
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
-		DWORD color;   // diffuse color    
+		UnsignedInt color;   // diffuse color    
 		float	u;
 		float	v;
 	} v[4];
@@ -742,7 +742,7 @@ Bool ScreenBWFilterDOT3::postRender(enum FilterModes mode, Coord2D &scrollDelta,
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
-		DWORD color;   // diffuse color    
+		UnsignedInt color;   // diffuse color    
 		float	u;
 		float	v;
 	} v[4];
@@ -766,7 +766,7 @@ Bool ScreenBWFilterDOT3::postRender(enum FilterModes mode, Coord2D &scrollDelta,
 	v[3].p = D3DXVECTOR4(  xpos-0.5f,  ypos-0.5f, 0.0f, 1.0f );
 	v[3].u = (Real)(xpos)/(Real)TheDisplay->getWidth();	v[3].v = (Real)(ypos)/(Real)TheDisplay->getHeight();
 	
-	DWORD currentFade=(((Int)((1.0f-m_curFadeValue) * 255.0f))<<24) | 0x00ffffff;	//store alpha value
+	UnsignedInt currentFade=(((Int)((1.0f-m_curFadeValue) * 255.0f))<<24) | 0x00ffffff;	//store alpha value
 
 	v[0].color = currentFade;
 	v[1].color = currentFade;
@@ -1003,7 +1003,7 @@ Bool ScreenCrossFadeFilter::postRender(enum FilterModes mode, Coord2D &scrollDel
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
-		DWORD color;   // diffuse color    
+		UnsignedInt color;   // diffuse color    
 		float	u;
 		float	v;
 		float	u1;
@@ -1050,7 +1050,7 @@ Bool ScreenCrossFadeFilter::postRender(enum FilterModes mode, Coord2D &scrollDel
 	v[3].u = (Real)(xpos)/(Real)TheDisplay->getWidth();	v[3].v = (Real)(ypos)/(Real)TheDisplay->getHeight();
 	v[3].u1 = 0.5f-radius;	v[3].v1 = 0.5f-radius;
 
-	DWORD diffuse = 0xffffffff;//((Int)((m_curFadeValue) * 255.0f) << 24) | 0x00ffffff;	//store alpha value in vertex diffuse
+	UnsignedInt diffuse = 0xffffffff;//((Int)((m_curFadeValue) * 255.0f) << 24) | 0x00ffffff;	//store alpha value in vertex diffuse
 
 	v[0].color = diffuse;
 	v[1].color = diffuse;
@@ -1172,7 +1172,7 @@ Bool ScreenMotionBlurFilter::postRender(enum FilterModes mode, Coord2D &scrollDe
 	Bool continueEffect = true;
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
-		DWORD color;   // diffuse color    
+		UnsignedInt color;   // diffuse color    
 		float	u;
 		float	v;
 	} v[4];
@@ -2190,7 +2190,7 @@ Int TerrainShaderPixelShader::init( void )
 		{
 			//this shader needs some assets that need to be loaded
 			//shader decleration
-			DWORD Declaration[]=
+			RenderUInt32 Declaration[]=
 			{
 				(D3DVSD_STREAM(0)),
 				(D3DVSD_REG(0, D3DVSDT_FLOAT3)), // Position
@@ -2201,18 +2201,18 @@ Int TerrainShaderPixelShader::init( void )
 			};
 
 			//base version which doesn't apply any noise textures.
-			HRESULT hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\terrain.pso", &m_dwBasePixelShader);
-			if (FAILED(hr))
+			RenderResult hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\terrain.pso", &m_dwBasePixelShader);
+			if (Render_Failed(hr))
 				return FALSE;
 
 			//version which blends 1 noise texture.
 			hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\terrainnoise.pso", &m_dwBaseNoise1PixelShader);
-			if (FAILED(hr))
+			if (Render_Failed(hr))
 				return FALSE;
 
 			//version which blends 2 noise textures.
 			hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\terrainnoise2.pso", &m_dwBaseNoise2PixelShader);
-			if (FAILED(hr))
+			if (Render_Failed(hr))
 				return FALSE;
 
 			W3DShaders[W3DShaderManager::ST_TERRAIN_BASE]=&terrainShaderPixelShader;
@@ -2489,7 +2489,7 @@ Int RoadShaderPixelShader::init( void )
 		{
 			//this shader needs some assets that need to be loaded
 			//shader decleration
-			DWORD Declaration[]=
+			RenderUInt32 Declaration[]=
 			{
 				(D3DVSD_STREAM(0)),
 				(D3DVSD_REG(0, D3DVSDT_FLOAT3)), // Position
@@ -2499,8 +2499,8 @@ Int RoadShaderPixelShader::init( void )
 			};
 
 			//version which blends 2 noise textures.
-			HRESULT hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\roadnoise2.pso", &m_dwBaseNoise2PixelShader);
-			if (FAILED(hr))
+			RenderResult hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\roadnoise2.pso", &m_dwBaseNoise2PixelShader);
+			if (Render_Failed(hr))
 				return FALSE;
 
 			//Only set this shader for use in dual noise mode.  The 2Stage shader will take care of
@@ -2841,27 +2841,27 @@ void W3DShaderManager::init(void)
 		m_currentChipset = res;	//cache the current chipset.
 
 		//Some of our effects require an offscreen render target, so try creating it here.
-		HRESULT hr=DX8Wrapper::_Get_D3D_Device()->GetRenderTarget(PRIMARY_RENDER_TARGET, &m_oldRenderSurface);
+		RenderResult hr=DX8Wrapper::_Get_D3D_Device()->GetRenderTarget(PRIMARY_RENDER_TARGET, &m_oldRenderSurface);
 
 		m_oldRenderSurface->GetDesc(&desc);
 
 		hr=DX8Wrapper::_Get_D3D_Device()->CreateTexture(desc.Width,desc.Height,1,D3DUSAGE_RENDERTARGET,desc.Format,D3DPOOL_DEFAULT,&m_renderTexture,NULL);
 
-		if (hr != S_OK)
+		if (hr != D3D_OK)
 		{
 			if (m_oldRenderSurface) m_oldRenderSurface->Release();
 			m_oldRenderSurface = NULL;
 			m_renderTexture = NULL;
 		} else {
 			hr = m_renderTexture->GetSurfaceLevel(0, &m_newRenderSurface);
-			if (hr != S_OK)
+			if (hr != D3D_OK)
 			{
 				if (m_renderTexture) m_renderTexture->Release();
 				m_renderTexture = NULL;
 				m_newRenderSurface = NULL;
 			}	else {
 				hr = DX8Wrapper::_Get_D3D_Device()->GetDepthStencilSurface(&m_oldDepthSurface);
-				if (hr != S_OK)
+				if (hr != D3D_OK)
 				{
 					if (m_newRenderSurface) m_newRenderSurface->Release();
 					if (m_renderTexture) m_renderTexture->Release();
@@ -3035,7 +3035,7 @@ void W3DShaderManager::drawViewport(Int color)
 
 	struct _TRANS_LIT_TEX_VERTEX {
 		D3DXVECTOR4 p;
-		DWORD color;   // diffuse color    
+		UnsignedInt color;   // diffuse color    
 		float	u;
 		float	v;
 	} v[4];
@@ -3093,9 +3093,9 @@ void W3DShaderManager::startRenderToTexture(void)
 	IDirect3DSurface9 *depthSurface = DX8Wrapper::_Get_Non_MultiSampled_Depth_Buffer();
 	if (depthSurface == NULL) depthSurface = m_oldDepthSurface;
 	DX8Wrapper::_Set_DX8_Render_Target(m_newRenderSurface,depthSurface);
-	HRESULT hr = S_OK;
-	DEBUG_ASSERTCRASH(hr==S_OK, ("Set target failed unexpectedly."));
-	if (hr != S_OK)
+	RenderResult hr = D3D_OK;
+	DEBUG_ASSERTCRASH(hr==D3D_OK, ("Set target failed unexpectedly."));
+	if (hr != D3D_OK)
 	{
 		rttComplain( "SetRenderTarget(texture) failed" );
 		return;
@@ -3109,7 +3109,7 @@ void W3DShaderManager::startRenderToTexture(void)
 		//a black world under a live UI, which is what bloom looked like with MSAA on.
 		D3DSURFACE_DESC depthDesc;
 		depthSurface->GetDesc(&depthDesc);
-		DWORD clearFlags = D3DCLEAR_ZBUFFER;
+		UnsignedInt clearFlags = D3DCLEAR_ZBUFFER;
 		if (depthDesc.Format == D3DFMT_D24S8 || depthDesc.Format == D3DFMT_D24X4S4 || depthDesc.Format == D3DFMT_D15S1)
 			clearFlags |= D3DCLEAR_STENCIL;
 		DX8Wrapper::_Get_D3D_Device()->Clear(0, NULL, clearFlags, 0, 1.0f, 0);
@@ -3151,11 +3151,11 @@ IDirect3DTexture9 *W3DShaderManager::endRenderToTexture(void)
 		return NULL;
 	}
 	DX8Wrapper::_Set_DX8_Render_Target(m_oldRenderSurface,m_oldDepthSurface);	//restore original render target
-	HRESULT hr = S_OK;
-	DEBUG_ASSERTCRASH(hr==S_OK, ("Set target failed unexpectedly."));
-	if (hr != S_OK)
+	RenderResult hr = D3D_OK;
+	DEBUG_ASSERTCRASH(hr==D3D_OK, ("Set target failed unexpectedly."));
+	if (hr != D3D_OK)
 		rttComplain( "SetRenderTarget(back buffer) failed - the frame is stuck in the texture" );
-	if (hr == S_OK)
+	if (hr == D3D_OK)
 	{
 		//assume render target texure will be in stage 0.  Most hardware has "conditional" support for
 		//non-power-of-2 textures so we must force some required states:
@@ -3286,7 +3286,7 @@ ChipsetType W3DShaderManager::getChipset( void )
 //=============================================================================
 /** Reads a compiled shader out of the file system into a buffer the caller frees with
 	HeapFree.  Returns NULL and leaves nothing allocated if the file is not there. */
-static const DWORD* readShaderBytecode(const char* strFilePath)
+static const RenderUInt32* readShaderBytecode(const char* strFilePath)
 {
 	File *file = TheFileSystem->openFile(strFilePath, File::READ | File::BINARY);
 	if (file == NULL)
@@ -3297,9 +3297,9 @@ static const DWORD* readShaderBytecode(const char* strFilePath)
 
 	FileInfo fileInfo;
 	TheFileSystem->getFileInfo(AsciiString(strFilePath), &fileInfo);
-	const DWORD dwFileSize = fileInfo.sizeLow;
+	const UnsignedInt dwFileSize = fileInfo.sizeLow;
 
-	const DWORD* pShader = (DWORD*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwFileSize);
+	const RenderUInt32* pShader = (RenderUInt32*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwFileSize);
 	if (pShader != NULL)
 	{
 		file->read((void *)pShader, dwFileSize);
@@ -3308,65 +3308,65 @@ static const DWORD* readShaderBytecode(const char* strFilePath)
 	return pShader;
 }
 
-HRESULT W3DShaderManager::LoadAndCreateD3DPixelShader(const char* strFilePath, IDirect3DPixelShader9** shader)
+RenderResult W3DShaderManager::LoadAndCreateD3DPixelShader(const char* strFilePath, IDirect3DPixelShader9** shader)
 {
 	if (getChipset() < DC_GENERIC_PIXEL_SHADER_1_1)
-		return E_FAIL;	//don't allow loading any shaders if hardware can't handle it.
+		return RENDER_FAIL;	//don't allow loading any shaders if hardware can't handle it.
 
-	const DWORD* pShader = readShaderBytecode(strFilePath);
+	const RenderUInt32* pShader = readShaderBytecode(strFilePath);
 	if (pShader == NULL)
-		return E_FAIL;
+		return RENDER_FAIL;
 
 	// The bytecode was compiled for D3D8 and does not load on a D3D9 device untouched;
 	// see d3d8shadertranslate.h for what has to be repaired and why.
 	std::string source;
-	const HRESULT hr = Create_Translated_Pixel_Shader(DX8Wrapper::_Get_D3D_Device(), pShader, shader,
+	const RenderResult hr = Create_Translated_Pixel_Shader(DX8Wrapper::_Get_D3D_Device(), pShader, shader,
 		&source);
 	HeapFree(GetProcessHeap(), 0, (void*)pShader);
 	dumpEngineShaderSource(strFilePath, source);
 
-	if (FAILED(hr))
+	if (Render_Failed(hr))
 	{
 		DEBUG_LOG(("SHADER: %s did not translate to Direct3D 9, hr=0x%08lx\n",
 			strFilePath, (unsigned long)hr));
-		return E_FAIL;
+		return RENDER_FAIL;
 	}
 
 	// Nothing transcribes a .pso yet, so this registration buys one thing: a refused draw can say
 	// which shader it was refused for instead of only that it was one of them.
 	Direct3D11_Register_Engine_Shader(*shader, strFilePath);
 
-	return S_OK;
+	return D3D_OK;
 }
 
-HRESULT W3DShaderManager::LoadAndCreateD3DVertexShader(const char* strFilePath, const DWORD* pDeclaration,
+RenderResult W3DShaderManager::LoadAndCreateD3DVertexShader(const char* strFilePath, const RenderUInt32* pDeclaration,
 	IDirect3DVertexShader9** shader, IDirect3DVertexDeclaration9** declaration)
 {
 	if (getChipset() < DC_GENERIC_PIXEL_SHADER_1_1)
-		return E_FAIL;	//don't allow loading any shaders if hardware can't handle it.
+		return RENDER_FAIL;	//don't allow loading any shaders if hardware can't handle it.
 
-	const DWORD* pShader = readShaderBytecode(strFilePath);
+	const RenderUInt32* pShader = readShaderBytecode(strFilePath);
 	if (pShader == NULL)
-		return E_FAIL;
+		return RENDER_FAIL;
 
 	std::string source;
-	const HRESULT hr = Create_Translated_Vertex_Shader(DX8Wrapper::_Get_D3D_Device(),
+	const RenderResult hr = Create_Translated_Vertex_Shader(DX8Wrapper::_Get_D3D_Device(),
 		pDeclaration, pShader, shader, declaration, &source);
 	HeapFree(GetProcessHeap(), 0, (void*)pShader);
 	dumpEngineShaderSource(strFilePath, source);
 
-	if (FAILED(hr))
+	if (Render_Failed(hr))
 	{
 		DEBUG_LOG(("SHADER: %s did not translate to Direct3D 9, hr=0x%08lx\n",
 			strFilePath, (unsigned long)hr));
-		return E_FAIL;
+		return RENDER_FAIL;
 	}
 
 	// The Direct3D 11 backend has a hand-written HLSL copy of some of these; the pointer is what
 	// tells a later bind which file it is looking at.
 	Direct3D11_Register_Engine_Shader(*shader, strFilePath);
 
-	return S_OK;
+	return D3D_OK;
 }
 
 //For the MP test, we're enforcing high min-spec requirements that need to be verified.
@@ -3806,7 +3806,7 @@ Int FlatTerrainShaderPixelShader::init( void )
 		{
 			//this shader needs some assets that need to be loaded
 			//shader decleration
-			DWORD Declaration[]=
+			RenderUInt32 Declaration[]=
 			{
 				(D3DVSD_STREAM(0)),
 				(D3DVSD_REG(0, D3DVSDT_FLOAT3)), // Position
@@ -3817,23 +3817,23 @@ Int FlatTerrainShaderPixelShader::init( void )
 			};
 
 			//base version which doesn't apply any noise textures.
-			HRESULT hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\fterrain.pso", &m_dwBasePixelShader);
-			if (FAILED(hr))
+			RenderResult hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\fterrain.pso", &m_dwBasePixelShader);
+			if (Render_Failed(hr))
 				return FALSE;
 
 			//base version which doesn't apply any shroud textures.
 			hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\fterrain0.pso", &m_dwBase0PixelShader);
-			if (FAILED(hr))
+			if (Render_Failed(hr))
 				return FALSE;
 
 			//version which blends 1 noise texture.
 			hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\fterrainnoise.pso", &m_dwBaseNoise1PixelShader);
-			if (FAILED(hr))
+			if (Render_Failed(hr))
 				return FALSE;
 
 			//version which blends 2 noise textures.
 			hr = W3DShaderManager::LoadAndCreateD3DPixelShader("shaders\\fterrainnoise2.pso", &m_dwBaseNoise2PixelShader);
-			if (FAILED(hr))
+			if (Render_Failed(hr))
 				return FALSE;
 
 			W3DShaders[W3DShaderManager::ST_FLAT_TERRAIN_BASE]=&flatTerrainShaderPixelShader;

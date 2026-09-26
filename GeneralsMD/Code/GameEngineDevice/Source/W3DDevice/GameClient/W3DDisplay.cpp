@@ -682,7 +682,7 @@ static void applyWindowFrame( Int mode )
 
 	ApplicationIsBorderless = ( mode == WINDOW_MODE_BORDERLESS );
 
-	DWORD style = WS_POPUP | WS_VISIBLE | WS_SYSMENU;
+	UnsignedInt style = WS_POPUP | WS_VISIBLE | WS_SYSMENU;
 	if( mode == WINDOW_MODE_WINDOWED )
 		style |= WS_DLGFRAME | WS_CAPTION | WS_MINIMIZEBOX;		// see WinMain: windowed means a real window
 
@@ -693,7 +693,7 @@ static void applyWindowFrame( Int mode )
 	// is about to cover the display is put at the monitor's corner now - otherwise it hangs off the
 	// bottom right by however far down the screen it happened to be sitting.
 	//
-	const RECT screen = chosenMonitor().rect;
+	const RenderRect screen = chosenMonitor().rect;
 	const UINT move =( mode == WINDOW_MODE_WINDOWED ) ? SWP_NOMOVE : 0;
 	::SetWindowPos( ApplicationHWnd,
 									( mode == WINDOW_MODE_WINDOWED ) ? HWND_TOP : HWND_TOPMOST,
@@ -714,7 +714,7 @@ static void sizeWindowToClient( Int mode, Int width, Int height )
 	if( mode == WINDOW_MODE_FULLSCREEN )
 		return;
 
-	RECT rect;
+	RenderRect rect;
 	rect.left = 0;
 	rect.top = 0;
 	rect.right = width;
@@ -724,7 +724,7 @@ static void sizeWindowToClient( Int mode, Int width, Int height )
 	const Int outerW = rect.right - rect.left;
 	const Int outerH = rect.bottom - rect.top;
 
-	const RECT screen = chosenMonitor().rect;
+	const RenderRect screen = chosenMonitor().rect;
 	Int x = screen.left, y = screen.top;
 	if( mode == WINDOW_MODE_WINDOWED )
 	{
@@ -3538,8 +3538,8 @@ static void CreateBMPFile(LPTSTR pszFile, char *image, Int width, Int height)
     BITMAPFILEHEADER hdr;       // bitmap file-header 
     PBITMAPINFOHEADER pbih;     // bitmap info-header 
     LPBYTE lpBits;              // memory pointer 
-    DWORD dwTotal;              // total count of bytes 
-    DWORD cb;                   // incremental count of bytes 
+    UnsignedInt dwTotal;              // total count of bytes 
+    UnsignedInt cb;                   // incremental count of bytes 
     BYTE *hp;                   // byte pointer 
     DWORD dwTmp; 
 
@@ -3562,7 +3562,7 @@ static void CreateBMPFile(LPTSTR pszFile, char *image, Int width, Int height)
     // Create the .BMP file. 
     hf = CreateFile(pszFile, 
                    GENERIC_READ | GENERIC_WRITE, 
-                   (DWORD) 0, 
+                   (UnsignedInt) 0, 
                     NULL, 
                    CREATE_ALWAYS, 
                    FILE_ATTRIBUTE_NORMAL, 
@@ -3571,14 +3571,14 @@ static void CreateBMPFile(LPTSTR pszFile, char *image, Int width, Int height)
 		return;
     hdr.bfType = 0x4d42;        // 0x42 = "B" 0x4d = "M" 
     // Compute the size of the entire file. 
-    hdr.bfSize = (DWORD) (sizeof(BITMAPFILEHEADER) + 
+    hdr.bfSize = (UnsignedInt) (sizeof(BITMAPFILEHEADER) + 
                  pbih->biSize + pbih->biClrUsed 
                  * sizeof(RGBQUAD) + pbih->biSizeImage); 
     hdr.bfReserved1 = 0; 
     hdr.bfReserved2 = 0; 
 
     // Compute the offset to the array of color indices. 
-    hdr.bfOffBits = (DWORD) sizeof(BITMAPFILEHEADER) + 
+    hdr.bfOffBits = (UnsignedInt) sizeof(BITMAPFILEHEADER) + 
                     pbih->biSize + pbih->biClrUsed 
                     * sizeof (RGBQUAD); 
 
@@ -3613,7 +3613,7 @@ static IDirect3DSurface9 *captureBackBuffer(void)
 {
 	IDirect3DDevice9 *dev = DX8Wrapper::_Get_D3D_Device();
 	IDirect3DSurface9 *bb = NULL;
-	if (dev == NULL || FAILED(dev->GetBackBuffer(PRIMARY_SWAP_CHAIN, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || bb == NULL)
+	if (dev == NULL || Render_Failed(dev->GetBackBuffer(PRIMARY_SWAP_CHAIN, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || bb == NULL)
 		return NULL;
 
 	D3DSURFACE_DESC desc;
@@ -3630,17 +3630,17 @@ static IDirect3DSurface9 *captureBackBuffer(void)
 		IDirect3DSurface9 *resolved = NULL;
 		IDirect3DSurface9 *source = bb;
 		if (desc.MultiSampleType != D3DMULTISAMPLE_NONE
-			&& SUCCEEDED(dev->CreateRenderTarget(desc.Width, desc.Height, desc.Format,
+			&& Render_Succeeded(dev->CreateRenderTarget(desc.Width, desc.Height, desc.Format,
 					D3DMULTISAMPLE_NONE, 0, FALSE, &resolved, NULL))
-			&& SUCCEEDED(dev->StretchRect(bb, NULL, resolved, NULL, D3DTEXF_NONE)))
+			&& Render_Succeeded(dev->StretchRect(bb, NULL, resolved, NULL, D3DTEXF_NONE)))
 		{
 			source = resolved;
 		}
 
-		if (SUCCEEDED(source->GetDesc(&desc)) && desc.MultiSampleType == D3DMULTISAMPLE_NONE
-			&& SUCCEEDED(dev->CreateOffscreenPlainSurface(desc.Width, desc.Height, desc.Format,
+		if (Render_Succeeded(source->GetDesc(&desc)) && desc.MultiSampleType == D3DMULTISAMPLE_NONE
+			&& Render_Succeeded(dev->CreateOffscreenPlainSurface(desc.Width, desc.Height, desc.Format,
 					D3DPOOL_SYSTEMMEM, &copy, NULL)) && copy != NULL
-			&& FAILED(dev->GetRenderTargetData(source, copy)))
+			&& Render_Failed(dev->GetRenderTargetData(source, copy)))
 		{
 			copy->Release();
 			copy = NULL;
@@ -3698,7 +3698,7 @@ static Bool writeFrameBMP(char *pathname)
 		return TRUE;
 	}
 
-	RECT bounds;
+	RenderRect bounds;
 	IDirect3DSurface9 *fb = captureBackBuffer();
 	if (fb != NULL)
 	{
@@ -3711,7 +3711,7 @@ static Bool writeFrameBMP(char *pathname)
 		// Lock front buffer and copy
 		fb=DX8Wrapper::_Get_DX8_Front_Buffer();
 
-		POINT point;
+		RenderPoint point;
 		GetClientRect(ApplicationHWnd,&bounds);
 		point.x=bounds.left; point.y=bounds.top;
 		ClientToScreen(ApplicationHWnd, &point);
@@ -3727,12 +3727,12 @@ static Bool writeFrameBMP(char *pathname)
 	// inside the copy loop below, which is a screenshot taking the game down. Clamp to the surface.
 	{
 		D3DSURFACE_DESC fbDesc;
-		if (fb != NULL && SUCCEEDED(fb->GetDesc(&fbDesc)))
+		if (fb != NULL && Render_Succeeded(fb->GetDesc(&fbDesc)))
 		{
 			if (bounds.left < 0) bounds.left = 0;
 			if (bounds.top < 0) bounds.top = 0;
-			if (bounds.right > (LONG)fbDesc.Width) bounds.right = (LONG)fbDesc.Width;
-			if (bounds.bottom > (LONG)fbDesc.Height) bounds.bottom = (LONG)fbDesc.Height;
+			if (bounds.right > (Int)fbDesc.Width) bounds.right = (Int)fbDesc.Width;
+			if (bounds.bottom > (Int)fbDesc.Height) bounds.bottom = (Int)fbDesc.Height;
 		}
 
 		if (fb == NULL || bounds.right <= bounds.left || bounds.bottom <= bounds.top)
@@ -4217,8 +4217,8 @@ void W3DDisplay::dumpAssetUsage(const char* mapname)
 //-------------------------------------------------------------------------------------------------
 static void drawFramerateBar(void)
 {
-	static DWORD prevTime = Clock_Milliseconds();
-	DWORD now = Clock_Milliseconds();
+	static UnsignedInt prevTime = Clock_Milliseconds();
+	UnsignedInt now = Clock_Milliseconds();
 	Real percTime = (1000.0f / (now - prevTime) ) / (1000.0f / TheGlobalData->m_framesPerSecondLimit);
 
 	if (percTime > 1.0f)

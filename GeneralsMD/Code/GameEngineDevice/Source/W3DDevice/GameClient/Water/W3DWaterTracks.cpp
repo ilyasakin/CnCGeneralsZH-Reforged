@@ -62,6 +62,7 @@
 #include "camera.h"
 #include "assetmgr.h"
 #include "WW3D2/DX8Wrapper.h"
+#include "Platform/RenderTypes.h"
 
 //#pragma optimize("", off)
 
@@ -1169,9 +1170,9 @@ static void TestWaterUpdate(void)
 	static WaterTracksObj *track=NULL,*track2=NULL;
 	static Int trackEditMode=0;
 	static waveType currentWaveType = WaveTypeOcean;
-	POINT	screenPoint;
-	POINT	endPoint;
-	static POINT	mouseAnchor;
+	RenderPoint	screenPoint;
+	RenderPoint	endPoint;
+	static RenderPoint	mouseAnchor;
 	static Int		haveStart=0;
 	static Int		haveEnd=0;
 	static Coord3D	terrainPointStart,terrainPointEnd;

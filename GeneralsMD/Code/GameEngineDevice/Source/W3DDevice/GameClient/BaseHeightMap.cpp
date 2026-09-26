@@ -353,7 +353,7 @@ void BaseHeightMapRenderObjClass::applyScorchTextureLOD(void)
 {
 #ifdef DO_SCORCH
 	if (m_scorchTexture && m_scorchTexture->Peek_D3D_Texture())
-		m_scorchTexture->Peek_D3D_Texture()->SetLOD((DWORD)m_currentTextureLOD);
+		m_scorchTexture->Peek_D3D_Texture()->SetLOD((UnsignedInt)m_currentTextureLOD);
 #endif
 }
 

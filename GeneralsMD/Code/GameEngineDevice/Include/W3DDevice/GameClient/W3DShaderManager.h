@@ -46,6 +46,7 @@ enum CpuType : Int;
 enum GraphicsVenderID;
 
 #include <d3d9.h>
+#include "Platform/RenderTypes.h"
 
 class TextureClass;	///forward reference
 /** System for managing complex rendering settings which are either not handled by
@@ -97,10 +98,10 @@ public:
 	///Return last activated shader.
 	static inline ShaderTypes getCurrentShader(void) {return m_currentShader;}
 	/// Loads a .pso file, translates its D3D8 bytecode and creates the pixel shader.
-	static HRESULT LoadAndCreateD3DPixelShader(const char* strFilePath, IDirect3DPixelShader9** shader);
+	static RenderResult LoadAndCreateD3DPixelShader(const char* strFilePath, IDirect3DPixelShader9** shader);
 	/// Loads a .vso file with the D3D8 declaration array that belongs to it, and creates
 	/// both the vertex shader and the D3D9 declaration that has to be bound beside it.
-	static HRESULT LoadAndCreateD3DVertexShader(const char* strFilePath, const DWORD* pDeclaration,
+	static RenderResult LoadAndCreateD3DVertexShader(const char* strFilePath, const RenderUInt32* pDeclaration,
 		IDirect3DVertexShader9** shader, IDirect3DVertexDeclaration9** declaration);
 
 	static Bool testMinimumRequirements(ChipsetType *videoChipType, CpuType *cpuType, Int *cpuFreq, Int *numRAM, Real *intBenchIndex, Real *floatBenchIndex, Real *memBenchIndex);

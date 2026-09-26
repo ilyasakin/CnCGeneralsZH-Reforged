@@ -58,6 +58,7 @@
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
 #include "W3DDevice/GameClient/Heightmap.h"
+#include "Platform/RenderTypes.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -104,7 +105,7 @@ static Int drawStartY=0;
 struct SHADOW_DECAL_VERTEX	//vertex structure passed to D3D
 {
 		float x,y,z;
-		DWORD diffuse;
+		UnsignedInt diffuse;
 		float u,v;
 }; 
 
@@ -296,7 +297,7 @@ Bool W3DProjectedShadowManager::ReAcquireResources(void)
 	DEBUG_ASSERTCRASH(m_pDev, ("Trying to ReAquireResources on W3DProjectedShadowManager without device"));
 	DEBUG_ASSERTCRASH(shadowDecalIndexBufferD3D == NULL && shadowDecalIndexBufferD3D == NULL, ("ReAquireResources not released in W3DProjectedShadowManager"));
 
-	if (FAILED(m_pDev->CreateIndexBuffer
+	if (Render_Failed(m_pDev->CreateIndexBuffer
 	(
 		SHADOW_DECAL_INDEX_SIZE*sizeof(WORD), 
 		D3DUSAGE_WRITEONLY|D3DUSAGE_DYNAMIC, 
@@ -312,7 +313,7 @@ Bool W3DProjectedShadowManager::ReAcquireResources(void)
 	if (shadowDecalVertexBufferD3D == NULL)
 	{	// Create vertex buffer
 
-		if (FAILED(m_pDev->CreateVertexBuffer
+		if (Render_Failed(m_pDev->CreateVertexBuffer
 		(
 			SHADOW_DECAL_VERTEX_SIZE*sizeof(SHADOW_DECAL_VERTEX),
 			D3DUSAGE_WRITEONLY|D3DUSAGE_DYNAMIC, 
@@ -617,7 +618,7 @@ enum BlendDirection
 
 //Vertex alpha values for each blend direction assuming tile vertices
 //start at top left corner and continue counter-clockwise
-DWORD BDToVA[9][4]=
+UnsignedInt BDToVA[9][4]=
 {
 	{0xff000000,0xff000000,0xff000000,0xff000000},
 	{0,0,0xff000000,0xff000000},

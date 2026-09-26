@@ -69,6 +69,7 @@
 #include "WW3D2/colorspace.h"
 
 #include "WW3D2/shdlib.h"
+#include "Platform/RenderTypes.h"
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -1308,7 +1309,7 @@ void renderStenciledPlayerColor( UnsignedInt color, UnsignedInt stencilRef, Bool
 {
 	struct _TRANSLITVERTEX {
 	    Vector4 p;
-		DWORD color;   // diffuse color    
+		UnsignedInt color;   // diffuse color    
 	} v[4];
 
 	Int xpos, ypos, width, height;
@@ -1347,7 +1348,7 @@ void renderStenciledPlayerColor( UnsignedInt color, UnsignedInt stencilRef, Bool
 	// Set stencil states
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_STENCILENABLE, TRUE );
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_ZENABLE, TRUE );
-	DWORD	oldColorWriteEnable=0x12345678;
+	RenderUInt32	oldColorWriteEnable=0x12345678;
 	if (clear)
 	{	//we want to clear the stencil buffer to some known value whereever a player index is stored
 		Int occludedMask=TheW3DShadowManager->getStencilShadowMask();

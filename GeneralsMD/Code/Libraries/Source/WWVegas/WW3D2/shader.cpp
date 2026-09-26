@@ -430,7 +430,7 @@ void ShaderClass::Apply()
 
 	if(diff & (ShaderClass::MASK_COLORMASK | ShaderClass::MASK_SRCBLEND | ShaderClass::MASK_DSTBLEND | ShaderClass::MASK_ALPHATEST))
 	{
-		ULONG planeMask = 0xffffff;
+		uint32 planeMask = 0xffffff;
 
 		if(Get_Color_Mask() != ShaderClass::COLOR_WRITE_ENABLE)
 			planeMask = 0;
@@ -534,20 +534,20 @@ void ShaderClass::Apply()
 	// Defaults
 	
 	D3DTEXTUREOP	PricOp	= D3DTOP_SELECTARG1;
-	DWORD				PricArg1 = D3DTA_DIFFUSE;
-	DWORD				PricArg2 = D3DTA_DIFFUSE;
+	uint32				PricArg1 = D3DTA_DIFFUSE;
+	uint32				PricArg2 = D3DTA_DIFFUSE;
 
 	D3DTEXTUREOP	PriaOp	 = D3DTOP_SELECTARG1;	
-	DWORD			PriaArg1 = D3DTA_DIFFUSE;
-	DWORD			PriaArg2 = D3DTA_DIFFUSE;
+	uint32			PriaArg1 = D3DTA_DIFFUSE;
+	uint32			PriaArg2 = D3DTA_DIFFUSE;
 
 	D3DTEXTUREOP	SeccOp	 = D3DTOP_DISABLE;
-	DWORD			SeccArg1 = D3DTA_TEXTURE;
-	DWORD			SeccArg2 = D3DTA_CURRENT;
+	uint32			SeccArg1 = D3DTA_TEXTURE;
+	uint32			SeccArg2 = D3DTA_CURRENT;
 
 	D3DTEXTUREOP	SecaOp	 = D3DTOP_DISABLE;
-	DWORD			SecaArg1 = D3DTA_TEXTURE;
-	DWORD			SecaArg2 = D3DTA_CURRENT;
+	uint32			SecaArg1 = D3DTA_TEXTURE;
+	uint32			SecaArg2 = D3DTA_CURRENT;
 
 	bool voodoo3=(DX8Wrapper::Get_Current_Caps()->Get_Vendor()==DX8Caps::VENDOR_3DFX) &&
 					 (DX8Wrapper::Get_Current_Caps()->Get_Device()==DX8Caps::DEVICE_3DFX_VOODOO_3);
@@ -925,7 +925,7 @@ void ShaderClass::Apply()
 			// If stage 0 has a diffuse input
 			// and stage 1 has an input put the diffuse in stage 2			
 			
-			DWORD tex_arg=D3DTA_CURRENT;
+			uint32 tex_arg=D3DTA_CURRENT;
 			if(Get_Texturing() == ShaderClass::TEXTURING_ENABLE) {
 				tex_arg=D3DTA_TEXTURE;
 			}

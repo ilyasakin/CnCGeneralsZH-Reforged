@@ -34,8 +34,11 @@
 		 It goes to "<file>.<pid>" and is renamed over the file, so a reader sees the old file or the
 		 new one.  There is no locking: the last writer wins.
 	 - A write the reader would not read back as written is refused: a line ending in the value, a
-		 value over 255 bytes, or blanks at either end of it (the reader trims them), or an empty one
-		 (the reader takes an empty value as missing).
+		 value over 255 bytes, or blanks at either end of it (the reader trims them).
+	 - An empty value is written as "name =", which the reader takes as missing.  Windows stores an
+		 empty string, and a read of it succeeds with ""; every reader of the one key the game writes
+		 empty, the HTTP proxy (cleared in Options), takes "" and missing alike as "no proxy", so the
+		 two behave the same.
 
 	 Windows has the registry, and none of this. */
 
@@ -54,7 +57,8 @@ AsciiString registryFileKey( const char *tree, const AsciiString &path, const As
 Bool readRegistryFileAt( const char *file, const AsciiString &name, AsciiString &val );
 
 /** Sets `name` to `val` in the Registry.ini at `file`, creating the file if it is not there; FALSE if
-	* the value would not read back as written, or any step fails, and the file is then unchanged. */
+	* the value would not read back as written (an empty one: would not read as missing), or any step
+	* fails, and the file is then unchanged. */
 Bool writeRegistryFileAt( const char *file, const AsciiString &name, const AsciiString &val );
 
 /** readRegistryFileAt and writeRegistryFileAt on this user's Registry.ini (findRegistryFile). */

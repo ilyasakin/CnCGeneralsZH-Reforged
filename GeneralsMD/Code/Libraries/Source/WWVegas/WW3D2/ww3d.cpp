@@ -220,7 +220,7 @@ unsigned													WW3D::NPatchesLevel=1;
 bool														WW3D::IsTexturingEnabled=true;
 bool										WW3D::IsColoringEnabled=false;
 
-static HWND												_Hwnd = NULL;		// Not a member to hide windows from WW3D users
+static RenderWindow												_Hwnd = NULL;		// Not a member to hide windows from WW3D users
 static int												_TextureReduction = 0;
 static int												_TextureMinDim = 1;
 static bool												_LargeTextureExtraReductionEnabled = false;
@@ -274,7 +274,7 @@ WW3DErrorType WW3D::Init(void *hwnd, char *defaultpal, bool lite)
 {
 	assert(IsInitted == false);
 	WWDEBUG_SAY(("WW3D::Init hwnd = %p\n",hwnd));
-	_Hwnd = (HWND)hwnd;
+	_Hwnd = (RenderWindow)hwnd;
 	Lite = lite;
 
 	/*
@@ -806,7 +806,7 @@ WW3DErrorType WW3D::Begin_Render(bool clear,bool clearz,const Vector3 & color, f
 
 	WWPROFILE("WW3D::Begin_Render");
 	WWASSERT(IsInitted);
-	HRESULT hr;
+	RenderResult hr;
 
 	SNAPSHOT_SAY(("==========================================\r\n"));
 	SNAPSHOT_SAY(("========== WW3D::Begin_Render ============\r\n"));
@@ -1366,7 +1366,7 @@ void WW3D::Make_Screen_Shot( const char * filename_base , const float gamma, con
 	D3DSURFACE_DESC desc;
 	fb->GetDesc(&desc);
 
-	RECT bounds;
+	RenderRect bounds;
 	GetWindowRect(_Hwnd,&bounds);
 
 	D3DLOCKED_RECT lrect;
@@ -1495,7 +1495,7 @@ void WW3D::Start_Movie_Capture( const char * filename_base, float frame_rate )
 	WWASSERT( !IsCapturing);
 	IsCapturing = true;
 
-	RECT bounds;
+	RenderRect bounds;
 	GetWindowRect(_Hwnd,&bounds);
 	int height=bounds.bottom-bounds.top;
 	int width=bounds.right-bounds.left;
@@ -1704,7 +1704,7 @@ void WW3D::Update_Movie_Capture( void )
 	D3DSURFACE_DESC desc;
 	fb->GetDesc(&desc);
 
-	RECT bounds;
+	RenderRect bounds;
 	GetWindowRect(_Hwnd,&bounds);
 
 	D3DLOCKED_RECT lrect;
