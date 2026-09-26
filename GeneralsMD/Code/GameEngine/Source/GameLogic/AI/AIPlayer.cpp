@@ -75,6 +75,7 @@
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/JetAIUpdate.h"		// a Comanche is a jet with no runway
 #include <map>
+#include "Platform/MsvcFloatCasts.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -3704,7 +3705,7 @@ Int AIPlayer::computeBuildDelay( Real seconds, Int money, Int poorAt, Int wealth
 	}	else if (money > wealthyAt) {
 		seconds = seconds/wealthyMod;
 	}
-	return (Int)(seconds*LOGICFRAMES_PER_SECOND/rateScale);
+	return floatToIntAsMsvc(seconds*LOGICFRAMES_PER_SECOND/rateScale);
 }
 
 //----------------------------------------------------------------------------------------------------------
