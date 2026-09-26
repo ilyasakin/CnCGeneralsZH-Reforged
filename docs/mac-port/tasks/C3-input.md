@@ -3,7 +3,7 @@
 - **Milestone:** M4
 - **Depends on:** C2, D4
 - **Blocks:** nothing
-- **Status:** C3a in progress (-47); C3b with A1
+- **Status:** C3a merged; C3b on its branch (-47)
 - **Size:** `Win32Mouse.cpp`, `Win32DIKeyboard.cpp` (`Win32DIMouse.cpp` is already out of the
   build)
 
@@ -113,6 +113,40 @@ W3DGameClient off Windows, so that is where the platform choice goes.
   - The double-click value itself varying: the machine's setting is 500 ms, the same as the fallback.
     The test shows only that NSEvent's class is present and asked.
   - Edge scrolling and the radar drag in play, which need the game on screen (M4).
+
+## C3b, 2026-09-26 (-47): the game makes the SDL input, through W3DGameClient's own factories
+
+- **`W3DGameClient.h`.** A1 had left the keyboard and mouse factories to a subclass off Windows. Both
+  factories are W3DGameClient's own again.
+  - createKeyboard is `DirectInputKeyboard` on Windows and `SdlKeyboard` elsewhere.
+  - createMouse is **`W3DMouse` on both**, so the W3D cursor modes (RM_W3D, RM_POLYGON, RM_DX8) come
+    along off Windows too.
+  - `TheWin32Mouse` stays Windows-only; `SdlMouse::active()` plays its part.
+  - -18's `PosixW3DGameClient` needs no input overrides, and any interim ones it gains are deleted
+    here.
+- **`W3DMouse.h`.** Off Windows the base is `SdlMouse`, through `typedef SdlMouse Win32Mouse;`, which is
+  commented as an engine class name kept so that `W3DMouse.cpp`'s text is the same on both platforms.
+- **`W3DMouse.cpp`,** back in A1's `w3ddevice`:
+  - `SetCursor(NULL)` becomes `SDL_HideCursor()` (three sites).
+  - RM_DX8's `GetCursorPos`/`ScreenToClient` becomes `SDL_GetMouseState` scaled to game pixels.
+  - `extern HWND ApplicationHWnd` is Windows-only.
+  - The in-class `MouseThreadClass::MouseThreadClass()` qualification, which MSVC accepts and C++ does
+    not, has a plain `#else`.
+  - `HRESULT` becomes `RenderResult`, A1's spelling, which is HRESULT on Windows.
+- **`D3D9Posix.h`** gains `D3DCURSOR_IMMEDIATE_UPDATE` (1). `d3d9posix_check.py` agrees on all 157
+  macros.
+- **`sdlinput`.** The SDL input files are their own library, which both `w3ddevice` and `sdldevice`
+  link, so that sdldevice can take w3ddevice for the engine's W3D factories without a cycle.
+- **Headless.** Windows' `LoadCursorFromFile` needs no display, so a headless Windows run loads the
+  cursors. SDL's need SDL's video, which -headless never starts, and each one would fail with a
+  DEBUG_ASSERTCRASH in a debug build. `SdlMouse::initCursorResources` returns first without video.
+  `test_sdl_input` shows it with a counting file system: no cursor file is opened without video, and
+  the same call opens one with video. It is red with the guard removed.
+- **Windows view** (`windows_view_diff.py` against 73e148ef): W3DGameClient.h and W3DMouse.h are
+  IDENTICAL. W3DMouse.cpp differs in the one `HRESULT res` → `RenderResult res` line, the same type.
+  SdlMouse.cpp, D3D9Posix.h and the test are not in the Windows build.
+- **Cannot see:** W3DMouse's W3D cursor modes drawing (that needs the renderer drawing, D4), and the
+  game's input in play (M4).
 
 ## Done when
 
