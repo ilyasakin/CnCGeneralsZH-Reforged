@@ -412,7 +412,7 @@ engine's own writes go through the file system and resolve correctly.
 **`zh_stat`** joins the forwarders: on Windows it is `stat`, the CRT's POSIX name, as the one engine
 call site already spelled it; on POSIX it resolves, then stats.
 
-**The sites: 77 calls in 30 files.** Every raw `fopen`, `remove`, `rename`, `access`, `_open`, `stat`
+**The sites: 78 calls in 30 files.** Every raw `fopen`, `remove`, `rename`, `access`, `_open`, `stat`
 and `unlink` whose path the engine spelled, in code the macOS build compiles, now uses its `zh_`
 form. On Windows each is the same call, inline. They cover:
 - the save, load and map writers;
@@ -422,7 +422,7 @@ form. On Windows each is the same call, inline. They cover:
 - the model-checksum cache;
 - `StatsCollector`, `MiniLog`, the perf and CRC dumps, `ThingFactory`'s exports, `DataChunk`'s
   temp file, `Debug.cpp`'s log rotation, and the GameSpy/LAN files;
-- WWLib's `mixfile`, `argv`, `Wwutil`'s `miscutil`;
+- WWLib's `mixfile`, `argv`, and `Wwutil`'s `miscutil` (its `Remove_File` POSIX arm is `zh_unlink`, as `DeleteFile` removes files only);
 - **`RawFileClass`'s POSIX arms** (its four `open`s and its `unlink`). Set_Name's inert `_UNIX` arm,
   which lowercased names and rewrote backslashes, is removed: it is what D1 rules out.
 

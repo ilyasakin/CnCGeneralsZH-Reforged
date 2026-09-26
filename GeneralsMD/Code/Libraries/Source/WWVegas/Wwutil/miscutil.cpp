@@ -259,7 +259,7 @@ void cMiscUtil::Remove_File(LPCSTR filename)
 #ifdef _WIN32
 	::DeleteFile(filename);
 #else
-	::remove(filename);	// like DeleteFile, a missing file is a quiet failure
+	zh_unlink(filename);	// like DeleteFile: a file only, and a missing one is a quiet failure
 #endif
 }
 
