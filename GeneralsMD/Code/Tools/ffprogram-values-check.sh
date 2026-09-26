@@ -6,7 +6,9 @@
 # header and ffprogram.h side by side and static_assert every value, with x86_64-w64-mingw32-g++.
 #
 #   1. against d3d8types.h: every opcode, register type, source modifier, rasterizer output, the
-#      version tokens, the end and comment tokens, co-issue, and the parameter-token fields;
+#      version tokens, the end and comment tokens, co-issue, and the parameter-token fields; the vertex
+#      declaration's token types, fields, D3DVSDT_ types and D3DVSDE_ registers, and every literal
+#      declaration token test_ffprogram writes, against the D3DVSD_ macros that make it;
 #   2. against d3d9types.h: the same fields as D3D9 names them (its register number is the 11 bits
 #      the driver pages give; D3D8's mask is wider, and shader model 1 never reaches the difference);
 #   3. the armed control: unit 1 with one assertion made false must NOT compile, so a pass means the
@@ -68,6 +70,31 @@ SAME(RESULTSHIFT_SHIFT, D3DSP_DSTSHIFT_SHIFT); SAME(RESULTSHIFT_MASK, D3DSP_DSTS
 SAME(SWIZZLE_SHIFT, D3DSP_SWIZZLE_SHIFT); SAME(SWIZZLE_MASK, D3DSP_SWIZZLE_MASK);
 SAME(SRCMOD_SHIFT, D3DSP_SRCMOD_SHIFT); SAME(SRCMOD_MASK, D3DSP_SRCMOD_MASK);
 SAME(ADDRESS_RELATIVE, 1u << D3DVS_ADDRESSMODE_SHIFT);
+// The vertex declaration's tokens (decodeD3D8Declaration), and the tokens its test writes as literals
+namespace D8 = FFRef::D3D8;
+namespace DT = FFRef::Declaration;
+SAME(D8::TOKEN_TYPE_SHIFT, D3DVSD_TOKENTYPESHIFT); SAME(7u << D8::TOKEN_TYPE_SHIFT, D3DVSD_TOKENTYPEMASK);
+SAME(D8::TOKEN_NOP, D3DVSD_TOKEN_NOP); SAME(D8::TOKEN_STREAM, D3DVSD_TOKEN_STREAM);
+SAME(D8::TOKEN_STREAMDATA, D3DVSD_TOKEN_STREAMDATA); SAME(D8::TOKEN_TESSELLATOR, D3DVSD_TOKEN_TESSELLATOR);
+SAME(D8::TOKEN_CONSTMEM, D3DVSD_TOKEN_CONSTMEM); SAME(D8::TOKEN_EXT, D3DVSD_TOKEN_EXT); SAME(D8::TOKEN_END, D3DVSD_TOKEN_END);
+SAME(D8::DECLARATION_END, D3DVSD_END()); SAME(D8::STREAM_NUMBER_MASK, D3DVSD_STREAMNUMBERMASK);
+SAME(D8::STREAM_TESS_BIT, D3DVSD_STREAMTESSMASK); SAME(D8::DATA_LOAD_SKIP_BIT, D3DVSD_DATALOADTYPEMASK);
+SAME(D8::DATA_TYPE_SHIFT, D3DVSD_DATATYPESHIFT); SAME(D8::DATA_TYPE_MASK, D3DVSD_DATATYPEMASK);
+SAME(D8::SKIP_COUNT_SHIFT, D3DVSD_SKIPCOUNTSHIFT); SAME(D8::SKIP_COUNT_MASK, D3DVSD_SKIPCOUNTMASK);
+SAME(D8::VERTEX_REG_MASK, D3DVSD_VERTEXREGMASK);
+SAME(D8::POSITION, D3DVSDE_POSITION); SAME(D8::BLENDWEIGHT, D3DVSDE_BLENDWEIGHT); SAME(D8::BLENDINDICES, D3DVSDE_BLENDINDICES);
+SAME(D8::NORMAL, D3DVSDE_NORMAL); SAME(D8::PSIZE, D3DVSDE_PSIZE); SAME(D8::DIFFUSE, D3DVSDE_DIFFUSE);
+SAME(D8::SPECULAR, D3DVSDE_SPECULAR); SAME(D8::TEXCOORD0, D3DVSDE_TEXCOORD0); SAME(D8::TEXCOORD7, D3DVSDE_TEXCOORD7);
+SAME(D8::POSITION2, D3DVSDE_POSITION2); SAME(D8::NORMAL2, D3DVSDE_NORMAL2);
+SAME(DT::FLOAT1, D3DVSDT_FLOAT1); SAME(DT::FLOAT2, D3DVSDT_FLOAT2); SAME(DT::FLOAT3, D3DVSDT_FLOAT3);
+SAME(DT::FLOAT4, D3DVSDT_FLOAT4); SAME(DT::D3DCOLOR, D3DVSDT_D3DCOLOR); SAME(DT::UBYTE4, D3DVSDT_UBYTE4);
+SAME(DT::SHORT2, D3DVSDT_SHORT2); SAME(DT::SHORT4, D3DVSDT_SHORT4);
+SAME(0x20000000u, D3DVSD_STREAM(0)); SAME(0x20000001u, D3DVSD_STREAM(1)); SAME(0x30000000u, D3DVSD_STREAM_TESS());
+SAME(0x40020000u, D3DVSD_REG(D3DVSDE_POSITION, D3DVSDT_FLOAT3)); SAME(0x40020001u, D3DVSD_REG(1, D3DVSDT_FLOAT3));
+SAME(0x40040002u, D3DVSD_REG(2, D3DVSDT_D3DCOLOR)); SAME(0x40010007u, D3DVSD_REG(D3DVSDE_TEXCOORD0, D3DVSDT_FLOAT2));
+SAME(0x40070003u, D3DVSD_REG(3, D3DVSDT_SHORT4)); SAME(0x40040005u, D3DVSD_REG(5, D3DVSDT_D3DCOLOR));
+SAME(0x40020010u, D3DVSD_REG(D3DVSDE_NORMAL2, D3DVSDT_FLOAT3)); SAME(0x50020000u, D3DVSD_SKIP(2));
+SAME(0x82000000u, D3DVSD_CONST(0, 1)); SAME(0x60020001u, D3DVSD_TESSNORMAL(0, 1)); SAME(0x00000000u, D3DVSD_NOP());
 ARMED_CONTROL
 EOF
 
@@ -109,7 +136,7 @@ compile() {	# compile <unit> [<control text>]
 
 status=0
 if compile d3d8.cpp; then
-	echo "ok: ffprogram.h's values equal MinGW-w64's d3d8types.h (opcodes, registers, modifiers, fields, versions)"
+	echo "ok: ffprogram.h's values equal MinGW-w64's d3d8types.h (opcodes, registers, modifiers, fields, versions, and the vertex declaration's tokens, types and registers)"
 else
 	echo "FAIL: against d3d8types.h:"; grep -m5 "error" "$WORK/err.txt"; status=1
 fi

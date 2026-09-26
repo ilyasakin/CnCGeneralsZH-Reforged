@@ -739,3 +739,107 @@ TEST(ffprogram_declaration_inputs_expand_as_the_pages_say)
 	CHECK( !declarationInputs( bytes, &normal1, 1, in, present, error ) );
 	CHECK( !declarationInputs( bytes, &ubyte4n, 1, in, present, error ) );
 }
+
+TEST(ffprogram_d3d8_declaration_decodes_the_engines_tokens)
+{
+	using namespace FFRef::D3D8;
+	// Trees' declaration as capture v3 recorded it: STREAM(0), REG(0, FLOAT3), REG(1, FLOAT3), REG(2, D3DCOLOR),
+	// REG(7, FLOAT2), END.  D1 packs them from byte 0: 0, 12, 24, 28.
+	const uint32_t trees[] = { 0x20000000u, 0x40020000u, 0x40020001u, 0x40040002u, 0x40010007u, 0xFFFFFFFFu };
+	std::vector<RegisterBinding> b;
+	std::string error;
+	CHECK( decodeD3D8Declaration( trees, 6, b, error ) );
+	CHECK_EQ( b.size(), (size_t)4 );
+	const RegisterBinding want[ 4 ] = { { 0, 0, 0, Declaration::FLOAT3 }, { 0, 12, 1, Declaration::FLOAT3 },
+		{ 0, 24, 2, Declaration::D3DCOLOR }, { 0, 28, 7, Declaration::FLOAT2 } };
+	for (size_t i = 0; i < b.size() && i < 4; ++i)
+	{
+		CHECK_EQ( b[i].reg, want[i].reg ); CHECK_EQ( b[i].offset, want[i].offset );
+		CHECK_EQ( b[i].type, want[i].type ); CHECK_EQ( b[i].stream, want[i].stream );
+	}
+	// The same layout as D3D9 elements, through the mapping page, reads back the same
+	const DeclarationElement e[] = { { 0, 28, Declaration::FLOAT2, 0, Declaration::TEXCOORD, 0 },
+		{ 0, 0, Declaration::FLOAT3, 0, Declaration::POSITION, 0 }, { 0, 12, Declaration::FLOAT3, 0, Declaration::BLENDWEIGHT, 0 },
+		{ 0, 24, Declaration::D3DCOLOR, 0, Declaration::BLENDINDICES, 0 } };
+	std::vector<RegisterBinding> fromElements;
+	CHECK( bindingsFromElements( e, 4, fromElements, error ) );
+	CHECK_EQ( compareBindings( b, fromElements ), std::string() );
+	// and one element moved, retyped or missing is named
+	DeclarationElement moved[ 4 ];
+	memcpy( moved, e, sizeof( e ) );
+	moved[0].offset = 32;
+	moved[2].type = Declaration::FLOAT4;
+	CHECK( bindingsFromElements( moved, 4, fromElements, error ) );
+	CHECK_EQ( compareBindings( b, fromElements ),
+		std::string( "v1: stream 0 offset 12 type 2 against stream 0 offset 12 type 3\n"
+			"v7: stream 0 offset 28 type 1 against stream 0 offset 32 type 1\n" ) );
+	CHECK( bindingsFromElements( e, 3, fromElements, error ) );
+	CHECK_EQ( compareBindings( b, fromElements ), std::string( "v2: only the first binds it\n" ) );
+	// two elements on one register would hide one from the comparison: refused
+	const DeclarationElement twice[] = { e[1], e[1] };
+	CHECK( !bindingsFromElements( twice, 2, fromElements, error ) && error.find( "bound twice" ) != std::string::npos );
+
+	// SKIP counts DWORDs, NOP is passed over, each stream packs from its own byte 0
+	const uint32_t skips[] = { 0x20000000u, 0x40020000u, 0x00000000u, 0x50020000u, 0x40070003u, 0x40040005u,
+		0x20000001u, 0x40010007u, 0xFFFFFFFFu, 0x40020009u };
+	CHECK( decodeD3D8Declaration( skips, 10, b, error ) );
+	const RegisterBinding want2[ 4 ] = { { 0, 0, 0, Declaration::FLOAT3 }, { 0, 20, 3, Declaration::SHORT4 },
+		{ 0, 28, 5, Declaration::D3DCOLOR }, { 1, 0, 7, Declaration::FLOAT2 } };
+	CHECK_EQ( b.size(), (size_t)4 );		// nothing after END
+	for (size_t i = 0; i < b.size() && i < 4; ++i)
+	{
+		CHECK_EQ( b[i].reg, want2[i].reg ); CHECK_EQ( b[i].offset, want2[i].offset );
+		CHECK_EQ( b[i].type, want2[i].type ); CHECK_EQ( b[i].stream, want2[i].stream );
+	}
+
+	// Every D2 refusal, by name
+	struct Refused { uint32_t token[ 3 ]; const char *says; };
+	const Refused refused[] = {
+		{ { 0x30000000u, 0x40020000u, 0xFFFFFFFFu }, "STREAM_TESS" },
+		{ { 0x20000000u, 0x60020001u, 0xFFFFFFFFu }, "TESSELLATOR" },
+		{ { 0x20000000u, 0x82000000u, 0xFFFFFFFFu }, "CONSTMEM" },
+		{ { 0x20000000u, 0xA0000000u, 0xFFFFFFFFu }, "EXT" },
+		{ { 0x20000000u, 0x40020010u, 0xFFFFFFFFu }, "past v15" },		// D3DVSDE_NORMAL2
+		{ { 0x20000000u, 0x40080000u, 0xFFFFFFFFu }, "no D3DVSDT_ type" },
+		{ { 0x20000000u, 0x40020003u, 0x40010003u }, "bound twice" },
+		{ { 0x40020000u, 0xFFFFFFFFu, 0 }, "before any" },
+		{ { 0x20000000u, 0x40020000u, 0xE0000000u }, "without every bit" },
+		{ { 0x20000000u, 0x40020000u, 0x00000000u }, "no D3DVSD_END" },
+	};
+	for (size_t i = 0; i < sizeof( refused ) / sizeof( refused[0] ); ++i)
+	{
+		error.clear();
+		CHECK( !decodeD3D8Declaration( refused[i].token, 3, b, error ) );
+		CHECK( error.find( refused[i].says ) != std::string::npos );
+	}
+}
+
+TEST(ffprogram_d3d8_bindings_feed_the_same_inputs)
+{
+	// Trees' vertex: position, a second FLOAT3, a colour, a texture coordinate - fed through the D3D8
+	// bindings and through the equivalent D3D9 elements, register for register
+	uint8_t bytes[ 36 ] = {};
+	const float f[ 8 ] = { 1, 2, 3, -4, 5.5f, -6, 0.125f, 0.875f };
+	memcpy( bytes, f, 24 );
+	const uint32_t colour = 0x11223344u;
+	memcpy( bytes + 24, &colour, 4 );
+	memcpy( bytes + 28, f + 6, 8 );
+	const uint32_t trees[] = { 0x20000000u, 0x40020000u, 0x40020001u, 0x40040002u, 0x40010007u, 0xFFFFFFFFu };
+	std::vector<RegisterBinding> b;
+	std::string error;
+	CHECK( decodeD3D8Declaration( trees, 6, b, error ) );
+	double a[ 16 ][ 4 ], d[ 16 ][ 4 ];
+	unsigned presentA = 0, presentD = 0;
+	CHECK( registerInputs( bytes, &b[0], (int)b.size(), a, presentA, error ) );
+	const DeclarationElement e[] = { { 0, 0, Declaration::FLOAT3, 0, Declaration::POSITION, 0 },
+		{ 0, 12, Declaration::FLOAT3, 0, Declaration::BLENDWEIGHT, 0 }, { 0, 24, Declaration::D3DCOLOR, 0, Declaration::BLENDINDICES, 0 },
+		{ 0, 28, Declaration::FLOAT2, 0, Declaration::TEXCOORD, 0 } };
+	CHECK( declarationInputs( bytes, e, 4, d, presentD, error ) );
+	CHECK_EQ( presentA, (1u << 0) | (1u << 1) | (1u << 2) | (1u << 7) );
+	CHECK_EQ( presentA, presentD );
+	CHECK( memcmp( a, d, sizeof( a ) ) == 0 );
+	CHECK_NEAR( a[1][0], -4.0, 0.0 ); CHECK_NEAR( a[2][0], 0x22 / 255.0, 1e-12 ); CHECK_NEAR( a[7][1], 0.875, 0.0 );
+	// a stream-1 binding is not this vertex's
+	const RegisterBinding other = { 1, 0, 0, Declaration::FLOAT3 };
+	CHECK( !registerInputs( bytes, &other, 1, a, presentA, error ) );
+}
