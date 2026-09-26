@@ -45,8 +45,7 @@
  *   (ZENABLE = USEW); cube or volume textures at a stage the cascade reads; TCI SPHEREMAP (no page
  *   defines it); texture generation or TTFF on pretransformed (XYZRHW) vertices; MAG/MIN filter NONE,
  *   PYRAMIDALQUAD, GAUSSIANQUAD, CONVOLUTIONMONO, and ANISOTROPIC with MAXANISOTROPY > 1; sRGB reads or
- *   writes; D3DRS_WRAPn cylindrical wrapping; ALPHAOP DISABLE under an enabled COLOROP ("undefined
- *   behavior", D3DTEXTUREOP); a colour-only D3DTOP used as ALPHAOP; RESULTARG other than CURRENT or
+ *   writes; D3DRS_WRAPn cylindrical wrapping; a colour-only D3DTOP used as ALPHAOP; RESULTARG other than CURRENT or
  *   TEMP; a stage reading D3DTA_TEXTURE with no texture bound, except the documented case of COLORARG1.
  *
  * NAMED CHOICES (where the pages are silent, contradictory, or image-only)
@@ -123,6 +122,14 @@
  *       stage n+1 reads is first multiplied by stage n+1's texture colour (the page's wording).
  *   N27 The halfway vector without LOCALVIEWER is norm((0,0,1) + Ldir), as "Specular Lighting" writes it
  *       (with it, norm(norm(-Vcamera) + Ldir)).
+ *   N28 A stage whose TEXCOORDINDEX names a coordinate set the vertices lack reads u, v = (0, 0)
+ *       (D3DTSS_TEXCOORDINDEX: "the system defaults to the u and v coordinates (0,0)"); the page names
+ *       no third or fourth component, so the set is padded as any 2-component set is (N13).
+ *   N29 ALPHAOP DISABLE under an enabled COLOROP is "undefined behavior" (D3DTEXTUREOP, D3DTOP_DISABLE),
+ *       and the game does it.  It is drawn rather than refused: that stage's alpha is unconstrained, with
+ *       CURRENT's alpha passed through as the nominal and 0 and 1 as the envelope's variants.  Every
+ *       later use of alpha - an operation, the alpha test, the blend - is linear or a threshold in it,
+ *       so the two extremes bound what any value could give.  The pixels it moves carry ZONE_UNDEFINED.
  */
 
 #ifndef FFREFERENCE_H
@@ -289,7 +296,8 @@ enum Zone			///< why a pixel's envelope is wider than its nominal value (the doc
 	ZONE_LOD = 4,			///< an LOD shift changes it (mip transitions, mag/min crossover)
 	ZONE_ALPHA_TEST = 8,	///< its alpha is within Freedoms::alphaRef of ALPHAREF
 	ZONE_DEPTH = 16,		///< its depth test is a tie, or the depth under it was ambiguous
-	ZONE_STENCIL = 32		///< the stencil under it was ambiguous
+	ZONE_STENCIL = 32,		///< the stencil under it was ambiguous
+	ZONE_UNDEFINED = 64		///< a state the pages call undefined changes it (N29): allowed, never a clean pass
 };
 
 struct Target
@@ -376,7 +384,7 @@ struct Comparison
 	long exact;			///< within base of the nominal value, every channel
 	long inFreedom;		///< not exact, but inside the envelope widened by base: a documented freedom
 	long outside;		///< neither: a failure
-	long zoneCounts[6];	///< for inFreedom pixels, how many carried each Zone bit (bit order)
+	long zoneCounts[7];	///< for inFreedom pixels, how many carried each Zone bit (bit order)
 	long histogram[256];///< max channel |gpu - nominal| in 1/255 steps, all pixels
 	int worstX, worstY;	///< the worst outside pixel, or -1
 	double worst;		///< its distance outside the envelope, 0..1
