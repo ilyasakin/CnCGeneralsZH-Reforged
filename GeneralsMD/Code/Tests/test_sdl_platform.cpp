@@ -114,6 +114,74 @@ TEST(display_modes_come_from_sdl_sorted_once_each_and_above_the_floor)
 	ThePlatformDisplays = NULL;
 }
 
+namespace {
+
+// Two monitors as a desk might have them: a 2560x1440 primary, and a Retina panel of 1512x982 points
+// to its right, which is 3024x1964 pixels.
+int fake_monitors(MonitorEntry *entries, int capacity)
+{
+	if (capacity < 2) return 0;
+	memset(entries, 0, 2 * sizeof(entries[0]));
+	strcpy(entries[0].device, "\\\\.\\DISPLAY1");
+	entries[0].number = 1;
+	entries[0].rect.right = 2560;
+	entries[0].rect.bottom = 1440;
+	entries[0].primary = true;
+	strcpy(entries[1].device, "\\\\.\\DISPLAY2");
+	entries[1].number = 2;
+	entries[1].rect.left = 2560;
+	entries[1].rect.right = 2560 + 3024;
+	entries[1].rect.bottom = 1964;
+	return 2;
+}
+
+int fake_modes(const char *, DisplayModeEntry *entries, int capacity)
+{
+	if (capacity < 1) return 0;
+	entries[0].width = 800;
+	entries[0].height = 600;
+	return 1;
+}
+
+const PlatformDisplays TheFakeDisplays = { fake_monitors, fake_modes };
+
+} // namespace
+
+// Options.ini names no resolution on a first run: the game starts at the monitor's own size in pixels,
+// the one Options.ini's Monitor names or the primary, and at the floor when there is no display at all.
+TEST(a_first_run_starts_at_the_monitors_own_size)
+{
+	int width = 0, height = 0;
+	ThePlatformDisplays = NULL;
+	firstRunResolution("", &width, &height);
+	CHECK_EQ(width, 800);		// headless: no displays, the floor as before
+	CHECK_EQ(height, 600);
+
+	ThePlatformDisplays = &TheFakeDisplays;
+	firstRunResolution("", &width, &height);
+	CHECK_EQ(width, 2560);
+	CHECK_EQ(height, 1440);
+	firstRunResolution("\\\\.\\DISPLAY2", &width, &height);
+	CHECK_EQ(width, 3024);		// pixels, not the panel's points
+	CHECK_EQ(height, 1964);
+	firstRunResolution("\\\\.\\DISPLAY7", &width, &height);		// unplugged since: the primary
+	CHECK_EQ(width, 2560);
+	CHECK_EQ(height, 1440);
+
+	// Over SDL's own list: the offscreen driver's display, at its desktop size in pixels.
+	CHECK(start_offscreen_video());
+	ThePlatformDisplays = &TheSdlDisplays;
+	firstRunResolution(NULL, &width, &height);
+	const SDL_DisplayMode *desktop = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+	CHECK(desktop != NULL);
+	if (desktop != NULL) {
+		const double density = desktop->pixel_density > 0 ? desktop->pixel_density : 1.0;
+		CHECK_EQ(width, (int)lround(desktop->w * density));
+		CHECK_EQ(height, (int)lround(desktop->h * density));
+	}
+	ThePlatformDisplays = NULL;
+}
+
 TEST(message_box_layout_is_windows_buttons_ids_default_and_icon)
 {
 	// The assertion box: Abort, Retry, Ignore, Ignore the default, an error.
