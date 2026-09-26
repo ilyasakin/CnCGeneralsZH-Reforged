@@ -198,7 +198,7 @@ you start. That commit is the lock.
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | claimed | -18 |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
 | C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | in progress: lower half (the Miles API on miniaudio) in review; upper half open | -a9 |
-| C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | not started | |
+| C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | claimed | -18 |
 | D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | in progress: recon and PR1 merged; PRs 2-8 need Windows (was -8d) | |
 | D2 | [Abstract the backend interface](tasks/D2-backend-interface.md) | M3 | D1 | not started | |
 | D3 | [Shader generators target SDL3 GPU](tasks/D3-shader-generators-ir.md) (decision 4) | M3 | — | done: SDL3 target, compile seam, POSIX twin test and D4's contract; 49/49 on Metal and Vulkan (-a9) | |
