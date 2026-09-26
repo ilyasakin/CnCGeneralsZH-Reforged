@@ -24,6 +24,8 @@
 
 #include "ffreference/ffprogram.h"
 
+#include <float.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -165,6 +167,98 @@ void checkCensus( const Program &p, const Instruction &in, size_t i, std::vector
 	}
 }
 
+/// The channels of source `s` an instruction reads, as a mask of components (after the swizzle)
+unsigned readMask( const Instruction &in, int s )
+{
+	const Operand &o = in.src[s];
+	unsigned channels = 0;
+	switch (in.opcode)
+	{
+		case OP_DP3: channels = 0x7; break;
+		case OP_DP4: case OP_M4x4: channels = 0xF; break;
+		case OP_RCP: channels = 0x1; break;
+		case OP_TEXBEM: channels = 0x3; break;		// the red and green: du, dv
+		default: channels = in.dst.mask; break;
+	}
+	unsigned mask = 0;
+	for (int c = 0; c < 4; ++c)
+		if (channels & (1u << c))
+			mask |= 1u << o.swizzle[c];
+	return mask;
+}
+
+/// A register the program can write, as one number: type * 16 + index (temps, t, a0, the outputs)
+int slot( const Operand &o ) { return (int)o.type * 16 + o.index; }
+
+/// What the pages require beyond the census: registers read only after they are written, and each
+/// instruction's own restrictions
+void checkPages( const Program &p, std::vector<std::string> &refusals )
+{
+	const bool ps = p.kind == PROGRAM_PIXEL;
+	unsigned written[ 8 * 16 ] = {};
+	bool bumpRead[ 4 ] = {};
+	for (size_t i = 0; i < p.code.size(); ++i)
+	{
+		const Instruction &in = p.code[i];
+		if (in.opcode == OP_DEF)
+			continue;
+		for (int s = 0; s < in.sources; ++s)
+		{
+			const Operand &o = in.src[s];
+			// "Registers - ps_1_X" and "Temporary Register - vs": a temporary is read only after a write;
+			// a ps_1_1 texture register only after tex or texbem loaded it
+			if (o.type == REG_TEMP || (ps && o.type == REG_TEXTURE))
+				if ((readMask( in, s ) & ~written[slot( o )]) != 0)
+					refusals.push_back( at( i, "reads a register channel no earlier instruction wrote" ) );
+			if (!ps && o.relative && written[slot( Operand{ REG_ADDR, 0, 0, { 0, 1, 2, 3 }, 0, false } )] == 0)
+				refusals.push_back( at( i, "relative addressing before a0 is loaded (\"Address Register - vs\")" ) );
+			// texbem - ps: "Register data that has been read by a texbem ... cannot be read later, except by
+			// another texbem"
+			if (ps && o.type == REG_TEXTURE && bumpRead[o.index] && in.opcode != OP_TEXBEM)
+				refusals.push_back( at( i, "reads a texture register a texbem has read (texbem - ps)" ) );
+		}
+		if (ps && in.opcode == OP_TEXBEM)
+		{
+			if (in.src[0].type != REG_TEXTURE || in.src[0].index >= in.dst.index)
+				refusals.push_back( at( i, "texbem t(m), t(n) needs m > n (texbem - ps)" ) );
+			else
+				bumpRead[in.src[0].index] = true;
+		}
+		if (!ps && in.opcode == OP_RCP && !(in.src[0].swizzle[0] == in.src[0].swizzle[1]
+				&& in.src[0].swizzle[1] == in.src[0].swizzle[2] && in.src[0].swizzle[2] == in.src[0].swizzle[3]))
+			refusals.push_back( at( i, "rcp without a replicate swizzle (rcp - vs)" ) );
+		if (!ps && in.opcode == OP_M4x4)
+		{
+			// m4x4 - vs: the xyzw mask (its masking page also allows .xyz; the stricter holds here), no
+			// modifier or swizzle on either source (the page contradicts itself on src0), dest not src0
+			if (in.dst.mask != 0xF)
+				refusals.push_back( at( i, "m4x4 without the xyzw mask" ) );
+			for (int s = 0; s < 2; ++s)
+				if (in.src[s].modifier != SRC_NONE || !identitySwizzle( in.src[s] ))
+					refusals.push_back( at( i, "m4x4 with a source modifier or swizzle" ) );
+			if (in.dst.type == in.src[0].type && in.dst.index == in.src[0].index)
+				refusals.push_back( at( i, "m4x4 whose dest is its src0" ) );
+		}
+		// P7: a co-issued pair where either reads a channel the other writes
+		if (in.coissue && i > 0)
+		{
+			const Instruction &a = p.code[i - 1];
+			for (int k = 0; k < 2; ++k)
+			{
+				const Instruction &reader = k == 0 ? in : a, &writer = k == 0 ? a : in;
+				for (int s = 0; s < reader.sources; ++s)
+					if (slot( reader.src[s] ) == slot( writer.dst ) && (readMask( reader, s ) & writer.dst.mask) != 0)
+						refusals.push_back( at( i, "a co-issued pair reads a channel its partner writes (no page defines it: P7)" ) );
+			}
+		}
+		const unsigned mask = (in.opcode == OP_TEX || in.opcode == OP_TEXBEM) ? 0xFu : in.dst.mask;
+		written[slot( in.dst )] |= mask;
+	}
+	// "r0 ... The value in r0 at the end of the shader is the pixel color": all of it, then
+	if (ps && written[REG_TEMP * 16 + 0] != 0xF)
+		refusals.push_back( "r0 is not fully written by the end (its unwritten channels have no documented value)" );
+}
+
 }	// namespace
 
 bool decodeProgram( const uint32_t *tokens, size_t count, Program &out )
@@ -278,7 +372,294 @@ bool decodeProgram( const uint32_t *tokens, size_t count, Program &out )
 		refusals.push_back( "no end token" );
 	if (!out.code.empty() && out.code[0].coissue)
 		refusals.push_back( "the first instruction is co-issued" );
+	if (refusals.empty())
+		checkPages( out, refusals );
 	return refusals.empty();
+}
+
+// ---- the vertex program ---------------------------------------------------------------------------
+namespace {
+
+/// A source's value: the register, swizzled, with its modifier (vs: negate only, by the census)
+void readVertexSource( const Operand &o, const double r[12][4], const double inputs[16][4], const double (*c)[4], int cn,
+	int a0, int offset, double v[4] )
+{
+	static const double zero[ 4 ] = { 0, 0, 0, 0 };
+	const double *base = zero;
+	if (o.type == REG_TEMP)
+		base = r[o.index + offset];
+	else if (o.type == REG_INPUT)
+		base = inputs[o.index + offset];
+	else
+	{
+		// "Constant Float Register": reads from out-of-range registers return (0.0, 0.0, 0.0, 0.0)
+		const int k = o.index + offset + (o.relative ? a0 : 0);
+		base = k >= 0 && k < cn ? c[k] : zero;
+	}
+	for (int i = 0; i < 4; ++i)
+		v[i] = o.modifier == SRC_NEGATE ? -base[o.swizzle[i]] : base[o.swizzle[i]];
+}
+
+}	// namespace
+
+void runVertexProgram( const Program &program, const double (*constants)[4], int constantCount,
+	const double inputs[16][4], VertexRun &out )
+{
+	memset( &out, 0, sizeof( out ) );
+	double r[ 12 ][ 4 ];
+	memset( r, 0, sizeof( r ) );
+	int a0 = 0;
+	for (size_t i = 0; i < program.code.size(); ++i)
+	{
+		const Instruction &in = program.code[i];
+		double s[ 3 ][ 4 ] = {};
+		for (int k = 0; k < in.sources; ++k)
+			readVertexSource( in.src[k], r, inputs, constants, constantCount, a0, 0, s[k] );
+		double result[ 4 ] = { 0, 0, 0, 0 };
+		switch (in.opcode)
+		{
+			case OP_MOV:		// mov - vs: dest = src
+				for (int c = 0; c < 4; ++c) result[c] = s[0][c];
+				break;
+			case OP_ADD:		// add - vs: dest = src0 + src1
+				for (int c = 0; c < 4; ++c) result[c] = s[0][c] + s[1][c];
+				break;
+			case OP_MUL:		// mul - vs: dest = src0 * src1
+				for (int c = 0; c < 4; ++c) result[c] = s[0][c] * s[1][c];
+				break;
+			case OP_MAD:		// mad - vs: dest = src0 * src1 + src2
+				for (int c = 0; c < 4; ++c) result[c] = s[0][c] * s[1][c] + s[2][c];
+				break;
+			case OP_DP4:		// dp4 - vs: the four-component dot product, to every component
+			{
+				const double d = s[0][0] * s[1][0] + s[0][1] * s[1][1] + s[0][2] * s[1][2] + s[0][3] * s[1][3];
+				for (int c = 0; c < 4; ++c) result[c] = d;
+				break;
+			}
+			case OP_M4x4:		// m4x4 - vs: dest.j = src0 . (src1 + j), the matrix in src1 and the next three
+				for (int j = 0; j < 4; ++j)
+				{
+					double row[ 4 ];
+					readVertexSource( in.src[1], r, inputs, constants, constantCount, a0, j, row );
+					result[j] = s[0][0] * row[0] + s[0][1] * row[1] + s[0][2] * row[2] + s[0][3] * row[3];
+				}
+				break;
+			case OP_RCP:		// rcp - vs, P2
+			{
+				double f = s[0][0];
+				if (f == 0.0)
+				{
+					f = FLT_MAX;
+					out.reciprocalOfZero = true;
+				}
+				else if (f != 1.0)
+					f = 1.0 / f;
+				for (int c = 0; c < 4; ++c) result[c] = f;
+				break;
+			}
+		}
+		const Operand &d = in.dst;
+		if (d.type == REG_ADDR)
+		{
+			// P1: rounding to nearest, ties away from zero; the page's src.w against the swizzle's x
+			if (s[0][0] != s[0][3])
+				out.addressAmbiguous = true;
+			a0 = (int)(s[0][0] < 0.0 ? -floor( -s[0][0] + 0.5 ) : floor( s[0][0] + 0.5 ));
+			continue;
+		}
+		double *target = NULL;
+		if (d.type == REG_TEMP) target = r[d.index];
+		else if (d.type == REG_RASTOUT) target = out.position;
+		else if (d.type == REG_ATTROUT) { target = out.colour[d.index]; out.wroteColour |= 1u << d.index; }
+		else if (d.type == REG_TEXCRDOUT) { target = out.texture[d.index]; out.wroteTexture |= 1u << d.index; }
+		for (int c = 0; c < 4; ++c)
+			if (target != NULL && (d.mask & (1u << c)))
+				target[c] = result[c];
+	}
+}
+
+// ---- the pixel program ----------------------------------------------------------------------------
+namespace {
+
+const double PRECISION = 1.0 / 256.0;		// P5
+
+struct Value { double n[4], lo[4], hi[4]; };
+
+Value exact( const double v[4] )
+{
+	Value x;
+	for (int c = 0; c < 4; ++c)
+		x.n[c] = x.lo[c] = x.hi[c] = v[c];
+	return x;
+}
+
+double clamp1( double v ) { return v < -1.0 ? -1.0 : (v > 1.0 ? 1.0 : v); }
+
+/// P4: a register whose range is -cap..+cap with cap >= 1 - nominally 1, the interval every cap allows
+void rangeOf( Value &x )
+{
+	for (int c = 0; c < 4; ++c)
+	{
+		x.lo[c] = fmin( x.lo[c], clamp1( x.lo[c] ) );
+		x.hi[c] = fmax( x.hi[c], clamp1( x.hi[c] ) );
+		x.n[c] = clamp1( x.n[c] );
+	}
+}
+
+Value swizzled( const Value &v, const Operand &o )
+{
+	Value x;
+	for (int c = 0; c < 4; ++c)
+	{
+		x.n[c] = v.n[o.swizzle[c]];
+		x.lo[c] = v.lo[o.swizzle[c]];
+		x.hi[c] = v.hi[o.swizzle[c]];
+		if (o.modifier == SRC_COMPLEMENT)		// "Source Register Invert": 1 - value
+		{
+			const double lo = x.lo[c];
+			x.n[c] = 1.0 - x.n[c];
+			x.lo[c] = 1.0 - x.hi[c];
+			x.hi[c] = 1.0 - lo;
+		}
+	}
+	return x;
+}
+
+void product( double alo, double ahi, double blo, double bhi, double &lo, double &hi )
+{
+	const double p[ 4 ] = { alo * blo, alo * bhi, ahi * blo, ahi * bhi };
+	lo = fmin( fmin( p[0], p[1] ), fmin( p[2], p[3] ) );
+	hi = fmax( fmax( p[0], p[1] ), fmax( p[2], p[3] ) );
+}
+
+}	// namespace
+
+void runPixelProgram( const Program &program, const PixelInputs &in, Interval4 &out )
+{
+	Value r[ 2 ], t[ 4 ], v[ 2 ], c[ 8 ];
+	memset( r, 0, sizeof( r ) );
+	memset( t, 0, sizeof( t ) );
+	for (int k = 0; k < 2; ++k)
+	{
+		// "Input color data values are clamped (saturated) to the range 0 through 1"; P5 for the iteration
+		double sat[ 4 ];
+		for (int ch = 0; ch < 4; ++ch)
+			sat[ch] = in.colour[k][ch] < 0.0 ? 0.0 : (in.colour[k][ch] > 1.0 ? 1.0 : in.colour[k][ch]);
+		v[k] = exact( sat );
+		for (int ch = 0; ch < 4; ++ch)
+		{
+			v[k].lo[ch] = fmax( 0.0, v[k].lo[ch] - PRECISION );
+			v[k].hi[ch] = fmin( 1.0, v[k].hi[ch] + PRECISION );
+		}
+	}
+	for (int k = 0; k < 8; ++k)
+	{
+		c[k] = exact( in.constants[k] );
+		rangeOf( c[k] );	// P4: c# is -1..+1
+	}
+	for (size_t i = 0; i < program.code.size(); ++i)
+	{
+		const Instruction &ins = program.code[i];
+		if (ins.opcode == OP_DEF)		// def - ps: the constant, for the rest of the program
+		{
+			c[ins.dst.index] = exact( ins.value );
+			rangeOf( c[ins.dst.index] );
+			continue;
+		}
+		if (ins.opcode == OP_TEX || ins.opcode == OP_TEXBEM)
+		{
+			double du = 0, dv = 0;
+			if (ins.opcode == OP_TEXBEM)
+			{
+				// texbem - ps: u' = u + MAT00 * t(n)R + MAT10 * t(n)G, v' = v + MAT01 * t(n)R + MAT11 * t(n)G,
+				// the matrix of the stage sampled (m); P8: the red and green are signed as they come
+				const Value &bump = t[ins.src[0].index];
+				const double *m = in.bumpMatrix[ins.dst.index];
+				du = m[0] * bump.n[0] + m[2] * bump.n[1];
+				dv = m[1] * bump.n[0] + m[3] * bump.n[1];
+			}
+			double rgba[ 4 ];
+			in.sample( in.context, ins.dst.index, du, dv, rgba );		// tex - ps: stage n, its coordinates
+			t[ins.dst.index] = exact( rgba );
+			continue;
+		}
+		Value s[ 3 ];
+		for (int k = 0; k < ins.sources; ++k)
+		{
+			const Operand &o = ins.src[k];
+			const Value &base = o.type == REG_TEMP ? r[o.index] : o.type == REG_TEXTURE ? t[o.index]
+				: o.type == REG_INPUT ? v[o.index] : c[o.index];
+			s[k] = swizzled( base, o );
+		}
+		Value x;
+		for (int ch = 0; ch < 4; ++ch)
+		{
+			double lo = 0, hi = 0, plo, phi;
+			switch (ins.opcode)
+			{
+				case OP_MOV:		// mov - ps: dest = src
+					x.n[ch] = s[0].n[ch]; lo = s[0].lo[ch]; hi = s[0].hi[ch];
+					break;
+				case OP_ADD:		// add - ps: dest = src0 + src1
+					x.n[ch] = s[0].n[ch] + s[1].n[ch]; lo = s[0].lo[ch] + s[1].lo[ch]; hi = s[0].hi[ch] + s[1].hi[ch];
+					break;
+				case OP_MUL:		// mul - ps: dest = src0 * src1
+					x.n[ch] = s[0].n[ch] * s[1].n[ch];
+					product( s[0].lo[ch], s[0].hi[ch], s[1].lo[ch], s[1].hi[ch], lo, hi );
+					break;
+				case OP_MAD:		// mad - ps: dest = src0 * src1 + src2
+					x.n[ch] = s[0].n[ch] * s[1].n[ch] + s[2].n[ch];
+					product( s[0].lo[ch], s[0].hi[ch], s[1].lo[ch], s[1].hi[ch], plo, phi );
+					lo = plo + s[2].lo[ch]; hi = phi + s[2].hi[ch];
+					break;
+				case OP_LRP:		// lrp - ps: dest = src0 * src1 + (1 - src0) * src2 = src2 + src0 * (src1 - src2)
+				{
+					x.n[ch] = s[0].n[ch] * s[1].n[ch] + (1.0 - s[0].n[ch]) * s[2].n[ch];
+					double alo, ahi, blo, bhi;		// both forms enclose it; keep their intersection
+					product( s[0].lo[ch], s[0].hi[ch], s[1].lo[ch], s[1].hi[ch], alo, ahi );
+					product( 1.0 - s[0].hi[ch], 1.0 - s[0].lo[ch], s[2].lo[ch], s[2].hi[ch], blo, bhi );
+					double dlo, dhi;
+					product( s[0].lo[ch], s[0].hi[ch], s[1].lo[ch] - s[2].hi[ch], s[1].hi[ch] - s[2].lo[ch], dlo, dhi );
+					lo = fmax( alo + blo, s[2].lo[ch] + dlo );
+					hi = fmin( ahi + bhi, s[2].hi[ch] + dhi );
+					break;
+				}
+				case OP_DP3:		// dp3 - ps, P6: the sum to every channel
+				{
+					x.n[ch] = s[0].n[0] * s[1].n[0] + s[0].n[1] * s[1].n[1] + s[0].n[2] * s[1].n[2];
+					for (int k = 0; k < 3; ++k)
+					{
+						product( s[0].lo[k], s[0].hi[k], s[1].lo[k], s[1].hi[k], plo, phi );
+						lo += plo; hi += phi;
+					}
+					break;
+				}
+			}
+			// "Modifiers for ps_1_X": _x2 multiplies the result before it is written
+			const double scale = ldexp( 1.0, ins.shift );
+			x.n[ch] *= scale; x.lo[ch] = lo * scale; x.hi[ch] = hi * scale;
+			if (ins.opcode != OP_MOV)		// P5: a new value is stored at the hardware's precision
+			{
+				x.lo[ch] -= PRECISION;
+				x.hi[ch] += PRECISION;
+			}
+		}
+		rangeOf( x );		// P4 for r#
+		Value &target = r[ins.dst.index];
+		for (int ch = 0; ch < 4; ++ch)
+			if (ins.dst.mask & (1u << ch))
+			{
+				target.n[ch] = x.n[ch];
+				target.lo[ch] = x.lo[ch];
+				target.hi[ch] = x.hi[ch];
+			}
+	}
+	for (int ch = 0; ch < 4; ++ch)
+	{
+		out.nominal[ch] = r[0].n[ch];
+		out.lo[ch] = r[0].lo[ch];
+		out.hi[ch] = r[0].hi[ch];
+	}
 }
 
 }	// namespace FFRef
