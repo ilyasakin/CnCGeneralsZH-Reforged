@@ -35,11 +35,11 @@ static const FixedFunctionValue TEXTURE_TRANSFORM_COUNT_MASK = 0x07;
 // has to fill the same registers.  These are the short names this file reads them by.
 //
 // The viewport's reciprocal sits before the lights because the D3D11 block declares only as many
-// lights as the description has, and anything after them would move with that count.  Six registers
-// a light, the same six whatever type it is: where it is, which way it points, its diffuse and
-// specular colours, its three attenuation terms with its range, and its cone.  A directional light
-// reads two of them and a spot light reads all six, and the layout stays uniform so the register a
-// light starts at is a multiplication rather than a running total over types.
+// lights as the description has, and anything after them would move with that count.  Seven
+// registers a light, the same seven whatever type it is: where it is, which way it points, its diffuse
+// and specular colours, its three attenuation terms with its range, its cone, and its ambient colour.
+// Every light reads its ambient, a spot light reads all seven, and the layout stays uniform so the
+// register a light starts at is a multiplication rather than a running total over types.
 static const unsigned REGISTERS_PER_MATRIX = VERTEX_REGISTERS_PER_MATRIX;
 static const unsigned REGISTER_WORLD_VIEW_PROJECTION = VERTEX_REGISTER_WORLD_VIEW_PROJECTION;
 static const unsigned REGISTER_WORLD_VIEW = VERTEX_REGISTER_WORLD_VIEW;
@@ -146,6 +146,12 @@ static void append_light(std::string & body, unsigned index, FixedFunctionValue 
 			index, index, index, index, index);
 		body += line;
 	}
+
+	// The light's own ambient, attenuated and coned like the rest of it ("Ambient Lighting": the
+	// ambient sum is Atten * Spot * La over the lights).  W3D gives point lights one: the light
+	// environment's (dx8wrapper.cpp, getPointAmbient) and the dynamic lights W3DDisplay makes.
+	snprintf(line, sizeof(line), "        ambient_light += Light%uAmbient.rgb * attenuation;\n", index);
+	body += line;
 
 	snprintf(line, sizeof(line),
 		"        float lambert = max(dot(view_normal, to_light), 0.0);\n"
@@ -286,9 +292,10 @@ static void append_constants_d3d9(std::string & hlsl, const VertexPipelineDescri
 			"float4 Light%uDiffuse : register(c%u);\n"
 			"float4 Light%uSpecular : register(c%u);\n"
 			"float4 Light%uAttenuation : register(c%u);\n"
-			"float4 Light%uSpot : register(c%u);\n",
+			"float4 Light%uSpot : register(c%u);\n"
+			"float4 Light%uAmbient : register(c%u);\n",
 			index, base, index, base + 1, index, base + 2,
-			index, base + 3, index, base + 4, index, base + 5);
+			index, base + 3, index, base + 4, index, base + 5, index, base + 6);
 		hlsl += line;
 	}
 }
@@ -331,8 +338,9 @@ static void append_constants_d3d11(std::string & hlsl,
 			"    float4 Light%uDiffuse;\n"
 			"    float4 Light%uSpecular;\n"
 			"    float4 Light%uAttenuation;\n"
-			"    float4 Light%uSpot;\n",
-			index, index, index, index, index, index);
+			"    float4 Light%uSpot;\n"
+			"    float4 Light%uAmbient;\n",
+			index, index, index, index, index, index, index);
 		hlsl += line;
 	}
 	hlsl += "};\n";
@@ -522,14 +530,16 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 		// was 13.2% from the Direct3D 9 frame and Golden Oasis in daylight 2.57%, and the geometry
 		// was in the right place in both.
 		//
-		// A light's own ambient is not in that second sum because DX11BackendClass::Set_Light does
-		// not carry one; every light W3D creates leaves it black.
+		// Each light's own ambient is in that second sum (ambient_light, summed in append_light).  It
+		// was left out once on the belief that W3D's lights all have a black one; its point lights do
+		// not (dx8wrapper.cpp's light environment, W3DDisplay's dynamic lights).
 		// A normal mapped draw lights its directional lights per pixel.  A point or spot light - the
 		// flash of a gun, the glow of a fire - stays per vertex and is summed on its own, so it can
 		// be handed to the pixel half as part of the base it adds the bumped light to.
 		body += "    float3 diffuse_light = float3(0.0, 0.0, 0.0);\n";
 		body += "    float3 local_light = float3(0.0, 0.0, 0.0);\n";
 		body += "    float3 specular_light = float3(0.0, 0.0, 0.0);\n";
+		body += "    float3 ambient_light = float3(0.0, 0.0, 0.0);\n";
 		for (unsigned index = 0; index < description.LightCount; ++index) {
 			const FixedFunctionValue type = description.Lights[index].Type;
 			append_light(body, index, type, type == FF_LIGHT_DIRECTIONAL ? "diffuse_light" : "local_light",
@@ -550,14 +560,14 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 		}
 
 		body += "    output.Diffuse.rgb = saturate(" + diffuse + ".rgb * diffuse_light + "
-			+ ambient + ".rgb * GlobalAmbient.rgb + " + emissive + ".rgb);\n";
+			+ ambient + ".rgb * (GlobalAmbient.rgb + ambient_light) + " + emissive + ".rgb);\n";
 		body += "    output.Diffuse.a = " + diffuse + ".a;\n";
 
 		if (description.NormalMapped) {
 			body += "    output.ViewPosition = view_position.xyz;\n";
 			body += "    output.ViewNormal = view_normal;\n";
 			body += "    output.LitBase = " + diffuse + ".rgb * local_light + " + ambient
-				+ ".rgb * GlobalAmbient.rgb + " + emissive + ".rgb;\n";
+				+ ".rgb * (GlobalAmbient.rgb + ambient_light) + " + emissive + ".rgb;\n";
 			body += "    output.LitMaterial = " + diffuse + ".rgb;\n";
 		}
 

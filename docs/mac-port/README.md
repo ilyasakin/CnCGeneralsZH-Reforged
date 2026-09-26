@@ -958,6 +958,26 @@ program's text and key change. **Not yet visible on screen:** the pixel programs
 colour to the pixel (defect #25), so no generated program shows a lit highlight at all. This fix is what
 that highlight will be computed from. `WINDOWS-DEBT.md` has the row.
 
+**23. Fork-introduced: under Direct3D 11 a light's own ambient colour is dropped - fixed.** Direct3D 9
+lights a vertex's ambient as the material ambient times (the scene ambient plus each light's ambient,
+attenuated and coned like the rest of it; "Ambient Lighting"). The generated vertex programs summed the
+scene ambient only. The comment said "every light W3D creates leaves it black", which isn't so. The
+light environment hands its point lights `getPointAmbient` (`dx8wrapper.cpp:3776`, sent to `SetLight` at
+`:3802`), and those are set by `W3DDisplay::createLightPulse` (`:2668`, an FX list's light pulse, which grows and
+decays over a few frames), `W3DPoliceCarDraw` (`:163`), `W3DTerrainVisual` (`:639`) and water's mesh light
+(`W3DWater.cpp:1143`). A player on the **Direct3D 11 renderer** saw those point lights light only the
+sides that face them: the ambient share of a light pulse, which D3D9 spreads over everything in range,
+was missing. Direct3D 9 is untouched: it runs no generated vertex programs. Found by A3b's
+harness against FFReference (N4). **Fixed:**
+- Each light has a seventh register, its ambient colour, carried by `DX8Wrapper::Set_DX8_Light`'s
+  mirror to `dx11backend`.
+- The program sums `Atten * Spot * La` into the ambient term.
+- The shader dump changes exactly the nine lit cases with a light, in all three targets. That is the
+  new declaration, the sum, and the ambient line; in the D3D9 profile, the later lights' registers
+  also move by one.
+- No key and no unlit program changes.
+- The harness's point-light-with-ambient scenario now matches. `WINDOWS-DEBT.md` has the row.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and
