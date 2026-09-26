@@ -1,5 +1,5 @@
 /*
- * FFReference: see ffreference.h - its conventions, refusals and NAMED CHOICES (N1-N27) are the key to
+ * FFReference: see ffreference.h - its conventions, refusals and NAMED CHOICES (N1-N29) are the key to
  * every function here.  Each function names the learn.microsoft.com page (under
  * /windows/win32/direct3d9/) it follows.  Double precision throughout.
  */
@@ -108,6 +108,9 @@ VOut lerpVOut( const VOut &a, const VOut &b, double t )
 	return o;
 }
 
+/// N28: the u and v of a coordinate set the vertices lack
+const double MISSING_SET_UV[2] = { 0.0, 0.0 };
+
 /// A coordinate set, padded as N13 says
 void padCoordinates( const double *in, int size, double out[4] )
 {
@@ -157,6 +160,8 @@ VOut processVertex( const Context &ctx, const Vertex &v )
 			const int set = (int)(s.stageState[st][TSS_TEXCOORDINDEX] & 0xFFFF);
 			if (set < s.texCoordSets)
 				padCoordinates( v.tex[set], s.texCoordSize[set], o.tex[st] );
+			else
+				padCoordinates( MISSING_SET_UV, 2, o.tex[st] );		// N28
 		}
 		return o;
 	}
@@ -210,6 +215,8 @@ VOut processVertex( const Context &ctx, const Vertex &v )
 				const int set = (int)(tci & 0xFFFF);
 				if (set < s.texCoordSets)
 					padCoordinates( v.tex[set], s.texCoordSize[set], in );
+				else
+					padCoordinates( MISSING_SET_UV, 2, in );		// N28
 				break;
 			}
 			case TSS_TCI_CAMERASPACENORMAL:
@@ -272,7 +279,9 @@ struct PixelIn
 	double eyeW, zNdc, Z;
 };
 
-struct Perturb { double lod; double du, dv; };
+/// A variant of the freedoms.  undefinedAlpha (N29): 0 passes CURRENT's alpha through a stage whose
+/// ALPHAOP is DISABLE under an enabled COLOROP, 1 makes it 0, 2 makes it 1.
+struct Perturb { double lod; double du, dv; int undefinedAlpha; };
 
 /// Texture coordinates for one stage from interpolated elements (N13's divide)
 void stageUV( const DrawState &s, int st, const double t[4], double uv[2] )
@@ -483,6 +492,7 @@ int arity( int op )
 		case TOP_SELECTARG2: return 2;
 		case TOP_MULTIPLYADD: case TOP_LERP: return 3;
 		case TOP_BUMPENVMAP: case TOP_BUMPENVMAPLUMINANCE: return 0;
+		case TOP_DISABLE: return 0;		// reads nothing (as ALPHAOP, N29)
 	}
 	return 12;
 }
@@ -610,8 +620,11 @@ Color cascade( const Context &ctx, const PixelIn &in, const Perturb &p, ShadeOut
 		const double colourBlend = blendAlphaFor( cop, in.diffuse, texel, tfactor, cur );
 		for (int ch = 0; ch < 3; ++ch)
 			setChannel( r, ch, cop == TOP_PREMODULATE ? channel( c1, ch ) : textureOp( cop, ch, c0, c1, c2, colourBlend, ctx.mutations ) );
-		r.a = aop == TOP_PREMODULATE ? a1.a
-			: textureOp( aop, 3, a0, a1, a2, blendAlphaFor( aop, in.diffuse, texel, tfactor, cur ), ctx.mutations );
+		if (aop == TOP_DISABLE)		// N29: undefined; the variant says what it gives
+			r.a = p.undefinedAlpha == 1 ? 0.0 : (p.undefinedAlpha == 2 ? 1.0 : cur.a);
+		else
+			r.a = aop == TOP_PREMODULATE ? a1.a
+				: textureOp( aop, 3, a0, a1, a2, blendAlphaFor( aop, in.diffuse, texel, tfactor, cur ), ctx.mutations );
 		if (cop == TOP_DOTPRODUCT3)
 			r.a = r.r;		// N17
 		r = saturate( r );	// N16
@@ -733,6 +746,10 @@ void rasterTriangle( Raster &r, Triangle t )
 	const uint32_t *rs = ctx.rs;
 	const Freedoms &fr = ctx.freedoms;
 	Target &tg = r.target;
+	bool undefinedAlphaStage = false;		// N29: a stage the cascade reaches with ALPHAOP DISABLE
+	for (int st = 0; st < MAX_STAGES && s.stageState[st][TSS_COLOROP] != TOP_DISABLE; ++st)
+		if (s.stageState[st][TSS_ALPHAOP] == TOP_DISABLE)
+			undefinedAlphaStage = true;
 
 	t.area2 = (t.v[1].X - t.v[0].X) * (t.v[2].Y - t.v[0].Y) - (t.v[2].X - t.v[0].X) * (t.v[1].Y - t.v[0].Y);
 	if (t.area2 == 0.0)
@@ -799,7 +816,7 @@ void rasterTriangle( Raster &r, Triangle t )
 
 			// The source colour, nominal and under each freedom
 			ShadeOut nominalOut;
-			Perturb p0 = { 0, 0, 0 };
+			Perturb p0 = { 0, 0, 0, 0 };
 			const Color src = shade( ctx, in, p0, nominalOut );
 			// The freedoms' variants (compare()'s envelope): the LOD at the window's ends and on both sides
 			// of every integer level inside it, since trilinear colour is piecewise linear in lambda with
@@ -821,20 +838,22 @@ void rasterTriangle( Raster &r, Triangle t )
 			static const double shifts[5][2] = { { 0, 0 }, { 1, 1 }, { -1, -1 }, { 1, -1 }, { -1, 1 } };
 			std::vector<Color> others;
 			unsigned zones = ambiguous ? ZONE_EDGE : 0;
-			for (size_t l = 0; l < lodOffsets.size(); ++l)
-				for (int t = 0; t < 5; ++t)
-				{
-					if (l == 0 && t == 0)
-						continue;		// the nominal itself
-					const Perturb p = { lodOffsets[l], shifts[t][0], shifts[t][1] };
-					ShadeOut o;
-					const Color c = shade( ctx, in, p, o );
-					if (differs( c, src ))
+			const int undefinedVariants = undefinedAlphaStage ? 3 : 1;		// N29: pass-through, 0 and 1
+			for (int u = 0; u < undefinedVariants; ++u)
+				for (size_t l = 0; l < lodOffsets.size(); ++l)
+					for (int t = 0; t < 5; ++t)
 					{
-						zones |= (l != 0 ? ZONE_LOD : 0) | (t != 0 ? ZONE_TEXEL : 0);
-						others.push_back( c );
+						if (u == 0 && l == 0 && t == 0)
+							continue;		// the nominal itself
+						const Perturb p = { lodOffsets[l], shifts[t][0], shifts[t][1], u };
+						ShadeOut o;
+						const Color c = shade( ctx, in, p, o );
+						if (differs( c, src ))
+						{
+							zones |= (l != 0 ? ZONE_LOD : 0) | (t != 0 ? ZONE_TEXEL : 0) | (u != 0 ? ZONE_UNDEFINED : 0);
+							others.push_back( c );
+						}
 					}
-				}
 			for (int st = 0; st < MAX_STAGES; ++st)
 				if (inside && nominalOut.sampled[st] && s.stageState[st][TSS_COLOROP] != TOP_DISABLE)
 				{
@@ -1079,7 +1098,8 @@ void validate( const DrawState &s, int primitiveType, Report &report )
 		if (tex == NULL && (ts[TSS_COLORARG1] & TA_SELECTMASK) == TA_TEXTURE)
 			break;
 		if (cop < TOP_SELECTARG1 || cop > TOP_LERP) refuse( report, stageText( st, "COLOROP of no documented value" ) );
-		if (aop == TOP_DISABLE) refuse( report, stageText( st, "ALPHAOP DISABLE under an enabled COLOROP (undefined)" ) );
+		if (aop == TOP_DISABLE)
+			;		// N29: undefined, drawn with its alpha unconstrained
 		else if (aop < TOP_SELECTARG1 || aop > TOP_LERP) refuse( report, stageText( st, "ALPHAOP of no documented value" ) );
 		else if (aop >= TOP_MODULATEALPHA_ADDCOLOR && aop <= TOP_BUMPENVMAPLUMINANCE)
 			refuse( report, stageText( st, "a colour-only operation as ALPHAOP" ) );
@@ -1119,8 +1139,6 @@ void validate( const DrawState &s, int primitiveType, Report &report )
 			for (int a = SAMP_ADDRESSU; a <= SAMP_ADDRESSV; ++a)
 				if (sp[a] < TADDRESS_WRAP || sp[a] > TADDRESS_MIRRORONCE)
 					refuse( report, stageText( st, "an address mode of no documented value" ) );
-			if (gen == TSS_TCI_PASSTHRU && (int)(tci & 0xFFFF) >= s.texCoordSets)
-				refuse( report, stageText( st, "TEXCOORDINDEX names a set the vertices lack" ) );
 		}
 		if (gen > TSS_TCI_CAMERASPACEREFLECTIONVECTOR) refuse( report, stageText( st, "TCI SPHEREMAP or undocumented generation" ) );
 		if (s.pretransformed && gen != 0) refuse( report, stageText( st, "texture generation on pretransformed vertices" ) );
@@ -1598,7 +1616,7 @@ Comparison compare( const Target &reference, const uint8_t *gpu, int rowBytes, d
 			else if (outside <= 1e-9)
 			{
 				++c.inFreedom;
-				for (int z = 0; z < 6; ++z)
+				for (int z = 0; z < 7; ++z)
 					if (reference.zones[i] & (1u << z))
 						++c.zoneCounts[z];
 			}
@@ -1618,13 +1636,13 @@ Comparison compare( const Target &reference, const uint8_t *gpu, int rowBytes, d
 
 void print( const Comparison &c, FILE *out, const char *label )
 {
-	static const char *zoneNames[6] = { "edge", "texel", "lod", "alpha-test", "depth", "stencil" };
+	static const char *zoneNames[7] = { "edge", "texel", "lod", "alpha-test", "depth", "stencil", "undefined" };
 	fprintf( out, "  %s: %ld pixels, %ld exact, %ld in a documented freedom, %ld outside", label, c.pixels,
 			c.exact, c.inFreedom, c.outside );
 	if (c.outside)
 		fprintf( out, " (worst %.1f/255 past the envelope at %d,%d)", c.worst * 255.0, c.worstX, c.worstY );
 	fprintf( out, "\n    freedoms:" );
-	for (int z = 0; z < 6; ++z)
+	for (int z = 0; z < 7; ++z)
 		fprintf( out, " %s %ld", zoneNames[z], c.zoneCounts[z] );
 	fprintf( out, "\n    |gpu - nominal| in 1/255:" );
 	for (int b = 0; b < 256; ++b)

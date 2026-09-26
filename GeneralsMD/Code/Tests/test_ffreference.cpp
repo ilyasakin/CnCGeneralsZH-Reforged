@@ -938,6 +938,106 @@ TEST(ffref_texcoord_generation_transform_and_projection)
 	CHECK_NEAR( at( t, 5, 3 ).r, 4.0 / 8.0, EPS );
 }
 
+TEST(ffref_missing_coordinate_set_reads_zero)
+{
+	// N28: stage 0 names set 1 of vertices with one set; D3DTSS_TEXCOORDINDEX says u, v = (0, 0).  An 8x1
+	// ramp, point-sampled and clamped: set 0 (u = .6) reads texel 4, the missing set 1 reads texel 0.
+	Texture ramp;
+	ramp.type = TEXTURE_2D;
+	TextureLevel l;
+	l.width = 8; l.height = 1;
+	for (int i = 0; i < 8; ++i)
+		l.texels.push_back( rgba( (i + 1) / 8.0, 0, 0, 1 ) );
+	ramp.levels.push_back( l );
+	for (int pretransformed = 0; pretransformed < 2; ++pretransformed)
+	{
+		DrawState s;
+		s.setDefaults( 8, 8 );
+		s.renderState[RS_CULLMODE] = CULL_NONE;
+		s.renderState[RS_LIGHTING] = 0;
+		s.pretransformed = pretransformed != 0;
+		s.hasDiffuse = true;
+		s.textures[0] = &ramp;
+		s.stageState[0][TSS_COLOROP] = TOP_SELECTARG1;
+		s.stageState[0][TSS_ALPHAOP] = TOP_SELECTARG1;
+		s.samplerState[0][SAMP_MAGFILTER] = TEXF_POINT;
+		s.samplerState[0][SAMP_MINFILTER] = TEXF_POINT;
+		s.samplerState[0][SAMP_ADDRESSU] = TADDRESS_CLAMP;
+		s.samplerState[0][SAMP_ADDRESSV] = TADDRESS_CLAMP;
+		s.texCoordSets = 1;
+		s.texCoordSize[0] = 2;
+		const Color w = rgba( 1, 1, 1, 1 );
+		Vertex v[3] = { pretransformed ? screenVertex( -100, -100, 0.5, 1, w ) : worldVertex( -10, -10, 0.5, w ),
+			pretransformed ? screenVertex( 300, -100, 0.5, 1, w ) : worldVertex( -10, 30, 0.5, w ),
+			pretransformed ? screenVertex( -100, 300, 0.5, 1, w ) : worldVertex( 30, -10, 0.5, w ) };
+		for (int i = 0; i < 3; ++i)
+		{
+			v[i].tex[0][0] = 0.6; v[i].tex[0][1] = 0.5;
+		}
+		Target t = exactTarget( 8, 8 );
+		Report r;
+		s.stageState[0][TSS_TEXCOORDINDEX] = 0;		// the control: the set the vertices have
+		CHECK( draw( s, PT_TRIANGLELIST, v, 3, 0, 3, t, &r ) );
+		CHECK_NEAR( at( t, 4, 4 ).r, 5.0 / 8.0, EPS );
+		t.clear( rgba( 0, 0, 0, 0 ) );
+		s.stageState[0][TSS_TEXCOORDINDEX] = 1;		// a set they lack: drawn, at (0, 0)
+		Report missing;
+		CHECK( draw( s, PT_TRIANGLELIST, v, 3, 0, 3, t, &missing ) );
+		CHECK( missing.refusals.empty() );
+		CHECK_NEAR( at( t, 4, 4 ).r, 1.0 / 8.0, EPS );
+		if (!pretransformed)
+		{
+			// padded as a 2-component set, (0, 0, 1, 0): a translation in _31 (the row the padded 1
+			// meets) moves it to u = .6, texel 4.  Unpadded zeros would stay at texel 0.
+			s.stageState[0][TSS_TEXTURETRANSFORMFLAGS] = TTFF_COUNT2;
+			s.textureTransform[0].m[2][0] = 0.6;
+			t.clear( rgba( 0, 0, 0, 0 ) );
+			CHECK( draw( s, PT_TRIANGLELIST, v, 3, 0, 3, t ) );
+			CHECK_NEAR( at( t, 4, 4 ).r, 5.0 / 8.0, EPS );
+		}
+	}
+}
+
+TEST(ffref_undefined_alpha_op_is_drawn_with_an_envelope)
+{
+	// N29: ALPHAOP DISABLE under an enabled COLOROP.  The alpha written is CURRENT's (the diffuse's .25),
+	// and the envelope runs from 0 to 1, marked ZONE_UNDEFINED; the colour, which does not read it, is
+	// exact.  ALPHAARG1 is left at its default, D3DTA_TEXTURE, with no texture: a DISABLE reads nothing.
+	DrawState s = screenState( 2, 2 );
+	s.stageState[0][TSS_COLOROP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_COLORARG1] = TA_DIFFUSE;
+	s.stageState[0][TSS_ALPHAOP] = TOP_DISABLE;
+	Target t = exactTarget( 2, 2 );
+	Report r;
+	fill( s, t, 0.5, rgba( 0.5, 0.5, 0.5, 0.25 ), &r );
+	CHECK( r.refusals.empty() );
+	CHECK_NEAR( at( t, 0, 0 ).a, 0.25, EPS );
+	CHECK_NEAR( t.lo[0].a, 0.0, EPS );
+	CHECK_NEAR( t.hi[0].a, 1.0, EPS );
+	CHECK_NEAR( t.lo[0].r, 0.5, EPS );
+	CHECK_NEAR( t.hi[0].r, 0.5, EPS );
+	CHECK( (t.zones[0] & ZONE_UNDEFINED) != 0 );
+
+	// blended by that alpha onto black, the colour itself is anywhere from 0 to .5
+	s.renderState[RS_ALPHABLENDENABLE] = 1;
+	s.renderState[RS_SRCBLEND] = BLEND_SRCALPHA;
+	s.renderState[RS_DESTBLEND] = BLEND_INVSRCALPHA;
+	t.clear( rgba( 0, 0, 0, 0 ) );
+	fill( s, t, 0.5, rgba( 0.5, 0.5, 0.5, 0.25 ) );
+	CHECK_NEAR( at( t, 0, 0 ).r, 0.125, EPS );
+	CHECK_NEAR( t.lo[0].r, 0.0, EPS );
+	CHECK_NEAR( t.hi[0].r, 0.5, EPS );
+
+	// the control: a defined ALPHAOP has no such envelope
+	s.stageState[0][TSS_ALPHAOP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_ALPHAARG1] = TA_DIFFUSE;
+	t.clear( rgba( 0, 0, 0, 0 ) );
+	fill( s, t, 0.5, rgba( 0.5, 0.5, 0.5, 0.25 ) );
+	CHECK_NEAR( t.lo[0].r, 0.125, EPS );
+	CHECK_NEAR( t.hi[0].r, 0.125, EPS );
+	CHECK_EQ( t.zones[0] & ZONE_UNDEFINED, 0u );
+}
+
 // ---- refusals, and compare()'s classification ------------------------------------------------------
 
 TEST(ffref_refusals_draw_nothing)
@@ -947,7 +1047,6 @@ TEST(ffref_refusals_draw_nothing)
 	{
 		static void shader( DrawState &s, Texture & ) { s.vertexShaderBound = true; }
 		static void spheremap( DrawState &s, Texture &t ) { s.textures[0] = &t; s.stageState[0][TSS_TEXCOORDINDEX] = TSS_TCI_SPHEREMAP; }
-		static void alphaDisable( DrawState &s, Texture & ) { s.stageState[0][TSS_COLORARG1] = TA_DIFFUSE; s.stageState[0][TSS_ALPHAOP] = TOP_DISABLE; }
 		static void aniso( DrawState &s, Texture &t ) { s.textures[0] = &t; s.samplerState[0][SAMP_MINFILTER] = TEXF_ANISOTROPIC; s.samplerState[0][SAMP_MAXANISOTROPY] = 4; }
 		static void cube( DrawState &s, Texture &t ) { t.type = TEXTURE_CUBE; s.textures[0] = &t; }
 		static void clipPlane( DrawState &s, Texture & ) { s.renderState[RS_CLIPPLANEENABLE] = 1; }
@@ -955,7 +1054,7 @@ TEST(ffref_refusals_draw_nothing)
 		static void colourOnlyAlpha( DrawState &s, Texture & ) { s.stageState[0][TSS_COLORARG1] = TA_DIFFUSE; s.stageState[0][TSS_ALPHAOP] = TOP_MODULATEALPHA_ADDCOLOR; }
 		static void textureless( DrawState &s, Texture & ) { s.stageState[0][TSS_COLORARG1] = TA_DIFFUSE; s.stageState[0][TSS_COLORARG2] = TA_TEXTURE; }
 	};
-	const Case cases[] = { { "shader", Sets::shader }, { "spheremap", Sets::spheremap }, { "alpha disable", Sets::alphaDisable },
+	const Case cases[] = { { "shader", Sets::shader }, { "spheremap", Sets::spheremap },
 		{ "anisotropic 4", Sets::aniso }, { "cube", Sets::cube }, { "clip plane", Sets::clipPlane }, { "wrap", Sets::wrap },
 		{ "colour-only alpha op", Sets::colourOnlyAlpha }, { "texture read without texture", Sets::textureless } };
 	for (size_t i = 0; i < sizeof( cases ) / sizeof( cases[0] ); ++i)
