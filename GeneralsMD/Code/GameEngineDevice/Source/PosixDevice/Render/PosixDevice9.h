@@ -49,6 +49,10 @@
 #include <atomic>
 
 class SdlGpuFrame;
+struct CombinerDescription;
+struct VertexPipelineDescription;
+struct SdlVertexConstants;
+struct SdlPixelConstants;
 
 /// AddRef and Release for one of the interfaces, counted as COM counts.
 template <class Interface>
@@ -167,6 +171,18 @@ public:
 	RenderResult Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, RenderUInt32 flags, D3DCOLOR color, float z,
 		RenderUInt32 stencil);
 
+	// ---- The draw's resolve (A3c, PosixDevice9Draw.cpp): the state as set, read the way dx11backend
+	// reads it, into D3's generator descriptions and the constants their programs read.
+
+	/// The texture stages, walked until COLOROP is DISABLE.  A disabled stage 0 means no texturing, which
+	/// D3D9 defines as the diffuse colour and alpha: one SELECTARG1(DIFFUSE) stage.
+	void Build_Combiner_Description(CombinerDescription &description) const;
+	/// Lighting, material sources, the enabled lights packed down, fog and each stage's coordinates.
+	/// False when more lights are enabled than the generator carries.
+	bool Build_Vertex_Description(VertexPipelineDescription &description) const;
+	/// The two constant blocks, packed to match the descriptions above.
+	void Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants &pixel) const;
+
 	/// Makes the implicit back buffer (and depth surface, when the present parameters ask for one) from
 	/// the present parameters, and binds them as render target 0 and the depth surface.  CreateDevice and
 	/// Reset call it, with every implicit surface already released.  -18's, in PosixDevice9Resources.cpp.
@@ -266,6 +282,8 @@ protected:
 
 	/// Drops every implicit surface and every render target and depth binding.  Reset and the destructor.
 	void Release_Surfaces();
+	/// D3D9's documented initial render, texture-stage and sampler states (PosixDevice9Draw.cpp).
+	void Set_Default_States();
 	/// A draw's answer before A3: nothing to show with no window, so success; with one, a loud failure.
 	RenderResult Draw_Unavailable(const char *what);
 

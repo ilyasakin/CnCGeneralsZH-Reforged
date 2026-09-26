@@ -88,13 +88,10 @@ PosixDevice9::PosixDevice9(PosixDirect3D9 *adapter, RenderWindow window, const D
 	Adapter->AddRef();
 
 	memset(RenderTargets, 0, sizeof(RenderTargets));
-	// State starts zeroed.  D3D9's documented defaults (CULLMODE CCW, ZENABLE with an auto depth
-	// surface, the stage-0 MODULATE ops, ...) are A3's to set, with the draw that reads them; the engine
-	// sets every state it relies on explicitly (DX8Wrapper::Invalidate_Cached_Render_States) before it
-	// draws.
 	memset(RenderStates, 0, sizeof(RenderStates));
 	memset(TextureStageStates, 0, sizeof(TextureStageStates));
 	memset(SamplerStates, 0, sizeof(SamplerStates));
+	Set_Default_States();
 	// Every transform starts as the identity, as D3D9's do.
 	memset(Transforms, 0, sizeof(Transforms));
 	for (int index = 0; index < TRANSFORM_COUNT; ++index) {
