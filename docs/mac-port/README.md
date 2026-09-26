@@ -293,7 +293,12 @@ run (found by C2's resolution fix). The same reasoning applies: every Apple Sili
 with a Vulkan driver, exceeds the game's requirements by orders of magnitude. So an UNKNOWN chipset
 reported by the POSIX device counts as meeting the top preset's chipset requirement, beside the CPU
 rule, behind the same POSIX-only guard. Windows, where the chipset is always identified, is
-unchanged.
+unchanged. *Done 2026-09-26 (-47):* `testMinimumRequirements` reports an unplaced device as the top of
+the chipset table (R300), under `#if !defined(_WIN32)`. The guard is the device's, not arm64's, so an x86
+Linux build gets the rule too. Only GameLOD's preset choice sees the value: the renderer keeps asking
+`getChipset`. `test_render_hooks` checks it against every shipped LODPreset. `lod_first_run_check` runs
+real launches: a first launch chooses High, a later one keeps High, and the `-noshaders` control (a
+Voodoo2 override) chooses Low.
 
 **3. Linux is a target, and the non-Windows platform layer is chosen for it (taken 2026-09-25).**
 The user asked for everything to be abstracted so that Linux and further platforms can follow. What

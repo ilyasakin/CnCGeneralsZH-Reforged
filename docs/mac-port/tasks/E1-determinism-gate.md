@@ -120,7 +120,9 @@ that can be replayed or played over a network. No defect.**
   modes are not recordable (`isRecordableGameMode`).
 So E1's `-autoskirmish` runs are unaffected by the POSIX device's DC_UNKNOWN preset. What this does
 NOT cover: other client-only settings read by logic that nobody was looking for. It is a trace of
-these three, not a general audit.
+these three, not a general audit. (Since 2026-09-26, decision 2's GPU rule gives a POSIX first launch
+the High preset instead of Low. The trace above is why that is not expected to move a replay: the
+full ctest run on that change, `replay_check` included, passed.)
 
 ## The POSIX harness, 2026-09-26 (-18)
 
