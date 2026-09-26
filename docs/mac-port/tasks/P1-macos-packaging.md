@@ -3,7 +3,7 @@
 - **Milestone:** M5
 - **Depends on:** C1 (file systems), C2 (entry point), V1 (FFmpeg's licence); E1 for the convergence step
 - **Blocks:** anything a player runs; E2's notarisation question
-- **Status:** design approved (2026-09-26); steps 1 and 2 merged; step 3 on its branch; step 5 (the `.app`) held until the PM says (disk)
+- **Status:** design approved (2026-09-26); steps 1-3 merged; step 4 on its branch; step 5 (the `.app`) held until the PM says (disk)
 - **Owner:** -47
 
 ## Why
@@ -394,3 +394,56 @@ harnesses pass on the shared stager, and replay_check passes with `-overlay`.
 
 **What it cannot see.** The bundle itself: step 5 copies the staged folder, and `replay-check.sh
 --app` waits for a bundle. The inferred list: see "What Windows does".
+
+## Step 4: where the player's Zero Hour is (-47, 2026-09-26)
+
+**The logic** is `PosixDevice/Install/PosixInstallRoot.cpp`, its own library `installroot` (no engine
+state, no SDL), which `PosixMain` calls before anything asks for a path:
+1. `-root <dir>`: as given, never validated (harnesses root at farms and test folders).
+2. Registry.ini's Zero Hour `InstallPath`, while it still validates. An install can move; a stale key
+   falls through.
+3. Inside an app bundle only: the known places, silently, with nothing written. These are
+   `~/Games/<name>`, `/Applications/<name>`, and CrossOver's and Whisky's bottles'
+   `drive_c/Program Files*/{EA Games, Origin Games, Steam/steamapps/common, Command & Conquer The First
+   Decade, …}/<name>`, for five spellings of the Zero Hour folder's name.
+4. Inside an app bundle only, and never under `-headless`: the player's choice, through SDL's native
+   folder dialog, titled "Choose your Command & Conquer Generals Zero Hour folder". A refused choice
+   is explained in a message box and asked again; Cancel ends the start. **The chosen folder is the
+   only thing written: Registry.ini's `InstallPath`**, so the dialog runs once.
+5. Outside a bundle: the executable's directory, as always.
+
+**Validation** (`PosixCheckInstallFolder`), each failure with its own sentence:
+- not a folder;
+- no `INIZH.big` (not Zero Hour);
+- Zero Hour, but the base game's `Textures.big` is nowhere `Win32BIGFileSystem::init` looks. That is
+  the folder itself, `ZH_Generals/`, the two sibling names, or Registry.ini's Generals `InstallPath`
+  and its First Decade subfolder. The message says to copy Generals' .big files into `ZH_Generals`;
+- a folder inside the app bundle or an overlay.
+There is no second chooser for the base game (minimal UI, the PM's call); the message says what to do.
+"Choose again" is `-root`, or removing the key; an Options entry is a follow-up.
+
+`isExecutableInAppBundle()` (ExecutableDirectory, POSIX) now decides both this and the log folder
+(step 2).
+
+**Checks.**
+- `test_install_root` (4 tests, 51 checks), in a temporary tree:
+  - every validation outcome, including the base game beside, inside, and through Registry.ini and
+    First Decade; an armed control: the forbidden folder validates when nothing forbids it;
+  - the two failure sentences differ, and each names its remedy;
+  - `-root` over a valid Registry.ini, and unvalidated;
+  - Registry.ini used while valid, and a moved install falling through to the executable directory
+    or, in a bundle, to the known places (`~/Games`' copy without a base game is skipped for the
+    bottle's whole one);
+  - the known places' list, bottles globbed;
+  - the chooser as a stub: re-asked with each reason (not Zero Hour, then no base game), Cancel, a
+    folder inside the app; `writeInstallPath` only for a chosen folder.
+- `packaging_resolution_check` gains **B, the bundle**: the executable hard-linked into
+  `Fake.app/Contents/MacOS` with the staged overlay in `Contents/Resources/Overlay`, run with no
+  `-root` and no `-overlay`. With nothing registered and an empty home, it stops and says to use
+  `-root`. With Registry.ini's `InstallPath` naming a farm, it finds its overlay and its install on
+  its own, and its dump equals W's, all 31,667 lines. The install stays hashed-unchanged.
+- Full ctest: 68 tests, all pass except `d3dx_oracle`, which skips as before.
+
+**What it cannot see.** The dialog itself: SDL's folder panel and the message boxes need a person to
+click them, and have not been clicked. Players' real install locations beyond these names. A real
+signed bundle (step 5).

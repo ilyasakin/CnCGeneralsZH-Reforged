@@ -12,6 +12,12 @@
 # archives), "loose" with the size and hash of its bytes, or the archive that won it with the member's
 # size, then the INI and EXE CRCs (PosixFileResolutionDump.cpp). The two dumps must be identical.
 #
+# And B, the bundle shape (P1 step 4): the executable hard-linked into Fake.app/Contents/MacOS with the
+# staged overlay copied to Contents/Resources/Overlay, run with NO -root and NO -overlay, so the game finds
+# both itself: the overlay beside it, and the install through Registry.ini's InstallPath (naming a farm of
+# the install) with an empty home, no known places. Its dump must equal W's too. With no InstallPath at
+# all, the same bundle must stop and say how to give it one (headless: no chooser).
+#
 # The armed control: P again with the overlay's ReforgedTextures.big renamed ZReforgedTextures.big. It
 # then mounts after TexturesZH.big instead of before, so every path both archives hold must change
 # hands, and the dump must differ in exactly such lines. That proves the comparison sees archive order,
@@ -126,6 +132,30 @@ else
 	else
 		echo "FAIL: the package layout resolves differently:"; diff "$WORK/W.dump" "$WORK/P.dump" | head -20; status=1
 	fi
+fi
+
+# ---- B: the bundle finds its overlay and its install itself ----------------------------------------
+mkdir -p "$WORK/Fake.app/Contents/MacOS" "$WORK/Fake.app/Contents/Resources" "$WORK/bhome" "$WORK/user_B"
+if ! ln "$GENERALS" "$WORK/Fake.app/Contents/MacOS/generals" 2>/dev/null; then
+	cp "$GENERALS" "$WORK/Fake.app/Contents/MacOS/generals"
+fi
+cp -R -P "$WORK/overlay" "$WORK/Fake.app/Contents/Resources/Overlay"
+farm "$WORK/B"
+( cd "$WORK" && HOME="$WORK/bhome" ZH_USER_DATA_DIR="$WORK/user_B" "$WORK/Fake.app/Contents/MacOS/generals" -headless \
+	> "$WORK/B0.out" 2> "$WORK/B0.err" )
+if grep -q 'start the game with -root' "$WORK/B0.err"; then
+	echo "ok: with nothing registered or known, the bundle stops and says to use -root"
+else
+	echo "FAIL: the bundle with no install known did not say so:"; head -3 "$WORK/B0.err"; status=1
+fi
+printf 'InstallPath = %s\n' "$WORK/B" > "$WORK/user_B/Registry.ini"
+( cd "$WORK" && HOME="$WORK/bhome" ZH_USER_DATA_DIR="$WORK/user_B" "$WORK/Fake.app/Contents/MacOS/generals" -headless \
+	-quickstart -noshellmap -multiInstance -logPrefix "${TAG}B" -dumpFileResolution "$WORK/B.dump" \
+	> "$WORK/B.out" 2> "$WORK/B.err" )
+if [ -s "$WORK/B.dump" ] && cmp -s "$WORK/W.dump" "$WORK/B.dump" && grep -q 'Resources/Overlay, searched before the install' "$WORK/B.err"; then
+	echo "ok: the bundle, rooted by Registry.ini with its own overlay, resolves every path as W does"
+else
+	echo "FAIL: the bundle layout did not resolve as W:"; head -4 "$WORK/B.err"; [ -s "$WORK/B.dump" ] && diff "$WORK/W.dump" "$WORK/B.dump" | head -5; status=1
 fi
 
 # ---- the armed control ----------------------------------------------------------------------------
