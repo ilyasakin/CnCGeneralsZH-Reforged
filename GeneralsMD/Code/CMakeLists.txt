@@ -1736,6 +1736,40 @@ if(ZH_PLATFORM_POSIX)
     COMMENT "Staging the development-only overlay (P1)" VERBATIM)
   add_custom_target(zh_overlay_dev ALL DEPENDS ${CMAKE_BINARY_DIR}/overlay-dev.staged)
 
+  # P1 step 5: the macOS app, "Zero Hour Reforged.app" beside the executable, its dSYM beside it
+  # (Tools/make-macos-app.sh: Info.plist, the icon, the staged overlay with its art as APFS clones, the
+  # licences checked against generals' link line, the HUD directive, an ad-hoc signature, verified).
+  # Outside ALL: build it with `ninja macos_app`.  The bundle id belongs to whoever ships; the default is
+  # the project's home (the README's).  ZH_APP_ART=OFF leaves the 1.6 GB of art out of a local bundle.
+  if(APPLE)
+    set(ZH_APP_BUNDLE_ID "io.github.olcayseygan.zero-hour-reforged" CACHE STRING "CFBundleIdentifier of the macOS app")
+    option(ZH_APP_ART "Put the Reforged*.big art archives into the macOS app" ON)
+    set(ZH_APP_ARGS --generals $<TARGET_FILE:generals> --overlay ${CMAKE_BINARY_DIR}/overlay
+        --build ${CMAKE_BINARY_DIR} --out "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app" --bundle-id ${ZH_APP_BUNDLE_ID})
+    if(NOT ZH_APP_ART)
+      list(APPEND ZH_APP_ARGS --no-art)
+    endif()
+    add_custom_target(macos_app
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/make-macos-app.sh ${ZH_APP_ARGS}
+      DEPENDS generals zh_overlay
+      COMMENT "Building Zero Hour Reforged.app (P1 step 5)" VERBATIM)
+    # the bundle script on itself: a bundle from this build's inputs (no art) holds what it should and
+    # verifies, and a HUD-off INI, an unlicensed library and a write after signing are each caught
+    add_test(NAME macos_app_check
+             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_macos_app.sh $<TARGET_FILE:generals>
+                     ${CMAKE_BINARY_DIR}/overlay ${CMAKE_BINARY_DIR})
+    set_tests_properties(macos_app_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+    # E1 on the bundle itself, "tests what ships": no -root, no -overlay, the seal checked after.  It needs
+    # `ninja macos_app` first (outside ALL), and says so when it skips.
+    add_test(NAME replay_check_app
+             COMMAND bash -c "if [ ! -x \"$1/Contents/MacOS/generals\" ]; then echo \"skip: no bundle at $1 - build it with ninja macos_app\"; exit 77; fi; exec \"$0\" --app \"$1\" --seeds 0 --maxframes 1200"
+                     ${CMAKE_CURRENT_SOURCE_DIR}/Tools/replay-check.sh "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app")
+    set_tests_properties(replay_check_app PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+    if(ZH_GAME_DATA)
+      set_tests_properties(replay_check_app PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+    endif()
+  endif()
+
   # P1 step 1: the fork's overlay as a read root gives the game what Windows' one folder gives it - the
   # EXE CRC, the INI CRC and the world state agree between the two layouts - with two armed controls.
   add_test(NAME overlay_crc_check
@@ -2408,7 +2442,7 @@ if(ZH_PLATFORM_POSIX)
 
   # The tests that build a farm of the install (a folder of links into it) never run at the same time:
   # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
-  foreach(_zh_test replay_check net_check overlay_crc_check packaging_resolution_check root_readonly_check
+  foreach(_zh_test replay_check replay_check_app net_check overlay_crc_check packaging_resolution_check root_readonly_check
                    lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager)
     if(TEST ${_zh_test})
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
