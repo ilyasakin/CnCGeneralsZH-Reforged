@@ -35,6 +35,10 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "render2dsentence.h"
+#if !defined(_WIN32)
+#include "glyphrasteriser.h"
+#include <math.h>
+#endif
 #include "surfaceclass.h"
 #include "texture.h"
 #include "wwprofile.h"
@@ -1207,6 +1211,8 @@ FontCharsClass::FontCharsClass (void) :
 	GDIBitmap( NULL ),
 	GDIBitmapBits ( NULL ),
 	MemDC( NULL ),
+#else
+	Rasteriser( NULL ),
 #endif
 	CurrPixelOffset( 0 ),
 	PointSize( 0 ),
@@ -1487,23 +1493,49 @@ FontCharsClass::Store_GDI_Char (WideChar ch)
 	//
 	return char_data;
 #else
-	// No rasteriser off Windows until D6: each glyph is blank and zero wide, stored where GDI's would
-	// be, so text lays out as nothing and nothing reads pixels that were never written.
-	static bool said = false;
-	if (!said) {
-		said = true;
-		WWDEBUG_SAY(("FontCharsClass: no text rasteriser off Windows until D6; every glyph is blank\n"));
+	/* GDI's steps with FreeType (D6): the character drawn into the (2 x PointSize) square box at
+		 (xOrigin, 0) - 'W' one pixel in, as above - its width the one-character extent plus the overlap
+		 and the origin, its rows the font's height, and each pixel's coverage through the same square
+		 root into the same 4-bit alpha.  Without a font (none could be found or opened) each glyph is
+		 blank and zero wide, as it was before there was a rasteriser. */
+	const int box = PointSize * 2;
+	int xOrigin = 0;
+	if (ch == 'W') {
+		xOrigin = 1;
 	}
-	Update_Current_Buffer( 0 );
+	int cx = 0;
+	int cy = CharHeight;
+	const uint8_t *coverage = NULL;
+	if ( Rasteriser != NULL ) {
+		Rasteriser->Draw_Char( ch, xOrigin );
+		coverage = Rasteriser->Get_Coverage();
+		cx = Rasteriser->Get_Advance( ch ) + PixelOverlap + xOrigin;	// GetTextExtentPoint32W's cx, then as above
+	}
+	Update_Current_Buffer( cx );
+	uint16* curr_buffer_p = BufferList[BufferList.Count () - 1]->Buffer;
+	curr_buffer_p += CurrPixelOffset;
+	for (int row = 0; row < cy; row ++) {
+		for (int col = 0; col < cx; col ++) {
+			const uint8 pixel_value = (coverage != NULL && row < box && col < box) ? coverage[row * box + col] : 0;
+			uint16 pixel_color = 0;
+			if (pixel_value != 0) {
+				pixel_color = 0x0FFF;
+			}
+			uint8 alpha_value	= (uint8)( sqrt( pixel_value / 255.0 ) * 15.0 + 0.5 );
+			*curr_buffer_p++	= pixel_color | (alpha_value << 12);
+		}
+	}
+
 	FontCharsClassCharDataStruct *char_data	= W3DNEW FontCharsClassCharDataStruct;
 	char_data->Value				= ch;
-	char_data->Width				= 0;
+	char_data->Width				= cx;
 	char_data->Buffer				= BufferList[BufferList.Count () - 1]->Buffer + CurrPixelOffset;
 	if ( ch < 256 ) {
 		ASCIICharArray[ch] = char_data;
 	} else {
 		UnicodeCharArray[ch - FirstUnicodeChar] = char_data;
 	}
+	CurrPixelOffset += ((cx+PixelOverlap) * CharHeight);
 	return char_data;
 #endif
 }
@@ -1646,12 +1678,44 @@ FontCharsClass::Create_GDI_Font (const char *font_name)
 		CharOverhang = 0;
 	}
 #else
-	// No font off Windows until D6.  A line is still a point size tall, so layout divides by nothing.
-	(void)font_name;
-	CharHeight = PointSize;
-	CharAscent = PointSize;
-	CharOverhang = 0;
-	PixelOverlap = 0;
+	/* GDI's font with FreeType (D6): the same face, height, width and weight as the CreateFont above -
+		 "Generals" is Arial squeezed to an lfWidth of 0.40 x its height - and the TEXTMETRIC's three
+		 numbers from the same file's own tables (glyphrasteriser.h says which).  Without a font, the
+		 glyphs are blank and a line is still a point size tall, so layout divides by nothing. */
+	const char *fontToUseForGenerals = "Arial";
+	bool doingGenerals = false;
+	if (strcmp(font_name, "Generals")==0) {
+		font_name = fontToUseForGenerals;
+		doingGenerals = true;
+	}
+	const int dotsPerInch = 96; // always use 96.	jba.
+	const int font_height = -((PointSize * dotsPerInch + 36) / 72);	// -MulDiv (PointSize, dotsPerInch, 72), for a positive size
+	int fontWidth = 0; // use font default.
+	if (doingGenerals) {
+		fontWidth = -font_height*0.40f; // one pixel tighter
+	}
+	PixelOverlap = (-font_height)/8;
+	if (PixelOverlap<0) PixelOverlap = 0;
+	if (PixelOverlap>4) PixelOverlap = 4;
+
+	delete Rasteriser;		// a second Create without a Free, if one ever comes
+	Rasteriser = new GlyphRasteriserClass;
+	if ( Rasteriser->Create_Font( font_name, -font_height, fontWidth, IsBold, PointSize * 2 ) ) {
+		CharHeight = Rasteriser->Get_Metrics().Height;
+		CharAscent = Rasteriser->Get_Metrics().Ascent;
+		CharOverhang = Rasteriser->Get_Metrics().Overhang;
+		if (doingGenerals) {
+			CharOverhang = 0;
+		}
+	} else {
+		WWDEBUG_SAY(("FontCharsClass: no font file for '%s'; its glyphs are blank\n", font_name));
+		delete Rasteriser;
+		Rasteriser = NULL;
+		CharHeight = PointSize;
+		CharAscent = PointSize;
+		CharOverhang = 0;
+		PixelOverlap = 0;
+	}
 #endif
 }
 
@@ -1692,6 +1756,9 @@ FontCharsClass::Free_GDI_Font (void)
 		::DeleteDC( MemDC );
 		MemDC = NULL;
 	}
+#else
+	delete Rasteriser;
+	Rasteriser = NULL;
 #endif
 
 	return ;
