@@ -31,6 +31,18 @@
 # network filters (Little Snitch, LuLu and the like) that ask on their own, pf rules, and a firewall
 # switched on between the check and the run.  Off macOS there is no such dialog and nothing is read.
 #
+# ONE AT A TIME, MACHINE-WIDE.  The game's ports are the machine's, and two net-checks from two worktrees
+# (ctest's RESOURCE_LOCK holds only within one ctest) once collided: the copy that could not bind 8088
+# spun in Transport::init's bind retry, leaking a socket per try, until the machine's file table was full
+# (2026-09-26).  So before its probe the harness takes an exclusive lock on one fixed path,
+# /tmp/zhr-net-check.lock (NET_CHECK_LOCK_FILE), and waits for it (NET_CHECK_LOCK_WAIT, 900 s, then skips).
+# The lock is flock(2), taken through python3's fcntl (macOS has no flock(1)) on descriptor 9, which the
+# harness and both copies of the game inherit: the kernel holds it until every one of them has exited -
+# a copy that outlives a killed harness keeps it - and releases it however they end, so it cannot go
+# stale.  And every copy runs under `ulimit -n` of NET_CHECK_FD_LIMIT (4096): a leak ends in EMFILE for
+# that copy instead of the machine.  A watchdog stops both copies once either holds three quarters of
+# that, and fails the run saying so.
+#
 # RULE 9: the game never runs with the real install as its root: a farm of links, the overlay staged
 # as the app ships it, the user data in the work folder, the install hashed before and after
 # (Tools/install-guard.sh), exit 99 if it changed or could not be checked.
@@ -113,6 +125,40 @@ if [ "$(uname -s)" = "Darwin" ]; then
 	case "$state" in *"State = 0"*) ;; *) echo "skip: the application firewall is on ($state); a copy listening off loopback would ask in a dialog"; exit 77;; esac
 	case "$stealth" in *"is off"*) ;; *) echo "skip: firewall stealth mode is not off ($stealth)"; exit 77;; esac
 	case "$blockall" in *"disabled"*) ;; *) echo "skip: firewall block-all is not disabled ($blockall)"; exit 77;; esac
+fi
+
+# ---- one net-check on the whole machine (see the header) ------------------------------------------------
+LOCK_FILE="${NET_CHECK_LOCK_FILE:-/tmp/zhr-net-check.lock}"
+LOCK_WAIT="${NET_CHECK_LOCK_WAIT:-900}"
+if ! exec 9>>"$LOCK_FILE"; then
+	echo "skip: cannot open the machine-wide lock $LOCK_FILE"
+	exit 77
+fi
+if ! python3 - "$LOCK_FILE" "$LOCK_WAIT" "$$" "$PWD" <<'LOCK_EOF'
+import fcntl, os, sys, time
+path, wait, pid, where = sys.argv[1], float(sys.argv[2]), sys.argv[3], sys.argv[4]
+deadline, said = time.time() + wait, False
+while True:
+    try:
+        fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)	# on the harness's own descriptor: it outlives this helper
+        break
+    except OSError:
+        try:
+            holder = open(path).read().strip() or "unknown"
+        except OSError:
+            holder = "unknown"
+        if time.time() >= deadline:
+            print("skip: another net-check held the machine-wide lock for %d s (%s)" % (wait, holder))
+            sys.exit(1)
+        if not said:
+            print("net-check: waiting up to %d s for another net-check on this machine (%s)" % (wait, holder), flush=True)
+            said = True
+        time.sleep(2)
+os.ftruncate(9, 0)
+os.write(9, ("pid %s, %s, since %s" % (pid, where, time.strftime("%H:%M:%S"))).encode())
+LOCK_EOF
+then
+	exit 77
 fi
 
 # ---- the second address, found by a probe ------------------------------------------------------------
@@ -251,12 +297,18 @@ OVERLAY="$WORK/overlay"
 	echo "net-check: stage-overlay.sh failed:" >&2; cat "$WORK/stage.out" >&2; exit 1; }
 
 # ---- a copy of the game ---------------------------------------------------------------------------------
+FD_LIMIT="${NET_CHECK_FD_LIMIT:-4096}"
+FD_ALARM=$(( FD_LIMIT * 3 / 4 ))
+fd_count() {	# open descriptors of process $1
+	if [ -d "/proc/$1/fd" ]; then ls "/proc/$1/fd" 2>/dev/null | wc -l | tr -d ' '
+	else lsof -n -P -p "$1" 2>/dev/null | awk 'NR > 1' | wc -l | tr -d ' '; fi
+}
 # start_copy <exe index> <name> <switches...>: runs it in the background, its pid in LAST_PID
 start_copy() {
 	local exe="${EXE[$1]}" name="$2"; shift 2
 	mkdir -p "$WORK/user-$name"
 	rm -f -- "$(dirname "$exe")/${TAG}${name}DebugLogFile.txt"
-	( cd "$ROOT" && exec env ZH_HIDDEN_WINDOW=1 ZH_USER_DATA_DIR="$WORK/user-$name" "$exe" -headless -root "$ROOT" \
+	( cd "$ROOT" && ulimit -n "$FD_LIMIT" && exec env ZH_HIDDEN_WINDOW=1 ZH_USER_DATA_DIR="$WORK/user-$name" "$exe" -headless -root "$ROOT" \
 		-overlay "$OVERLAY" -quickstart -noshellmap -multiInstance -noFPSLimit -maxframes "$FRAMES" \
 		-logPrefix "${TAG}${name}" "$@" > "$WORK/$name.out" 2> "$WORK/$name.err" ) &
 	LAST_PID=$!
@@ -265,17 +317,25 @@ start_copy() {
 log_of() { echo "$(dirname "${EXE[$1]}")/${TAG}$2DebugLogFile.txt"; }
 crc_of() { grep -a 'HEADLESS CRC: 0x' "$1" 2>/dev/null | tail -1 | sed -n 's/.*HEADLESS CRC: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\1 \2/p'; }
 # wait_all <seconds> <pids...>: 0 when every copy ended by itself; 1 when the time ran out; 2 when a log
-# in WATCH_LOGS showed a CRC mismatch first.  In the last two cases the copies are killed: a copy that
-# has seen a mismatch waits on its disconnect screen for good, and the verdict is already known.
+# in WATCH_LOGS showed a CRC mismatch first; 3 when a copy held FD_ALARM descriptors or more (FD_REPORT
+# says which).  In the last three cases the copies are killed: a copy that has seen a mismatch waits on
+# its disconnect screen for good, and the verdict is already known.
 WATCH_LOGS=""
 wait_all() {
 	local limit=$1; shift
-	local deadline=$(( $(date +%s) + limit )) p alive why=0 l
+	local deadline=$(( $(date +%s) + limit )) p alive why=0 l n
 	while :; do
 		alive=0
 		for p in "$@"; do kill -0 "$p" 2>/dev/null && alive=1; done
 		[ "$alive" -eq 0 ] && break
 		for l in $WATCH_LOGS; do grep -a -q 'CRC Mismatch' "$l" 2>/dev/null && why=2; done
+		for p in "$@"; do
+			n=$(fd_count "$p")
+			if [ "${n:-0}" -ge "$FD_ALARM" ]; then
+				FD_REPORT="process $p held $n descriptors (the alarm is $FD_ALARM of a $FD_LIMIT limit): a descriptor leak"
+				why=3
+			fi
+		done
 		[ "$why" -eq 0 ] && [ "$(date +%s)" -ge "$deadline" ] && why=1
 		if [ "$why" -ne 0 ]; then
 			for p in "$@"; do kill "$p" 2>/dev/null; done
@@ -305,11 +365,13 @@ WATCH_LOGS=""
 case $ended in
 	1) how=", STOPPED after $LIVE_TIMEOUT s";;
 	2) how=", stopped at the first CRC mismatch";;
+	3) how=", STOPPED: $FD_REPORT";;
 	*) how="";;
 esac
 echo "  the match: $(( $(date +%s) - started )) s$how"
 
 bad=""
+[ "$ended" -eq 3 ] && bad=" DESCRIPTOR LEAK: $FD_REPORT;"
 LIVE_CRC0=none; LIVE_FRAME0=none; LIVE_CRC1=none; LIVE_FRAME1=none
 for s in 0 1; do
 	log="$(log_of "$s" "live$s")"
@@ -378,7 +440,12 @@ for s in 0 1; do
 		echo "  copy 0's replay: every recorded CRC at frame $CORRUPTED changed by one bit (the playback check's control)"
 	fi
 	start_copy "$s" "back$s" -replay "netcheck$s"
-	wait_all "$LIVE_TIMEOUT" "$LAST_PID" || bad="$bad the playback of copy $s's replay was STOPPED after $LIVE_TIMEOUT s;"
+	wait_all "$LIVE_TIMEOUT" "$LAST_PID"
+	case $? in
+		0) ;;
+		3) bad="$bad DESCRIPTOR LEAK in the playback of copy $s's replay: $FD_REPORT;";;
+		*) bad="$bad the playback of copy $s's replay was STOPPED after $LIVE_TIMEOUT s;";;
+	esac
 	log="$(log_of "$s" "back$s")"
 	read -r crc frame <<< "$(crc_of "$log")"
 	oos="$(grep -a -m1 'Replay has gone out of sync' "$log" 2>/dev/null)"
