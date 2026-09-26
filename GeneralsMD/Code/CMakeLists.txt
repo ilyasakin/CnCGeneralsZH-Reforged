@@ -91,14 +91,15 @@ set(VENDORED
     # litehtml and nanosvg are common rather than Windows-only: gameengine links litehtml and
     # compiles nanosvg into HtmlOverlay.cpp, and gameengine is what the macOS build is for.
     ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/litehtml/CMakeLists.txt
-    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/nanosvg/nanosvgrast.h)
-# The DirectX 8 headers and the GameSpy SDK are only read by targets this file does not define on
-# macOS, and A2 decides what a Mac fetch pulls down.  Demanding them here would stop a Mac
-# configure over files nothing portable includes.
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/nanosvg/nanosvgrast.h
+    # The GameSpy SDK is built everywhere since B6 (see "gamespy" below).
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/GameSpy/CMakeLists.txt)
+# The DirectX 8 headers are only read by targets this file does not define on macOS, and A2 decides
+# what a Mac fetch pulls down.  Demanding them here would stop a Mac configure over files nothing
+# portable includes.
 if(ZH_PLATFORM_WINDOWS)
   list(APPEND VENDORED
-    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/DirectX/Include/d3d8.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/GameSpy/CMakeLists.txt)
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/DirectX/Include/d3d8.h)
   set(VENDOR_HINT "Run Tools\\vendor.ps1 (build.bat does it for you).")
 else()
   # SDL3 and miniaudio are the platform layer everywhere but Windows (decision 3).
@@ -720,10 +721,11 @@ target_include_directories(eabrowserdispatch
 endif()  # ZH_PLATFORM_WINDOWS - MIDL-generated browser dispatch
 
 # ---- gamespy --------------------------------------------------------------
-# Windows for now, and only for now: the SDK is CMake-based and portable, and B6 is the task that
-# tries it for real on macOS rather than stubbing it.  Until then a Mac configure does not need the
-# vendored SDK on disk, which is why the guard is around add_subdirectory and not just the flags.
-if(ZH_PLATFORM_WINDOWS)
+# Every platform (B6): the SDK is CMake-based and portable, and gameengine's online code - PeerThread,
+# BuddyThread, PersistentStorageThread, MainMenuUtils - calls 89 of its entry points.  Built for real
+# rather than stubbed, with Tools/vendor.sh's two patches applied (gamespy-strlwr-c-only.patch, and
+# gamespy-gsi-unix.patch, which renames its _UNIX to GSI_UNIX so no engine file sees _UNIX).  Nothing
+# in it runs until a player opens the online menus, and the services it would reach are gone.
 # PLAN.md called for hand-written stubs behind the five GameSpy* libs, but the
 # real SDK is open source (TheSuperHackers/GamespySDK, itself CMake-based), so
 # vendor and build it instead: correct signatures, structs and enum values
@@ -736,7 +738,6 @@ set(GS_SECURESECONNECT  OFF CACHE BOOL "" FORCE)
 set(GS_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
 set(GS_INCLUDE_VOICE    OFF CACHE BOOL "" FORCE)
 add_subdirectory(${LIBSRC}/GameSpy ${CMAKE_CURRENT_BINARY_DIR}/gamespy)
-endif()  # ZH_PLATFORM_WINDOWS - GameSpy SDK
 
 # ---- litehtml -------------------------------------------------------------
 # The HTML and CSS layout engine behind the pages drawn over the battlefield (GameClient/
@@ -1072,6 +1073,21 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(posixdevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
   set_target_properties(posixdevice PROPERTIES CXX_STANDARD 17)
   target_link_libraries(posixdevice PUBLIC gameengine)
+  # PosixRenderHooks.cpp on its own, ahead of gameengine linking: decision 2 (B19 (c)) lives in its
+  # testMinimumRequirements, checked against the shipped GameLODPresets.ini when ZH_GAME_DATA is set.
+  # See Tests/test_posix_render_hooks.cpp.
+  add_executable(posix_render_hooks_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_render_hooks.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/GameClient/PosixRenderHooks.cpp)
+  target_include_directories(posix_render_hooks_selfcheck PRIVATE
+    $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
+    ${LIBSRC}/Benchmark)
+  target_compile_definitions(posix_render_hooks_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+  set_target_properties(posix_render_hooks_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(posix_render_hooks_selfcheck PRIVATE wwlib wwdebug benchmark)
+  add_test(NAME posix_render_hooks_selfcheck COMMAND posix_render_hooks_selfcheck)
+  if(ZH_GAME_DATA)
+    set_tests_properties(posix_render_hooks_selfcheck PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
 endif()
 
 # ===========================================================================
