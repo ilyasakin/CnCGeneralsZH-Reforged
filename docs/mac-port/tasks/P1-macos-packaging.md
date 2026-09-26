@@ -3,7 +3,7 @@
 - **Milestone:** M5
 - **Depends on:** C1 (file systems), C2 (entry point), V1 (FFmpeg's licence); E1 for the convergence step
 - **Blocks:** anything a player runs; E2's notarisation question
-- **Status:** design approved (2026-09-26); step 1 done on its branch; step 5 (the `.app`) held until the PM says (disk)
+- **Status:** design approved (2026-09-26); step 1 merged; step 2 on its branch; step 5 (the `.app`) held until the PM says (disk)
 - **Owner:** -47
 
 ## Why
@@ -279,3 +279,73 @@ see the overlay. The local file system needed no change.
 **What it cannot see.** Windows' own `Run/` (W is the farm standing in for it, as E1's is); a write
 that bypasses `zh_*` and `posixpath` (raw `fopen` of a relative path), which step 2's audit looks for;
 Linux (the disk hold).
+
+## Step 2: read-only roots, the writer audit, logs out of the bundle (-47, 2026-09-26)
+
+**Read-only roots.** `PosixPath_Set_Root_Read_Only`, set by `PosixMain` for every run:
+- every `zh_*` call that would write a RELATIVE path is refused with `EROFS` and reported once per
+  path on stderr (and to WWDebug). That covers create, truncate, append, update (`r+`), remove,
+  unlink, rename (either end) and mkdir;
+- absolute paths (the user data directory, logs, a `-mod` folder) are the engine's deliberate
+  destinations and pass;
+- `-writableRoot` turns it off, for a harness's armed control only.
+The refusal sits in the `zh_*` wrappers, not in `PosixPath_Resolve`, because the listing code
+resolves directories with the root-only intent just to read them.
+
+**The audit.** The design's 31 grep hits are classified, and a second sweep covers writes that bypass
+`zh_*` (raw `fopen`, `open`, `rename`, `unlink`, `mkdir`, `ofstream`) in GameEngine,
+GameEngineDevice, Main and WWVegas:
+- **the user data directory** (absolute, unaffected): saves, replays and their archive, map previews,
+  the GameSpy folders, the model-CRC cache, screenshots, Options.ini/Registry.ini, the crash
+  reports;
+- **relative, now refused:** `GameEngine::init`'s `Data\INI\INIZH.big` delete, a logged no-op;
+  `MainMenuUtils`' `PatchAccessTest.txt` probe, whose POSIX branch called raw `open()`, now
+  `zh_open`, so a read-only install answers "no write access", which is true;
+- **found by the proof run, missed by the grep:** `ffprobe.txt`. The fixed-function probe is always
+  on (W3DDisplay), and `DX8Wrapper::Shutdown` dumps it with a raw `fopen` into the working
+  directory at every exit: `Run/` on Windows, the player's install here. Its POSIX branch is now
+  `zh_fopen`, so it is refused;
+- **relative, debug and dev tools only, not in a release build:** `-playStats`' `Stats\`, the
+  `.\` stats base, `-updateTGAToDDS`'s `buildDDS.txt`, the particle editor's
+  `Data\INI\ParticleSystem*.ini`, `PreloadedAssets.txt`, `FrameRateLog.txt` and the other
+  `_DEBUG`/`_INTERNAL`/`DUMP_PERF_STATS` dumps. The water-track editor is Windows-only. If one is
+  ever built, the read-only root refuses it (through `zh_*`) or the raw `fopen` needs the same
+  one-line branch.
+
+**Logs out of the bundle.** `getLogDirectory` (POSIX): the executable's directory, as on Windows,
+unless the executable is inside `.app/Contents/MacOS`, in which case `<user data>/Logs/`. Debug.cpp
+and MiniLog.cpp take it through a POSIX-only branch. The crash report was already in user data.
+`MemoryInit`'s read of `Data/INI/MemoryPools.ini` beside the executable is a read (absent in a
+bundle, so defaults), and was left as it is.
+
+**Checks.**
+- `test_posixpath`: `read_only_root_refuses_relative_writes_only`, each writer against the read-only
+  root (`EROFS`, nothing changed), reads and absolute writes unaffected; the control with read-only
+  off does write.
+- `root_readonly_check` (`Tools/root-readonly-check.sh`, ctest, needs `ZH_GAME_DATA`):
+  1. the install's listing (names, sizes, mtimes, stat only) is taken FIRST;
+  2. a 600-frame skirmish rooted at a farm of the install with the overlay, and a real
+     `Data/INI/INIZH.big` planted (the farm link removed first);
+  3. afterwards the plant survives, the refusals are reported (`INIZH.big`, `ffprobe.txt`), and the
+     farm's listing and the install's are unchanged;
+  4. the armed control runs with `-writableRoot` in a root holding only the plant, never a farm of
+     the install. It deletes the plant, so the check sees a write when there is one. It runs from
+     the executable hard-linked into `Fake.app/Contents/MacOS`, and its log must be in
+     `<user data>/Logs`, not in the bundle.
+
+**INCIDENT, recorded as it happened.** The first version of `root-readonly-check.sh` planted the file
+with a plain `printf >` into the farm. The install has `Data/INI/INIZH.big` (the stray this whole
+step protects), so the farm entry was a link to it, and the write went through the link. **The
+install's `Data/INI/INIZH.big` was overwritten with 31 bytes, twice, by the harness, not the game.**
+- The check's own install listing diff flagged it.
+- No copy exists on this machine and there is no backup, so it cannot be restored here. It is the
+  file the game itself deletes on its first Windows start, and nothing reads it
+  (`test_bigfilesystem`, `test_install_textures` and `gametext_csf` still pass).
+- Restoring it from the install's source, deleting it, or leaving it is the user's decision; the PM
+  was told at once.
+- The script now removes the link before writing, snapshots the install before it writes anything,
+  and runs its writable control outside any farm. A memory records the lesson for later sessions.
+
+**What these cannot see.** A raw writer in a library not swept (the audit covered GameEngine,
+GameEngineDevice, Main and WWVegas); a debug build's dumps (not built here); a real signed bundle
+(the hard link stands in for its path, not its signature).
