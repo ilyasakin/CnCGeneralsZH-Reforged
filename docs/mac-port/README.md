@@ -223,6 +223,11 @@ Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, 
 
 ### Known gaps, not on a milestone's critical path
 
+- **Upstream: retail replay headers (-18's LP64 audit, 2026-09-26).** Retail (VC6, 4-byte `time_t`)
+  `.rep` headers are probably offset after `GENREP` in both of the fork's 64-bit builds. `Recorder.cpp`
+  writes and reads the header's `time_t` fields raw with `sizeof(time_t)`, which is 8 bytes on Windows
+  x64 and on macOS alike. Unverified against a real retail replay. It is not a port item: Windows x64 and
+  macOS agree with each other.
 - **The app icon needs a 1024 px master (P1, 2026-09-26).** `Main/Generals.ico` tops out at 48 px, and
   a Retina Dock icon is built from 1024 px. Until someone who owns the fork's artwork supplies one, the
   `.icns` comes from the 48 px image and looks soft. Owner: the fork's art, not a port task.
