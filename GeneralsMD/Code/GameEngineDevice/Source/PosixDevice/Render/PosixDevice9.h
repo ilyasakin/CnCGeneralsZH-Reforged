@@ -1,0 +1,295 @@
+/*
+**	Command & Conquer Generals Zero Hour(tm)
+**	Copyright 2025 Electronic Arts Inc.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/*
+** The Direct3D 9-shaped device off Windows (decision 7): what d3d9.dll is on Windows, behind the same
+** interfaces (Platform/D3D9Posix.h), so WW3D2 and W3DDevice keep every D3D9 call they make.
+**
+** Two owners, one file each, so neither edits the other's (agreed 2026-09-26):
+**   - a contributor: this header; PosixDirect3D9.cpp (the adapter, its modes, CreateDevice and Reset);
+**     PosixDevice9.cpp (the device's state, bindings, scenes, presentation, shaders and draws);
+**   - a contributor (phase A2): PosixDevice9Resources.cpp (every resource-creating and surface method, Clear,
+**     and Create_Implicit_Surfaces); PosixD3D9Caps.cpp (the caps, the Check* answers and the adapter
+**     identifier); the resource classes, in files of their own.
+**
+** No window is a real case, not an error: -headless starts no video, so the device is made with a null
+** RenderWindow and must work as Windows' -headless device on its hidden window does - resources and
+** state for real, and draws that are never seen.  So with no window a draw succeeds and does nothing;
+** with a window, a draw fails loudly until A3 puts it on SDL3 GPU.
+**
+** Reference counting is COM's: every object is born with one reference, Release deletes at zero, a Get
+** method AddRefs what it hands out, and binding an object (SetTexture, SetStreamSource, ...) holds a
+** reference until something else is bound or the device goes.  Counts are atomic: WW3D2's texture
+** loader thread creates textures while the main thread draws.
+*/
+
+#pragma once
+
+#ifndef POSIXDEVICE9_H
+#define POSIXDEVICE9_H
+
+#include "Platform/RenderTypes.h"
+#include "Platform/D3D9Posix.h"
+
+#include <atomic>
+
+/// AddRef and Release for one of the interfaces, counted as COM counts.
+template <class Interface>
+class PosixRefCounted : public Interface
+{
+public:
+	uint32_t AddRef() override { return ++References; }
+	uint32_t Release() override
+	{
+		const uint32_t left = --References;
+		if (left == 0) {
+			delete this;
+		}
+		return left;
+	}
+
+protected:
+	PosixRefCounted() : References(1) {}
+	virtual ~PosixRefCounted() {}
+
+private:
+	std::atomic<uint32_t> References;
+};
+
+/// Holds a reference to whatever it is given, dropping the one it held: a binding slot.
+template <class Object>
+inline void Posix_Bind(Object *&slot, Object *object)
+{
+	if (object != NULL) {
+		object->AddRef();
+	}
+	if (slot != NULL) {
+		slot->Release();
+	}
+	slot = object;
+}
+
+/// Hands out what a slot holds, with a reference of the caller's own, as D3D9's Get methods do.
+template <class Object>
+inline RenderResult Posix_Hand_Out(Object *slot, Object **out)
+{
+	if (out == NULL) {
+		return D3DERR_INVALIDCALL;
+	}
+	*out = slot;
+	if (slot != NULL) {
+		slot->AddRef();
+	}
+	return D3D_OK;
+}
+
+//-------------------------------------------------------------------------------------------------
+// The adapter: Direct3DCreate9's object.
+//-------------------------------------------------------------------------------------------------
+
+class PosixDirect3D9 : public PosixRefCounted<IDirect3D9>
+{
+public:
+	PosixDirect3D9();
+
+	unsigned int GetAdapterCount() override;
+	RenderResult GetAdapterIdentifier(unsigned int adapter, RenderUInt32 flags, D3DADAPTER_IDENTIFIER9 *identifier) override;	// a contributor
+	unsigned int GetAdapterModeCount(unsigned int adapter, D3DFORMAT format) override;
+	RenderResult EnumAdapterModes(unsigned int adapter, D3DFORMAT format, unsigned int mode, D3DDISPLAYMODE *display_mode) override;
+	RenderResult GetAdapterDisplayMode(unsigned int adapter, D3DDISPLAYMODE *mode) override;
+	RenderResult CheckDeviceType(unsigned int adapter, D3DDEVTYPE type, D3DFORMAT display_format,
+		D3DFORMAT back_buffer_format, int windowed) override;																	// a contributor
+	RenderResult CheckDeviceFormat(unsigned int adapter, D3DDEVTYPE type, D3DFORMAT adapter_format, RenderUInt32 usage,
+		D3DRESOURCETYPE resource_type, D3DFORMAT check_format) override;														// a contributor
+	RenderResult CheckDeviceMultiSampleType(unsigned int adapter, D3DDEVTYPE type, D3DFORMAT surface_format,
+		int windowed, D3DMULTISAMPLE_TYPE multisample, RenderUInt32 *quality_levels) override;								// a contributor
+	RenderResult CheckDepthStencilMatch(unsigned int adapter, D3DDEVTYPE type, D3DFORMAT adapter_format,
+		D3DFORMAT render_target_format, D3DFORMAT depth_stencil_format) override;											// a contributor
+	RenderResult GetDeviceCaps(unsigned int adapter, D3DDEVTYPE type, D3DCAPS9 *caps) override;								// a contributor
+	RenderResult CreateDevice(unsigned int adapter, D3DDEVTYPE type, RenderWindow focus_window,
+		RenderUInt32 behaviour_flags, D3DPRESENT_PARAMETERS *parameters, IDirect3DDevice9 **device) override;
+};
+
+//-------------------------------------------------------------------------------------------------
+// The device.
+//-------------------------------------------------------------------------------------------------
+
+class PosixDevice9 : public PosixRefCounted<IDirect3DDevice9>
+{
+public:
+	enum
+	{
+		RENDER_STATE_COUNT = 256,		// D3DRENDERSTATETYPE's values are all below this
+		TEXTURE_STAGE_COUNT = 8,
+		TEXTURE_STAGE_STATE_COUNT = 33,	// D3DTEXTURESTAGESTATETYPE's values are all below this
+		SAMPLER_COUNT = 16,
+		SAMPLER_STATE_COUNT = 14,		// D3DSAMPLERSTATETYPE's values are all below this
+		TRANSFORM_COUNT = 512,			// D3DTS_WORLDMATRIX(255) is 511
+		LIGHT_COUNT = 8,
+		CLIP_PLANE_COUNT = 6,
+		STREAM_COUNT = 16,
+		RENDER_TARGET_COUNT = 4,
+		VERTEX_SHADER_CONSTANT_COUNT = 256,
+		PIXEL_SHADER_CONSTANT_COUNT = 32
+	};
+
+	PosixDevice9(PosixDirect3D9 *adapter, RenderWindow window, const D3DPRESENT_PARAMETERS &parameters);
+
+	// What a contributor's resource code reads.
+	const D3DPRESENT_PARAMETERS & Get_Present_Parameters() const { return Parameters; }
+	RenderWindow Get_Window() const { return Window; }
+
+	/// Makes the implicit back buffer (and depth surface, when the present parameters ask for one) from
+	/// the present parameters, and binds them as render target 0 and the depth surface.  CreateDevice and
+	/// Reset call it, with every implicit surface already released.  a contributor's, in PosixDevice9Resources.cpp.
+	RenderResult Create_Implicit_Surfaces();
+
+	RenderResult TestCooperativeLevel() override;
+	unsigned int GetAvailableTextureMem() override;
+	RenderResult EvictManagedResources() override;
+	RenderResult GetDeviceCaps(D3DCAPS9 *caps) override;																		// a contributor
+	RenderResult GetDisplayMode(unsigned int swap_chain, D3DDISPLAYMODE *mode) override;
+	RenderResult SetCursorProperties(unsigned int hotspot_x, unsigned int hotspot_y, IDirect3DSurface9 *bitmap) override;
+	void SetCursorPosition(int x, int y, RenderUInt32 flags) override;
+	int ShowCursor(int show) override;
+	RenderResult CreateAdditionalSwapChain(D3DPRESENT_PARAMETERS *parameters, IDirect3DSwapChain9 **swap_chain) override;
+	RenderResult Reset(D3DPRESENT_PARAMETERS *parameters) override;
+	RenderResult Present(const RenderRect *source, const RenderRect *dest, RenderWindow override_window,
+		const void *dirty_region) override;
+	RenderResult GetBackBuffer(unsigned int swap_chain, unsigned int index, D3DBACKBUFFER_TYPE type,
+		IDirect3DSurface9 **surface) override;																					// a contributor
+	void SetGammaRamp(unsigned int swap_chain, RenderUInt32 flags, const D3DGAMMARAMP *ramp) override;
+
+	// a contributor's: resources and surfaces.
+	RenderResult CreateTexture(unsigned int width, unsigned int height, unsigned int levels, RenderUInt32 usage,
+		D3DFORMAT format, D3DPOOL pool, IDirect3DTexture9 **texture, void **shared) override;
+	RenderResult CreateVolumeTexture(unsigned int width, unsigned int height, unsigned int depth, unsigned int levels,
+		RenderUInt32 usage, D3DFORMAT format, D3DPOOL pool, IDirect3DVolumeTexture9 **texture, void **shared) override;
+	RenderResult CreateCubeTexture(unsigned int edge, unsigned int levels, RenderUInt32 usage, D3DFORMAT format,
+		D3DPOOL pool, IDirect3DCubeTexture9 **texture, void **shared) override;
+	RenderResult CreateVertexBuffer(unsigned int length, RenderUInt32 usage, RenderUInt32 fvf, D3DPOOL pool,
+		IDirect3DVertexBuffer9 **buffer, void **shared) override;
+	RenderResult CreateIndexBuffer(unsigned int length, RenderUInt32 usage, D3DFORMAT format, D3DPOOL pool,
+		IDirect3DIndexBuffer9 **buffer, void **shared) override;
+	RenderResult CreateRenderTarget(unsigned int width, unsigned int height, D3DFORMAT format,
+		D3DMULTISAMPLE_TYPE multisample, RenderUInt32 quality, int lockable, IDirect3DSurface9 **surface, void **shared) override;
+	RenderResult CreateDepthStencilSurface(unsigned int width, unsigned int height, D3DFORMAT format,
+		D3DMULTISAMPLE_TYPE multisample, RenderUInt32 quality, int discard, IDirect3DSurface9 **surface, void **shared) override;
+	RenderResult UpdateSurface(IDirect3DSurface9 *source, const RenderRect *source_rect, IDirect3DSurface9 *dest,
+		const RenderPoint *dest_point) override;
+	RenderResult UpdateTexture(IDirect3DBaseTexture9 *source, IDirect3DBaseTexture9 *dest) override;
+	RenderResult GetRenderTargetData(IDirect3DSurface9 *render_target, IDirect3DSurface9 *dest) override;
+	RenderResult GetFrontBufferData(unsigned int swap_chain, IDirect3DSurface9 *dest) override;
+	RenderResult StretchRect(IDirect3DSurface9 *source, const RenderRect *source_rect, IDirect3DSurface9 *dest,
+		const RenderRect *dest_rect, D3DTEXTUREFILTERTYPE filter) override;
+	RenderResult CreateOffscreenPlainSurface(unsigned int width, unsigned int height, D3DFORMAT format, D3DPOOL pool,
+		IDirect3DSurface9 **surface, void **shared) override;
+	RenderResult SetRenderTarget(RenderUInt32 index, IDirect3DSurface9 *surface) override;
+	RenderResult GetRenderTarget(RenderUInt32 index, IDirect3DSurface9 **surface) override;
+	RenderResult SetDepthStencilSurface(IDirect3DSurface9 *surface) override;
+	RenderResult GetDepthStencilSurface(IDirect3DSurface9 **surface) override;
+	RenderResult Clear(RenderUInt32 count, const D3DRECT *rects, RenderUInt32 flags, D3DCOLOR color, float z,
+		RenderUInt32 stencil) override;
+
+	RenderResult BeginScene() override;
+	RenderResult EndScene() override;
+	RenderResult SetTransform(D3DTRANSFORMSTATETYPE state, const D3DMATRIX *matrix) override;
+	RenderResult GetTransform(D3DTRANSFORMSTATETYPE state, D3DMATRIX *matrix) override;
+	RenderResult SetViewport(const D3DVIEWPORT9 *viewport) override;
+	RenderResult GetViewport(D3DVIEWPORT9 *viewport) override;
+	RenderResult SetMaterial(const D3DMATERIAL9 *material) override;
+	RenderResult SetLight(RenderUInt32 index, const D3DLIGHT9 *light) override;
+	RenderResult LightEnable(RenderUInt32 index, int enable) override;
+	RenderResult SetClipPlane(RenderUInt32 index, const float *plane) override;
+	RenderResult SetRenderState(D3DRENDERSTATETYPE state, RenderUInt32 value) override;
+	RenderResult GetRenderState(D3DRENDERSTATETYPE state, RenderUInt32 *value) override;
+	RenderResult GetTexture(RenderUInt32 stage, IDirect3DBaseTexture9 **texture) override;
+	RenderResult SetTexture(RenderUInt32 stage, IDirect3DBaseTexture9 *texture) override;
+	RenderResult GetTextureStageState(RenderUInt32 stage, D3DTEXTURESTAGESTATETYPE type, RenderUInt32 *value) override;
+	RenderResult SetTextureStageState(RenderUInt32 stage, D3DTEXTURESTAGESTATETYPE type, RenderUInt32 value) override;
+	RenderResult SetSamplerState(RenderUInt32 sampler, D3DSAMPLERSTATETYPE type, RenderUInt32 value) override;
+	RenderResult ValidateDevice(RenderUInt32 *passes) override;
+	RenderResult SetSoftwareVertexProcessing(int software) override;
+	RenderResult DrawPrimitive(D3DPRIMITIVETYPE type, unsigned int start_vertex, unsigned int primitive_count) override;
+	RenderResult DrawIndexedPrimitive(D3DPRIMITIVETYPE type, int base_vertex, unsigned int min_vertex,
+		unsigned int vertex_count, unsigned int start_index, unsigned int primitive_count) override;
+	RenderResult DrawPrimitiveUP(D3DPRIMITIVETYPE type, unsigned int primitive_count, const void *vertices,
+		unsigned int stride) override;
+	RenderResult ProcessVertices(unsigned int source_start, unsigned int dest_index, unsigned int vertex_count,
+		IDirect3DVertexBuffer9 *dest, IDirect3DVertexDeclaration9 *declaration, RenderUInt32 flags) override;
+	RenderResult CreateVertexDeclaration(const D3DVERTEXELEMENT9 *elements, IDirect3DVertexDeclaration9 **declaration) override;
+	RenderResult SetVertexDeclaration(IDirect3DVertexDeclaration9 *declaration) override;
+	RenderResult SetFVF(RenderUInt32 fvf) override;
+	RenderResult CreateVertexShader(const RenderUInt32 *function, IDirect3DVertexShader9 **shader) override;
+	RenderResult SetVertexShader(IDirect3DVertexShader9 *shader) override;
+	RenderResult GetVertexShader(IDirect3DVertexShader9 **shader) override;
+	RenderResult SetVertexShaderConstantF(unsigned int start, const float *data, unsigned int count) override;
+	RenderResult SetStreamSource(unsigned int stream, IDirect3DVertexBuffer9 *buffer, unsigned int offset,
+		unsigned int stride) override;
+	RenderResult SetIndices(IDirect3DIndexBuffer9 *buffer) override;
+	RenderResult GetIndices(IDirect3DIndexBuffer9 **buffer) override;
+	RenderResult CreatePixelShader(const RenderUInt32 *function, IDirect3DPixelShader9 **shader) override;
+	RenderResult SetPixelShader(IDirect3DPixelShader9 *shader) override;
+	RenderResult GetPixelShader(IDirect3DPixelShader9 **shader) override;
+	RenderResult SetPixelShaderConstantF(unsigned int start, const float *data, unsigned int count) override;
+
+protected:
+	~PosixDevice9() override;
+
+	/// Drops every implicit surface and every render target and depth binding.  Reset and the destructor.
+	void Release_Surfaces();
+	/// A draw's answer before A3: nothing to show with no window, so success; with one, a loud failure.
+	RenderResult Draw_Unavailable(const char *what);
+
+	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
+	RenderWindow Window;				///< null under -headless
+	D3DPRESENT_PARAMETERS Parameters;
+
+	// The surfaces: the implicit ones CreateDevice makes, and what is bound.  a contributor's code fills them; all of
+	// them are references this device holds, released by Release_Surfaces.
+	IDirect3DSurface9 *BackBuffer;
+	IDirect3DSurface9 *DepthSurface;
+	IDirect3DSurface9 *RenderTargets[RENDER_TARGET_COUNT];
+	IDirect3DSurface9 *DepthStencil;
+
+	// The state, as set.  A3 reads it at the draw.
+	bool InScene;
+	RenderUInt32 RenderStates[RENDER_STATE_COUNT];
+	RenderUInt32 TextureStageStates[TEXTURE_STAGE_COUNT][TEXTURE_STAGE_STATE_COUNT];
+	RenderUInt32 SamplerStates[SAMPLER_COUNT][SAMPLER_STATE_COUNT];
+	D3DMATRIX Transforms[TRANSFORM_COUNT];
+	D3DVIEWPORT9 Viewport;
+	D3DMATERIAL9 Material;
+	D3DLIGHT9 Lights[LIGHT_COUNT];
+	bool LightsEnabled[LIGHT_COUNT];
+	float ClipPlanes[CLIP_PLANE_COUNT][4];
+	IDirect3DBaseTexture9 *Textures[SAMPLER_COUNT];
+	IDirect3DVertexBuffer9 *Streams[STREAM_COUNT];
+	unsigned int StreamOffsets[STREAM_COUNT];
+	unsigned int StreamStrides[STREAM_COUNT];
+	IDirect3DIndexBuffer9 *Indices;
+	IDirect3DVertexDeclaration9 *Declaration;
+	RenderUInt32 FVF;
+	IDirect3DVertexShader9 *VertexShader;
+	IDirect3DPixelShader9 *PixelShader;
+	float VertexShaderConstants[VERTEX_SHADER_CONSTANT_COUNT][4];
+	float PixelShaderConstants[PIXEL_SHADER_CONSTANT_COUNT][4];
+	D3DGAMMARAMP GammaRamp;
+};
+
+#endif // POSIXDEVICE9_H

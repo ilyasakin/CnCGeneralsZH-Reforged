@@ -108,6 +108,8 @@ private:
 	static int	TextureInactiveOverrideTime;
 };
 
+class TextureLoadTaskListClass;	// the friend below does not declare it for lookup outside MSVC
+
 class TextureLoadTaskListNodeClass
 {
 	friend class TextureLoadTaskListClass;

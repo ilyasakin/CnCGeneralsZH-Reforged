@@ -36,14 +36,14 @@
 #ifndef __W3DSHADERMANAGER_H_
 #define __W3DSHADERMANAGER_H_
 
-#include "WW3D2/Texture.h"
+#include "WW3D2/texture.h"
 enum FilterTypes : Int;
 enum FilterModes : Int;
-enum CustomScenePassModes;
+#include "W3DDevice/GameClient/W3DCustomScene.h"	// CustomScenePassModes, which ISO C++ cannot forward-declare
 enum StaticGameLODLevel : Int;
 enum ChipsetType : Int;
 enum CpuType : Int;
-enum GraphicsVenderID;
+enum GraphicsVenderID : int;	// defined in W3DShaderManager.cpp with the same int, as MSVC's is
 
 #include <d3d9.h>
 #include "Platform/RenderTypes.h"
@@ -86,7 +86,7 @@ public:
 	static void shutdown(void);	///<release resources used by shaders
 	static ChipsetType getChipset(void);	///<return current device chipset.
 	static GraphicsVenderID getCurrentVendor(void) {return m_currentVendor;}	///<return current card vendor.
-	static __int64 getCurrentDriverVersion(void) {return m_driverVersion; }	///<return current driver version.
+	static Int64 getCurrentDriverVersion(void) {return m_driverVersion; }	///<return current driver version.
 	static Int getShaderPasses(ShaderTypes shader);	///<rendering passes required for shader
 	static Int setShader(ShaderTypes shader, Int pass);	///<enable specific shader pass.
 	static Int setShroudTex(Int stage);	///<Set shroud in a texture stage.
@@ -126,7 +126,7 @@ protected:
 	static TextureClass *m_Textures[8];	///textures assigned to each of the possible stages
 	static ChipsetType m_currentChipset;	///<last video card chipset that was detected.
 	static GraphicsVenderID m_currentVendor;	///<last video card vendor
-	static __int64 m_driverVersion;			///<driver version of last chipset.
+	static Int64 m_driverVersion;			///<driver version of last chipset.
 	static ShaderTypes m_currentShader;	///<last shader that was set.
 	static Int m_currentShaderPass;		///<pass of last shader that was set.
 

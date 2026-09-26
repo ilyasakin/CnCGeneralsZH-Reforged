@@ -35,7 +35,9 @@
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////////////////////////
 #include <stdlib.h>
 #include "Lib/Clock.h"
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "Common/BuildAssistant.h"
@@ -89,19 +91,21 @@
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/W3DCustomScene.h"
 
-#include "WW3D2/DX8Renderer.h"
-#include "WW3D2/Light.h"
-#include "WW3D2/Camera.h"
-#include "WW3D2/Coltype.h"
-#include "WW3D2/PredLod.h"
-#include "WW3D2/WW3D.h"
+#include "WW3D2/dx8renderer.h"
+#include "WW3D2/light.h"
+#include "WW3D2/camera.h"
+#include "WW3D2/coltype.h"
+#include "WW3D2/predlod.h"
+#include "WW3D2/ww3d.h"
 #include "WW3D2/dx11runtime.h"
 
 #include "W3DDevice/GameClient/camerashakesystem.h"
 
+#if defined(_WIN32)
 #include "WinMain.h"  /** @todo Remove this, it's only here because we
 													are using timeGetTime, but we can remove that
 													when we have our own timer */
+#endif
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -1189,8 +1193,8 @@ void W3DView::update(void)
 	Bool recalcCamera = m_recalcCamera;
 	Bool didScriptedMovement = false;
 #ifdef LOG_FRAME_TIMES
-	__int64 curTime64,freq64;
-	static __int64 prevTime64=0;
+	Int64 curTime64,freq64;
+	static Int64 prevTime64=0;
 	freq64 = Clock_Ticks_Per_Second();
 	curTime64 = Clock_Ticks();
 	freq64 /= 1000;

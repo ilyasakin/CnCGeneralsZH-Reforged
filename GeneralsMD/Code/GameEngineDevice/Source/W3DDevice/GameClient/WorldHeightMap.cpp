@@ -27,7 +27,9 @@
 // Author: John Ahlquist, April 2001
 
 
+#if defined(_WIN32)
 #include "windows.h"
+#endif
 #include "stdlib.h"
 #include <string.h>
 #include "Common/STLTypedefs.h"

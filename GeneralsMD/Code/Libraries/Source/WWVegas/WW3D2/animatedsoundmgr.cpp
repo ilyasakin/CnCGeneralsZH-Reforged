@@ -47,13 +47,15 @@
 #include "definition.h"
 #include "definitionmgr.h"
 #include "definitionclassids.h"
-#include "wwaudio.h"
-#include "audiblesound.h"
+#if defined(_WIN32)	// WWAudio is Miles's, Windows only; sound reaches the game through SoundLibraryBridgeClass
+#include "WWAudio.h"
+#include "AudibleSound.h"
+#endif
 #include "htree.h"
 #include "hanim.h"
 #include "soundlibrarybridge.h"
 
-#include "WWDebug.h"
+#include "wwdebug.h"
 
 //////////////////////////////////////////////////////////////////////
 //	Static member initialization

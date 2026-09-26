@@ -67,7 +67,9 @@
 #include <srColorSurface.hpp>
 #include <srTextureIFace.hpp>
 						  
+#if defined(_WIN32)
 #include <direct.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #ifdef _UNIX
@@ -124,7 +126,7 @@ int Compressor::Compress( const unsigned char * in, unsigned int in_len,
 												 unsigned char * out, unsigned int * out_len )
 {
 	if (!in || !out || !out_len)
-		return FALSE;
+		return false;
 
 	if (in_len <= 0)
 		return false;
@@ -133,14 +135,14 @@ int Compressor::Compress( const unsigned char * in, unsigned int in_len,
 
 	*out_len = in_len;
 
-	return TRUE;
+	return true;
 }
 
 int Compressor::Decompress( const unsigned char * in, unsigned int in_len,
 													 unsigned char * out, unsigned int * out_len )
 {
 	if (!in || !out || !out_len)
-		return FALSE;
+		return false;
 
 	if (in_len <= 0)
 		return false;
@@ -149,7 +151,7 @@ int Compressor::Decompress( const unsigned char * in, unsigned int in_len,
 
 	*out_len = in_len;
 
-	return TRUE;
+	return true;
 }
 
 
@@ -376,7 +378,7 @@ bool TextureFileCache::Save_Texture(const char *texturename, srTextureIFace::Mul
 
 
 		// Lots-o-test to make sure that the compression did what we want.
-		assert(retcode == TRUE);
+		assert(retcode == true);
 		Verify_Compression_Buffer();
 
 		int readin = TextureHandle->Write(Get_Compression_Buffer(compsize), compsize);
@@ -646,7 +648,7 @@ void TextureFileCache::Read_Texture(int offsetidx, srColorSurface *surface)
 														(unsigned *)			&decompsize);
 
 	// Lots-o-test to make sure that the compression did what we want.
-	assert(retcode == TRUE);
+	assert(retcode == true);
 	assert(decompsize == Texture_Size(offsetidx));
 	Verify_Compression_Buffer();
 }	

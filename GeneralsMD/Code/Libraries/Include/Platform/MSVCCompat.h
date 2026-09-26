@@ -274,6 +274,14 @@ typedef char TCHAR;
 #ifndef MAX_PATH
 #define MAX_PATH _MAX_PATH
 #endif
+// _splitpath's component limits, from the same <stdlib.h>, with its values for the same reason: two
+// filename buffers in WW3D2's meshmdlio.cpp are sized by them.
+#ifndef _MAX_FNAME
+#define _MAX_FNAME 256
+#endif
+#ifndef _MAX_EXT
+#define _MAX_EXT 256
+#endif
 
 // Microsoft returns int from both; C99's are macros over a bool-ish result.  The casts keep the
 // `if (_isnan(x))` and `if (!_finite(x))` call sites reading exactly as they do on Windows.

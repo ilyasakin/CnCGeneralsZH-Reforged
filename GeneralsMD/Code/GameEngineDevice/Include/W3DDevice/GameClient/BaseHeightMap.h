@@ -38,7 +38,7 @@
 #include "vertmaterial.h"
 #include "Lib/BaseType.h"
 #include "GameLogic/TerrainHeightSampling.h"
-#include "common/GameType.h"
+#include "Common/GameType.h"
 #include "WorldHeightMap.h"
 
 #define MAX_ENABLED_DYNAMIC_LIGHTS 20

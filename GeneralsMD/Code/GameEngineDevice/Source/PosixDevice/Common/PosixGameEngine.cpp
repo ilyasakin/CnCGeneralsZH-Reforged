@@ -33,11 +33,6 @@ PosixGameEngine::~PosixGameEngine()
 {
 }
 
-void PosixGameEngine::init( void )
-{
-	GameEngine::init();
-}
-
 void PosixGameEngine::reset( void )
 {
 	GameEngine::reset();

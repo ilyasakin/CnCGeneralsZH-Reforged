@@ -34,7 +34,7 @@
 
 #define NO_DEBUG_CRC
 
-#include "Common/CRC.h"
+#include "Common/crc.h"
 #include "Common/CRCDebug.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
@@ -69,11 +69,11 @@
 #include "W3DDevice/GameClient/BaseHeightMap.h"
 #include "W3DDevice/GameClient/W3DTerrainTracks.h"
 #include "W3DDevice/GameClient/WorldHeightMap.h"
-#include "WW3D2/HAnim.h"
-#include "WW3D2/HLod.h"
-#include "WW3D2/RendObj.h"
-#include "WW3D2/Mesh.h"
-#include "WW3D2/MeshMdl.h"
+#include "WW3D2/hanim.h"
+#include "WW3D2/hlod.h"
+#include "WW3D2/rendobj.h"
+#include "WW3D2/mesh.h"
+#include "WW3D2/meshmdl.h"
 #include "Common/BitFlagsIO.h"
 
 #ifdef _INTERNAL
@@ -1241,7 +1241,7 @@ enum AnimParseType
 //-------------------------------------------------------------------------------------------------
 static void parseAnimation(INI* ini, void *instance, void * /*store*/, const void* userData)
 {
-	AnimParseType animType = (AnimParseType)(UnsignedInt)userData;
+	AnimParseType animType = (AnimParseType)(UnsignedInt)(uintptr_t)userData;	// an enum kept in a pointer
 
 	AsciiString animName = ini->getNextAsciiString();
 	animName.toLower();
@@ -1455,7 +1455,7 @@ void W3DModelDrawModuleData::parseConditionState(INI* ini, void *instance, void 
 
 	ModelConditionInfo info;
 	W3DModelDrawModuleData* self = (W3DModelDrawModuleData*)instance;
-	ParseCondStateType cst = (ParseCondStateType)(UnsignedInt)userData;
+	ParseCondStateType cst = (ParseCondStateType)(UnsignedInt)(uintptr_t)userData;	// an enum kept in a pointer
 	switch (cst)
 	{
 		case PARSE_DEFAULT:
@@ -1950,7 +1950,7 @@ static Bool fillShadowInfoFromTemplate(const ThingTemplate *tmplate, Shadow::Sha
 	}
 
 	strcpy(shadowInfo->m_ShadowName, tmplate->getShadowTextureName().str());
-	DEBUG_ASSERTCRASH(shadowInfo->m_ShadowName[0] != ' ', ("this should be validated in ThingTemplate now"));
+	DEBUG_ASSERTCRASH(shadowInfo->m_ShadowName[0] != '\0', ("this should be validated in ThingTemplate now"));
 	shadowInfo->allowUpdates		= FALSE;		//shadow image will never update
 	shadowInfo->allowWorldAlign	= TRUE;	//shadow image will wrap around world objects
 	shadowInfo->m_type					= (ShadowType)tmplate->getShadowType();

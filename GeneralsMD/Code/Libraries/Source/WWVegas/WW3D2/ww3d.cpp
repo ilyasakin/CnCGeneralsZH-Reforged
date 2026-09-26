@@ -90,7 +90,9 @@
 #include "camera.h"
 #include "scene.h"
 #include "texfcach.h"
+#if defined(_WIN32)
 #include "registry.h"
+#endif
 #include "segline.h"
 #include "shader.h"
 #include "vertmaterial.h"
@@ -109,10 +111,10 @@
 #include "render2d.h"
 #include "bound.h"
 #include "rddesc.h"
-#include "vector3i.h"
+#include "Vector3i.h"
 #include <cstdio>
 #include "dx8wrapper.h"
-#include "targa.h"
+#include "TARGA.H"
 #include "sortingrenderer.h"
 #include "thread.h"
 #include "cpudetect.h"
@@ -124,7 +126,9 @@
 #include "shdlib.h"
 
 #ifndef _UNIX
-#include "framgrab.h"
+#if defined(_WIN32)
+#include "framgrab.h"	// AVI capture through vfw32; its uses are all under _WINDOWS
+#endif
 #endif
 
 
@@ -678,6 +682,7 @@ void WW3D::Get_Device_Resolution(int & set_w,int & set_h,int & set_bits,bool & s
 }
 
 
+#if defined(_WIN32)	// the registry: Windows only
 /***********************************************************************************************
  * WW3D::Registry_Save_Render_Device -- Saves settings to Registry
  *                                                                                             *
@@ -750,6 +755,7 @@ bool WW3D::Registry_Load_Render_Device( const char * sub_key, char *device, int 
 {
 	return DX8Wrapper::Registry_Load_Render_Device(sub_key,device,device_len,width,height,depth,windowed,texture_depth);
 }
+#endif // _WIN32
 
 void WW3D::_Invalidate_Mesh_Cache()
 {
@@ -1309,6 +1315,7 @@ void WW3D::Normalize_Coordinates(int x, int y, float &fx, float &fy)
  *=============================================================================================*/
 void WW3D::Make_Screen_Shot( const char * filename_base , const float gamma, const ScreenShotFormatEnum format)
 {
+#if defined(_WIN32)	// the front buffer through the window's rectangle, written with wingdi's structures
 
 	WWASSERT(!IsRendering);
 
@@ -1470,6 +1477,11 @@ void WW3D::Make_Screen_Shot( const char * filename_base , const float gamma, con
 	}
 
 	delete [] image;
+#else
+	// Off Windows a screenshot is W3DDisplay's, from the back buffer, once the device can read it back (A3).
+	(void)filename_base; (void)gamma; (void)format;
+	WWDEBUG_SAY(("WW3D::Make_Screen_Shot: not off Windows yet\n"));
+#endif
 }
 
 
