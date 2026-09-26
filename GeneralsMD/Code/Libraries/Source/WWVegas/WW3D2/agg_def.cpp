@@ -51,6 +51,7 @@
 #endif
 #include <stdio.h>	// snprintf
 #include <string.h>	// memset, strcpy, strlen
+#include "Platform/StrdupAsWindows.h"
 
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -610,7 +611,7 @@ AggregateDefClass::Read_Header (ChunkLoadClass &chunk_load)
 	if (chunk_load.Read (&header, sizeof (header)) == sizeof (header)) {
 
 		// Copy the name from the header structure
-		m_pName = ::strdup (header.Name);
+		m_pName = strdupAsWindows(header.Name);
 		m_Version = header.Version;
 
 		// Success!

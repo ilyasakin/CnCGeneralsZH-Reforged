@@ -41,6 +41,7 @@
 #include "utils.h"
 #include "ffactory.h"
 #include "win.h"
+#include "Platform/StrdupAsWindows.h"
 
 
 
@@ -154,7 +155,7 @@ SoundBufferClass::Set_Filename (const char *name)
 {
 	SAFE_FREE (m_Filename);
 	if (name != NULL) {
-		m_Filename = ::strdup (name);
+		m_Filename = strdupAsWindows(name);
 	}
 
 	return ;

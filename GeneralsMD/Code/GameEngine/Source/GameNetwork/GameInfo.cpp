@@ -47,6 +47,7 @@
 #include "GameNetwork/LANAPI.h"						// for testing packet size
 #include "GameNetwork/LANAPICallbacks.h"	// for testing packet size
 #include "strtok_r.h"
+#include "Platform/StrdupAsWindows.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1132,7 +1133,7 @@ static Int grabHexInt(const char *s)
 Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
 {
 	// Parse game options
-	char *buf = strdup(options.str());
+	char *buf = strdupAsWindows(options.str());
 	char *bufPtr = buf;
 	char *strPos, *keyValPair;
 	GameSlot newSlot[MAX_SLOTS];
@@ -1278,7 +1279,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
 		{
 			sawSlotlist = true;
 			/// @TODO: Need to read in all the slot info... big mess right now.
-			char *rawSlotBuf = strdup(val.str());
+			char *rawSlotBuf = strdupAsWindows(val.str());
 			char *freeMe = NULL;
 			AsciiString rawSlot;
 //			Bool slotsOk = true;	//flag that lets us know whether or not the slot list is good.
