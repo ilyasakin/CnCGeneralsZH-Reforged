@@ -174,7 +174,7 @@ a machine where Direct3D 11 failed to start.
 did not have before; the Windows `ww3d2` source set is unchanged. Not compiled with MSVC: WINDOWS-DEBT
 has the row.
 
-## A3 design: the draw on SDL3 GPU (for review, 2026-09-26)
+## A3 design: the draw on SDL3 GPU (approved 2026-09-26)
 
 Not code yet. What A3 builds, in what order, and how a draw is proven right. It is `dx11backend`'s
 design (resolve D3D9 state at the draw into cached programs, pipelines and state objects) on SDL3 GPU,
@@ -278,8 +278,10 @@ and a clear draw otherwise.
 - **Render targets** (shadow maps, water reflection, the back buffer): with a window, their contents
   live on the GPU. A2's CPU image is then stale, and a lock or `GetRenderTargetData` downloads it
   (`SDL_DownloadFromGPUTexture` and a fence) after a flush. `Clear` with a window clears the GPU
-  target; -18's CPU fill stays the headless path. **This is the one seam with A2 to agree:** who owns
-  a render target's pixels, per mode.
+  target; -18's CPU fill stays the headless path. **Agreed with A2 (approved 2026-09-26):** with a
+  window a render target's pixels are the GPU's, and A2's `Clear`, lock and read-back paths check the
+  mode (a lock or `GetRenderTargetData` flushes and downloads first, and a download does not bump
+  `version()`); headless, A2's CPU fill and copies are the whole story.
 - **Present:** the back buffer is an offscreen target (as the spike's); `Present` flushes, acquires the
   swap-chain texture and blits it, with `SetGammaRamp`'s curve applied in that pass. Present mode from
   the present parameters' interval: vsync or immediate, the two D2 found everywhere.
