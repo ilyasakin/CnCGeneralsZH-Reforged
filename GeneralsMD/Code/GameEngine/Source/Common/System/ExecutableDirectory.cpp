@@ -91,14 +91,19 @@ void getExecutableDirectory( char *buf, size_t size, Bool keepTrailingSeparator 
 }
 
 #if !defined(_WIN32)
-void getLogDirectory( char *buf, size_t size, Bool keepTrailingSeparator )
+Bool isExecutableInAppBundle( void )
 {
-	getExecutableDirectory( buf, size, keepTrailingSeparator );
 	char exe[ 4096 ];
 	getExecutableDirectory( exe, sizeof( exe ), FALSE );
 	static const char bundled[] = ".app/Contents/MacOS";
 	const size_t length = strlen( exe ), tail = sizeof( bundled ) - 1;
-	if (length < tail || strcmp( exe + length - tail, bundled ) != 0)
+	return length >= tail && strcmp( exe + length - tail, bundled ) == 0;
+}
+
+void getLogDirectory( char *buf, size_t size, Bool keepTrailingSeparator )
+{
+	getExecutableDirectory( buf, size, keepTrailingSeparator );
+	if (!isExecutableInAppBundle())
 		return;
 
 	char logs[ 4096 ];

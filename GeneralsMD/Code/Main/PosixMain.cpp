@@ -83,6 +83,13 @@
 
 #include "posixpath.h"
 
+#include <SDL3/SDL.h>		// the folder dialog and the message box, before the engine exists (P1 step 4)
+#include <atomic>
+#include <mutex>
+
+#include "Common/RegistryFile.h"
+#include "PosixDevice/Common/PosixInstallRoot.h"
+
 // GLOBALS ////////////////////////////////////////////////////////////////////
 // gameengine names these three; WinMain.cpp defines them on Windows, with these values.
 const Char *g_strFile = "data\\Generals.str";
@@ -104,22 +111,100 @@ static SdlGameEngine::WindowRequest s_windowRequest = { FALSE, FALSE, FALSE };
 // WinMain's GENERALS_GUID, the name of its one-copy mutex; here the name of a lock file.
 #define GENERALS_GUID "685EAFF2-3216-4265-B047-251C5F4B82F3"
 
-/** The install root: "-root <dir>" if given, else the executable's directory.  Read from argv itself
-	* rather than EarlyCommandLine.h, whose values end at a space, because a path may have one. */
-static Bool chooseInstallRoot( int argc, char *argv[], char *out, size_t outSize )
+// The player's choice of folder, through SDL's native dialog (NSOpenPanel on macOS).  The dialog answers
+// asynchronously, maybe on another thread, so the answer is handed over under a lock.
+struct FolderAnswer
 {
-	for (int i = 1; i + 1 < argc; ++i)
+	std::mutex lock;
+	std::atomic<int> state;		// 0 waiting, 1 chosen, 2 cancelled or failed
+	std::string path;
+};
+
+static void SDLCALL onFolderChosen( void *userdata, const char * const *filelist, int )
+{
+	FolderAnswer *answer = (FolderAnswer *)userdata;
+	std::lock_guard<std::mutex> guard( answer->lock );
+	if (filelist != NULL && filelist[0] != NULL)
 	{
-		if (strcasecmp( argv[i], "-root" ) == 0)
-		{
-			if (strlen( argv[i + 1] ) + 1 > outSize)
-				return FALSE;
-			strcpy( out, argv[i + 1] );
-			return TRUE;
-		}
+		answer->path = filelist[0];
+		answer->state = 1;
 	}
-	getExecutableDirectory( out, outSize, FALSE );
-	return out[0] != 0;
+	else
+		answer->state = 2;
+}
+
+/** PosixInstallChooser over SDL: the reason the last choice was refused, if any, in a message box, then
+	* the folder dialog.  FALSE when the player cancels. */
+static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, void * )
+{
+	if (!SDL_InitSubSystem( SDL_INIT_VIDEO ))
+		return false;
+	if (!why.empty())
+		SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_WARNING, "Zero Hour Reforged", why.c_str(), NULL );
+
+	FolderAnswer answer;
+	answer.state = 0;
+	char home[ 4096 ];
+	const SDL_PropertiesID properties = SDL_CreateProperties();
+	SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_TITLE_STRING, "Choose your Command & Conquer Generals Zero Hour folder" );
+	SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_ACCEPT_STRING, "Use This Folder" );
+	if (findHomeDirectory( home, sizeof( home ) ))
+		SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_LOCATION_STRING, home );
+	SDL_ShowFileDialogWithProperties( SDL_FILEDIALOG_OPENFOLDER, onFolderChosen, &answer, properties );
+	while (answer.state == 0)
+	{
+		SDL_PumpEvents();
+		SDL_Delay( 10 );
+	}
+	SDL_DestroyProperties( properties );
+	SDL_QuitSubSystem( SDL_INIT_VIDEO );
+	std::lock_guard<std::mutex> guard( answer.lock );
+	chosen = answer.path;
+	return answer.state == 1;
+}
+
+/** The install root (P1 step 4, PosixInstallRoot.h): "-root <dir>"; else Registry.ini's InstallPath while
+	* it still holds the game; else, inside an app bundle, the known places and then the player's own choice
+	* (never under -headless), which is written to Registry.ini's InstallPath so it is asked once; else the
+	* executable's directory.  Read from argv itself rather than EarlyCommandLine.h, whose values end at a
+	* space, because a path may have one. */
+static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::string> &overlays, char *out, size_t outSize )
+{
+	PosixInstallRequest request;
+	Bool headless = FALSE;
+	for (int i = 1; i < argc; ++i)
+	{
+		request.arguments.push_back( argv[i] );
+		if (strcasecmp( argv[i], "-headless" ) == 0)
+			headless = TRUE;
+	}
+	char buffer[ 4096 ];
+	getExecutableDirectory( buffer, sizeof( buffer ), FALSE );
+	request.executableDirectory = buffer;
+	request.insideAppBundle = isExecutableInAppBundle() != FALSE;
+	request.home = findHomeDirectory( buffer, sizeof( buffer ) ) ? buffer : "";
+	if (request.insideAppBundle)
+		request.forbidden.push_back( request.executableDirectory + "/../.." );	// the bundle
+	request.forbidden.insert( request.forbidden.end(), overlays.begin(), overlays.end() );
+	request.registryFile = findRegistryFile( buffer, sizeof( buffer ) ) ? buffer : "";
+	request.chooser = headless ? NULL : chooseFolderWithSdl;
+	request.chooserContext = NULL;
+
+	PosixInstallChoice choice;
+	if (!PosixChooseInstallRoot( request, choice ))
+	{
+		fprintf( stderr, "generals: %s\n", choice.problem.c_str() );
+		if (request.insideAppBundle && !headless)
+			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Zero Hour Reforged", choice.problem.c_str(), NULL );
+		return FALSE;
+	}
+	if (choice.writeInstallPath && !writeRegistryFile( registryFileKey( "", AsciiString::TheEmptyString,
+			AsciiString( "InstallPath" ) ), AsciiString( choice.root.c_str() ) ))
+		fprintf( stderr, "generals: could not remember %s in Registry.ini; it will be asked for again\n", choice.root.c_str() );
+	if (choice.root.size() + 1 > outSize)
+		return FALSE;
+	strcpy( out, choice.root.c_str() );
+	return TRUE;
 }
 
 /** The fork's overlay (P1, decision 9): read roots searched before the install for every relative path
@@ -209,7 +294,10 @@ int main( int argc, char *argv[] )
 		if (!chooseOverlays( argc, argv, overlays ))
 			return 1;
 		char root[ 4096 ];
-		if (!chooseInstallRoot( argc, argv, root, sizeof( root ) ) || chdir( root ) != 0)
+		root[0] = 0;
+		if (!chooseInstallRoot( argc, argv, overlays, root, sizeof( root ) ))
+			return 1;		// it has said why
+		if (chdir( root ) != 0)
 		{
 			fprintf( stderr, "generals: cannot use '%s' as the install root: %s\n", root, strerror( errno ) );
 			return 1;

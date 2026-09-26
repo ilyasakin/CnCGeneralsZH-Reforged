@@ -1152,6 +1152,14 @@ if(ZH_PLATFORM_POSIX)
   # PosixDevice/Render is the Direct3D 9-shaped device (decision 7), a library of its own below: WW3D2
   # links it the way it links d3d9.lib on Windows, and posixdevice needs none of it.
   list(FILTER POSIXDEVICE_SOURCES EXCLUDE REGEX "/PosixDevice/Render/")
+  # PosixDevice/Install is where the player's Zero Hour is (P1 step 4): plain logic over the file system
+  # and Registry.ini, no engine state, so a library of its own that test_install_root links alone.
+  list(FILTER POSIXDEVICE_SOURCES EXCLUDE REGEX "/PosixDevice/Install/")
+  add_library(installroot STATIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Install/PosixInstallRoot.cpp)
+  target_include_directories(installroot PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
+  set_target_properties(installroot PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(installroot PUBLIC wwlib)
   # The BIG archive reader is Win32Device's own, built here as it is (C1 (f)): it has no Win32 in it but
   # ntohl and one message box, both behind #if, and one copy keeps the mount order - which archive wins
   # which path, and so the INI CRC - the same on every platform.
@@ -1574,7 +1582,7 @@ if(ZH_PLATFORM_POSIX)
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
   set_target_properties(generals PROPERTIES CXX_STANDARD 17)
-  target_link_libraries(generals PRIVATE sdldevice)
+  target_link_libraries(generals PRIVATE sdldevice installroot)
   # C2's SDL side of Monitors.h and MessageBoxWrapper, on SDL's offscreen video driver.
   add_executable(test_sdl_platform ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_platform.cpp)
   target_include_directories(test_sdl_platform PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
@@ -1929,6 +1937,9 @@ if(ZH_PLATFORM_POSIX)
 # case-sensitive APFS image it creates, since neither macOS's default volume nor the Steam installs'
 # exFAT tells case apart.  Linux's runs are case-sensitive already.
 add_lib_test(test_posixpath wwlib wwdebug)
+# P1 step 4: where the player's Zero Hour is - -root, Registry.ini, the known places, the chooser (a stub
+# here: the real one, SDL's folder dialog, needs a person), and every validation message.
+add_lib_test(test_install_root installroot wwlib wwdebug)
 target_include_directories(test_posixpath PRIVATE ${WW}/WWLib ${WW}/WWDebug)
 
 # PosixLocalFileSystem through the engine's own interface (C1): built from the real memory manager,
