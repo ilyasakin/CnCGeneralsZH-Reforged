@@ -597,13 +597,13 @@ CrossOver run.
   - `GetFrontBufferData` after Present and a later clear;
   - four mutations caught.
 
-**The game on it.** The windowed skirmish (seed 1234, 600 frames) and the shell map (`-quickstart`, 60 s)
-both run with **no refusals at all**:
+**The game on it.** The windowed skirmish (seed 1234, 600 frames) and the main menu without the shell map
+(`-quickstart`, 60 s; see the correction under A3e-2) both run with **no refusals at all**:
 - the skirmish: 2,483 presents and 1,665,243 draws;
-- the shell map: 3,635 presents and 1,398,108 draws.
+- the main menu without the shell map (`-quickstart`): 3,635 presents and 1,398,108 draws.
 Without `-quickstart` the intro movie plays through V1's Bink path.
 
-![The Zero Hour shell map on Metal, present 900](../a3d-shell-map-metal.png)
+![The Zero Hour main menu on Metal, present 900 (-quickstart: whether it shows the 3D shell map is being re-checked)](../a3d-shell-map-metal.png)
 
 The diagnostic overlay is not drawn in the shell by design; see the in-game pictures for the renderer and frame.
 
@@ -695,7 +695,7 @@ is given.
 | Run | Draws recorded | Signatures captured | Compared | Drew something | Pass | Known |
 |---|---|---|---|---|---|---|
 | Skirmish, seed 1234, 600 frames | 1,977,780 | 49 (4 off screen) | 46 | 36 | 43 | 3 |
-| Shell map, `-quickstart`, 200 s | 32,631,851 | 67 (12 off screen) | 65 | 42 | 60 | 5 |
+| Main menu without the shell map (`-quickstart`), 200 s | 32,631,851 | 67 (12 off screen) | 65 | 42 | 60 | 5 |
 
 - **Stable across runs:** two skirmish captures run the same way gave the same 49 signatures.
 - **"Drew nothing"** means the reference wrote no pixel, and the GPU agreed. These draws are either
@@ -732,7 +732,7 @@ is given.
 
 **After -47's N28 and N29** (feature/mac-port at 54e5e88f), every capture compares:
 - **Skirmish:** 49 of 49, 11 drew nothing, 0 failed, 3 known (C1, C2).
-- **Shell map:** 67 of 67, 25 drew nothing, 0 failed, 5 known (C1, C2).
+- **Main menu without the shell map (`-quickstart`):** 67 of 67, 25 drew nothing, 0 failed, 5 known (C1, C2).
 
 **A3 is not done.** Both runs draw with no refusals. But "every key checked" still waits on C1 and C2, and
 on the draws that drew nothing. Those need a capture of the pixels, depth and stencil under the draw, which
@@ -892,7 +892,12 @@ answered `DC_UNKNOWN`:
   - A3d's "shell map" record and picture, and this record's capture of the "shell map", came from
     `-quickstart` runs as well.
   - A3d's run drew about 385 a present, so what it drew isn't settled.
-  - Until a run without `-quickstart` is checked, those records show the menu screen, and whether they show
-    the 3D shell map is open.
+  - Until a run without `-quickstart` is checked, those records say "the main menu without the shell map
+    (`-quickstart`)", as the PM decided.
+  - **The contradiction the re-check has to settle:** the capture set with that label holds 3D draws
+    (lit models, and alpha-tested foliage with cloud-shadow coordinates), at about 1,150 draws a present.
+    It was made before the day's merge of feature/mac-port. Today's `-quickstart` runs draw about 95 a
+    present and no terrain. So either something then drew a 3D scene behind the menu, or something since
+    the merge changed what `-quickstart` shows.
 - **The user closes game windows.** Several windowed runs today ended early, and the likeliest cause is the
   user closing them. Evidence runs now use a hidden window (the item raised with the PM).
