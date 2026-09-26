@@ -49,6 +49,10 @@ void INI::load(AsciiString, INILoadType, Xfer *) { unreachable("INI::load"); }
 FileSystem *TheFileSystem = NULL;
 File *FileSystem::openFile(const Char *, Int) { unreachable("FileSystem::openFile"); return NULL; }
 
+// GameDataGone (Common/Debug.h): an archive read failed because its drive went away.  Every archive this
+// test opens is on the local install and stays there, so that never happens here.
+extern "C" void GameDataGone(const char *what) { fprintf(stderr, "GameDataGone(%s)\n", what); unreachable("GameDataGone"); }
+
 // The archive code's other reaches, for this test:
 //  - TheAudio: Win32BIGFileSystem::closeArchiveFile stops the music when Music.big closes; nothing
 //    closes an archive here.
