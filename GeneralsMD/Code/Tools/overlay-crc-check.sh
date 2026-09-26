@@ -28,6 +28,8 @@
 #
 # RULE 9: neither layout's root is the install itself. The install is linked file by file into a farm
 # (and, for W, the overlay copied over the links, each link removed before its copy is written).
+# The install is listed (sizes, times, BLAKE2) before this script writes anything and again at the end,
+# and must be unchanged (Tools/install-guard.sh).
 #
 # Usage: overlay-crc-check.sh --generals <path> [--data <dir>] [--maxframes 600] [--keep]
 # Exit status: 0 when W and P agree and the control differs; 1 otherwise; 77 without game data.
@@ -92,6 +94,11 @@ lay_over() {	# lay_over <overlay> <farm>: the overlay's entries into the farm, e
 	done
 }
 
+. "$CODE/Tools/install-guard.sh"	# install_snapshot, install_verify
+if ! install_snapshot "$INSTALL" "$WORK/install.before"; then
+	echo "FAIL: COULD NOT VERIFY the install: its listing before the run could not be made; nothing was run"
+	exit 1
+fi
 stage_overlay "$WORK/overlay"
 farm "$WORK/W"
 lay_over "$WORK/overlay" "$WORK/W"
@@ -151,4 +158,5 @@ if [ -z "$E_INI" ] || [ "$E_INI" = "$W_INI" ] || [ "$E_EXE" != "$W_EXE" ]; then
 else
 	echo "ok: one changed INI value changes the INI CRC, and only it"
 fi
+install_verify "$INSTALL" "$WORK/install.before" "$WORK/install.after" || status=1
 exit $status

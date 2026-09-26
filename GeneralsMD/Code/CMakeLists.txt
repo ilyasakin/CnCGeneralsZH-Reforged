@@ -1678,6 +1678,9 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(packaging_resolution_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # Their install check (Tools/install-guard.sh) on a made-up install: a change, and a check that could not
+  # be made, are told apart.  No game data.
+  add_test(NAME install_guard_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_guard.sh)
   add_test(NAME root_readonly_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/root-readonly-check.sh --generals $<TARGET_FILE:generals>)
   set_tests_properties(root_readonly_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
@@ -2269,11 +2272,28 @@ endif()
 # stops any test binary started without one).  Here, after the last add_test, so no test is missed and
 # no later set_tests_properties replaces it.  One folder per test so tests run in parallel do not share
 # an Options.ini or a Registry.ini.  Off Windows only: there the engine does not read the variable.
+#
+# And every test's own TMPDIR, in the build tree, made here at configure time (a deleted one comes back
+# with the next configure).  The system's is one folder for every process of the user: ctest -j4 on
+# 2026-09-26 lost a replay_check's work folder mid-run while other sessions' harnesses, of several
+# versions, ran in the same folder.  A test's temporary trees are its own now, and whatever is left
+# behind stays in this build, where it can be seen.
 if(ZH_PLATFORM_POSIX)
   get_property(_zh_tests DIRECTORY PROPERTY TESTS)
   foreach(_zh_test IN LISTS _zh_tests)
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/test-tmp/${_zh_test})
     set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT
-      "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data/${_zh_test}")
+      "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data/${_zh_test}"
+      "TMPDIR=${CMAKE_BINARY_DIR}/test-tmp/${_zh_test}")
+  endforeach()
+
+  # The tests that build a farm of the install (a folder of links into it) never run at the same time:
+  # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
+  foreach(_zh_test replay_check overlay_crc_check packaging_resolution_check root_readonly_check
+                   test_bigfilesystem test_install_textures test_milesaudiomanager)
+    if(TEST ${_zh_test})
+      set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
+    endif()
   endforeach()
 endif()
 
