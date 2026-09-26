@@ -6,7 +6,7 @@
  * the image operations (PosixImageOps): block copies, conversions, D3DX's filters, fills; and the device's
  * A2 half (PosixDevice9Resources, PosixD3D9Caps): a device made with no window, as -headless makes it,
  * its implicit surfaces, Clear read back, copies, and caps that claim exactly what the device and the
- * fixed-function generator do.  Run under ASan where it can be,
+ * fixed-function generator do; and D3DX's texture helpers (WW3D2/d3dx9posix_texture.cpp).  Run under ASan where it can be,
  * since a reference count that is off shows up as a leak or a use after free, not as a wrong value.
  */
 #include "test_harness.h"
@@ -14,6 +14,7 @@
 #include "PosixD3D9Caps.h"
 #include "PosixDevice9.h"
 #include "PosixImageOps.h"
+#include "d3dx9posix.h"
 #include "ffshader.h"
 #include "ffstate_values.h"
 #include "PosixPixelCodec.h"
@@ -771,4 +772,95 @@ TEST(posix_caps_texture_ops_are_the_generators)
 		claimed += claim ? 1 : 0;
 	}
 	CHECK_EQ(claimed, 23);
+}
+
+TEST(posix_d3dx_creates_textures_as_d3dx_does)
+{
+	LPDIRECT3DTEXTURE9 texture = (LPDIRECT3DTEXTURE9)1;
+	CHECK_EQ(D3DX9Posix_Create_Texture(NULL, 16, 16, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture), D3DERR_INVALIDCALL);
+	CHECK(texture == NULL);		// -nodevice's contract: failure and a null texture
+
+	PosixDirect3D9 *adapter = NULL;
+	IDirect3DDevice9 *device = headless_device(&adapter);
+	if (device == NULL) { adapter->Release(); return; }
+	D3DSURFACE_DESC desc;
+	// a format the device refuses is replaced by the nearest it takes: V8U8 has no alpha
+	CHECK_EQ(D3DX9Posix_Create_Texture(device, 16, 16, 1, 0, D3DFMT_V8U8, D3DPOOL_MANAGED, &texture), D3D_OK);
+	CHECK(texture != NULL);
+	if (texture != NULL) {
+		texture->GetLevelDesc(0, &desc);
+		CHECK_EQ(desc.Format, D3DFMT_X8R8G8B8);
+		texture->Release();
+	}
+	// D3DX_DEFAULT levels are the full chain; a DXT texture cannot autogenerate, so D3DX makes it plainly
+	CHECK_EQ(D3DX9Posix_Create_Texture(device, 64, 64, D3DX_DEFAULT, D3DUSAGE_AUTOGENMIPMAP, D3DFMT_DXT1, D3DPOOL_MANAGED, &texture), D3D_OK);
+	CHECK(texture != NULL);
+	if (texture != NULL) {
+		CHECK_EQ(texture->GetLevelCount(), 7u);
+		texture->GetLevelDesc(0, &desc);
+		CHECK_EQ(desc.Format, D3DFMT_DXT1);
+		texture->Release();
+	}
+	CHECK_EQ(device->Release(), 0u);
+	adapter->Release();
+}
+
+TEST(posix_d3dx_filters_mip_levels_from_the_top)
+{
+	PosixDirect3D9 *adapter = NULL;
+	IDirect3DDevice9 *device = headless_device(&adapter);
+	if (device == NULL) { adapter->Release(); return; }
+	LPDIRECT3DTEXTURE9 texture = NULL;
+	CHECK_EQ(device->CreateTexture(4, 4, 0, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, NULL), D3D_OK);
+	D3DLOCKED_RECT locked;
+	texture->LockRect(0, &locked, NULL, 0);
+	for (int y = 0; y < 4; ++y)			// blue 0x00 in the left half, 0xff in the right; alpha 0xff
+		for (int x = 0; x < 4; ++x)
+			((uint32_t *)((uint8_t *)locked.pBits + y * locked.Pitch))[x] = (x < 2) ? 0xff000000u : 0xff0000ffu;
+	texture->UnlockRect(0);
+	CHECK_EQ(D3DX9Posix_Filter_Texture(texture, NULL, 0, D3DX_FILTER_BOX), D3D_OK);
+	IDirect3DSurface9 *level1 = NULL, *level2 = NULL;
+	texture->GetSurfaceLevel(1, &level1);
+	texture->GetSurfaceLevel(2, &level2);
+	CHECK_EQ(pixel_of(level1, 0, 0), 0xff000000u);
+	CHECK_EQ(pixel_of(level1, 1, 1), 0xff0000ffu);
+	CHECK_EQ(pixel_of(level2, 0, 0), 0xff000080u);	// (0 + 255) / 2 = 127.5, written as 128
+	level1->Release(); level2->Release();
+	CHECK_EQ(D3DX9Posix_Filter_Texture(texture, NULL, 3, D3DX_FILTER_BOX), D3DERR_INVALIDCALL);	// past the last level
+	CHECK_EQ(D3DX9Posix_Filter_Texture(texture, NULL, 0, 0x7f), D3DERR_INVALIDCALL);			// no such filter
+	texture->Release();
+
+	// a DXT chain would need compressing: refused, not written wrong
+	CHECK_EQ(device->CreateTexture(8, 8, 0, 0, D3DFMT_DXT1, D3DPOOL_MANAGED, &texture, NULL), D3D_OK);
+	CHECK_EQ(D3DX9Posix_Filter_Texture(texture, NULL, D3DX_DEFAULT, D3DX_DEFAULT), D3DERR_INVALIDCALL);
+	texture->Release();
+	CHECK_EQ(device->Release(), 0u);
+	adapter->Release();
+}
+
+TEST(posix_d3dx_loads_surfaces_with_conversion_and_scaling)
+{
+	PosixDirect3D9 *adapter = NULL;
+	IDirect3DDevice9 *device = headless_device(&adapter);
+	if (device == NULL) { adapter->Release(); return; }
+	IDirect3DSurface9 *source = NULL, *dest = NULL;
+	device->CreateOffscreenPlainSurface(4, 4, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &source, NULL);
+	device->CreateOffscreenPlainSurface(2, 2, D3DFMT_R5G6B5, D3DPOOL_SYSTEMMEM, &dest, NULL);
+	D3DLOCKED_RECT locked;
+	source->LockRect(&locked, NULL, 0);
+	for (int y = 0; y < 4; ++y)
+		for (int x = 0; x < 4; ++x)
+			((uint32_t *)((uint8_t *)locked.pBits + y * locked.Pitch))[x] = 0xffff0000u;		// red
+	source->UnlockRect();
+	CHECK_EQ(D3DX9Posix_Load_Surface_From_Surface(dest, NULL, NULL, source, NULL, NULL, D3DX_DEFAULT, 0), D3D_OK);
+	dest->LockRect(&locked, NULL, D3DLOCK_READONLY);
+	CHECK_EQ(((uint16_t *)locked.pBits)[0], (uint16_t)0xf800u);
+	dest->UnlockRect();
+	RenderRect outside = { 0, 0, 5, 5 };
+	CHECK_EQ(D3DX9Posix_Load_Surface_From_Surface(dest, NULL, NULL, source, NULL, &outside, D3DX_FILTER_NONE, 0), D3DERR_INVALIDCALL);
+	CHECK_EQ(D3DX9Posix_Load_Surface_From_Surface(dest, NULL, NULL, source, NULL, NULL, D3DX_FILTER_NONE, 0xff00ff00u), D3DERR_NOTAVAILABLE);
+	CHECK_EQ(D3DX9Posix_Load_Surface_From_Surface(dest, NULL, NULL, NULL, NULL, NULL, D3DX_FILTER_NONE, 0), D3DERR_INVALIDCALL);
+	source->Release(); dest->Release();
+	CHECK_EQ(device->Release(), 0u);
+	adapter->Release();
 }
