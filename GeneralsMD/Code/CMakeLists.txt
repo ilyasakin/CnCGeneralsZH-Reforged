@@ -955,9 +955,6 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 #    DownloadManagerPosix.cpp defines it NULL.  DownloadMenu.cpp itself is built everywhere, because
 #    .wnd files bind its callbacks by name through FunctionLexicon, which must be the same on
 #    every platform.
-#  - MapObjectRenderPosix.cpp: MapObject's three RenderObjClass members.  Windows has them beside the
-#    W3D terrain code in gameenginedevice (WorldHeightMap.cpp); the data half is Common/MapObject.cpp
-#    on both.  B6.
 #  - WWDownloadRegistryPosix.cpp: WWDownload's registry functions and FormatURLFromRegistry over
 #    Registry.ini.  On Windows they come from wwdownload itself.  B6.
 #  - IMEManager.cpp: the IMM32 input method editor (Chinese, Japanese and Korean text entry).  Its
@@ -973,7 +970,6 @@ if(ZH_PLATFORM_WINDOWS)
     ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp
     ${GE}/Source/GameNetwork/DownloadManagerPosix.cpp
     ${GE}/Source/GameClient/GUI/IMEManagerPosix.cpp
-    ${GE}/Source/Common/MapObjectRenderPosix.cpp
     ${GE}/Source/Common/System/WWDownloadRegistryPosix.cpp)
 else()
   list(REMOVE_ITEM GAMEENGINE_SOURCES
@@ -1166,21 +1162,6 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(posixdevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
   set_target_properties(posixdevice PROPERTIES CXX_STANDARD 17)
   target_link_libraries(posixdevice PUBLIC gameengine)
-  # PosixRenderHooks.cpp on its own, ahead of gameengine linking: decision 2 (B19 (c)) lives in its
-  # testMinimumRequirements, checked against the shipped GameLODPresets.ini when ZH_GAME_DATA is set.
-  # See Tests/test_posix_render_hooks.cpp.
-  add_executable(posix_render_hooks_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_render_hooks.cpp
-                 ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/GameClient/PosixRenderHooks.cpp)
-  target_include_directories(posix_render_hooks_selfcheck PRIVATE
-    $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
-    ${LIBSRC}/Benchmark)
-  target_compile_definitions(posix_render_hooks_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
-  set_target_properties(posix_render_hooks_selfcheck PROPERTIES CXX_STANDARD 17)
-  target_link_libraries(posix_render_hooks_selfcheck PRIVATE wwlib wwdebug benchmark)
-  add_test(NAME posix_render_hooks_selfcheck COMMAND posix_render_hooks_selfcheck)
-  if(ZH_GAME_DATA)
-    set_tests_properties(posix_render_hooks_selfcheck PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
-  endif()
 endif()
 
 # ===========================================================================
@@ -1282,6 +1263,17 @@ if(ZH_PLATFORM_POSIX)
   set_tests_properties(test_install_textures PROPERTIES SKIP_RETURN_CODE 77)
   if(ZH_GAME_DATA)
     set_tests_properties(test_install_textures PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+
+  # The renderer's hooks gameengine calls, W3DDevice's own off Windows as on it, and decision 2 (B19 (c))
+  # in W3DShaderManager's testMinimumRequirements, checked against the shipped GameLODPresets.ini when
+  # ZH_GAME_DATA is set.  See Tests/test_render_hooks.cpp.
+  add_executable(test_render_hooks ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_render_hooks.cpp)
+  set_target_properties(test_render_hooks PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_render_hooks PRIVATE w3ddevice ww3d2 posixdevice gameengine)
+  add_test(NAME test_render_hooks COMMAND test_render_hooks)
+  if(ZH_GAME_DATA)
+    set_tests_properties(test_render_hooks PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
 endif()
 
@@ -1451,8 +1443,8 @@ endif()  # ZH_PLATFORM_WINDOWS - GameEngineDevice, the backends and generals.exe
 # The game off Windows (C2): SdlDevice and the POSIX entry point
 # ===========================================================================
 # SdlGameEngine is PosixGameEngine (C1) with SDL3's window and events under it; Main/PosixMain.cpp is
-# WinMain's start-up sequence without the Windows.  Until T1 and D4 the engine stops at the first
-# factory only a renderer can answer, and says so (SdlGameEngine.h).
+# WinMain's start-up sequence without the Windows.  Its factories are Win32GameEngine's W3D classes
+# (decision 8), so sdldevice takes w3ddevice as gameenginedevice holds W3DDevice on Windows.
 if(ZH_PLATFORM_POSIX)
   # Windows' audio manager, unchanged but for its guarded non-AIL remainder, over the Miles surface on
   # miniaudio (C4's upper half): gameenginedevice's audio half, as A1's w3ddevice is its renderer half.
@@ -1478,7 +1470,7 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(sdldevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
-  target_link_libraries(sdldevice PUBLIC posixdevice SDL3::SDL3-static milesaudiomanager sdlinput)
+  target_link_libraries(sdldevice PUBLIC posixdevice w3ddevice SDL3::SDL3-static milesaudiomanager sdlinput)
 
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
@@ -1669,10 +1661,10 @@ target_compile_definitions(test_terrain_golden PRIVATE
 set_target_properties(test_terrain_golden PROPERTIES CXX_STANDARD 17)
 set_tests_properties(test_terrain_golden PROPERTIES SKIP_RETURN_CODE 77)
 # test_gameengine's stubs: the exe's names everywhere, and on Windows the device layer's stand-ins,
-# which off Windows PosixDevice has for real.
+# which off Windows PosixDevice (the CD manager) and W3DDevice (the renderer's hooks) have for real.
 target_sources(test_terrain_golden PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
 if(ZH_PLATFORM_POSIX)
-  target_link_libraries(test_terrain_golden PRIVATE posixdevice)
+  target_link_libraries(test_terrain_golden PRIVATE posixdevice w3ddevice)
 endif()
 if(ZH_GAME_DATA)
   set_tests_properties(test_terrain_golden PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
@@ -1683,12 +1675,13 @@ add_lib_test(test_water_grid gameengine)
 target_sources(test_water_grid PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
 set_target_properties(test_water_grid PROPERTIES CXX_STANDARD 17)
 if(ZH_PLATFORM_POSIX)
-  target_link_libraries(test_water_grid PRIVATE posixdevice)
+  target_link_libraries(test_water_grid PRIVATE posixdevice w3ddevice)
 endif()
-# Off Windows the device layer's hooks (render stand-ins, the CD manager) are PosixDevice's, where on
-# Windows the test's own stubs stand in for gameenginedevice, which it does not link (B6).
+# Off Windows the device layer's hooks are the game's own: the renderer's from W3DDevice, the CD
+# manager from PosixDevice.  On Windows the test's own stubs stand in for gameenginedevice, which it
+# does not link (B6).
 if(ZH_PLATFORM_POSIX)
-  target_link_libraries(test_gameengine PRIVATE posixdevice)
+  target_link_libraries(test_gameengine PRIVATE posixdevice w3ddevice)
 endif()
 # the well-known Dict keys and a handful of device/exe entry points live in
 # GameEngineDevice, which Phase 4 ports; stand-ins until then.

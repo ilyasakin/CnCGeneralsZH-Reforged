@@ -28,14 +28,25 @@
 #include "SdlDevice/Common/SdlGameEngine.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
 #include "SdlDevice/GameClient/SdlInput.h"
+#include "SdlDevice/Common/PosixW3DGameClient.h"
 #include "MilesAudioDevice/MilesAudioManager.h"
+#include "Common/GlobalData.h"		// -nodevice picks the radar, as on Windows
+#include "Common/WindowMode.h"
+#include "Win32Device/Common/HeadlessRadar.h"
+#include "W3DDevice/Common/W3DFunctionLexicon.h"
+#include "W3DDevice/Common/W3DModuleFactory.h"
+#include "W3DDevice/Common/W3DRadar.h"
+#include "W3DDevice/Common/W3DThingFactory.h"
+#include "W3DDevice/GameClient/W3DParticleSys.h"
+#include "W3DDevice/GameClient/W3DWindowHooks.h"
+#include "W3DDevice/GameLogic/W3DGameLogic.h"
 
 #include <SDL3/SDL.h>
 
 #include <stdio.h>
 
-// WinMain's DEFAULT_XRESOLUTION and DEFAULT_YRESOLUTION: the window's size until the renderer (D4)
-// sizes it to the game's resolution, as dx8wrapper does on Windows.
+// WinMain's DEFAULT_XRESOLUTION and DEFAULT_YRESOLUTION: the window's size until W3DDisplay sizes it to
+// the game's resolution when the device is made, as dx8wrapper does on Windows (W3DWindowHooks.h).
 static const int INITIAL_WINDOW_WIDTH = 800;
 static const int INITIAL_WINDOW_HEIGHT = 600;
 
@@ -55,13 +66,41 @@ static Bool canPostQuitMessage( void )
 	return TheMessageStream != NULL && ThePlayerList != NULL && ThePlayerList->getLocalPlayer() != NULL;
 }
 
-/** A factory this platform cannot answer yet.  Stops the game and says what it waits for. */
-static void notYetOffWindows( const char *factory, const char *waitsFor )
+// WinMain.cpp's, defined in PosixMain.cpp: the window W3DDevice draws into, and whether it is borderless.
+extern RenderWindow ApplicationHWnd;
+extern Bool ApplicationIsBorderless;
+
+/** W3DDisplay's applyWindowFrame, for SDL's window: WinMain's rules, a frame and a caption for a plain
+	* window and none for the two that own the screen. */
+static void dressWindow( Int mode )
 {
-	char why[ 512 ];
-	snprintf( why, sizeof( why ), "SdlGameEngine::%s is not implemented off Windows yet: %s", factory, waitsFor );
-	DEBUG_LOG(( "%s\n", why ));
-	RELEASE_CRASH( why );
+	SDL_Window *window = s_titledWindow;
+	if (window == NULL)
+		return;
+	if (mode == WINDOW_MODE_FULLSCREEN)
+	{
+		SDL_SetWindowFullscreen( window, true );
+		return;
+	}
+	SDL_SetWindowFullscreen( window, false );
+	SDL_SetWindowBordered( window, mode == WINDOW_MODE_WINDOWED );
+}
+
+/** W3DDisplay's sizeWindowToClient, for SDL's window: a client area of the resolution, a plain window
+	* in the middle of the chosen monitor and a borderless one at its corner. */
+static void sizeWindow( Int mode, Int width, Int height, const MonitorRect &screen )
+{
+	SDL_Window *window = s_titledWindow;
+	if (window == NULL)
+		return;
+	SDL_SetWindowSize( window, width, height );
+	int x = (int)screen.left, y = (int)screen.top;
+	if (mode == WINDOW_MODE_WINDOWED)
+	{
+		x += ((int)(screen.right - screen.left) - width) / 2;
+		y += ((int)(screen.bottom - screen.top) - height) / 2;
+	}
+	SDL_SetWindowPosition( window, x, y );
 }
 
 SdlGameEngine::SdlGameEngine( const WindowRequest &request )
@@ -134,6 +173,12 @@ void SdlGameEngine::createWindow( void )
 	s_titledWindow = m_window;
 	TheApplicationWindowTitleHook = setTitleOfWindow;
 	setSdlMessageBoxOwner( m_window );
+
+	// WinMain's ApplicationHWnd, for W3DDevice: the device's window, and the calls that dress and size it
+	ApplicationHWnd = (RenderWindow)m_window;
+	ApplicationIsBorderless = m_request.borderless;
+	TheW3DWindowFrameHook = dressWindow;
+	TheW3DWindowSizeHook = sizeWindow;
 }
 
 void SdlGameEngine::destroyWindow( void )
@@ -143,8 +188,12 @@ void SdlGameEngine::destroyWindow( void )
 		if (s_titledWindow == m_window)
 		{
 			TheApplicationWindowTitleHook = NULL;
+			TheW3DWindowFrameHook = NULL;
+			TheW3DWindowSizeHook = NULL;
 			s_titledWindow = NULL;
 		}
+		if (ApplicationHWnd == (RenderWindow)m_window)
+			ApplicationHWnd = NULL;
 		setSdlMessageBoxOwner( NULL );
 		SDL_DestroyWindow( m_window );
 		m_window = NULL;
@@ -200,51 +249,23 @@ void SdlGameEngine::serviceWindowsOS( void )
 	}
 }
 
-GameLogic *SdlGameEngine::createGameLogic( void )
-{
-	notYetOffWindows( "createGameLogic", "the simulation's terrain has to move out of W3DDevice first (task T1)" );
-	return NULL;
-}
-
-GameClient *SdlGameEngine::createGameClient( void )
-{
-	notYetOffWindows( "createGameClient", "W3DGameClient comes with the renderer (D4), or a headless client after T1" );
-	return NULL;
-}
-
-ModuleFactory *SdlGameEngine::createModuleFactory( void )
-{
-	notYetOffWindows( "createModuleFactory", "W3DModuleFactory's 19 draw modules come with the renderer (D4); see PosixGameEngine.h" );
-	return NULL;
-}
-
-ThingFactory *SdlGameEngine::createThingFactory( void )
-{
-	notYetOffWindows( "createThingFactory", "W3DThingFactory comes with the renderer (D4)" );
-	return NULL;
-}
-
-FunctionLexicon *SdlGameEngine::createFunctionLexicon( void )
-{
-	notYetOffWindows( "createFunctionLexicon", "W3DFunctionLexicon's window draw functions come with the renderer (D4)" );
-	return NULL;
-}
+// Win32GameEngine's factories, the same W3D classes (decision 8); the radar too: W3DRadar, and
+// HeadlessRadar only under -nodevice, where there is no device to hold W3DRadar's textures.  -headless
+// makes the device with no window (decision 8, refined), so it keeps W3DRadar, as on Windows.
+GameLogic *SdlGameEngine::createGameLogic( void ) { return NEW W3DGameLogic; }
+GameClient *SdlGameEngine::createGameClient( void ) { return NEW PosixW3DGameClient; }
+ModuleFactory *SdlGameEngine::createModuleFactory( void ) { return NEW W3DModuleFactory; }
+ThingFactory *SdlGameEngine::createThingFactory( void ) { return NEW W3DThingFactory; }
+FunctionLexicon *SdlGameEngine::createFunctionLexicon( void ) { return NEW W3DFunctionLexicon; }
+ParticleSystemManager *SdlGameEngine::createParticleSystemManager( void ) { return NEW W3DParticleSystemManager; }
 
 Radar *SdlGameEngine::createRadar( void )
 {
-	notYetOffWindows( "createRadar", "W3DRadar comes with the renderer (D4); HeadlessRadar is Win32Device's and not built here yet" );
-	return NULL;
+	if( TheGlobalData && TheGlobalData->m_noRenderDevice )
+		return NEW HeadlessRadar;
+	return NEW W3DRadar;
 }
 
-ParticleSystemManager *SdlGameEngine::createParticleSystemManager( void )
-{
-	notYetOffWindows( "createParticleSystemManager", "W3DParticleSystemManager comes with the renderer (D4)" );
-	return NULL;
-}
-
-// Win32GameEngine's, line for line: MilesAudioManager, here over the Miles surface on miniaudio (C4).
-// -headless needs nothing of its own: parseHeadless turns m_audioOn off, and openDevice returns on it
-// before AIL_startup, on Windows as here.
 AudioManager *SdlGameEngine::createAudioManager( void )
 {
 	return NEW MilesAudioManager;

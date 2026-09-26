@@ -8,7 +8,7 @@
  *    data are gameengine's since B6 (Common/WellKnownKeys.cpp, Common/MapObject.cpp),
  *    so the tests link the real ones.  The three members that hold a RenderObjClass
  *    live beside the W3D terrain code in gameenginedevice, which this test does not
- *    link; off Windows gameengine's MapObjectRenderPosix.cpp has them.
+ *    link on Windows; off Windows it links W3DDevice, which has them.
  *
  *  - Device/exe callbacks the engine calls out to: the W3D shader manager, the
  *    CD manager, the Win32 message boxes, WinMain.  None of them are reachable
@@ -26,6 +26,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include "Platform/RenderTypes.h"
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -51,6 +53,11 @@ RenderObjClass *MapObject::getBridgeRenderObject( BridgeTowerType type )
 
 #if defined(_WIN32)
 HWND ApplicationHWnd = NULL;
+#else
+/* Main/PosixMain.cpp's, which W3DDevice names off Windows: the window (null, as under -headless) and
+   whether it is borderless. */
+RenderWindow ApplicationHWnd = NULL;
+Bool ApplicationIsBorderless = FALSE;
 #endif
 
 /* Debug.cpp names its log file after this; WinMain.cpp owns it in the real exe. */
@@ -61,8 +68,8 @@ const Char *g_strFile = "data\\Generals.str";
 const Char *g_csfFile = "data\\%s\\Generals.csf";
 
 /* The device layer's.  On Windows this test links gameengine alone, so they are stand-ins here; off
-   Windows it links PosixDevice too, whose PosixRenderHooks.cpp and PosixCDManager.cpp define them
-   (and the GameSpy SDK getQR2HostingStatus), so they would be defined twice (B6). */
+   Windows it links W3DDevice, which defines the renderer's, and PosixDevice, whose PosixCDManager.cpp
+   defines the rest (and the GameSpy SDK getQR2HostingStatus), so they would be defined twice (B6). */
 #if defined(_WIN32)
 ProjectedShadowManager *TheProjectedShadowManager = NULL;
 

@@ -134,6 +134,10 @@ static void drawFramerateBar(void);
 // The window the device draws into: C2's, and null under -headless.  On Windows, WinMain's HWND, which
 // RenderWindow is there.
 extern RenderWindow ApplicationHWnd;
+// What applyWindowFrame and sizeWindowToClient do to the window on Windows, the window's owner does here.
+#include "W3DDevice/GameClient/W3DWindowHooks.h"
+W3DWindowFrameHook TheW3DWindowFrameHook = NULL;
+W3DWindowSizeHook TheW3DWindowSizeHook = NULL;
 #endif
 #include "zhio.h"		// zh_fopen, zh_remove, zh_mkdir: the engine's Windows-spelled paths (C1)
 
@@ -721,7 +725,16 @@ static void applyWindowFrame( Int mode )
 									( mode == WINDOW_MODE_WINDOWED ) ? HWND_TOP : HWND_TOPMOST,
 									screen.left, screen.top, 0, 0, SWP_NOSIZE | SWP_FRAMECHANGED | move );
 #else
-	(void)mode;		// the window is C2's off Windows, and it dresses and sizes itself
+	// the window is C2's off Windows: the same rules, and the platform layer's hook does the dressing
+	extern RenderWindow ApplicationHWnd;	// SdlGameEngine's window (PosixMain.cpp)
+	extern Bool ApplicationIsBorderless;
+
+	if( ApplicationHWnd == NULL || ( TheGlobalData && TheGlobalData->m_headless ) )
+		return;
+
+	ApplicationIsBorderless = ( mode == WINDOW_MODE_BORDERLESS );
+	if( TheW3DWindowFrameHook != NULL )
+		TheW3DWindowFrameHook( mode );
 #endif
 }
 
@@ -762,7 +775,15 @@ static void sizeWindowToClient( Int mode, Int width, Int height )
 									( mode == WINDOW_MODE_WINDOWED ) ? HWND_TOP : HWND_TOPMOST,
 									x, y, outerW, outerH, SWP_NOACTIVATE );
 #else
-	(void)mode; (void)width; (void)height;		// the window is C2's off Windows
+	extern RenderWindow ApplicationHWnd;	// SdlGameEngine's window (PosixMain.cpp)
+
+	if( ApplicationHWnd == NULL || ( TheGlobalData && TheGlobalData->m_headless ) )
+		return;
+	if( mode == WINDOW_MODE_FULLSCREEN )
+		return;
+
+	if( TheW3DWindowSizeHook != NULL )
+		TheW3DWindowSizeHook( mode, width, height, chosenMonitor().rect );
 #endif
 }
 
@@ -1145,6 +1166,14 @@ void W3DDisplay::init( void )
 						                              : "no Direct3D 9 runtime loaded"));
 #else
 	DEBUG_LOG(("W3DDisplay::init - renderer runtime: the POSIX Direct3D 9 device (posixd3d9)\n"));
+	// On Windows Set_Render_Device's resize_window gives the window a client area of the resolution;
+	// off Windows dx8wrapper leaves the window to its owner, so the display asks for that here.
+	{
+		extern Bool ApplicationIsBorderless;
+		sizeWindowToClient( getWindowed() ? ( ApplicationIsBorderless ? WINDOW_MODE_BORDERLESS : WINDOW_MODE_WINDOWED )
+																			: WINDOW_MODE_FULLSCREEN,
+												getWidth(), getHeight() );
+	}
 #endif
 	// multisampling is opt-in with "-msaa" / "-msaa N" and silently degrades to whatever the
 	// device supports, so log what was actually granted
