@@ -450,6 +450,100 @@ disk through `zh_fopen` now, and the resolver takes both separators.
 include. The other four are `zhio.h`'s `zh_stat` and its `<sys/types.h>`/`<sys/stat.h>`,
 RawFileClass's removed `_UNIX` arm, and two POSIX-only files. WINDOWS-DEBT has the rows.
 
+## PR (f): the BIG reader, PosixGameEngine and the asset test (2026-09-26)
+
+**One BIG reader, not two.** `Win32BIGFile.cpp` and `Win32BIGFileSystem.cpp` are built into
+`posixdevice` as they are.
+- `Win32BIGFile` has no Windows call.
+- `Win32BIGFileSystem` had three, now behind `#if`: `<winsock2.h>`/`<windows.h>` for `ntohl`
+  (`<arpa/inet.h>` off Windows), and the missing-base-game `MessageBox` (`MessageBoxWrapper`
+  off Windows).
+- A copy was the alternative, and it would have two versions of the mount order: which archive wins
+  which path (the patch pass, the base-game search, `prioritizeLargerFiles`), which is what the
+  INI CRC and every asset hang off. -47 agreed. The classes keep their Windows names.
+- Two includes were in the wrong case (`Common/File.h`, `Common/registry.h`), which Linux would
+  refuse. They are fixed; Windows sees only an include-case change.
+
+**The BIGF rule (requirement above).** A file the listing finds whose first four bytes are not
+`BIGF` is left out, with one `DEBUG_LOG` line, off Windows. It is neither mounted nor fatal. Windows
+keeps its `DEBUG_CRASH`, which fires in debug builds only.
+
+**PosixGameEngine**, `GameEngineDevice/{Include,Source}/PosixDevice/Common/`, shared by macOS and
+Linux, and **abstract on purpose.**
+- **It answers what is the platform's:**
+  - `PosixLocalFileSystem`;
+  - the BIG reader;
+  - `NetworkInterface::createNetwork()`;
+  - no web browser (nothing creates one on Windows either).
+- **Pure virtual:** the factories Windows answers with W3DDevice classes (game logic, client,
+  module factory, thing factory, lexicon, particles, radar) and the audio manager.
+  - No W3D class links on macOS yet (-47).
+  - `createGameLogic` must not fall back to the base `GameLogic`: `W3DTerrainLogic` takes ground
+    height from the renderer's height map (-47's finding, now task T1).
+  - A headless `createModuleFactory` needs `W3DModuleFactory`'s 19 draw-module names, registered in
+    the same order right after `ModuleFactory::init` (their NameKeys), with parsers that accept each
+    one's INI fields. -47 sent the list; it is not in (f).
+  - An abstract class can't return the wrong one.
+- **The headless module factory's requirement** (from -47, for whoever builds it; proposed as its
+  own piece after T1):
+  - Register these 19 draw modules straight after `ModuleFactory::init()`, in this order, which
+    fixes their NameKeys as Windows has them: W3DDefaultDraw, W3DDebrisDraw, W3DModelDraw,
+    W3DLaserDraw, W3DOverlordTankDraw, W3DOverlordTruckDraw, W3DOverlordAircraftDraw,
+    W3DProjectileStreamDraw, W3DPoliceCarDraw, W3DRopeDraw, W3DScienceModelDraw, W3DSupplyDraw,
+    W3DDependencyModelDraw, W3DTankDraw, W3DTruckDraw, W3DTracerDraw, W3DTankTruckDraw,
+    W3DTreeDraw, W3DPropDraw.
+  - Each one's ModuleData must accept that module's INI fields (W3DModelDraw's table and the ones
+    that extend it), or object INI loading fails on the first unknown field. Ignoring them is safe
+    only if no draw ModuleData feeds logic; -47 knows of none, but W3DModelDraw's parse table should
+    be checked for anything GameLogic reads.
+- **Agreed with -18 for C2:**
+  - `serviceWindowsOS` is an empty virtual, and C2's SDL subclass overrides it (event pump, focus).
+  - The factories stay virtual and non-final.
+  - `CreateGameEngine` is C2's, in its `main`.
+  - C2's `main` makes the install root the current directory once, under rule 9.
+- `Win32GameEngine::update`'s minimized-window idle and audio wake-up are window work, left to that
+  subclass.
+- `PosixCDManager` is -47's, from B6.
+- Compiled here; no test constructs it, since `GameEngine`'s constructor needs the whole engine
+  linked.
+
+**The asset test: `test_bigfilesystem`, under rule 9.**
+- **The farm.** It builds a farm of symbolic links to the install's archives under a temporary
+  folder: Zero Hour's `*.big`, the AppleDouble `._*.big` too, `Data\INI`'s stray `INIZH.big`, and
+  Generals' as `ZH_Generals\`. It makes the farm read-only and mounts that with the real
+  `Win32BIGFileSystem::init()`. The install is only ever read, and `INIZH.big` was checked still in
+  place after runs.
+- **An independent reading of the archives.** The test's own parser, and the mount rules written
+  from their statement, not the code:
+  - the root's archives in name order, first claim kept;
+  - `Patch*.big` again, each overwriting;
+  - the base game filling what is left;
+  - in `Art\Textures\`, the larger of `TexturesZH.big`'s and `Textures.big`'s copies.
+- **Against every path**, it compares the owning archive the game reports, and the bytes the game
+  reads.
+- **Results, on both `$TMPDIR` and a case-sensitive APFS image:**
+  - 38 archives, and 38 AppleDouble files refused quietly;
+  - 25,294 paths, 481 textures moved to the larger copy;
+  - every owner as the rules say;
+  - **all 25,293 openable files byte-identical**. The one left, `data\*` in `PatchZH.big`, has no
+    `'.'` in its last component, so the directory walk (defect 12's) never files it, on Windows as
+    here;
+  - no missing-base-game message: `ZH_Generals` is found;
+  - hash of every path and its bytes: `c8140abc27b4d05d`. A Windows run of the same test should
+    print the same. That is the "byte-identical to the Windows build" comparison, left for a
+    Windows machine.
+  - 7 seconds.
+- **With the `Patch*.big` pass removed**, owners and bytes both fail (`WindowTransitions.ini` from
+  `INIZH.big` instead of `PatchINI.big`).
+- It needs `ZH_GAME_DATA` at configure time, and exits 77 (Skipped) without it.
+
+**C1's "Done when":**
+- Mounting the `.big` files and reading assets byte-identically is shown on both volumes, and checked
+  into `Tests/`.
+- "`MacGameEngine` constructs" became `PosixGameEngine`, abstract, which constructs once C2's
+  subclass supplies the renderer's factories and T1 the terrain.
+- The Windows-build side of "byte-identical" is the hash above, for a Windows run to reproduce.
+
 ## Registry.ini: the protocol (agreed 2026-09-26 by -a9 (C1), -18 (registry.cpp) and -47 (B6))
 
 Off Windows, `Registry.ini` in the user data directory stands in for the registry.
@@ -489,12 +583,12 @@ what only macOS has, laid out to mirror `Win32Device/` (PR (b) above says why). 
 
 | File | Lines | Mac equivalent |
 |:--|:--|:--|
-| `Win32GameEngine.cpp` | the factory and the service loop | `MacGameEngine` |
+| `Win32GameEngine.cpp` | the factory and the service loop | `PosixGameEngine` (abstract, C1 (f)); C2's SDL subclass |
 | `Win32LocalFileSystem.cpp` | real files | POSIX |
 | `Win32LocalFile.cpp` | one open file | POSIX |
-| `Win32BIGFileSystem.cpp` | mounts `.big` archives | mostly portable already |
-| `Win32BIGFile.cpp` | one file inside an archive | mostly portable already |
-| `Win32CDManager.cpp` | the disc check | a null implementation; there is no disc |
+| `Win32BIGFileSystem.cpp` | mounts `.big` archives | the same file, built off Windows (C1 (f)) |
+| `Win32BIGFile.cpp` | one file inside an archive | the same file, built off Windows (C1 (f)) |
+| `Win32CDManager.cpp` | the disc check | `PosixCDManager`, -47's (B6): no drives |
 | `Win32OSDisplay.cpp` | message boxes | minimal for headless |
 | `Win32Mouse.cpp`, `Win32DIKeyboard.cpp`, `Win32DIMouse.cpp` | input | **not this task** — C3 |
 
