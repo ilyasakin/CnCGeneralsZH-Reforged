@@ -198,6 +198,19 @@ calling `::operator new(1)` (and `delete new char` first, which clang elided - t
 the PM's to route** - candidates: `LogClass` opens its file on first `log()`, or the string classes
 call the pre-main initializer when the allocator is still NULL.
 
+**The registry step, 2026-09-26: `test_gameengine` links through ninja on macOS, nothing missing.**
+`WWDownloadRegistryPosix.cpp` (off Windows only) gives WWDownload's four registry functions and
+`FormatURLFromRegistry` bodies over Registry.ini through -18's `Common/RegistryFile.h`. The getters
+call registry.cpp's own `AsciiString` getters (one key scheme, one parse); the setters call
+`writeRegistryFile`; `FormatURLFromRegistry` is urlBuilder.cpp's body, byte for byte - with the
+engine's registry header included only below it, since both headers' getters take a string literal
+and Windows compiles that text seeing WWDownload's alone. `test_wwdownload_registry` (POSIX ctest, 6
+tests, 46 checks; hex DWORDs fail it) checks both directions against the engine's readers. **Open,
+with RegistryFile.h's owner (-18):** an empty value cannot be written, so clearing the HTTP proxy box
+leaves the old proxy in the file where Windows would store "" and every reader would take "none"; the
+test pins today's refusal. `test_gameengine` stays `PENDING_MACOS` until LogClass (b) lands: it links,
+and dies before `main` in `WOLLobbyMenu.cpp`'s `LogClass` without it.
+
 **Stale below, corrected:**
 - *`ww3d2` is "real, and the hard one" (`D3DXVec4Transform`).* No longer: B17 made the D3DX maths
   portable (`d3dxportable.h`) and not one D3DX symbol is undefined. The only WW3D2 symbol left is

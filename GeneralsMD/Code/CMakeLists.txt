@@ -920,6 +920,8 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 #  - MapObjectRenderPosix.cpp: MapObject's three RenderObjClass members.  Windows has them beside the
 #    W3D terrain code in gameenginedevice (WorldHeightMap.cpp); the data half is Common/MapObject.cpp
 #    on both.  B6.
+#  - WWDownloadRegistryPosix.cpp: WWDownload's registry functions and FormatURLFromRegistry over
+#    Registry.ini.  On Windows they come from wwdownload itself.  B6.
 #  - IMEManager.cpp: the IMM32 input method editor (Chinese, Japanese and Korean text entry).  Its
 #    only exports are TheIMEManager and CreateIMEManagerInterface; GameClient::init handles a NULL
 #    manager and every other caller tests for one, and no test calls it.  IMEManagerPosix.cpp answers
@@ -931,7 +933,8 @@ if(ZH_PLATFORM_WINDOWS)
     ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp
     ${GE}/Source/GameNetwork/DownloadManagerPosix.cpp
     ${GE}/Source/GameClient/GUI/IMEManagerPosix.cpp
-    ${GE}/Source/Common/MapObjectRenderPosix.cpp)
+    ${GE}/Source/Common/MapObjectRenderPosix.cpp
+    ${GE}/Source/Common/System/WWDownloadRegistryPosix.cpp)
 else()
   list(REMOVE_ITEM GAMEENGINE_SOURCES
     ${GE}/Source/Common/System/StackDump.cpp
@@ -1545,6 +1548,29 @@ add_test(NAME test_registryfile COMMAND test_registryfile)
 if(ZH_PLATFORM_LINUX)
   set_target_properties(test_registryfile PROPERTIES EXCLUDE_FROM_ALL TRUE)
   set_tests_properties(test_registryfile PROPERTIES DISABLED TRUE)
+endif()
+
+# WWDownload's registry functions and FormatURLFromRegistry off Windows (WWDownloadRegistryPosix.cpp)
+# over this user's Registry.ini, read back through registry.cpp's own getters too (B6).  Writes only
+# into a folder in the build tree.  POSIX only: on Windows they are wwdownload's, over the registry.
+if(ZH_PLATFORM_POSIX)
+  set(ZH_WWDOWNLOAD_REGISTRY_SOURCES ${ZH_REGISTRYFILE_SOURCES})
+  list(REMOVE_ITEM ZH_WWDOWNLOAD_REGISTRY_SOURCES ${TESTS}/test_registryfile.cpp)
+  list(APPEND ZH_WWDOWNLOAD_REGISTRY_SOURCES ${TESTS}/test_wwdownload_registry.cpp
+    ${GE}/Source/Common/System/WWDownloadRegistryPosix.cpp)
+  add_executable(test_wwdownload_registry ${ZH_WWDOWNLOAD_REGISTRY_SOURCES})
+  target_include_directories(test_wwdownload_registry PRIVATE
+    $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+  target_compile_definitions(test_wwdownload_registry PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+  set_target_properties(test_wwdownload_registry PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_wwdownload_registry PRIVATE test_harness wwlib wwdebug)
+  add_test(NAME test_wwdownload_registry COMMAND test_wwdownload_registry)
+  set_tests_properties(test_wwdownload_registry PROPERTIES
+    ENVIRONMENT "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-wwdownload-registry")
+  if(ZH_PLATFORM_LINUX)
+    set_target_properties(test_wwdownload_registry PROPERTIES EXCLUDE_FROM_ALL TRUE)
+    set_tests_properties(test_wwdownload_registry PROPERTIES DISABLED TRUE)
+  endif()
 endif()
 
 # The user's folders off Windows (C1 (e)): the user data directory and the Desktop, EarlyOptions.h's
