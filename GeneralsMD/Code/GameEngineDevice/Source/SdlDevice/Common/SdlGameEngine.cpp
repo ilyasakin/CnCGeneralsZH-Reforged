@@ -29,6 +29,7 @@
 #include "SdlDevice/Common/SdlMessageBox.h"
 #include "SdlDevice/GameClient/SdlInput.h"
 #include "W3DDevice/GameClient/W3DGameClient.h"
+#include "PosixDevice/Common/PosixFileResolutionDump.h"
 #include "MilesAudioDevice/MilesAudioManager.h"
 #include "Common/GlobalData.h"		// -nodevice picks the radar, as on Windows
 #include "Common/WindowMode.h"
@@ -122,6 +123,17 @@ void SdlGameEngine::init( int argc, char *argv[] )
 {
 	createWindow();
 	GameEngine::init( argc, argv );
+
+	// P1 step 3: "-dumpFileResolution <file>" writes where every path resolves, then ends the run
+	// (test_packaging_resolution compares two layouts' dumps).  A test switch, never a player's.
+	for (int i = 1; i + 1 < argc; ++i)
+		if (strcasecmp( argv[i], "-dumpFileResolution" ) == 0)
+		{
+			const Bool written = PosixDumpFileResolution( argv[i + 1] );
+			fprintf( stderr, "generals: file resolution %s %s\n", written ? "written to" : "NOT written to", argv[i + 1] );
+			fflush( NULL );
+			_exit( written ? 0 : 1 );
+		}
 }
 
 void SdlGameEngine::createWindow( void )
