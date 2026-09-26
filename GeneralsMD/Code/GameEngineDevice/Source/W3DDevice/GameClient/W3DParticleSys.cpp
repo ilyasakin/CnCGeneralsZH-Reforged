@@ -53,6 +53,7 @@
 
 
 #include "Common/QuickTrig.h"
+#include "Platform/MsvcFloatCasts.h"
 
 #ifdef DEBUG_LOGGING
 extern Real TheParticleFillMS;
@@ -116,7 +117,8 @@ static void fillBillboards( Int index, void *context )
 		const RGBColor *color = p->getColor();
 		const unsigned packed = DX8Wrapper::Convert_Color_Clamp(
 			Vector4( color->red, color->green, color->blue, p->getAlpha() ) );
-		const uint8 orientation = (uint8)(p->getAngle() * 255.0f / (2.0f * PI));
+		// The orientation table's index wraps, as it did on Windows (Platform/MsvcFloatCasts.h).
+		const uint8 orientation = floatToByteAsMsvc( p->getAngle() * 255.0f / (2.0f * PI) );
 		PointGroupClass::Write_Billboard( quad, job->view, Vector3( pos->x, pos->y, pos->z ), psize,
 			orientation, packed );
 		quad += 4;
@@ -396,7 +398,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			RGBAArray[count].Z = color->blue;
 			RGBAArray[count].W = p->getAlpha();
 		
-			angleArray[count] = (uint8)(p->getAngle() * 255.0f / (2.0f * PI));
+			angleArray[count] = floatToByteAsMsvc( p->getAngle() * 255.0f / (2.0f * PI) );
 			
 			if (++count == MAX_POINTS_PER_GROUP)
 			{
