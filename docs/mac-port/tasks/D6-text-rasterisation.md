@@ -3,7 +3,7 @@
 - **Milestone:** M4 (the game is visible; without this, it has no text)
 - **Depends on:** nothing to start the seam and the rasteriser; D4 to see the result in the game
 - **Blocks:** any screen with text on macOS and Linux
-- **Status:** D6a done on its branch (-47); D6b waits on A1
+- **Status:** D6a merged; D6b on its branch (-47)
 - **Size:** `WW3D2/render2dsentence.cpp` (the GDI path), `GameClient/GlobalLanguage.cpp` (font
   installation), one vendored library
 
@@ -133,6 +133,43 @@ aliased text where a Windows player sees smooth text. Layout is unaffected: adva
 depend on anti-aliasing. The default is faithful to GDI with the platform's own file.
 `GlyphRasteriserClass::Set_Antialias_Mode(ANTIALIAS_ALWAYS_GRAY)` is the one switch. **At M4, with text
 on screen, the user judges which reads better.** The switch is not in the game's options.
+
+## D6b, 2026-09-26 (-47): FontCharsClass draws with FreeType off Windows
+
+A1 had already put `render2dsentence.cpp`'s three GDI members under `#if defined(_WIN32)`, with
+`#else` stubs that gave blank, zero-width glyphs. D6b fills those `#else` branches and nothing else, so
+the seam is the design's and the Windows view cannot move. `windows_view_diff.py` says IDENTICAL for
+render2dsentence.{h,cpp} and GlobalLanguage.cpp.
+
+- **`Create_GDI_Font`** does GDI's arithmetic around `GlyphRasteriserClass`:
+  - "Generals" becomes Arial with lfWidth = 0.40 x the height.
+  - The height is `-MulDiv(pt, 96, 72)`, rounded as MulDiv rounds.
+  - PixelOverlap is a pixel per 8 of height, at most 4.
+  - CharHeight, CharAscent and CharOverhang come from the rasteriser's tmHeight, tmAscent and
+    tmOverhang.
+  - Without a font file, the glyphs are blank as before.
+- **`Store_GDI_Char`** follows the Windows body step by step:
+  - The character is drawn into the (2 x pt) box at (xOrigin, 0), with 'W' one pixel in.
+  - Its width is the advance plus the overlap plus the origin, and its rows are the font's height.
+  - Each pixel goes through the same square root into 4-bit alpha, with the same bookkeeping after.
+- **`Free_GDI_Font`** releases the rasteriser.
+- **`GlobalLanguage`'s `installLocalFont` and `removeLocalFont`** off Windows resolve Language.ini's
+  LocalFontFile through the engine's path resolver, and register it with the rasteriser. It is found by
+  family before the substitution table, as an AddFontResource'd font is found before GDI's mapper.
+- **CMake:** ww3d2 and gameengine link `glyphrasteriser`, off Windows only.
+- **`test_fontchars`** (ctest) drives the real FontCharsClass through its public face:
+  - The line height is 16 at 10 pt, which is VDMX's 13 + 3.
+  - Every width of a fixed string at 8, 10, 12 and 14 pt is the advance plus the overlap, with 'W'
+    one pixel more.
+  - A 10 pt 'H' is 10 x 16 with 25 fully inked pixels and no partial ones, as gasp keeps it bilevel;
+    under the always-grey switch, partial alpha appears.
+  - "GENERALS" at 15 pt is 113 px squeezed against Arial's 122, with the same height.
+  - Red twice: 'W' not one pixel wider, and MulDiv truncating instead of rounding.
+- **Cannot see:**
+  - GDI itself.
+  - Text in the game, which needs the renderer drawing (M4).
+  - A language that ships LocalFontFile; English ships none, so installLocalFont's POSIX path is
+    compiled and linked but not exercised.
 
 ## D6b (with or after A1)
 

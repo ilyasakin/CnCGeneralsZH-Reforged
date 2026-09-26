@@ -56,6 +56,11 @@
 #include "Common/INI.h"
 #include "Common/Registry.h"
 #include "GameClient/GlobalLanguage.h"
+#if !defined(_WIN32)
+#include "glyphrasteriser.h"
+#include "posixpath.h"
+#include <string>
+#endif
 #include "Common/FileSystem.h"
 
 //-----------------------------------------------------------------------------
@@ -110,16 +115,17 @@ void INI::parseLanguageDefinition( INI *ini )
 
 /* The font files a language ships next to the game (Language.ini's LocalFontFile entries, kept in
 	 m_localFonts).  On Windows they are installed for this process with AddFontResource and removed on
-	 shutdown, and GDI draws every glyph from them.  Elsewhere text rasterisation is D6's (decision 6:
-	 FreeType behind a seam), and there is no process-wide font table to install into: these do nothing,
-	 and m_localFonts - public, filled the same way on every platform - is the list D6 loads. */
+	 shutdown, and GDI draws every glyph from them.  Elsewhere FreeType draws them (D6): the file is
+	 registered with the glyph rasteriser, which finds it by its family name before its substitution
+	 table, as GDI finds an installed font before its font mapper does.  The name is the engine's spelling,
+	 relative to the working directory as AddFontResource took it, and is resolved to the file on disk. */
 static Bool installLocalFont( const AsciiString &font )
 {
 #if defined(_WIN32)
 	return AddFontResource(font.str()) != 0;
 #else
-	(void)font;
-	return TRUE;
+	std::string path;
+	return PosixPath_Resolve( font.str(), POSIX_PATH_EXISTING, path ) && GlyphRasteriserClass::Register_Font_File( path.c_str() );
 #endif
 }
 
@@ -128,7 +134,9 @@ static void removeLocalFont( const AsciiString &font )
 #if defined(_WIN32)
 	RemoveFontResource(font.str());
 #else
-	(void)font;
+	std::string path;
+	if (PosixPath_Resolve( font.str(), POSIX_PATH_EXISTING, path ))
+		GlyphRasteriserClass::Unregister_Font_File( path.c_str() );
 #endif
 }
 
