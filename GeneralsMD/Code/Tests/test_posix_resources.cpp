@@ -525,6 +525,42 @@ TEST(posix_fills_colour_and_depth)
 	CHECK_EQ(posixFillDepth(target, all, D3DCLEAR_ZBUFFER, 0.0f, 0), D3DERR_INVALIDCALL);
 }
 
+TEST(posix_gpu_read_backs_land_in_the_targets_format)
+{
+	// Three pixels by two rows of B8G8R8A8, as the GPU hands them back: rows packed, top first.
+	const uint8_t bgra[3 * 2 * 4] = {
+		0x00, 0x80, 0xff, 0x40,		0x11, 0x22, 0x33, 0x44,		0xff, 0xff, 0xff, 0x00,
+		0x01, 0x02, 0x03, 0x04,		0x00, 0x00, 0x00, 0xff,		0x10, 0x20, 0x30, 0x80,
+	};
+
+	PosixImage argb = image_of(D3DFMT_A8R8G8B8, 3, 2);
+	const uint32_t version = argb.version();
+	CHECK(posixWriteFromBgra(argb, bgra, 3, 2));
+	CHECK_EQ(argb_at(argb, 0, 0), 0x40ff8000u);
+	CHECK_EQ(argb_at(argb, 2, 1), 0x80302010u);
+	CHECK_EQ(argb.version(), version);		// the GPU's copy is the newer one: nothing to upload
+
+	PosixImage xrgb = image_of(D3DFMT_X8R8G8B8, 3, 2);
+	CHECK(posixWriteFromBgra(xrgb, bgra, 3, 2));
+	CHECK_EQ(argb_at(xrgb, 2, 0), 0xffffffffu);
+	CHECK_EQ(argb_at(xrgb, 0, 1), 0xff030201u);		// X8: the unused byte is 0xff whatever the GPU had
+
+	PosixImage rgb565 = image_of(D3DFMT_R5G6B5, 3, 2);
+	CHECK(posixWriteFromBgra(rgb565, bgra, 3, 2));
+	const uint8_t *first = rgb565.bytes();
+	CHECK_EQ((unsigned)(first[0] | (first[1] << 8)), 0xfc00u);		// red 255, green 128 (32 of 63), blue 0
+	const uint8_t *last = rgb565.bytes() + rgb565.rowPitch() + 2 * 2;
+	CHECK_EQ((unsigned)(last[0] | (last[1] << 8)), 0x3102u);		// 0x30, 0x20, 0x10 to 6, 8, 2
+
+	CHECK(!posixWriteFromBgra(argb, bgra, 2, 3));		// another size
+	PosixImage dxt = image_of(D3DFMT_DXT1, 4, 4);
+	CHECK(!posixWriteFromBgra(dxt, bgra, 4, 4));
+	PosixImage depth = image_of(D3DFMT_D24S8, 3, 2);
+	CHECK(!posixWriteFromBgra(depth, bgra, 3, 2));
+	PosixImage a1 = image_of(D3DFMT_A1R5G5B5, 3, 2);
+	CHECK(!posixWriteFromBgra(a1, bgra, 3, 2));		// not a format the engine renders to
+}
+
 namespace {
 
 D3DPRESENT_PARAMETERS headless_parameters()

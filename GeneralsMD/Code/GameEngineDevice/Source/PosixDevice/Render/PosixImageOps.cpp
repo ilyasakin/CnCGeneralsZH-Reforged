@@ -277,6 +277,37 @@ RenderResult posixFillImage( PosixImage &dest, const PosixRegion &region, const 
 	return D3D_OK;
 }
 
+bool posixWriteFromBgra( PosixImage &image, const uint8_t *bgra, unsigned int width, unsigned int height )
+{
+	if (bgra == NULL || image.bytes() == NULL || width != image.width() || height != image.height()
+		|| image.depth() != 1)
+		return false;
+	const D3DFORMAT format = image.format();
+	if (format != D3DFMT_A8R8G8B8 && format != D3DFMT_X8R8G8B8 && format != D3DFMT_R5G6B5)
+		return false;
+	const size_t sourcePitch = (size_t)width * 4;
+	for (unsigned int y = 0; y < height; ++y)
+	{
+		const uint8_t *from = bgra + (size_t)y * sourcePitch;
+		uint8_t *to = image.bytes() + (size_t)y * image.rowPitch();
+		if (format == D3DFMT_R5G6B5)
+		{
+			for (unsigned int x = 0; x < width; ++x, from += 4, to += 2)
+			{
+				const PosixColor colour = { from[2] / 255.0f, from[1] / 255.0f, from[0] / 255.0f, 1.0f };
+				posixEncodePixel( format, colour, to );
+			}
+			continue;
+		}
+		// D3DFMT_A8R8G8B8 is B, G, R, A in memory: the GPU's bytes as they are.
+		memcpy( to, from, sourcePitch );
+		if (format == D3DFMT_X8R8G8B8)
+			for (unsigned int x = 0; x < width; ++x)
+				to[x * 4 + 3] = 0xFF;
+	}
+	return true;
+}
+
 RenderResult posixFillDepth( PosixImage &dest, const PosixRegion &region, RenderUInt32 flags, float z,
 	RenderUInt32 stencil )
 {

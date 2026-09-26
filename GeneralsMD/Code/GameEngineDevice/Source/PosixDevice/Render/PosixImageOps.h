@@ -70,4 +70,11 @@ RenderResult posixFillImage( PosixImage &dest, const PosixRegion &region, const 
 RenderResult posixFillDepth( PosixImage &dest, const PosixRegion &region, RenderUInt32 flags, float z,
 	RenderUInt32 stencil );
 
+/** A render target's pixels read back from the GPU, into its image (the A3d render-target seam).  `bgra`
+	* is B8G8R8A8, `width` * 4 bytes a row with no padding, top row first, the image's own size.
+	* A8R8G8B8 is the same bytes; X8R8G8B8 is those with the unused byte 0xFF, what sampling it reads;
+	* R5G6B5 is encoded, rounding to nearest.  The image's version() is left alone: the GPU's copy is
+	* the newer one, and this only brings the CPU's up to it.  False for another size or format. */
+bool posixWriteFromBgra( PosixImage &image, const uint8_t *bgra, unsigned int width, unsigned int height );
+
 #endif // POSIXIMAGEOPS_H
