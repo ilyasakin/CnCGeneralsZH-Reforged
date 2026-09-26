@@ -492,7 +492,11 @@ SDL_GPUSampler *SdlSamplerCache::Sampler(const RenderUInt32 sampler_states[14])
 	std::string refusal;
 	SDL_GPUSampler *sampler = NULL;
 	if (Sdl_Sampler_Description(sampler_states, &info, refusal)) {
+		const double started = Sdl_Creation_Log_Asked() ? Sdl_Now_Ms() : 0.0;
 		sampler = SDL_CreateGPUSampler(Device, &info);
+		if (Sdl_Creation_Log_Asked()) {
+			Sdl_Creation_Log("sampler", started, Sdl_Now_Ms() - started, "");
+		}
 		if (sampler == NULL) {
 			refusal = std::string("the device: ") + SDL_GetError();
 		}

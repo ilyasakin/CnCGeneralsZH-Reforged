@@ -25,6 +25,7 @@
 #include "PosixDevice9.h"
 #include "PosixResources9.h"
 #include "SdlConstants.h"
+#include "SdlCreationLog.h"
 #include "SdlGpuFrame.h"
 #include "SdlPipelineCache.h"
 #include "SdlProgramCache.h"
@@ -715,6 +716,36 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		explicit DrawTimer(double *into) : Into(into), Start(into != NULL ? SDL_GetTicksNS() : 0) {}
 		~DrawTimer() { if (Into != NULL) *Into += (double)(SDL_GetTicksNS() - Start) / 1.0e6; }
 	} timer(Timing_Is_Asked() ? &TimingDrawMs : NULL);
+	// PERF1's hitch hunt: with ZH_GPU_CREATION_LOG, a draw over 20 ms says how long each of its phases took.
+	struct PhaseClock
+	{
+		bool On;
+		double Start, Last;
+		double Took[8];
+		const char *Names[8];
+		int Count;
+		double Parts[3];	// inside the copies: textures, samplers, buffers
+		int Rounds;
+		explicit PhaseClock(bool on) : On(on), Start(on ? Sdl_Now_Ms() : 0.0), Last(Start), Count(0), Rounds(0) { Parts[0] = Parts[1] = Parts[2] = 0.0; }
+		double Now() const { return On ? Sdl_Now_Ms() : 0.0; }
+		void Part(int which, double since) { if (On) Parts[which] += Sdl_Now_Ms() - since; }
+		void Mark(const char *name)
+		{
+			if (!On || Count == 8) return;
+			const double now = Sdl_Now_Ms();
+			Names[Count] = name;
+			Took[Count++] = now - Last;
+			Last = now;
+		}
+		~PhaseClock()
+		{
+			if (!On || Sdl_Now_Ms() - Start <= 20.0) return;
+			fprintf(stderr, "PosixDevice9 create: t %10.1f ms  SLOW DRAW %8.2f ms:", Start, Sdl_Now_Ms() - Start);
+			for (int i = 0; i < Count; ++i) fprintf(stderr, " %s %.2f", Names[i], Took[i]);
+			fprintf(stderr, " rest %.2f (copies: textures %.2f samplers %.2f buffers %.2f rounds %d)\n", Sdl_Now_Ms() - Last,
+				Parts[0], Parts[1], Parts[2], Rounds);
+		}
+	} phases(Sdl_Creation_Log_Asked());
 
 	const unsigned int reads = vertices_of(call.Type, call.PrimitiveCount);
 	if (reads == 0 && call.PrimitiveCount != 0) {
@@ -755,6 +786,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	if (Gpu->Batch_Is_Full()) {
 		Gpu->Flush();
 	}
+	phases.Mark("dead+full");
 
 	// Where it draws (A3d): the back buffer, or a render target's GPU texture.
 	std::string target_refusal;
@@ -807,9 +839,11 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		Refuse_Draw("the pipeline: " + refusal);
 		return D3D_OK;
 	}
+	phases.Mark("target+programs");
 	SdlRecordedDraw draw;
 	memset(&draw, 0, sizeof(draw));
 	draw.Pipeline = Pipelines->Pipeline(key);
+	phases.Mark("pipeline");
 	if (draw.Pipeline == NULL) {
 		Refuse_Draw("the GPU refused a pipeline");
 		return D3D_OK;
@@ -836,6 +870,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	// for marked as used by the batch before: so ask again until a round flushes nothing.
 	for (int round = 0; round < 3; ++round) {
 		const uint64_t batch = Gpu->Batch();
+		++phases.Rounds;
 		draw.SamplerCount = pixel_program.SamplerSlots;
 		for (unsigned int slot = 0; slot < pixel_program.SamplerSlots; ++slot) {
 			const int texture_stage = pixel_program.SlotTexture[slot];
@@ -845,7 +880,9 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 				return D3D_OK;
 			}
 			IDirect3DBaseTexture9 *texture = Textures[texture_stage];
+			double since = phases.Now();
 			draw.Textures[slot] = texture != NULL ? Mirrors->Texture(texture, refusal) : Mirrors->White();
+			phases.Part(0, since);
 			if (draw.Textures[slot] != NULL && draw.Textures[slot] == target.Colour) {
 				// Undefined in D3D9, and an error on SDL3 GPU: the pass would read what it writes.
 				Refuse_Draw("sampling the render target it draws into");
@@ -855,18 +892,22 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 				Refuse_Draw("the texture: " + refusal);
 				return D3D_OK;
 			}
+			since = phases.Now();
 			draw.Samplers[slot] = Samplers->Sampler(SamplerStates[sampler_stage]);
+			phases.Part(1, since);
 			if (draw.Samplers[slot] == NULL) {
 				Refuse_Draw("the sampler: " + Samplers->Refusal());
 				return D3D_OK;
 			}
 		}
+		const double buffers_since = phases.Now();
 		if (!stage_vertices) {
 			draw.VertexBuffer = Mirrors->Buffer(vertex_buffer, vertex_buffer->storage(), refusal);
 		}
 		if (call.Indexed && !stage_indices) {
 			draw.IndexBuffer = Mirrors->Buffer(index_buffer, index_buffer->storage(), refusal);
 		}
+		phases.Part(2, buffers_since);
 		if ((!stage_vertices && draw.VertexBuffer == NULL) || (call.Indexed && !stage_indices && draw.IndexBuffer == NULL)) {
 			Refuse_Draw("the buffer: " + refusal);
 			return D3D_OK;
@@ -876,6 +917,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		}
 	}
 
+	phases.Mark("copies");
 	// The vertices: a static buffer's copy is bound where the stream points, and a dynamic buffer's or
 	// the caller's bytes are staged, from the first vertex the draw can read.
 	if (stage_vertices) {
@@ -977,6 +1019,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 			target.Width, target.Height);
 	}
 
+	phases.Mark("staging");
 	// The constants, pushed only when they change.
 	SdlVertexConstants vertex_constants;
 	SdlPixelConstants pixel_constants;
@@ -1025,6 +1068,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	if (draw.Scissor[2] == 0 || draw.Scissor[3] == 0) {
 		return D3D_OK;		// the viewport is off the target: nothing to draw
 	}
+	phases.Mark("constants");
 	Gpu->Set_Target(target);
 	draw.StencilReference = RenderStates[D3DRS_STENCILREF] & 0xFF;
 	draw.BlendFactor = RenderStates[D3DRS_BLENDFACTOR];
