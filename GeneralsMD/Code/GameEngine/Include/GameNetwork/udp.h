@@ -129,4 +129,15 @@ class UDP
 AsciiString GetWSAErrorString( Int error );
 #endif
 
+/* The last socket call's error, for the logs: winsock's on Windows, errno elsewhere.  GetWSAErrorString
+	 (udp.cpp) names either. */
+inline int lastSocketError( void )
+{
+#if defined(_WIN32)
+	return WSAGetLastError();
+#else
+	return errno;
+#endif
+}
+
 #endif
