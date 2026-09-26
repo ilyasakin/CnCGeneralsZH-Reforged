@@ -27,6 +27,12 @@
 // indexed its orientation table 190 GB past the end (docs/mac-port/README.md, the latent undefined
 // behaviour list).
 //
+// The lowering assumed is MSVC's long-standing one.  Visual Studio 2022 has an option for it,
+// /fpcvt:BC (that one) against /fpcvt:IA (saturating); -18 recalls it from memory and the current
+// documentation should be checked.  A Windows build that changed it would stop matching this header
+// while the other platforms still passed, which is what test_msvc_float_casts' MSVC-side comparison
+// is there to catch.
+//
 // Each function here is that MSVC result, computed with defined operations only, so every platform
 // gets the Windows answer and Windows gets the answer it always had.  The MSVC lowering is the
 // documented cvttss2si behaviour; it has not been measured on a Windows machine by this project
