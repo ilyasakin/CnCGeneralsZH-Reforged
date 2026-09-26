@@ -84,7 +84,7 @@ enum FirewallDetectionState {
 
 #pragma pack(push, 1)
 
-// size = 16 bytes
+// size = 20 bytes
 struct ManglerData {
 		unsigned int		CRC;
 		unsigned short	magic;
@@ -97,7 +97,7 @@ struct ManglerData {
 		unsigned short	Padding;
 };
 
-// size = TransportMessageHeader + ManglerData + 10 bytes = 26 bytes
+// size = ManglerData + 10 bytes = 30 bytes (ManglerData begins with the transport header's CRC and magic)
 struct ManglerMessage {
         ManglerData							data;
         int											length;
@@ -106,6 +106,10 @@ struct ManglerMessage {
 };
 
 #pragma pack(pop)
+
+// ManglerData goes on the wire as it sits in memory (see NetworkDefs.h).
+static_assert(sizeof(ManglerData) == 20, "ManglerData is 20 bytes on the wire");
+static_assert(sizeof(ManglerMessage) == 30, "ManglerMessage is ManglerData and 10 bytes");
 
 static const Int MAX_NUM_MANGLERS = 4;
 static const UnsignedShort MANGLER_PORT = 4321;
