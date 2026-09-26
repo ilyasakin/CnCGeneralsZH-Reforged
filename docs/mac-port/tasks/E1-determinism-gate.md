@@ -159,6 +159,39 @@ full ctest run on that change, `replay_check` included, passed.)
 one seed agree on this machine and this build. It says nothing about agreement with a Windows build,
 which needs a replay recorded on Windows.
 
+**The baselines since the die-flag fix, 2026-09-26 (-18).** These replace every table below.
+- The earlier Mac baselines all measured a simulation whose death mux was broken. `get/set/clearDeathTypeFlag`
+  and `get/set/clearVeterancyLevelFlag` built value 0's bit as `1UL << -1`, which gives bit 31 with
+  Windows' 32-bit `long` and bit 63 with macOS's 64-bit one (README, latent UB).
+- So on the Mac no die module with default flags ran for a regular unit, and none ran for a normal
+  death: no slow deaths and no hulks.
+- Probes over seed 0 counted it: `SlowDeathBehavior::onDie` was applicable 0 times in 108 before the fix
+  and 127 times in 224 after it, and hulk lifetimes ran 0 and 4 times. The control, `Object::onDie`, fired
+  306 times before.
+- arm64 and x86_64 agreed with each other throughout, both LP64. This is the "`long` of 32 bits" in the
+  compiler-axis caveat below, found.
+- Each match agreed with its checkpointed playback and a second run. The install hashes were unchanged.
+- feature/mac-port d38d6803 plus the fix, arm64 Release, the same defaults (2 players, brutal, the
+  generator's size, 12,000 frames).
+
+| name | seed | players | HEADLESS CRC | built after frame 0 | per side: units built/lost/kills/peak, buildings |
+|:--|:--|:--|:--|:--|:--|
+| `mac_baseline_seed0` | 0 | 2 | 0xE896DEF3 | 49 | 42/12/7/44, 29; 60/7/12/87, 20 |
+| `mac_baseline_seed1` | 1 | 2 | 0x7C7DBA69 | 53 | 95/13/31/123, 26; 87/31/6/107, 29 |
+| `mac_baseline_extended_s2_p2` | 2 | 2 | 0x589A80C1 | 46 | 81/29/16/88, 21; 95/16/27/113, 25 |
+| `mac_baseline_extended_s2_p4` | 2 | 4 | 0xDE39B104 | 90 | 80/41/15/67, 23; 82/15/26/94, 23; 87/26/26/79, 25; 84/31/21/87, 21 |
+| `mac_baseline_extended_s3_p2` | 3 | 2 | 0x6605C85D | 30 | 81/18/11/80, 13; 41/11/18/49, 18 |
+| `mac_baseline_extended_s3_p4` | 3 | 4 | 0x8DB3C6FD | 87 | 81/24/30/71, 17; 82/18/16/79, 24; 89/27/26/62, 30; 57/22/18/63, 20 |
+| `mac_baseline_extended_s4_p2` | 4 | 2 | 0x9D25B814 | 63 | 94/23/53/81, 39; 55/54/22/41, 26 |
+| `mac_baseline_extended_s4_p4` | 4 | 4 | 0x14DB25D9 | 107 | 97/22/4/82, 32; 39/21/26/41, 25; 108/25/23/105, 27; 51/5/20/65, 27 |
+| `mac_baseline_extended_s5_p2` | 5 | 2 | 0x3A5A5FA7 | 40 | 53/12/20/55, 22; 59/20/6/64, 20 |
+| `mac_baseline_extended_s5_p4` | 5 | 4 | 0xE91EDDC6 | 82 | 50/18/21/46, 23; 50/23/6/40, 18; 46/14/12/43, 20; 68/14/30/87, 25 |
+
+**x86_64 (Rosetta) with the fix:** seed 0 gives 0xE896DEF3 and seed 1 gives 0x7C7DBA69, the same as arm64.
+Each agreed with its own playback.
+
+**Superseded** (a broken death mux; kept for the record):
+
 **The Mac baseline**, macOS 27 arm64, M3 Pro, Release, feature/mac-port 33f968c9 plus defect #20's fix.
 Default arguments: 2 players, brutal, the generator's size (248 cells), 12,000 frames. Each seed agreed
 with its own checkpointed playback and with a second run. The install listing is identical before and
