@@ -242,13 +242,16 @@ AsciiString registryFileKey( const char *tree, const AsciiString &path, const As
 }
 
 /** Whether findEarlyOptionValueIn could give back exactly `val`: it reads a value to the line's end,
-	* trims blanks after the '=' and at the end, takes an empty value as missing, and readRegistryFileAt
-	* reads it into 256 bytes.  The write checks the file it made in any case; this says why up front. */
+	* trims blanks after the '=' and at the end, and readRegistryFileAt reads it into 256 bytes.  (An
+	* empty value is written anyway, and reads as missing: see RegistryFile.h.)  The write checks the
+	* file it made in any case; this says why up front. */
 static Bool valueReadsBack( const AsciiString &val )
 {
 	const char *text = val.str();
 	const size_t length = ::strlen( text );
-	if (length == 0 || length > 255 || ::strpbrk( text, "\r\n" ) != NULL)
+	if (length == 0)
+		return TRUE;
+	if (length > 255 || ::strpbrk( text, "\r\n" ) != NULL)
 		return FALSE;
 	const char first = text[ 0 ], last = text[ length - 1 ];
 	return (first != ' ' && first != '\t' && last != ' ' && last != '\t') ? TRUE : FALSE;
@@ -288,7 +291,7 @@ Bool writeRegistryFileAt( const char *file, const AsciiString &name, const Ascii
 	}
 
 	std::string line = name.str();
-	line += " = ";
+	line += val.isEmpty() ? " =" : " = ";		// "name =": no blank for the reader to trim, and nothing after it
 	line += val.str();
 	line += '\n';
 	if (lastStart != std::string::npos)
@@ -301,9 +304,10 @@ Bool writeRegistryFileAt( const char *file, const AsciiString &name, const Ascii
 	}
 
 	// Written beside the file and renamed over it, so a reader sees the old file or the new one; and
-	// renamed only if the reader reads the value back from it as written, which covers what the
-	// line-by-line view above cannot see (a name the reader would not match, or a line longer than
-	// the reader's 1024-byte buffer, which it reads in pieces).
+	// renamed only if the reader reads the value back from it as written - or, for an empty value,
+	// reads the key as missing - which covers what the line-by-line view above cannot see (a name the
+	// reader would not match, or a line longer than the reader's 1024-byte buffer, which it reads in
+	// pieces).
 	AsciiString temporary;
 	temporary.format( "%s.%d", file, (int)::getpid() );
 	FILE *out = zh_fopen( temporary.str(), "w" );
@@ -312,8 +316,9 @@ Bool writeRegistryFileAt( const char *file, const AsciiString &name, const Ascii
 	const Bool wrote = ::fwrite( contents.data(), 1, contents.size(), out ) == contents.size();
 	const Bool closed = ::fclose( out ) == 0;
 	AsciiString readBack;
-	if (!wrote || !closed || !readRegistryFileAt( temporary.str(), name, readBack ) || readBack.compare( val ) != 0
-			|| zh_rename( temporary.str(), file ) != 0)
+	const Bool found = readRegistryFileAt( temporary.str(), name, readBack );
+	const Bool readsBack = val.isEmpty() ? !found : (found && readBack.compare( val ) == 0);
+	if (!wrote || !closed || !readsBack || zh_rename( temporary.str(), file ) != 0)
 	{
 		zh_remove( temporary.str() );
 		return FALSE;

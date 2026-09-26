@@ -165,7 +165,7 @@ TEST(registry_file_write_refuses_what_would_not_read_back_and_leaves_the_file)
 	write_file(s.posix, original);
 
 	const std::string longest(255, 'x');
-	const char * refused[] = { "", "two\nlines", "cr\r", " leading", "trailing\t" };
+	const char * refused[] = { "two\nlines", "cr\r", " leading", "trailing\t" };
 	for (size_t i = 0; i < sizeof(refused) / sizeof(refused[0]); ++i) {
 		CHECK(!writeRegistryFileAt(s.engine.c_str(), AsciiString("Language"), AsciiString(refused[i])));
 	}
@@ -177,6 +177,27 @@ TEST(registry_file_write_refuses_what_would_not_read_back_and_leaves_the_file)
 
 	CHECK(writeRegistryFileAt(s.engine.c_str(), AsciiString("Language"), AsciiString(longest.c_str())));
 	CHECK_STR(read_value(s.engine, "Language").c_str(), longest.c_str());
+}
+
+// Windows stores an empty string; here an empty value is "name =", which the reader takes as missing,
+// and it replaces the key's line as any other value does.
+TEST(registry_file_write_of_an_empty_value_makes_the_key_read_as_missing)
+{
+	Scratch s("test_registryfile_empty");
+	write_file(s.posix, "Proxy = proxy.example:8080\nLanguage = english\n");
+	CHECK(writeRegistryFileAt(s.engine.c_str(), AsciiString("proxy"), AsciiString("")));
+	CHECK_STR(read_file(s.posix).c_str(), "proxy =\nLanguage = english\n");
+	CHECK_STR(read_value(s.engine, "Proxy").c_str(), "<missing>");
+	CHECK_STR(read_value(s.engine, "Language").c_str(), "english");
+
+	// and a value written after it is read again
+	CHECK(writeRegistryFileAt(s.engine.c_str(), AsciiString("Proxy"), AsciiString("other.example:3128")));
+	CHECK_STR(read_file(s.posix).c_str(), "Proxy = other.example:3128\nLanguage = english\n");
+
+	// On a file with no such key it is appended, and reads as missing.
+	CHECK(writeRegistryFileAt(s.engine.c_str(), AsciiString("ergc\\Serial"), AsciiString("")));
+	CHECK_STR(read_value(s.engine, "ergc\\Serial").c_str(), "<missing>");
+	CHECK(!exists(s.temporary));
 }
 
 // The reader reads 1024 bytes at a time, so the tail of a longer line reaches it as a line of its own.
