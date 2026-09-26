@@ -1340,6 +1340,14 @@ set(TESTS ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
 # binary links it instead of writing its own main().
 add_library(test_harness STATIC ${TESTS}/test_main.cpp)
 target_include_directories(test_harness PUBLIC ${TESTS})
+# Off Windows, every binary that links the harness - its own main() or the runner's - refuses to start
+# without ZH_USER_DATA_DIR, which otherwise leaves the engine to use this user's real data directory.
+# An INTERFACE source so it is compiled into each executable, where a static library's object would be
+# dropped by any binary that does not reference it.  ctest gives each test its folder at the end of
+# this file.
+if(ZH_PLATFORM_POSIX)
+  target_sources(test_harness INTERFACE ${TESTS}/test_user_data_guard.cpp)
+endif()
 
 # add_lib_test(<name> [PENDING_MACOS] <libs...>) -> Tests/<name>.cpp, built and registered.
 #
@@ -1465,20 +1473,21 @@ target_sources(test_terrain_golden PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
 if(ZH_PLATFORM_POSIX)
   target_link_libraries(test_terrain_golden PRIVATE posixdevice)
 endif()
-# GlobalData asks for the user data directory: keep it in the build tree, as test_gameengine does.
 if(ZH_GAME_DATA)
-  set_tests_properties(test_terrain_golden PROPERTIES
-    ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA};ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data")
+  set_tests_properties(test_terrain_golden PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+endif()
+# T1c (defect 17): the water grid's step, moved to the top of each logic frame, against the original
+# code's output under EA's one-pass-per-frame loop (Tests/water_grid_oracle.cpp), under catch-up too.
+add_lib_test(test_water_grid gameengine)
+target_sources(test_water_grid PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
+set_target_properties(test_water_grid PROPERTIES CXX_STANDARD 17)
+if(ZH_PLATFORM_POSIX)
+  target_link_libraries(test_water_grid PRIVATE posixdevice)
 endif()
 # Off Windows the device layer's hooks (render stand-ins, the CD manager) are PosixDevice's, where on
 # Windows the test's own stubs stand in for gameenginedevice, which it does not link (B6).
 if(ZH_PLATFORM_POSIX)
   target_link_libraries(test_gameengine PRIVATE posixdevice)
-endif()
-# GlobalData asks for the user data directory, which off Windows is made on first use: keep it in
-# the build tree rather than the real one under the user's home (C1 (e)).
-if(ZH_PLATFORM_POSIX)
-  set_tests_properties(test_gameengine PROPERTIES ENVIRONMENT "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data")
 endif()
 # the well-known Dict keys and a handful of device/exe entry points live in
 # GameEngineDevice, which Phase 4 ports; stand-ins until then.
@@ -1639,8 +1648,6 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(test_wwdownload_registry PROPERTIES CXX_STANDARD 17)
   target_link_libraries(test_wwdownload_registry PRIVATE test_harness wwlib wwdebug)
   add_test(NAME test_wwdownload_registry COMMAND test_wwdownload_registry)
-  set_tests_properties(test_wwdownload_registry PROPERTIES
-    ENVIRONMENT "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-wwdownload-registry")
   if(ZH_PLATFORM_LINUX)
     set_target_properties(test_wwdownload_registry PROPERTIES EXCLUDE_FROM_ALL TRUE)
     set_tests_properties(test_wwdownload_registry PROPERTIES DISABLED TRUE)
@@ -1855,6 +1862,18 @@ if(PERF_TIMERS)
   else()
     message(STATUS "PERF_TIMERS ON - measurement build, timers cost real time")
   endif()
+endif()
+
+# Every test's own user data directory, in the build tree (the harness's guard, test_user_data_guard.cpp,
+# stops any test binary started without one).  Here, after the last add_test, so no test is missed and
+# no later set_tests_properties replaces it.  One folder per test so tests run in parallel do not share
+# an Options.ini or a Registry.ini.  Off Windows only: there the engine does not read the variable.
+if(ZH_PLATFORM_POSIX)
+  get_property(_zh_tests DIRECTORY PROPERTY TESTS)
+  foreach(_zh_test IN LISTS _zh_tests)
+    set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT
+      "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data/${_zh_test}")
+  endforeach()
 endif()
 
 # Say out loud which tests this configuration does not run.  A test that is

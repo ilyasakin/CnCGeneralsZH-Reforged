@@ -3,7 +3,7 @@
 - **Milestone:** M2 (a headless game must stand on the same ground as Windows)
 - **Depends on:** nothing
 - **Blocks:** E1 (no POSIX replay can match a Windows one until this lands), C1 (f)'s engine subclass
-- **Status:** claimed (-47)
+- **Status:** done (-47): T1a merged; T1c on its branch; T1b, T1d and the rest of T1a dropped by decision 8
 - **Size:** `W3DDevice/GameLogic/W3DTerrainLogic.cpp`, `W3DDevice/GameClient/WorldHeightMap.cpp`,
   `BaseHeightMap.cpp`: the height data and the maths that sample it
 
@@ -71,7 +71,8 @@ census could not see it.
 device and the terrain visual, and `-nodevice` still creates the terrain visual.
 
 **Phases, decided:** T1a (A, B, C) with the height golden; T1c's fix (E, step the grid per logic frame);
-T1b (D, the mesh-extent reader); T1d (F).
+T1b (D, the mesh-extent reader); T1d (F). **Changed by decision 8 (README, 2026-09-26); see "Scope after
+decision 8" below.**
 
 ## The oracle, 2026-09-26: the original code, three ways, one answer
 
@@ -114,11 +115,63 @@ has run on Windows.
   parameter bound to `va_list&`). Fixed separately.
 - Windows: `WINDOWS-DEBT.md`'s T1a row.
 
-**Still to do in T1a:** the portable terrain logic that owns a `WorldHeightMapData` and answers
-`getGroundHeight`, `getLayerHeight`, `isCliffCell`, `isClearLineOfSight` and the extents through
-`TerrainHeightSampling`, for C1 (f)'s engine; and a headless `setRawMapHeight`/`getRawMapHeight`.
+## Scope after decision 8, 2026-09-26
+
+Decision 8 (README): the POSIX engine uses the same W3D factories Windows' `-headless` uses, because
+decision 7's A1 builds W3DDevice on POSIX. So on POSIX, as on Windows, `W3DTerrainLogic` runs over a
+real `HeightMapRenderObjClass` - now forwarding to `TerrainHeightSampling` - and `W3DBridgeBuffer` loads
+the bridge meshes through WW3D2 as Windows does. Parity comes from running Windows' own classes, so:
+
+- **Dropped:** the rest of T1a (a portable terrain logic owning a `WorldHeightMapData`, and a headless
+  `setRawMapHeight`/`getRawMapHeight`); T1b (the portable `.w3d` mesh-extent reader); T1d (saves).
+- **Kept:** T1a as merged. The extraction and `test_terrain_golden` are what show the simulation's
+  heights are the same on every platform, whichever class asks.
+- **Kept:** T1c's fix, because defect 17 is a bug in the shipping Windows game.
+
+## T1c: the water grid steps once per logic frame, 2026-09-26
+
+Defect 17. The grid's mesh motion ran in `WaterRenderObjClass::update`, on the client pass, gated on the
+logic frame having changed: one step a pass. EA's loop ran one pass per logic frame; this fork's
+catch-up runs several, and a machine that caught up k frames stepped the grid once.
+
+- **Where it runs now.** At the top of `GameLogic::update`, after `setFPMode`, through a new pure virtual
+  `TerrainVisual::updateWaterGrid(frame)` (W3DTerrainVisual forwards to the render object's
+  `updateMeshMotion`). EA's order within a pass was: the client pass (which stepped the grid if the frame
+  had changed), then the logic frame. Nothing between the two changes the frame or writes the grid, so
+  the top of the logic update is the same point in the frame's sequence: before `startNewGame`, before
+  the scripts, before `WaveGuideUpdate` pushes velocity and before anything reads `isUnderwater`. It was
+  chosen over `W3DTerrainLogic::update`, which runs after the scripts, and over a catch-up loop in the
+  render pass. EA's frame gate is kept, so a frozen or held frame (the camera freeze returns before
+  `m_frame++`) still steps once.
+- **What moved.** The step, verbatim with its gate (a script in the scratch record: identical after the listed
+  substitutions), is `WaterGridMotion::updateForLogicFrame` in gameengine (`GameLogic/WaterGridMotion.h`).
+  `WaterRenderObjClass::WaterMeshData` is a typedef of its `MeshPoint`: the same members in the same order.
+  It moved so that the step can be tested on a machine where W3DDevice does not build yet.
+- **The oracle.** `Tools/water_grid_oracle_extract.py` takes the original block and the mesh point type
+  out of `7b209198`; `Tests/water_grid_oracle.cpp` steps them on the client pass as the engine did, over
+  `Tests/water_grid_scenario.h` (a 12 x 9 grid, a push every third frame of the first 120 as
+  `WaveGuideUpdate` would push, then left to settle; GameData.ini's gravity). Built with mingw-w64 and run
+  under Wine, native arm64, and x86_64 under Rosetta: **identical output**. With one pass per logic frame
+  (EA's loop) the grid is in motion on 183 of 240 frames and settles. **Armed control:** the original under
+  passes of 3, of 5, and a mixed schedule (1,4,2,1,6,3,1,1,5,2) gives three different results, each
+  still in motion at frame 240.
+- **`test_water_grid`** (ctest): the moved step, called at the top of each logic frame, under all four
+  schedules, **prints EA's-loop line every time**, and a second call for the same frame does not step
+  again. Red twice: with the gate removed, the double-call test fails; with the damping moved by one ulp
+  (0.93f to 0.9300001f), six checks fail.
+- **Windows.** The mingw-as-MSVC sweep over every Windows-side file: 0 new errors, 0 gone, 688 to 689
+  compiling clean (`WaterGridMotion.cpp`); `W3DWater.cpp` and `W3DTerrainVisual.cpp` reach their ends
+  (no fatal error). `WINDOWS-DEBT.md`'s T1c row is **high**: on a water-grid map, grid heights change
+  under the catch-up, back to EA's count.
+- **What it cannot see.** That `GameLogic::update` makes the call at its top is read in the source, not
+  run: the engine loop needs W3DDevice. A client pass now sees the grid as of the previous logic frame's
+  step, one step behind EA within a pass (drawing only). A `_DEBUG`/`_INTERNAL` `-jumpToFrame N` run,
+  whose client pass skipped the terrain visual's update until frame N and so never stepped the grid
+  before it, now steps it every frame. Nothing has run on Windows; no replay of CHI03, GLA01 or USA06 was
+  played.
 
 ## Also
 
 W3DModuleFactory registers 19 draw modules by name, and object INIs name them. A headless module
 factory needs those names too, or INI parsing fails. Coordinate with C1 (f)'s engine subclass.
+(Superseded by decision 8: there is no headless module factory; W3DModuleFactory registers its own.)
