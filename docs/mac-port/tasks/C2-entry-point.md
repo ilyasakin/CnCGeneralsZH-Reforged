@@ -47,7 +47,12 @@
   `MessageBoxWrapper`'s POSIX body uses `SDL_ShowMessageBox` when a window exists. The renderer,
   logic and audio factories stay C1's pure virtuals until T1, D4 and C4 fill them.
 - **`-headless` initialises no SDL video subsystem at all.** It must run on a machine with no
-  display, as E1's replay runs will.
+  display, as E1's replay runs will. It still has a render device, as Windows' `-headless` does:
+  decision 7's own CPU-backed D3D9-shaped device, with no window (decision 8, refined 2026-09-26).
+  So it does NOT set `m_noRenderDevice`. W3DDisplay's device creation takes a null `RenderWindow`
+  off Windows, which is A1's shim to honour. SdlGameEngine's factories mirror Win32GameEngine's
+  exactly, including W3DRadar under `-headless` and HeadlessRadar only under `-nodevice`. The
+  `-nodevice` path's known gaps are listed under the plan's status board.
 - **`gAppPrefix`, `g_csfFile` and `g_strFile`** get their real definitions here, with WinMain's
   values. They move out of the test stubs and drivers.
 - **Out of scope:** input mapping (C3), audio wiring (C4's upper half), the app bundle (M5).
