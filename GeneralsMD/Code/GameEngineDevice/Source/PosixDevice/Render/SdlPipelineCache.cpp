@@ -451,8 +451,11 @@ bool Sdl_Sampler_Description(const RenderUInt32 ss[14], void *create_info, std::
 	// the same one and leaves a minified pixel's LOD above zero.
 	info.min_lod = (float)ss[D3DSAMP_MAXMIPLEVEL];
 	info.max_lod = mip == D3DTEXF_NONE ? info.min_lod + 0.25f : 1000.0f;
+	// MAXANISOTROPY held to 1..16: the caps' MaxAnisotropy (PosixD3D9Caps.cpp), and the range Metal's
+	// maxAnisotropy takes (SDL3 passes the value through as it is).
+	const RenderUInt32 anisotropy = ss[D3DSAMP_MAXANISOTROPY];
 	info.enable_anisotropy = anisotropic;
-	info.max_anisotropy = anisotropic ? (float)(ss[D3DSAMP_MAXANISOTROPY] < 1 ? 1 : ss[D3DSAMP_MAXANISOTROPY]) : 1.0f;
+	info.max_anisotropy = anisotropic ? (float)(anisotropy < 1 ? 1 : anisotropy > 16 ? 16 : anisotropy) : 1.0f;
 	return true;
 }
 
