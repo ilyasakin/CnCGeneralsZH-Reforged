@@ -23,6 +23,8 @@
 #include <new>
 #include <string.h>
 
+void (*posixResourceDestroyed)( const void *resource ) = NULL;
+
 //-------------------------------------------------------------------------------------------------
 // Formats
 //-------------------------------------------------------------------------------------------------
@@ -252,6 +254,8 @@ PosixSurface9::PosixSurface9( IDirect3DBaseTexture9 *container, D3DRESOURCETYPE 
 
 PosixSurface9::~PosixSurface9()
 {
+	if (m_container == NULL && posixResourceDestroyed != NULL)
+		posixResourceDestroyed( this );
 }
 
 PosixSurface9 *PosixSurface9::createStandalone( unsigned int width, unsigned int height, D3DFORMAT format,
@@ -383,6 +387,8 @@ PosixTexture9::PosixTexture9()
 
 PosixTexture9::~PosixTexture9()
 {
+	if (posixResourceDestroyed != NULL)
+		posixResourceDestroyed( this );
 	for (size_t i = 0; i < m_surfaces.size(); ++i)
 	{
 		if (m_surfaces[i] != NULL)
@@ -498,6 +504,8 @@ PosixCubeTexture9::PosixCubeTexture9()
 
 PosixCubeTexture9::~PosixCubeTexture9()
 {
+	if (posixResourceDestroyed != NULL)
+		posixResourceDestroyed( this );
 	for (size_t i = 0; i < m_surfaces.size(); ++i)
 	{
 		if (m_surfaces[i] != NULL)
@@ -663,6 +671,8 @@ PosixVolumeTexture9::PosixVolumeTexture9()
 
 PosixVolumeTexture9::~PosixVolumeTexture9()
 {
+	if (posixResourceDestroyed != NULL)
+		posixResourceDestroyed( this );
 	for (size_t i = 0; i < m_volumes.size(); ++i)
 	{
 		if (m_volumes[i] != NULL)
@@ -807,6 +817,12 @@ RenderResult PosixBufferStorage::unlock()
 	return D3D_OK;
 }
 
+PosixVertexBuffer9::~PosixVertexBuffer9()
+{
+	if (posixResourceDestroyed != NULL)
+		posixResourceDestroyed( this );
+}
+
 PosixVertexBuffer9 *PosixVertexBuffer9::create( unsigned int length, RenderUInt32 usage, RenderUInt32 fvf, D3DPOOL pool )
 {
 	PosixVertexBuffer9 *buffer = new (std::nothrow) PosixVertexBuffer9;
@@ -855,6 +871,12 @@ RenderResult PosixVertexBuffer9::GetDesc( D3DVERTEXBUFFER_DESC *desc )
 	desc->Size = m_storage.length();
 	desc->FVF = m_fvf;
 	return D3D_OK;
+}
+
+PosixIndexBuffer9::~PosixIndexBuffer9()
+{
+	if (posixResourceDestroyed != NULL)
+		posixResourceDestroyed( this );
 }
 
 PosixIndexBuffer9 *PosixIndexBuffer9::create( unsigned int length, RenderUInt32 usage, D3DFORMAT format, D3DPOOL pool )
