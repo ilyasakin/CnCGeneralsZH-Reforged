@@ -1244,7 +1244,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     }
     else if (key.compare("SC") == 0 )
     {
-      UnsignedInt startingCashAmount = strtoul( val.str(), NULL, 10 );
+      UnsignedInt startingCashAmount = strtoulAsWindows( val.str() );
       startingCash.init();
       startingCash.deposit( startingCashAmount, FALSE );
       sawStartingCash = TRUE;

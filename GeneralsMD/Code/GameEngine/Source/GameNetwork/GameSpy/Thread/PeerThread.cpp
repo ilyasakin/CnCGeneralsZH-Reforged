@@ -2903,9 +2903,9 @@ static void listingGamesCallback(PEER peer, PEERBool success, const char * name,
 		const char *ladIPStr = SBServerGetStringValue(server, LADIP_STR, "000000");
 		const char *pingStr = SBServerGetStringValue(server, PINGSTR_STR, "FFFFFFFFFFFFFFFF");
 		UnsignedShort ladPort = (UnsignedShort)SBServerGetIntValue(server, LADPORT_STR, 0);
-		UnsignedInt verVal = strtoul(verStr, NULL, 10);
-		UnsignedInt exeVal = strtoul(exeStr, NULL, 10);
-		UnsignedInt iniVal = strtoul(iniStr, NULL, 10);
+		UnsignedInt verVal = strtoulAsWindows(verStr);
+		UnsignedInt exeVal = strtoulAsWindows(exeStr);
+		UnsignedInt iniVal = strtoulAsWindows(iniStr);
 		resp.stagingRoom.requiresPassword = hasPassword;
 		resp.stagingRoom.allowObservers = allowObservers;
     resp.stagingRoom.useStats = usesStats;
