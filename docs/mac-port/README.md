@@ -1346,6 +1346,45 @@ Linux - fixed.**
 - **Fixed:** the challenge screen returns as the single player screen does
   (`docs/mac-port/tasks/mission-start.md`).
 
+**Latent, not numbered: the game's data going away under it (the lid-close crash) - every platform,
+environment-triggered; fixed.**
+- **What happened:** -a9's run on 2026-09-26 crashed at 22:58 on waking from sleep: SIGSEGV in
+  `WindowLayout::hide` ← `GameEngine::reset` ← `GameLogic::clearGameData`. The install was on an exFAT
+  drive that had gone away in the sleep. The archives were open, so the next read of one (the window
+  layout `Menus/BlankWindow.wnd`) failed, `winCreateLayout` returned NULL, and `reset()` used it unchecked.
+- **Measured (-18, on finer):** a headless skirmish with the two window archives on a disk image. The
+  game was stopped with SIGSTOP, the image detached, and the game continued: -a9's exact stack.
+  - Nothing is detached, and the game is stopped 21.5 minutes just before its exit: it exits normally.
+  - The folder is renamed away instead: the game plays on (open files stay readable).
+  - The failed read is `errno 5` (EIO) on both HFS+ and exFAT images.
+  - So it is the data going away, not the time jump. A lid close with the game on the internal disk does
+    not crash.
+- **Who it hits:** a player whose game is on an external or network drive that is disconnected, ejected
+  or asleep. Windows takes the same path (shared code). The trigger is the environment, not data, so no
+  number.
+- **Fixed, in one place:**
+  - `LocalFile` keeps the error of a failed read or seek, and `File::deviceGone` says whether it means
+    the device went away: EIO, ENXIO or ENODEV; on Windows `_doserrno` ERROR_DEVICE_NOT_CONNECTED,
+    ERROR_NOT_READY, ERROR_DEV_NOT_EXIST or ERROR_FILE_INVALID.
+  - The archive layer asks it when an archive read fails (`Win32BIGFile::openFile`,
+    `StreamingArchiveFile::read`) and calls `GameDataGone` (`Common/Debug.h`).
+  - On the main thread, `GameDataGone` logs "GAME DATA GONE" and shows a box saying the data is no longer
+    available (none under -headless). It ends the process with `_exit(3)`, so nothing saves or writes
+    Options.ini on data it can no longer read.
+  - From another thread (the audio's streaming reads) it only records the loss, and the main loop stops
+    the game at the top of its next pass.
+  - Second line: `GameEngine::reset` and `GameLogic::prepareNewGame` go on without the cosmetic
+    backdrop when its layout is NULL.
+- **Tested:** `data_gone_check` (macOS, hdiutil) detaches the test's own image mid-match and expects
+  exit status 3, the line and no crash report. The rename control expects the match to play on.
+- **What it cannot see:**
+  - A drive that comes back between the failure and the check: the loss is still reported; there is no
+    retry.
+  - Network volumes, whose errors (ETIMEDOUT, ESTALE and others) are not classified as gone. A read that
+    only hangs is never classified at all.
+  - The Windows error codes, which are named but not measured. A VHD test on the W2 VM is an open item.
+  - Reads that are not archive reads: loose files and the user's own folder. These fail as before.
+
 **Latent, not numbered: a missing coordinate set under a texture transform.**
 - **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
   D3D9 documents (0,0) ("the system defaults to the u and v coordinates (0,0)"). FFReference's N28 pads

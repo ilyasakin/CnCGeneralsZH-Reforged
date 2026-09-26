@@ -35,6 +35,10 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | a Metal / window-server probe | `~/zhr-worker/tools/gpuprobe.m` and its binary | written and compiled by -47 (it opens no window) | in the folder |
 | a tree hasher | `~/zhr-worker/bin/hashtree.py` (path, size and BLAKE2 per file) | written by -47, for the data check | in the folder |
 | the README | `~/zhr-worker/README` | written by -47 | in the folder |
+| worktree for -18 | `~/zhr-worker/wt-18`, branch `agent-18` (then `feature/mac-port-data-gone`), vendor and art cloned in, SDL3 patched by `Tools/vendor.sh`; the repo ref `refs/remotes/mac18/feature/mac-port` | `git worktree add` (-18) | in the folder |
+| build dir for -18 | `~/zhr-worker/build-18` (Release, `ZH_GAME_DATA=~/zhr-worker/data`), its logs `~/zhr-worker/build-18.*.log`, and `build-18/s18`: the sweep and lid-close scripts, APFS clones of the binary, their logs | `cmake`/`ninja` via `zheavy`, `scp` (-18) | in the folder |
+| -18's bundles | `~/zhr-worker/bundles/fmp18.bundle`, `dg18.bundle` | `scp` (-18) | in the folder |
+| disk images for the lid-close repro and `data_gone_check` | made in a temporary work folder under `build-18/s18` or `$TMPDIR`, attached, detached (by their own device) and deleted by the script that made them; none is left | `hdiutil create/attach/detach` (-18), no sudo | nothing left to undo; `hdiutil info` lists none |
 
 Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wide.
 

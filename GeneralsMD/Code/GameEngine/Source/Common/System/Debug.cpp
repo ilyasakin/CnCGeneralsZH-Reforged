@@ -75,9 +75,9 @@
 extern bool DX8Wrapper_IsWindowed;
 #if defined(_WIN32)
 extern HWND ApplicationHWnd;
-#else
-#include <thread>		// the main thread's id, where Windows uses GetCurrentThreadId
 #endif
+#include <thread>		// the main thread's id off Windows (Windows uses GetCurrentThreadId); GameDataGone's yield
+#include <atomic>		// GameDataGone's state, set from whichever thread's read failed
 
 extern char *gAppPrefix; /// So WB can have a different log file name.
 
@@ -908,6 +908,71 @@ void ReleaseCrash(const char *reason)
 
 	_exit(1);
 }  
+
+// ----------------------------------------------------------------------------
+// GameDataGone
+// ----------------------------------------------------------------------------
+
+/* 0: the data is there.  1: a thread is writing theGameDataGoneWhat.  2: it is gone, and
+	 theGameDataGoneWhat says what failed. */
+static std::atomic<int> theGameDataGone( 0 );
+static char theGameDataGoneWhat[ 256 ];
+
+static Bool isMainThread( void )
+{
+#if defined(_WIN32)
+	return theMainThreadID == GetCurrentThreadId();
+#else
+	return theMainThreadID == std::this_thread::get_id();
+#endif
+}
+
+/* On the main thread only.  Written for a run that is past saving: the log is flushed by hand and the
+	 process ends with _exit, so no destructor, no quit path and nothing that writes Options.ini or a save
+	 runs on data it can no longer read. */
+static void gameDataGoneExit( void )
+{
+	while (theGameDataGone.load() == 1)
+		std::this_thread::yield();		// another thread is still naming what failed
+
+	char text[ 1024 ];
+	snprintf( text, sizeof( text ), "The game's data is no longer available (%s could not be read). "
+		"If Zero Hour is installed on an external or network drive, it may have been disconnected, ejected or "
+		"put to sleep. Reconnect it and start the game again.", theGameDataGoneWhat );
+
+	DEBUG_LOG(( "GAME DATA GONE: %s\n", text ));
+#ifdef DEBUG_LOGGING
+	if (theLogFile)
+		fflush( theLogFile );		// flushed on a timer otherwise, and _exit below skips the CRT's flush
+#endif
+	fprintf( stderr, "GAME DATA GONE: %s\n", text );
+	fflush( stderr );
+
+	if (!isUnattendedRun())
+	{
+		hideFullScreenWindowForMessage();
+		MessageBoxWrapper( text, "Command & Conquer Generals Zero Hour", MSGBOX_OK | MSGBOX_ICONERROR | MSGBOX_TASKMODAL );
+	}
+	_exit( GAME_DATA_GONE_EXIT_STATUS );
+}
+
+void GameDataGone( const char *what )
+{
+	int none = 0;
+	if (theGameDataGone.compare_exchange_strong( none, 1 ))
+	{
+		strlcpy( theGameDataGoneWhat, (what != NULL && what[0] != '\0') ? what : "an archive", sizeof( theGameDataGoneWhat ) );
+		theGameDataGone.store( 2 );
+	}
+	if (isMainThread())
+		gameDataGoneExit();
+}
+
+void GameDataGoneCheck( void )
+{
+	if (theGameDataGone.load() != 0)
+		gameDataGoneExit();
+}
 
 void ReleaseCrashLocalized(const AsciiString& p, const AsciiString& m)
 {

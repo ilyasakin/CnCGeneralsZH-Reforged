@@ -1772,6 +1772,15 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(mission_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # The game's data going away under it (a drive disconnected or asleep): the game must say so and stop
+  # with exit status 3, never crash; the control, a rename, plays on.  macOS only for now (hdiutil); skipped
+  # elsewhere and without game data.  See the script.
+  add_test(NAME data_gone_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_data_gone_check.sh $<TARGET_FILE:generals>)
+  set_tests_properties(data_gone_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
+  if(ZH_GAME_DATA)
+    set_tests_properties(data_gone_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # L1's POSIX harness on itself: two headless copies on this machine play one seeded LAN match over
   # 127.0.0.1 and a second local address, agree to frame 1800, and each replay plays back to it; a
   # second copy on another seed is reported FAILED.  One machine, one compiler: see the script.  Skipped
@@ -2520,7 +2529,8 @@ if(ZH_PLATFORM_POSIX)
   # The tests that build a farm of the install (a folder of links into it) never run at the same time:
   # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
   foreach(_zh_test replay_check replay_check_app net_check overlay_crc_check packaging_resolution_check root_readonly_check
-                   lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager)
+                   lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager
+                   mission_check data_gone_check)
     if(TEST ${_zh_test})
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
     endif()
