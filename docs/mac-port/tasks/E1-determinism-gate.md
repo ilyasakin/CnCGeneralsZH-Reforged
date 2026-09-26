@@ -84,3 +84,40 @@ of the last.
 - Do not "fix" a mismatch by loosening a comparison or by rounding. A lockstep simulation is
   bit-exact or it is not lockstep.
 - Do not skip this to get to M2 faster. Everything after this point assumes it passed.
+
+## The simulation reads LOD (found 2026-09-26, B5/A2): trace before trusting any POSIX replay
+
+Found by -18 while answering the POSIX device's chipset question. Graphics detail reaches logic in
+at least three places:
+
+- `GameLogic.cpp:1874-1885`: `forceFluffToProp` depends on the STATIC LOD preset, except when
+  `TheRecorder->isMultiplayer()`, which pins it. So in skirmish and solo replays, the logic-side
+  props depend on the recording machine's preset.
+- `ObjectCreationList.cpp:1365`: LOGIC debris objects are skipped by the DYNAMIC LOD's skip mask,
+  which follows the frame rate.
+- `SlowDeathBehavior.cpp:240, 391`: death timing is scaled by the LOD's `m_slowDeathScale`.
+
+Not yet traced: whether replays and network games pin the last two. If they do not, two Windows
+machines with different frame rates or presets already disagree, which would be a defect of the
+shipping game. For the port, it matters because the POSIX device reports DC_UNKNOWN with PS 0.0 caps,
+so its STATIC preset can differ from the Windows recording's (every POSIX machine gets LOW until a
+renderer reports a chipset, B6's finding). Before E1 compares any POSIX replay with a Windows one,
+trace all three. For each, either show that it's pinned in replays and network games, or make the
+replay header carry what the recording machine used and have playback use that. Search for further
+readers of TheGameLODManager, TheGlobalData's LOD fields and the dynamic-LOD skip masks from
+GameLogic, by symbol.
+
+**Traced 2026-09-26 (-18, by symbol, read-only): all three are pinned or neutralised for every game
+that can be replayed or played over a network. No defect.**
+- `getSlowDeathScale()` is always 1.0: since `1b8279c6` ("close every desync the second audit found"),
+  `applyDynamicLODLevel` no longer copies it, and only the constructors write it.
+- `isDebrisSkipped()` never skips: the same commit stopped copying the skip mask, and only the
+  constructors write it (0), so `x & 0 == 0`. The frame-rate-driven dynamic LOD now changes only
+  client-side particle settings.
+- `forceFluffToProp` and `useTrees` are pinned TRUE whenever `TheRecorder->isMultiplayer()`, which
+  holds for LAN, internet and skirmish while recording, and for any replay with an occupied slot
+  during playback. The LOD-dependent path is single player and Generals Challenge only, and those
+  modes are not recordable (`isRecordableGameMode`).
+So E1's `-autoskirmish` runs are unaffected by the POSIX device's DC_UNKNOWN preset. What this does
+NOT cover: other client-only settings read by logic that nobody was looking for. It is a trace of
+these three, not a general audit.

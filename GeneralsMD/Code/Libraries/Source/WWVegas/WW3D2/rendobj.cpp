@@ -74,7 +74,9 @@
 
 #include "rendobj.h"
 #include "assetmgr.h"
-#include "_mono.h"
+#if defined(_WIN32)
+#include "_mono.h"	// the monochrome debug monitor: Windows only, and unused here
+#endif
 #include "bsurface.h"
 #include "pot.h"
 #include "scene.h"
@@ -92,6 +94,7 @@
 #include "saveload.h"
 #include "ww3dids.h"
 #include "intersec.h"
+#include <string.h>	// memset, strcpy, strlen
 
 
 #ifdef _INTERNAL
@@ -114,7 +117,7 @@ Filename_From_Asset_Name (const char *asset_name)
 		//
 		// Copy the model name into a new filename buffer
 		//
-		::lstrcpy (filename.Get_Buffer (::lstrlen (asset_name) + 5), asset_name);
+		strcpy (filename.Get_Buffer (strlen (asset_name) + 5), asset_name);
 		
 		//
 		// Do we need to strip off the model's suffix?
@@ -1155,7 +1158,7 @@ void RenderObjClass::Add_Dependencies_To_List
 		const HTreeClass *phtree = Get_HTree ();
 		if (phtree != NULL) {
 			const char *htree_name = phtree->Get_Name ();
-			if (::lstrcmpi (htree_name, model_name) != 0) {
+			if (strcasecmp (htree_name, model_name) != 0) {
 								
 				//
 				// Add this file to the list

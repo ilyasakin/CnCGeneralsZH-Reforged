@@ -27,8 +27,10 @@
 // Desc: Draw module reacts to SupplyStatus setting by hiding an equal number of the specified bone array.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "Common/Xfer.h"
+// Drawable.h before Xfer.h: Xfer.h reaches BitFlagsIO.h, whose templates use Xfer, before it has
+// declared Xfer.  MSVC parses a template body late and never noticed; clang parses it where it stands.
 #include "GameClient/Drawable.h"
+#include "Common/Xfer.h"
 #include "W3DDevice/GameClient/Module/W3DSupplyDraw.h"
 
 //-------------------------------------------------------------------------------------------------

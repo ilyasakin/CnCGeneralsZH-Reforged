@@ -744,7 +744,7 @@ void	Render2DSentenceClass::Build_Sentence_Centered (const WideChar *text, int *
 	int		wordWidth = 0;
 	int notCenteredHotkeyX = 0;
 	int notCenteredHotkeyY = 0;
-	Vector2 extent = Build_Sentence_Not_Centered(text,&notCenteredHotkeyX, &notCenteredHotkeyY, TRUE); //Get_Formatted_Text_Extents(text);
+	Vector2 extent = Build_Sentence_Not_Centered(text,&notCenteredHotkeyX, &notCenteredHotkeyY, true); //Get_Formatted_Text_Extents(text);
 	
 	//
 	//	Start fresh
@@ -1200,12 +1200,14 @@ Render2DSentenceClass::Build_Sentence (const WideChar *text, int *hkX, int *hkY)
 //
 ////////////////////////////////////////////////////////////////////////////////////
 FontCharsClass::FontCharsClass (void) :
+#if defined(_WIN32)
 	OldGDIFont(	NULL ),
 	OldGDIBitmap( NULL ),
 	GDIFont( NULL ),
 	GDIBitmap( NULL ),
 	GDIBitmapBits ( NULL ),
 	MemDC( NULL ),
+#endif
 	CurrPixelOffset( 0 ),
 	PointSize( 0 ),
 	CharHeight( 0 ),
@@ -1362,6 +1364,7 @@ FontCharsClass::Blit_Char (WideChar ch, uint16 *dest_ptr, int dest_stride, int x
 const FontCharsClassCharDataStruct *
 FontCharsClass::Store_GDI_Char (WideChar ch)
 {
+#if defined(_WIN32)
 	int width	= PointSize * 2;
 	int height	= PointSize * 2;
 
@@ -1483,6 +1486,26 @@ FontCharsClass::Store_GDI_Char (WideChar ch)
 	//	Return the index of the entry we just added
 	//
 	return char_data;
+#else
+	// No rasteriser off Windows until D6: each glyph is blank and zero wide, stored where GDI's would
+	// be, so text lays out as nothing and nothing reads pixels that were never written.
+	static bool said = false;
+	if (!said) {
+		said = true;
+		WWDEBUG_SAY(("FontCharsClass: no text rasteriser off Windows until D6; every glyph is blank\n"));
+	}
+	Update_Current_Buffer( 0 );
+	FontCharsClassCharDataStruct *char_data	= W3DNEW FontCharsClassCharDataStruct;
+	char_data->Value				= ch;
+	char_data->Width				= 0;
+	char_data->Buffer				= BufferList[BufferList.Count () - 1]->Buffer + CurrPixelOffset;
+	if ( ch < 256 ) {
+		ASCIICharArray[ch] = char_data;
+	} else {
+		UnicodeCharArray[ch - FirstUnicodeChar] = char_data;
+	}
+	return char_data;
+#endif
 }
 
 
@@ -1530,6 +1553,7 @@ FontCharsClass::Update_Current_Buffer (int char_width)
 void
 FontCharsClass::Create_GDI_Font (const char *font_name)
 {
+#if defined(_WIN32)
 	HDC screen_dc = ::GetDC ((HWND)WW3D::Get_Window());
 
 	const char *fontToUseForGenerals = "Arial";
@@ -1621,6 +1645,14 @@ FontCharsClass::Create_GDI_Font (const char *font_name)
 	if (doingGenerals) {
 		CharOverhang = 0;
 	}
+#else
+	// No font off Windows until D6.  A line is still a point size tall, so layout divides by nothing.
+	(void)font_name;
+	CharHeight = PointSize;
+	CharAscent = PointSize;
+	CharOverhang = 0;
+	PixelOverlap = 0;
+#endif
 }
 
 
@@ -1632,6 +1664,7 @@ FontCharsClass::Create_GDI_Font (const char *font_name)
 void
 FontCharsClass::Free_GDI_Font (void)
 {
+#if defined(_WIN32)
 	//
 	//	Select the old font back into the DC and delete
 	// our font object
@@ -1659,6 +1692,7 @@ FontCharsClass::Free_GDI_Font (void)
 		::DeleteDC( MemDC );
 		MemDC = NULL;
 	}
+#endif
 
 	return ;
 }

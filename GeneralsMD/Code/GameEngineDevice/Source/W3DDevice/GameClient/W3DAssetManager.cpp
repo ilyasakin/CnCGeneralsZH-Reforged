@@ -167,7 +167,7 @@ W3DAssetManager::~W3DAssetManager(void)
 }
 
 #ifdef DUMP_PERF_STATS
-__int64 Total_Get_Texture_Time=0;
+Int64 Total_Get_Texture_Time=0;
 #endif
 
 TextureClass *	W3DAssetManager::Get_Texture
@@ -205,7 +205,7 @@ TextureClass *W3DAssetManager::Get_Texture(
 )
 {
 	#ifdef DUMP_PERF_STATS
-	__int64 startTime64,endTime64;
+	Int64 startTime64,endTime64;
 	GetPrecisionTimer(&startTime64);
 	#endif
 
@@ -721,7 +721,7 @@ TextureClass * W3DAssetManager::Recolor_Texture_One_Time(TextureClass *texture, 
 }
 
 #ifdef DUMP_PERF_STATS
-__int64 Total_Create_Render_Obj_Time=0;
+Int64 Total_Create_Render_Obj_Time=0;
 #endif
 //---------------------------------------------------------------------
 /** Generals specific code to generate customized render objects for each team color
@@ -736,7 +736,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 )
 {
 	#ifdef DUMP_PERF_STATS
-	__int64 startTime64,endTime64;
+	Int64 startTime64,endTime64;
 	GetPrecisionTimer(&startTime64);
 	#endif
 
@@ -810,13 +810,13 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 		const char *mesh_name = ::strchr (name, '.');
 		if (mesh_name != NULL) 
 		{
-			::lstrcpyn(filename, name, (int)(mesh_name - name) + 1);
+			snprintf(filename, (int)(mesh_name - name) + 1, "%s", name);
 #ifdef	INCLUDE_GRANNY_IN_BUILD
 			if (isGranny)
-				::lstrcat(filename, ".gr2");
+				strcat(filename, ".gr2");
 			else
 #endif
-				::lstrcat(filename, ".w3d");
+				strcat(filename, ".w3d");
 		} else {
 			snprintf( filename, ARRAY_SIZE(filename), "%s.w3d", name);
 		}
@@ -829,7 +829,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 			{
 #ifdef	INCLUDE_GRANNY_IN_BUILD
 				char *mesh_name = ::strchr (filename, '.');
-				::lstrcpyn (mesh_name, ".gr2",5);
+				snprintf (mesh_name, 5, "%s", ".gr2");
 				Load_3D_Assets( filename );
 				isGranny=true;
 #endif
@@ -1015,7 +1015,7 @@ void W3DAssetManager::Recolor_Vertex_Material(VertexMaterialClass *vmat, const i
 }
 
 #ifdef DUMP_PERF_STATS
-__int64 Total_Load_3D_Assets=0;
+Int64 Total_Load_3D_Assets=0;
 static Load_3D_Asset_Recursions=0;
 #endif
 //---------------------------------------------------------------------
@@ -1024,7 +1024,7 @@ bool W3DAssetManager::Load_3D_Assets( const char * filename )
 #ifdef DUMP_PERF_STATS
 		Load_3D_Asset_Recursions++;
 
-		__int64 startTime64,endTime64;
+		Int64 startTime64,endTime64;
 		GetPrecisionTimer(&startTime64);
 #endif
 
@@ -1117,7 +1117,7 @@ bool W3DAssetManager::Load_3D_Assets( const char * filename )
 }
 
 #ifdef DUMP_PERF_STATS
-__int64 Total_Get_HAnim_Time=0;
+Int64 Total_Get_HAnim_Time=0;
 static HAnim_Recursions=0;
 #endif
 //---------------------------------------------------------------------
@@ -1126,7 +1126,7 @@ HAnimClass *	W3DAssetManager::Get_HAnim(const char * name)
 #ifdef DUMP_PERF_STATS
 	HAnim_Recursions++;
 
-	__int64 startTime64,endTime64;
+	Int64 startTime64,endTime64;
 	GetPrecisionTimer(&startTime64);
 #endif
 	WWPROFILE( "WW3DAssetManager::Get_HAnim" );
@@ -1345,7 +1345,7 @@ void W3DAssetManager::Report_Used_Textures(void)
 		}
 		else
 		{
-			DEBUG_LOG(("**Texture \"%s\" referenced %d times on map reset\n",tex->Get_Texture_Name(),tex->Num_Refs()-1));
+			DEBUG_LOG(("**Texture \"%s\" referenced %d times on map reset\n",(const char *)tex->Get_Texture_Name(),tex->Num_Refs()-1));
 		}
 	}
 /*	for (unsigned i=0;i<count;++i) {
@@ -1503,11 +1503,11 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(const char * name,float scal
 		char filename [MAX_PATH];
 		char *mesh_name = ::strchr (name, '.');
 		if (mesh_name != NULL) {
-			::lstrcpyn (filename, name, ((int)mesh_name) - ((int)name) + 1);
+			snprintf (filename, (int)(mesh_name - name) + 1, "%s", name);
 			if (isGranny)
-				::lstrcat (filename, ".gr2");
+				strcat (filename, ".gr2");
 			else
-				::lstrcat (filename, ".w3d");
+				strcat (filename, ".w3d");
 		} else {
 			snprintf( filename, ARRAY_SIZE(filename), "%s.w3d", name);
 		}
@@ -1518,7 +1518,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(const char * name,float scal
 			if (Load_3D_Assets( new_filename ) == false)
 			{
 				char *mesh_name = ::strchr (filename, '.');
-				::lstrcpyn (mesh_name, ".gr2",5);
+				snprintf (mesh_name, 5, "%s", ".gr2");
 				Load_3D_Assets( filename );
 				isGranny=true;
 			}

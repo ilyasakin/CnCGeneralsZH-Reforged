@@ -29,7 +29,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
@@ -918,6 +920,15 @@ void W3DTerrainVisual::addWaterVelocity( Real worldX, Real worldY,
 		m_waterRenderObject->addVelocity( worldX, worldY, velocity, preferredHeight );
 
 }  // end addWaterVelocity
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+void W3DTerrainVisual::updateWaterGrid( UnsignedInt logicFrame )
+{
+	// whether or not the grid is drawn: the simulation reads it either way, as update() stepped it
+	if( m_waterRenderObject )
+		m_waterRenderObject->updateMeshMotion( logicFrame );
+}  // end updateWaterGrid
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------

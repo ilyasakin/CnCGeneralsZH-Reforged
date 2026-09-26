@@ -27,8 +27,8 @@
 // Graham Smallwood, May 2002
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include "GameClient/Drawable.h"	// before Xfer.h: see W3DSupplyDraw.cpp
 #include "Common/Xfer.h"
-#include "GameClient/Drawable.h"
 #include "GameLogic/Object.h"
 #include "W3DDevice/GameClient/Module/W3DProjectileStreamDraw.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"

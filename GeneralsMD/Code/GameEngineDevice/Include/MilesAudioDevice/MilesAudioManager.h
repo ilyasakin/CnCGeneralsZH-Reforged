@@ -26,6 +26,9 @@
 #include "mutex.h"
 #include <list>
 #include <map>
+#if !defined(_WIN32)
+#include <mutex>
+#endif
 
 class AudioEventRTS;
 
@@ -149,7 +152,11 @@ class AudioFileCache
 		OpenFilesHash m_openFiles;
 		UnsignedInt m_currentlyUsedSize;
 		UnsignedInt m_maxSize;
+#if defined(_WIN32)
 		HANDLE m_mutex;
+#else
+		std::timed_mutex *m_mutex;	///< Windows' named mutex, as a process's own (C4): ScopedMutex.h
+#endif
 		const char *m_mutexName;
 };
 

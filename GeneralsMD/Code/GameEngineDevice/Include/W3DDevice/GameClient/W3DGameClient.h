@@ -48,16 +48,24 @@
 #include "W3DDevice/GameClient/W3DGameWindowManager.h"
 #include "W3DDevice/GameClient/W3DGameFont.h"
 #include "W3DDevice/GameClient/W3DDisplayStringManager.h"
+#if defined(_WIN32)
 #include "VideoDevice/Bink/BinkVideoPlayer.h"
+#endif
+#if defined(_WIN32)
+// The keyboard and mouse are Win32Device's here.  Off Windows they are the platform layer's (C3), and
+// W3DGameClient leaves GameClient's two input factories to its subclass there; see below.
 #include "Win32Device/GameClient/Win32DIKeyboard.h"
 #include "Win32Device/GameClient/Win32DIMouse.h"
 #include "Win32Device/GameClient/Win32Mouse.h"
 #include "W3DDevice/GameClient/W3DMouse.h"
+#endif
 #include "W3DDevice/GameClient/W3DSnow.h"
 
 class ThingTemplate;
 
+#if defined(_WIN32)
 extern Win32Mouse *TheWin32Mouse;
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // PROTOTYPES /////////////////////////////////////////////////////////////////
@@ -94,8 +102,10 @@ public:
 
 protected:
 
+#if defined(_WIN32)
 	virtual Keyboard *createKeyboard( void );								///< factory for the keyboard
 	virtual Mouse *createMouse( void );											///< factory for the mouse
+#endif
 
 	/// factory for creating TheDisplay
 	virtual Display *createGameDisplay( void ) { return NEW W3DDisplay; }
@@ -112,7 +122,9 @@ protected:
   /// Manager for display strings
 	virtual DisplayStringManager *createDisplayStringManager( void ) { return NEW W3DDisplayStringManager; }
 
+#if defined(_WIN32)	// Bink on FFmpeg; off Windows the video player, like the keyboard and mouse, is the platform's
 	virtual VideoPlayerInterface *createVideoPlayer( void ) { return NEW BinkVideoPlayer; }
+#endif
 	/// factory for creating the TerrainVisual
 	virtual TerrainVisual *createTerrainVisual( void ) { return NEW W3DTerrainVisual; }
 
@@ -123,6 +135,7 @@ protected:
 
 };  // end class W3DGameClient
 
+#if defined(_WIN32)
 inline Keyboard *W3DGameClient::createKeyboard( void ) { return NEW DirectInputKeyboard; }
 inline Mouse *W3DGameClient::createMouse( void )
 {
@@ -131,5 +144,6 @@ inline Mouse *W3DGameClient::createMouse( void )
 	TheWin32Mouse = mouse;   ///< global cheat for the WndProc()
 	return mouse;
 }
+#endif
 
 #endif  // end __W3DGAMEINTERFACE_H_

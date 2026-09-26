@@ -110,7 +110,7 @@ IDirect3DPixelShader9 * CombinerShaderCache_Get(IDirect3DDevice9 * device,
 
 	LPD3DXBUFFER compiled = NULL;
 	LPD3DXBUFFER errors = NULL;
-	const RenderResult result = D3DXCompileShader(hlsl.c_str(), (UINT)hlsl.size(), NULL, NULL,
+	const RenderResult result = D3DXCompileShader(hlsl.c_str(), (unsigned int)hlsl.size(), NULL, NULL,
 		COMPILE_ENTRY_POINT, COMPILE_PROFILE, 0, &compiled, &errors, NULL);
 	if (errors != NULL) {
 		errors->Release();

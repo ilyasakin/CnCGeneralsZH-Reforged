@@ -90,3 +90,82 @@ a boundary gets a platform name.
   `part_ldr.cpp` (`lstrlen`), `surfaceclass.cpp` (`ZeroMemory`);
 - `W3DShaderManager.cpp`: `*(LARGE_INTEGER*)&m_driverVersion = did.DriverVersion`. A1's header
   decides the type of `D3DADAPTER_IDENTIFIER9::DriverVersion`.
+
+## A1: WW3D2 and W3DDevice compile and link off Windows (2026-09-26)
+
+**The checkpoint holds.** WW3D2 and W3DDevice compile on macOS with no errors, and `w3d_link_probe`
+links all of both (whole archive, `-force_load` on macOS) against `posixdevice` and `gameengine`, so
+every symbol they reference resolves; `nm` shows W3DDisplay and DX8Wrapper in it. Both libraries and the
+probe are in the default build. From 152 failing translation units to 0.
+
+**The D3D9 names.** `Libraries/Include/Platform/D3D9Posix.h`, POSIX only, written from Direct3D 9's
+published values and `#error` on `_WIN32`; no `DWORD`, `HRESULT`, `HWND`, `IID` or `GUID`.
+`D3D9PosixMath.h` holds `D3DVECTOR` and `D3DMATRIX` alone, for `d3dx9math.h`, so GameEngine still sees
+no more of D3D9. `Platform/PosixD3D9/{d3d9,d3d9types,d3d9caps}.h` redirect to it, on the POSIX renderer
+targets' include path only, so no `#include <d3d9.h>` changed.
+`Tools/d3d9posix_check.py` compiles the header against MinGW-w64's `d3d9.h` and asserts 404 enumerators,
+156 macros, 23 function-like macro samples, `D3DDECL_END()`'s fields, 22 structures (204 field offsets)
+and both IIDs' bytes; a false control must fail, and it fails on any function-like macro without samples
+or enumerator without a written value. `*_FORCE_DWORD` is not compared: Wine gives some `0xffffffff`,
+Microsoft `0x7fffffff`; the header uses Microsoft's and asserts the four-byte width. -18 second-read the
+header and `RenderTypes.h`; their one finding (`IID`) and both hardenings are in.
+
+**The device** (`GameEngineDevice/Source/PosixDevice/Render/`, library `posixd3d9`, split by file with
+-18, who owns A2): `PosixDevice9.h` declares the adapter and the device; `Direct3DCreate9` returns a real
+adapter; `CreateDevice` accepts a null window, since `-headless` starts no video and its device has to
+work as Windows' hidden-window one does. With no window a draw succeeds and does nothing; with one it
+fails loudly until A3. State is kept as set; D3D9's documented defaults for the render states are A3's.
+
+**D3DX off Windows** (`WW3D2/d3dx9posix.cpp`): the matrix functions compute (renderer only: the
+simulation's `D3DXVec4Transform`/`D3DXVec4Dot` stay `d3dxportable.h`'s); `Get_FVF_Vertex_Size` computes
+from the FVF bits; the pointers stay pointers, since call sites test them, and all are bound. Shader
+assembly fails for good (A3 draws generated HLSL). The texture helpers are -18's
+(`d3dx9posix_texture.cpp`). `d3dx9posix_selfcheck` checks the FVF size against 12 of `dx8fvf.h`'s vertex
+structures, and the matrices against a double-precision reference and known images; four mutation
+controls fail it. It does not compare rounding with `d3dx9_43.dll`: `Tests/d3dx_oracle` could, and that
+is left for A3, where the matrices reach the picture.
+
+**Direct3D 11 off Windows:** `dx11runtime_posix.cpp` answers all 76 calls, and the buffer twin's lock, as
+a machine where Direct3D 11 failed to start.
+
+**The compile fixes**, by kind (the commits list each):
+- MSVC tolerances clang refuses, spelled the ISO way with MSVC's meaning: functional casts, `false` as a
+  null pointer, default arguments at the definition, `register`, friend-only names, a dependent base's
+  members, in-class `Class::member`, extern-then-static, `StringClass(NULL)`, `StringClass` through
+  varargs, rvalues to non-const references, the address of a temporary, forward-declared enums;
+- `Xfer.h` first in six draw modules: it reaches `BitFlagsIO.h`, whose templates use `Xfer` before it
+  is declared, and clang parses template bodies where they stand. `Drawable.h` goes first now;
+- Win32 API with an exact C equivalent at the call site (`lstrcpy`, `lstrcpyn`, `ZeroMemory`, ...);
+- Win32 behaviour with no POSIX meaning in the renderer behind `_WIN32`, each with its POSIX answer
+  beside it: the registry, the embedded browser, window style and size, desktop gamma and display mode,
+  movie capture, the front-buffer screenshot, the `.ANI` cursor images, the wave editor, the ffmpeg
+  launch;
+- 335 includes respelled to the on-disk case (`include_case_check` reads W3DDevice now).
+
+**Handed on:**
+- **C2 (-18):** define `RenderWindow ApplicationHWnd` (null under `-headless`) and
+  `Bool ApplicationIsBorderless` off Windows; W3DDisplay's window style and size calls are no-ops off
+  Windows, so the window follows a display-mode change on C2's side. `W3DGameClient` off Windows leaves
+  `createKeyboard`, `createMouse` and `createVideoPlayer` to the platform's subclass. The stand-ins in
+  `PosixRenderHooks.cpp` go when `generals` links `w3ddevice` (-18 agreed to take that).
+- **C3:** `W3DMouse` is out of the POSIX build; the cursor and the order-cursor images are yours.
+- **D6:** `render2dsentence`'s GDI font is behind `_WIN32`; off Windows every glyph is blank and zero
+  wide until the rasteriser lands.
+- **A2 (-18):** resources, surfaces, `Clear`, the caps (VS/PS 0.0 until A3 implements a shader path,
+  so `getChipset` answers `DC_UNKNOWN` and every renderer path is fixed-function).
+- **A3:** draws, `Present`, gamma, render-state defaults, screenshots off Windows, stage-0 colour
+  `D3DTOP_DISABLE`, the D3DX oracle comparison.
+
+**Findings on the way, not changed:**
+- W3DDisplay's Windows `CreateBMPFile` reads `(w+7)/8*h*24` bytes from a `3*w*h` image: an over-read on
+  every screenshot. The POSIX writer is correct; the Windows one is left, and reported.
+- `d3dx9math.h`'s Windows `D3DXMatrixInverseFunction` returns `HRESULT` where D3DX returns a
+  `D3DXMATRIX *`; nobody reads the result, so nothing breaks today.
+- `dx8fvf.h`'s `VertexFormatXYZNUV2DMAP` is 48 bytes against its FVF's 52; nothing sizes a buffer by
+  either.
+- CMake's comment calls `dx8webbrowser.cpp` inert; its header sets `ENABLE_EMBEDDED_BROWSER` to 1.
+- Two pointer truncations (`surfaceclass.cpp`, `assetmgr.cpp`) were real on x64 and are fixed.
+
+**Windows:** every changed `.cpp` compiles under MinGW-w64 against the Windows headers with no error it
+did not have before; the Windows `ww3d2` source set is unchanged. Not compiled with MSVC: WINDOWS-DEBT
+has the row.

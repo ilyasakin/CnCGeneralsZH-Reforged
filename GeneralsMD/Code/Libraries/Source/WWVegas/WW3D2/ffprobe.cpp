@@ -17,6 +17,7 @@
 */
 
 #include "ffprobe.h"
+#include "bittype.h"		// uint32
 
 #include <map>
 #include <stdio.h>

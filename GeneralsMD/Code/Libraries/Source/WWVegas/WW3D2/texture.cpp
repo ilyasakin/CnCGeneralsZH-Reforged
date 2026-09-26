@@ -58,6 +58,7 @@
 #include "meshmatdesc.h"
 #include "texturethumbnail.h"
 #include "wwprofile.h"
+#include <string.h>	// memset, strcpy, strlen
 
 //#pragma optimize("", off)
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
@@ -87,7 +88,7 @@ const unsigned MAX_TEXTURES_APPLIED_PER_FRAME=2;
  */
 static bool Describe_Texture_Level_0(IDirect3DTexture9 *texture, D3DSURFACE_DESC &desc)
 {
-	::ZeroMemory(&desc, sizeof(D3DSURFACE_DESC));
+	memset(&desc,0, sizeof(D3DSURFACE_DESC));
 
 	if (texture == NULL)
 		return false;
@@ -1724,7 +1725,7 @@ void CubeTextureClass::Apply_New_Surface
 
 	WWASSERT(d3d_texture);
 	D3DSURFACE_DESC d3d_desc;
-	::ZeroMemory(&d3d_desc, sizeof(D3DSURFACE_DESC));
+	memset(&d3d_desc,0, sizeof(D3DSURFACE_DESC));
 	DX8_ErrorCode(Peek_D3D_CubeTexture()->GetLevelDesc(0,&d3d_desc));
 
 	if (initialized) 
@@ -2011,7 +2012,7 @@ void VolumeTextureClass::Apply_New_Surface
 
 	WWASSERT(d3d_texture);
 	D3DVOLUME_DESC d3d_desc;
-	::ZeroMemory(&d3d_desc, sizeof(D3DVOLUME_DESC));
+	memset(&d3d_desc,0, sizeof(D3DVOLUME_DESC));
 
 	DX8_ErrorCode(Peek_D3D_VolumeTexture()->GetLevelDesc(0,&d3d_desc));
 

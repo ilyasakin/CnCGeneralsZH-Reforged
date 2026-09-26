@@ -953,7 +953,7 @@ void VertexMaterialClass::Apply(void) const
 	DX8Wrapper::Set_DX8_Material(Material);
 
 	if (WW3D::Is_Coloring_Enabled())
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_LIGHTING,FALSE);
+		DX8Wrapper::Set_DX8_Render_State(D3DRS_LIGHTING,false);
 	else
 		DX8Wrapper::Set_DX8_Render_State(D3DRS_LIGHTING,UseLighting);
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_AMBIENTMATERIALSOURCE,AmbientColorSource);
@@ -983,7 +983,7 @@ void VertexMaterialClass::Apply_Null(void)
 		1.0f									// power
 	};
 
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_LIGHTING,FALSE);
+	DX8Wrapper::Set_DX8_Render_State(D3DRS_LIGHTING,false);
 	DX8Wrapper::Set_DX8_Material(&default_settings);
 
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_AMBIENTMATERIALSOURCE,D3DMCS_MATERIAL);

@@ -29,8 +29,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
+#include "GameClient/Drawable.h"	// before Xfer.h: see W3DSupplyDraw.cpp
 #include "Common/Xfer.h"
-#include "GameClient/Drawable.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "W3DDevice/GameClient/Module/W3DOverlordTankDraw.h"
