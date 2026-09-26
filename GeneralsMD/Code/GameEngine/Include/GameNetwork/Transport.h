@@ -61,6 +61,18 @@ public:
 
 	inline Bool allowBroadcasts(Bool val) { if (!m_udpsock) return false; return (m_udpsock->AllowBroadcasts(val))?true:false; }
 
+#if !defined(_WIN32)
+	/* Defect #29 (udp.h): shareAddress(TRUE) before init lets this socket share its port with another
+		 copy's broadcast listener; initBroadcastListener binds the wildcard address to take only the
+		 broadcasts sent to that port.  Both persist across reset(). */
+	void shareAddress( Bool val ) { m_shareAddress = val; }
+	Bool initBroadcastListener( UnsignedShort port );
+	Bool isOpen( void ) const { return m_udpsock != NULL; }
+	/// Moves every received message into free slots of `inbox`'s m_inBuffer, each once; what does not
+	/// fit stays here for the next call
+	void moveReceivedInto( Transport &inbox );
+#endif
+
 	// Latency insertion and packet loss
 	void setLatency( Bool val ) { m_useLatency = val; }
 	void setPacketLoss( Bool val ) { m_usePacketLoss = val; }
@@ -82,6 +94,10 @@ public:
 private:
 	Bool m_winsockInit;
 	UDP *m_udpsock;
+#if !defined(_WIN32)
+	Bool m_shareAddress;
+	Bool m_broadcastsOnly;
+#endif
 
 	// Latency insertion and packet loss
 	Bool m_useLatency;
