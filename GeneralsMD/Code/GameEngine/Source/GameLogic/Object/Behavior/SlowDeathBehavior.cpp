@@ -48,6 +48,7 @@
 #include "GameLogic/Module/SlavedUpdate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
+#include "Platform/MsvcFloatCasts.h"
 #include "GameLogic/Weapon.h"
 #include "GameClient/Drawable.h"
 
@@ -186,7 +187,9 @@ Int SlowDeathBehavior::getProbabilityModifier( const DamageInfo *damageInfo ) co
 	// eg ( 200 hp max, had 10 left, took 50 damage, 40 overkill, (40/200) * 100 = 20 overkill %)
 	Int overkillDamage = damageInfo->out.m_actualDamageDealt - damageInfo->out.m_actualDamageClipped;
 	Real overkillPercent = (float)overkillDamage / (float)getObject()->getBodyModule()->getMaxHealth();
-	Int overkillModifier = overkillPercent * getSlowDeathBehaviorModuleData()->m_modifierBonusPerOverkillPercent;
+	// An object with no health to lose (an InactiveBody: debris, hulks) makes this 0/0.  Windows converts
+	// the NaN to INT_MIN, so the modifier comes out 1; the helper gives that answer everywhere.
+	Int overkillModifier = floatToIntAsMsvc( overkillPercent * getSlowDeathBehaviorModuleData()->m_modifierBonusPerOverkillPercent );
 
 	return max( getSlowDeathBehaviorModuleData()->m_probabilityModifier + overkillModifier, 1 );
 }
