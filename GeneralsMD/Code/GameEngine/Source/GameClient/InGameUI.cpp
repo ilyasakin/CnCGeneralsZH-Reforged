@@ -8904,6 +8904,11 @@ enum
 //-------------------------------------------------------------------------------------------------
 void InGameUI::addSignalMark( SignalKind kind, const Coord3D &pos, Color color, ParticleSystemID smoke )
 {
+	// No decal manager without a renderer (headless, or off Windows until the D track): no mark.
+	// GameLogicDispatch calls this for every signal a player sends, replays included.
+	if( TheProjectedShadowManager == NULL )
+		return;
+
 	Shadow::ShadowTypeInfo decalInfo;
 	decalInfo.allowUpdates = FALSE;
 	decalInfo.allowWorldAlign = TRUE;		// wrapped over the terrain it lands on

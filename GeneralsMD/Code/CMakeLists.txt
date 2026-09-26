@@ -1073,6 +1073,21 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(posixdevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
   set_target_properties(posixdevice PROPERTIES CXX_STANDARD 17)
   target_link_libraries(posixdevice PUBLIC gameengine)
+  # PosixRenderHooks.cpp on its own, ahead of gameengine linking: decision 2 (B19 (c)) lives in its
+  # testMinimumRequirements, checked against the shipped GameLODPresets.ini when ZH_GAME_DATA is set.
+  # See Tests/test_posix_render_hooks.cpp.
+  add_executable(posix_render_hooks_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_render_hooks.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/GameClient/PosixRenderHooks.cpp)
+  target_include_directories(posix_render_hooks_selfcheck PRIVATE
+    $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
+    ${LIBSRC}/Benchmark)
+  target_compile_definitions(posix_render_hooks_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+  set_target_properties(posix_render_hooks_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(posix_render_hooks_selfcheck PRIVATE wwlib wwdebug benchmark)
+  add_test(NAME posix_render_hooks_selfcheck COMMAND posix_render_hooks_selfcheck)
+  if(ZH_GAME_DATA)
+    set_tests_properties(posix_render_hooks_selfcheck PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
 endif()
 
 # ===========================================================================
