@@ -1018,6 +1018,10 @@ if(ZH_PLATFORM_POSIX)		# bash and perl: the value itself is the same tool on eve
   # the manifest still lists exactly the tracked files (skipped without git: a tarball uses it as shipped)
   add_test(NAME build_fingerprint_manifest COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/fingerprint-manifest.sh --check)
   set_tests_properties(build_fingerprint_manifest PROPERTIES SKIP_RETURN_CODE 77)
+  # the manifest script on itself, in a scratch repository: a line twice fails --check with its name, and
+  # a merge stopped on a conflict (git ls-files then names a path once per stage) is refused
+  add_test(NAME fingerprint_manifest_selfcheck COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_fingerprint_manifest.sh)
+  set_tests_properties(fingerprint_manifest_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 if(ZH_PLATFORM_POSIX)
   # GlobalLanguage registers Language.ini's LocalFontFile with the glyph rasteriser (D6b)
