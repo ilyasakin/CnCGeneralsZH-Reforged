@@ -33,6 +33,22 @@
 #include "GameNetwork/NetworkUtil.h"
 #include "GameNetwork/GameMessageParser.h"
 
+/* A game message's arguments travel as sizeof(their type) bytes each, here and in the replay file
+	 (Recorder.cpp's writeArgument), so those widths are the wire format a Mac and a Windows player must
+	 share (L1 step 5).  B4 and B5 pinned the packed structs, GameMessage::Type (MessageStream.h) and
+	 WideChar (WideChar.h); these are the argument types, each with the width MSVC x64 gives it.  A
+	 compiler that disagrees fails here instead of talking a different format. */
+static_assert( sizeof(Int) == 4, "ARGUMENTDATATYPE_INTEGER is 4 bytes on the wire" );
+static_assert( sizeof(Real) == 4, "ARGUMENTDATATYPE_REAL is 4 bytes on the wire" );
+static_assert( sizeof(Bool) == 1, "ARGUMENTDATATYPE_BOOLEAN is 1 byte on the wire" );
+static_assert( sizeof(ObjectID) == 4, "ARGUMENTDATATYPE_OBJECTID is 4 bytes on the wire" );
+static_assert( sizeof(DrawableID) == 4, "ARGUMENTDATATYPE_DRAWABLEID is 4 bytes on the wire" );
+static_assert( sizeof(UnsignedInt) == 4, "ARGUMENTDATATYPE_TEAMID and _TIMESTAMP are 4 bytes on the wire" );
+static_assert( sizeof(Coord3D) == 12, "ARGUMENTDATATYPE_LOCATION is three Reals on the wire" );
+static_assert( sizeof(ICoord2D) == 8, "ARGUMENTDATATYPE_PIXEL is two Ints on the wire" );
+static_assert( sizeof(IRegion2D) == 16, "ARGUMENTDATATYPE_PIXELREGION is two ICoord2Ds on the wire" );
+static_assert( sizeof(UnsignedByte) == 1 && sizeof(UnsignedShort) == 2, "a command's header fields are 1 and 2 bytes" );
+
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
