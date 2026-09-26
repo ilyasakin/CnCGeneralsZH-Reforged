@@ -397,6 +397,59 @@ CMake additions are POSIX-only.
 So until (d) moves them to `zh_fopen`, they find nothing and fall back to their defaults. The
 engine's own writes go through the file system and resolve correctly.
 
+## PR (d): raw file calls through the resolver (2026-09-26)
+
+**The early readers, first.** `EarlyOptions`' `Options.ini` reader and `registry.cpp`'s
+`Registry.ini` reader (-18's file, changed with their agreement) open through `zh_fopen`.
+- Before, they read nothing off Windows: the user data directory ends in `'\'`, and a raw POSIX
+  `fopen` takes that as part of a file name.
+- `findRegistryFile` is the one path for every reader and writer. The protocol is in the next
+  section.
+- `test_posixlocalfilesystem` builds the real `registry.cpp` and reads a `Registry.ini` in a
+  `ZH_USER_DATA_DIR` of its own. With the raw `fopen` put back, 7 of its checks fail.
+- `test_userfolders` reads an `Options.ini` the same way.
+
+**`zh_stat`** joins the forwarders: on Windows it is `stat`, the CRT's POSIX name, as the one engine
+call site already spelled it; on POSIX it resolves, then stats.
+
+**The sites: 77 calls in 30 files.** Every raw `fopen`, `remove`, `rename`, `access`, `_open`, `stat`
+and `unlink` whose path the engine spelled, in code the macOS build compiles, now uses its `zh_`
+form. On Windows each is the same call, inline. They cover:
+- the save, load and map writers;
+- the Xfer files;
+- Recorder's stats and debug copies;
+- `UserPreferences`;
+- the model-checksum cache;
+- `StatsCollector`, `MiniLog`, the perf and CRC dumps, `ThingFactory`'s exports, `DataChunk`'s
+  temp file, `Debug.cpp`'s log rotation, and the GameSpy/LAN files;
+- WWLib's `mixfile`, `argv`, `Wwutil`'s `miscutil`;
+- **`RawFileClass`'s POSIX arms** (its four `open`s and its `unlink`). Set_Name's inert `_UNIX` arm,
+  which lowercased names and rewrote backslashes, is removed: it is what D1 rules out.
+
+**The joins after the executable's directory** (`MiniLog`, `MemoryInit`'s
+`"\Data\INI\MemoryPools.ini"`, `Debug.cpp`'s log names) need no change of their own. They reach the
+disk through `zh_fopen` now, and the resolver takes both separators.
+
+**Left raw, on purpose:**
+- real POSIX paths (`EarlyOptions`' `mkdir`/`stat` of the directory it builds, `user-dirs.dirs`,
+  `srandom`'s `/dev/random`, `PosixLocalFileSystem`, which resolves itself);
+- code the macOS build does not compile (W3D2's `missingtexture`, `FramGrab`, `ffprobe`, the D3D11
+  backend; every `CreateFile`);
+- `LocalFile`'s `USE_BUFFERED_IO` branch, which is compiled out.
+
+**Tests.**
+- `test_posixpath`, 168 checks: `zh_stat`, and RawFileClass reading, writing and deleting
+  engine-spelled paths on both volumes. With RawFileClass's read `open` made raw again, its checks
+  fail on both, because the backslashes alone defeat a raw `open`.
+- `test_posixlocalfilesystem`, 161 checks.
+- ctest 35 of 35 on macOS: `gametext_csf` and `d3dx_oracle` skipped, `test_gameengine` disabled.
+- The five tests that compile engine files from source (the widechar gates, `widechar_file_selfcheck`,
+  `gametext_csf`) link wwlib off Windows now, for `zh_fopen`.
+
+**Windows.** `windows_view_diff.py`: 29 of the 33 files differ only by the `zh_` prefix and the
+include. The other four are `zhio.h`'s `zh_stat` and its `<sys/types.h>`/`<sys/stat.h>`,
+RawFileClass's removed `_UNIX` arm, and two POSIX-only files. WINDOWS-DEBT has the rows.
+
 ## Registry.ini: the protocol (agreed 2026-09-26 by -a9 (C1), -18 (registry.cpp) and -47 (B6))
 
 Off Windows, `Registry.ini` in the user data directory stands in for the registry.
