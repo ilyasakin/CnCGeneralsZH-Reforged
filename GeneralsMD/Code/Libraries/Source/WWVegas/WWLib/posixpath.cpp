@@ -49,8 +49,23 @@ struct Listing
 // Every lookup takes this: Miles opens streams from its service thread through the file system, so
 // lookups arrive from more than one thread.
 std::mutex g_lock;
-std::map<std::string, Listing> g_listings;	// by real directory; "" is the current directory
-std::set<std::string> g_reported;			// ambiguities already logged, by directory and folded name
+
+// The caches are built on first use rather than at file scope.  Files are opened before main: a
+// static constructor that allocates starts the engine's memory manager (GameMemory.h), which looks
+// for its pool-size file through zh_fopen, and that can happen before this file's own statics are
+// constructed - a file-scope map there was used unconstructed, and then emptied when its constructor
+// did run.  (g_lock is a std::mutex, whose constructor is constexpr: it is ready before any code runs.)
+std::map<std::string, Listing> & listings()	// by real directory; "" is the current directory
+{
+	static std::map<std::string, Listing> s_listings;
+	return s_listings;
+}
+
+std::set<std::string> & reported()			// ambiguities already logged, by directory and folded name
+{
+	static std::set<std::string> s_reported;
+	return s_reported;
+}
 
 bool is_separator(char c)
 {
@@ -104,8 +119,8 @@ const Listing * listing_of(const std::string & directory)
 	if (!modification_time(directory, now)) {
 		return NULL;
 	}
-	std::map<std::string, Listing>::iterator cached = g_listings.find(directory);
-	if (cached != g_listings.end() && cached->second.modified.tv_sec == now.tv_sec
+	std::map<std::string, Listing>::iterator cached = listings().find(directory);
+	if (cached != listings().end() && cached->second.modified.tv_sec == now.tv_sec
 		&& cached->second.modified.tv_nsec == now.tv_nsec) {
 		return &cached->second;
 	}
@@ -125,7 +140,7 @@ const Listing * listing_of(const std::string & directory)
 	for (std::map<std::string, std::vector<std::string> >::iterator it = fresh.by_folded.begin(); it != fresh.by_folded.end(); ++it) {
 		std::sort(it->second.begin(), it->second.end());
 	}
-	Listing & stored = g_listings[directory];
+	Listing & stored = listings()[directory];
 	stored = fresh;
 	return &stored;
 }
@@ -145,7 +160,7 @@ std::string match_in(const std::string & directory, const std::string & componen
 	}
 	// D2: an exact spelling would have been found by the caller's own stat, so this is the case where
 	// none exists; byte order decides, and it is said once.
-	if (found->second.size() > 1 && g_reported.insert(directory + "/" + folded).second) {
+	if (found->second.size() > 1 && reported().insert(directory + "/" + folded).second) {
 		WWDEBUG_WARNING(("PosixPath: \"%s\" matches %u names in \"%s\" that differ only in case; using \"%s\"\n",
 			component.c_str(), (unsigned)found->second.size(), directory.empty() ? "." : directory.c_str(),
 			found->second[0].c_str()));
@@ -219,14 +234,14 @@ bool PosixPath_Resolve(const char * engine_path, PosixPathIntent intent, std::st
 void PosixPath_Forget_Directory(const char * real_directory)
 {
 	std::lock_guard<std::mutex> guard(g_lock);
-	g_listings.erase(real_directory != NULL && strcmp(real_directory, ".") != 0 ? real_directory : "");
+	listings().erase(real_directory != NULL && strcmp(real_directory, ".") != 0 ? real_directory : "");
 }
 
 void PosixPath_Forget_All()
 {
 	std::lock_guard<std::mutex> guard(g_lock);
-	g_listings.clear();
-	g_reported.clear();
+	listings().clear();
+	reported().clear();
 }
 
 // ---- listing, as Win32LocalFileSystem lists ------------------------------------------------------

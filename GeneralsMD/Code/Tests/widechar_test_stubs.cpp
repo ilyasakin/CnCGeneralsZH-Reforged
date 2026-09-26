@@ -55,6 +55,8 @@ static void notOnThisPath( const char *what )
 	printf( "FAIL: the gate reached %s, which it stubs on the understanding that it never runs\n", what );
 	exit( 2 );
 }
+// The strings call it when TheDynamicMemoryAllocator is NULL, which the one above never is.
+void preMainInitMemoryManager() { notOnThisPath( "preMainInitMemoryManager" ); }
 GameState *TheGameState = NULL;
 ScienceStore *TheScienceStore = NULL;
 UpgradeCenter *TheUpgradeCenter = NULL;
