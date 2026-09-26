@@ -324,7 +324,6 @@ void View::xfer( Xfer *xfer )
 	// camera angle
 	Real angle = getAngle();
 	xfer->xferReal( &angle );
-	setAngle( angle );
 
 	// view position
 	Coord3D viewPos;
@@ -332,6 +331,14 @@ void View::xfer( Xfer *xfer )
 	xfer->xferReal( &viewPos.x );
 	xfer->xferReal( &viewPos.y );
 	xfer->xferReal( &viewPos.z );
-	lookAt( &viewPos );
+
+	// Only when loading: setting the camera to where it already is re-applies it, and the replay
+	// viewer saves a checkpoint every 900 frames, so the camera was nudged, or a move in progress
+	// stopped, at each one (the client twin of defect #20).
+	if( xfer->getXferMode() == XFER_LOAD )
+	{
+		setAngle( angle );
+		lookAt( &viewPos );
+	}
 
 }  // end xfer
