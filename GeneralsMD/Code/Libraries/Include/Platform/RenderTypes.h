@@ -43,7 +43,13 @@
 
 #if defined(_WIN32)
 
-#include <windows.h>
+// windows.h must already be in, and this header does not include it.  Its configuration
+// (WIN32_LEAN_AND_MEAN, and winsock2.h before winsock.h) is each includer's to choose; a header that
+// pulled it in first would choose for them without a word.  d3d9.h includes it, so after <d3d9.h> -
+// as dx8wrapper.h has it - is always right.
+#if !defined(_WINDOWS_) && !defined(_INC_WINDOWS)
+#error "Platform/RenderTypes.h needs windows.h (or d3d9.h) included first; it will not choose windows.h's configuration for you"
+#endif
 
 typedef DWORD RenderUInt32;			///< a DWORD the device reads or writes through a pointer
 typedef HRESULT RenderResult;		///< what a device call returns
