@@ -48,7 +48,13 @@
 #ifndef DX11RUNTIME_H
 #define DX11RUNTIME_H
 
+#if defined(_WIN32)
 #include <windows.h>
+#endif
+// RenderWindow, RenderRect and RenderPoint: on Windows HWND, RECT and POINT themselves (A0).  Off
+// Windows there is no Direct3D 11, and dx11runtime_posix.cpp answers every call as a machine without
+// it would: nothing is ever active.
+#include "Platform/RenderTypes.h"
 
 #include <string>
 
@@ -62,7 +68,7 @@ bool Direct3D11_Is_Enabled();
 
 // Built once the window and its size are known.  False means the machine could not make one, and
 // the caller carries on with Direct3D 9 rather than failing to start.
-bool Direct3D11_Create(HWND window, unsigned width, unsigned height);
+bool Direct3D11_Create(RenderWindow window, unsigned width, unsigned height);
 void Direct3D11_Release();
 
 // The swap chain's buffers at a new resolution.  Nothing if they already are that size.
@@ -144,8 +150,8 @@ void Direct3D11_Mirror_Render_Target(struct IDirect3DSurface9 * surface);
 // One of the engine's surface copies, carried into the copy of the destination texture.  This is
 // how a default-pool texture the CPU cannot read - the shroud - reaches D3D11 at all.
 void Direct3D11_Mirror_Surface_Copy(struct IDirect3DSurface9 * destination,
-	struct IDirect3DSurface9 * source, const struct tagRECT * source_rectangle,
-	const struct tagPOINT * destination_point);
+	struct IDirect3DSurface9 * source, const RenderRect * source_rectangle,
+	const RenderPoint * destination_point);
 
 // The frame, alongside Direct3D 9's own.  Begin binds the back buffer and the viewport, Clear
 // takes the same arguments DX8Wrapper::Clear was given, and End presents only when the run asked
