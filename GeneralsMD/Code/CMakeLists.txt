@@ -1225,9 +1225,9 @@ if(ZH_PLATFORM_POSIX)
 
   # ---- w3ddevice: GameEngineDevice's W3DDevice, gameenginedevice's renderer half ---------------------
   file(GLOB_RECURSE W3DDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/*.cpp)
-  # W3DMouse is a Win32Mouse, the hardware cursor through the window procedure: the platform layer's
-  # input (C3), not the renderer.  W3DGameClient leaves its keyboard and mouse to the subclass off Windows.
-  list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DMouse\\.cpp$")
+  # W3DMouse sits on SDL3's mouse off Windows (C3b), and W3DGameClient makes it and SDL3's keyboard, so
+  # w3ddevice takes sdlinput: the input half of the SDL layer, apart from sdldevice so that sdldevice can
+  # take w3ddevice for the engine's W3D factories without the two needing each other.
   # W3DWebBrowser is the embedded browser as a COM object, which only Win32GameEngine makes; GameEngine
   # has its own WebBrowser off Windows (B5).
   list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DWebBrowser\\.cpp$")
@@ -1236,7 +1236,7 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(w3ddevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs ${CMAKE_CURRENT_SOURCE_DIR}/Main
             ${WW}/Miles6/include ${WW}/Bink/include)
-  target_link_libraries(w3ddevice PUBLIC gameengine ww3d2)
+  target_link_libraries(w3ddevice PUBLIC gameengine ww3d2 sdlinput)
 
   # A1's link checkpoint: all of w3ddevice and ww3d2, whole archive, against what the POSIX game links.
   add_executable(w3d_link_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_link_probe.cpp)
@@ -1424,12 +1424,21 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(milesaudiomanager PROPERTIES CXX_STANDARD 17)
   target_link_libraries(milesaudiomanager PUBLIC gameengine milesaudio)
 
+  # SDL3's input (C3): the keyboard, the mouse, the text input's hooks, the .ANI cursors.  Its own
+  # library because w3ddevice's W3DGameClient and W3DMouse need it, and sdldevice needs w3ddevice.
+  file(GLOB SDLINPUT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/SdlDevice/GameClient/*.cpp)
+  add_library(sdlinput STATIC ${SDLINPUT_SOURCES})
+  target_include_directories(sdlinput PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+  set_target_properties(sdlinput PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(sdlinput PUBLIC gameengine SDL3::SDL3-static)
+
   file(GLOB_RECURSE SDLDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/SdlDevice/*.cpp)
+  list(FILTER SDLDEVICE_SOURCES EXCLUDE REGEX "/SdlDevice/GameClient/")
   add_library(sdldevice STATIC ${SDLDEVICE_SOURCES})
   target_include_directories(sdldevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
-  target_link_libraries(sdldevice PUBLIC posixdevice SDL3::SDL3-static milesaudiomanager)
+  target_link_libraries(sdldevice PUBLIC posixdevice SDL3::SDL3-static milesaudiomanager sdlinput)
 
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
