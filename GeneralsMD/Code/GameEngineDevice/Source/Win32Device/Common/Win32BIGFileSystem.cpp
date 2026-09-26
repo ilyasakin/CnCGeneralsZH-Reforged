@@ -26,18 +26,25 @@
 // Bryan Cleveland, August 2002
 /////////////////////////////////////////////////////////////
 
+// Built off Windows too (C1 (f)): nothing below is Win32 but ntohl and one message box, so macOS and
+// Linux mount archives with this same code rather than a copy whose load order could drift.
+#if defined(_WIN32)
 #include <winsock2.h>
 #include <windows.h>	// MessageBox, for the one thing a player has to be told before the menu
+#else
+#include <arpa/inet.h>	// ntohl
+#include "Common/MessageBoxFlags.h"
+#endif
 #include "Common/AudioAffect.h"
 #include "Common/ArchiveFile.h"
 #include "Common/ArchiveFileSystem.h"
-#include "Common/File.h"
+#include "Common/file.h"
 #include "Common/GameAudio.h"
 #include "Common/GameMemory.h"
 #include "Common/LocalFileSystem.h"
 #include "Win32Device/Common/Win32BIGFile.h"
 #include "Win32Device/Common/Win32BIGFileSystem.h"
-#include "Common/registry.h"
+#include "Common/Registry.h"
 #include "Common/EarlyOptions.h"
 
 #ifdef _INTERNAL
@@ -81,12 +88,21 @@ static Bool holdsBaseGameArchives(const char *directory)
 static void reportMissingBaseGame(void)
 {
 	DEBUG_LOG(("Win32BIGFileSystem::init - no base game archives anywhere; most of the art and audio will be missing.\n"));
+#if defined(_WIN32)
 	::MessageBox(NULL,
 		"Zero Hour shares most of its artwork, sound effects and music with Command & Conquer Generals, "
 		"and none of the base game's .big files could be found.\n\n"
 		"Install Generals, or copy its .big files into a folder named ZH_Generals next to generals.exe.",
 		"Zero Hour Reforged",
 		MB_OK | MB_ICONWARNING | MB_TASKMODAL);
+#else
+	MessageBoxWrapper(
+		"Zero Hour shares most of its artwork, sound effects and music with Command & Conquer Generals, "
+		"and none of the base game's .big files could be found.\n\n"
+		"Install Generals, or copy its .big files into a folder named ZH_Generals beside the game.",
+		"Zero Hour Reforged",
+		MSGBOX_OK | MSGBOX_ICONWARNING | MSGBOX_TASKMODAL);
+#endif
 }
 
 Win32BIGFileSystem::Win32BIGFileSystem() : ArchiveFileSystem() {
@@ -215,7 +231,15 @@ ArchiveFile * Win32BIGFileSystem::openArchiveFile(const Char *filename) {
 	fp->read(buffer, 4); // read the "BIG" at the beginning of the file.
 	buffer[4] = 0;
 	if (strcmp(buffer, BIGFileIdentifier) != 0) {
+#if defined(_WIN32)
 		DEBUG_CRASH(("Error reading BIG file identifier in file %s", filename));
+#else
+		// Quietly, and once for each such file: macOS leaves a "._" AppleDouble companion beside every
+		// file it copies onto exFAT or FAT, and "*.big" finds them, so an install that came off such a
+		// volume has twenty of these.  They are not archives and nothing is lost by leaving them out
+		// (C1's task file, PR (f)).
+		DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - %s is not a BIG archive (no BIGF), left out\n", filename));
+#endif
 		fp->close();
 		fp = NULL;
 		return NULL;
