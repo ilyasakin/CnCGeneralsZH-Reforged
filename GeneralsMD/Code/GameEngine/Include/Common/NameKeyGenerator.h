@@ -149,7 +149,11 @@ private:
 	mutable NameKeyType m_key;
 	const char* m_name;
 public:
-	StaticNameKey(const char* p) : m_key(NAMEKEY_INVALID), m_name(p) {}
+	// constexpr so that every StaticNameKey with static storage - the 128 well-known keys among them -
+	// is constant-initialized: set at load time, before any dynamic initializer in any translation
+	// unit runs, on every compiler.  It stores a sentinel and a pointer and key() resolves the name
+	// lazily, so there is no initialization order to get wrong.  WellKnownKeys.cpp checks it (B6).
+	constexpr StaticNameKey(const char* p) : m_key(NAMEKEY_INVALID), m_name(p) {}
 	NameKeyType key() const;
 	// ugh, this is a little hokey, but lets us pretend that a StaticNameKey == NameKeyType
 	inline operator NameKeyType() const { return key(); }

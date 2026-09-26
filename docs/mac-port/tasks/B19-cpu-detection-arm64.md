@@ -78,7 +78,14 @@ The tier is decided; the marked point is no longer open. `CPUDETECT_UNMEASURED_P
 `0` — what the measurement class honestly knows — and `testMinimumRequirements` treats an unknown
 CPU as meeting the top preset. Reasoning in the plan README, "Decisions taken".
 
-**Not yet built.** `testMinimumRequirements` is GameEngine code and `gameengine` does not compile on
+**Built, 2026-09-26 (B6):** off Windows `testMinimumRequirements` is PosixDevice's
+(`PosixRenderHooks.cpp`), and reports an unmeasured CPU at `UNMEASURED_CPU_REPORTED_MHZ` = 3049, the
+fastest profile the shipped `GameLODPresets.ini` names; `posix_render_hooks_selfcheck` proves it meets
+every preset in the game's own file. The end-to-end half - a first and a later launch choosing the
+same preset - waits on `test_gameengine`. Windows' W3DShaderManager body is unchanged: on x86 cpudetect
+always measures, so its branch would never run.
+
+~~**Not yet built.**~~ `testMinimumRequirements` is GameEngine code and `gameengine` does not compile on
 macOS until B5's GameEngine half lands. Whoever takes it: make the unknown-CPU branch explicit and
 named, and prove it by checking that a first launch and a later launch choose the SAME preset — the
 inconsistency between them is the bug option (a) would have left in place.

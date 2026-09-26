@@ -124,6 +124,47 @@ MapObject member**.
   compile clean (659 -> 662 of 855 -> 858); the only lines that differ are `WorldHeightMap.cpp`'s same
   14 messages, 266 lines higher.
 
+**Step (1) done, 2026-09-26: the GameSpy SDK builds and links off Windows.** The `add_subdirectory`
+lost its Windows guard (the Windows lines are unchanged) and the SDK's `CMakeLists.txt` joined the
+common vendored list; `vendor.sh` already fetched it with both patches on POSIX. `libgamespy.a`:
+0 errors, 3 `-Wenum-compare` warnings in the SDK's own C. `unix_define_check` passes. With it linked,
+on `a6d97948` plus the keys: **41 undefined, no GameSpy symbol among them** (the census's 41 and the
+48 `PeerThread` added when it compiled - 89 entry points, all real). What is left:
+
+| Owner | Symbols |
+|:--|:--|
+| -18, Winsock (B5) | `Transport` 14, `UDP` 6, `IPEnumeration` 4 |
+| B6: registry writes (the agreed `Registry.ini` protocol, C1's task file) | the four `std::string` `Get/Set*Registry` |
+| B6: device hooks, null or B19 (c) | `doSkyBoxSet`, `oversizeTheTerrain`, `TheProjectedShadowManager`, `DX8Wrapper_PreserveFPU`, `testMinimumRequirements` (B19 (c)); and, new since `GameEngine.cpp` compiles, `CreateCDManager` and `DX8Wrapper_IsWindowed` |
+| B6's driver, for now; C2 for real | `CreateGameEngine`, `g_csfFile`, `g_strFile`, `gAppPrefix` |
+| Dead service | `MOTDSystem` (W3DMOTD), `FormatURLFromRegistry` (WWDownload) |
+
+Not measured: the SDK under GCC on Linux.
+
+**Step (4) done, 2026-09-26: the device hooks.** `PosixDevice/GameClient/PosixRenderHooks.cpp` and
+`PosixDevice/Common/PosixCDManager.cpp`, each checked at every call site first:
+
+| Symbol | Windows body | POSIX body, and why |
+|:--|:--|:--|
+| `doSkyBoxSet` | sets `TheWritableGlobalData->m_drawSkyBox` | **the same**, not null: it is a GlobalData flag, not a render call |
+| `oversizeTheTerrain` | asks the terrain render object, if there is one | nothing: there is never one yet |
+| `TheProjectedShadowManager` | the W3D singleton | NULL. Two callers dereferenced it unchecked and **now test it**: `RadiusDecal` and `InGameUI::addSignalMark` - which `GameLogicDispatch` calls for every signal, so a headless replay would have crashed on the first smoke signal |
+| `DX8Wrapper_PreserveFPU`, `DX8Wrapper_IsWindowed` | `dx8wrapper.cpp`'s globals, 0 and true | the same starting values |
+| `CreateCDManager` | `Win32CDManager`: every drive letter that is a CD-ROM | a `CDManager` that finds no drives - what a Windows PC without an optical drive gets |
+| `MOTDSystem` | the message-of-the-day window's callback | `MSG_IGNORED`: the window only opens with a message from EA's servers (dead service) |
+| `testMinimumRequirements` | W3DShaderManager: D3D chipset, CPUID type, cpudetect speed, memory, benchmark | **decision 2 (B19 (c))**: chipset `DC_UNKNOWN` (no device), type and memory as on Windows, and a speed cpudetect could not measure reported as `UNMEASURED_CPU_REPORTED_MHZ` = 3049, the fastest profile the shipped `GameLODPresets.ini` names |
+
+`posix_render_hooks_selfcheck` (POSIX ctest) checks the function and, with `ZH_GAME_DATA`, that 3049
+meets all 34 `LODPreset`s and 4 `BenchProfile`s of the game's own file and clears `ReallyLowMHz` 600;
+with the old speed (cpudetect's 0) it fails. `FormatURLFromRegistry` moved to the registry step: it is
+portable code that reads the registry API. Left: 33 undefined - Winsock 24 (-18), registry 5 (B6,
+waiting on -18's `Common/RegistryFile.h` and C1 (d)), and the entry point's 4.
+
+**Not yet shown, and B6's to show when `test_gameengine` links:** that `GameLODManager`, run for real
+on a first and a later launch, chooses the same preset and the same shell-map setting. Also open for
+the D track: with the chipset `DC_UNKNOWN`, GameLOD presumes a TNT2, below every shipped preset's GF3,
+so every POSIX machine gets the Low preset until a renderer reports a chipset.
+
 **Stale below, corrected:**
 - *`ww3d2` is "real, and the hard one" (`D3DXVec4Transform`).* No longer: B17 made the D3DX maths
   portable (`d3dxportable.h`) and not one D3DX symbol is undefined. The only WW3D2 symbol left is
