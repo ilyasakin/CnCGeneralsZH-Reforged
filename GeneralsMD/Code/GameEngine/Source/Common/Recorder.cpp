@@ -984,23 +984,17 @@ Int RecorderClass::getPlaybackFramesPerSecond( void )
 CRCInfo::CRCInfo()
 {
 	m_localPlayer = ~0;
-	m_skipOneCRC = FALSE;
+	m_alignment = ALIGN_NONE;
 	m_sawCRCMismatch = FALSE;
 }
 
-Bool replayIsMissingFirstCRC( Int originalGameMode )
+Bool replayMayLackFirstCRC( Int originalGameMode )
 {
 	return originalGameMode == GAME_LAN || originalGameMode == GAME_INTERNET;
 }
 
 void CRCInfo::addCRC(UnsignedInt val)
 {
-	if (m_skipOneCRC)
-	{
-		m_skipOneCRC = FALSE;
-		return;
-	}
-
 	m_data.push_back(val);
 	//DEBUG_LOG(("CRCInfo::addCRC() - crc %8.8X pushes list to %d entries (full=%d)\n", val, m_data.size(), !m_data.empty()));
 }
@@ -1017,6 +1011,24 @@ UnsignedInt CRCInfo::readCRC(void)
 	m_data.pop_front();
 	//DEBUG_LOG(("CRCInfo::readCRC() - returning %8.8X, full=%d, size=%d\n", val, !m_data.empty(), m_data.size()));
 	return val;
+}
+
+UnsignedInt CRCInfo::readCRCFor(UnsignedInt recorded)
+{
+	if (m_alignment == ALIGN_PENDING)
+	{
+		std::list<UnsignedInt>::const_iterator it = m_data.begin();
+		if (it != m_data.end() && *it == recorded)
+			m_alignment = ALIGN_FROM_FRAME_0;
+		else if (it != m_data.end() && ++it != m_data.end() && *it == recorded)
+		{
+			m_alignment = ALIGN_FRAME_0_MISSING;
+			m_data.pop_front();
+		}
+		else
+			m_alignment = ALIGN_UNDECIDED;
+	}
+	return readCRC();
 }
 
 void RecorderClass::handleCRCMessage(UnsignedInt newCRC, Int playerIndex, Bool fromPlayback)
@@ -1037,7 +1049,16 @@ void RecorderClass::handleCRCMessage(UnsignedInt newCRC, Int playerIndex, Bool f
 		samePlayer = TRUE;
 	if (samePlayer || (localPlayerIndex < 0))
 	{
-		UnsignedInt playbackCRC = m_crcInfo->readCRC();
+		const Bool aligning = (m_crcInfo->getAlignment() == CRCInfo::ALIGN_PENDING);
+		UnsignedInt playbackCRC = m_crcInfo->readCRCFor(newCRC);
+		if (aligning)
+		{
+			// say which kind of recording this was, so a reader of the log can tell (Recorder.h)
+			const CRCInfo::Alignment how = m_crcInfo->getAlignment();
+			DEBUG_LOG(("Replay CRCs: %s\n", how == CRCInfo::ALIGN_FROM_FRAME_0 ? "recorded from frame 0"
+				: how == CRCInfo::ALIGN_FRAME_0_MISSING ? "legacy: frame 0 missing"
+				: "neither alignment fits the first recorded CRC"));
+		}
 		//DEBUG_LOG(("RecorderClass::handleCRCMessage() - Comparing CRCs of %8.8X/%8.8X from %d\n", newCRC, playbackCRC, playerIndex));
 		if (TheGameLogic->getFrame() > 0 && newCRC != playbackCRC && !m_crcInfo->sawCRCMismatch())
 		{
@@ -1047,7 +1068,7 @@ void RecorderClass::handleCRCMessage(UnsignedInt newCRC, Int playerIndex, Bool f
 				 different game than the one that was recorded used to do it in complete silence.  Say so in
 				 the log, which release builds do write. */
 			DEBUG_LOG(("Replay has gone out of sync on frame %d: recorded %8.8X, played back %8.8X\n",
-				TheGameLogic->getFrame(), playbackCRC, newCRC));
+				TheGameLogic->getFrame(), newCRC, playbackCRC));
 
 			//Kris: Patch 1.01 November 10, 2003 (integrated changes from Matt Campbell)
 			// Since we don't seem to have any *visible* desyncs when replaying games, but get this warning
@@ -1055,8 +1076,8 @@ void RecorderClass::handleCRCMessage(UnsignedInt newCRC, Int playerIndex, Bool f
 			// tail end of patch season, let's just disable the message, and hope the users believe the
 			// problem is fixed. -MDC 3/20/2003
 			//TheInGameUI->message("GUI:CRCMismatch");
-			DEBUG_CRASH(("Replay has gone out of sync!  All bets are off!\nOld:%8.8X New:%8.8X\nFrame:%d",
-				playbackCRC, newCRC, TheGameLogic->getFrame()));
+			DEBUG_CRASH(("Replay has gone out of sync!  All bets are off!\nRecorded:%8.8X Played back:%8.8X\nFrame:%d",
+				newCRC, playbackCRC, TheGameLogic->getFrame()));
 		}
 		return;
 	}
@@ -1116,9 +1137,9 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 	if (!openPlayback(filename, difficulty, rankPoints, maxFPS))
 		return FALSE;
 
-	if (replayIsMissingFirstCRC( m_originalGameMode ))
+	if (replayMayLackFirstCRC( m_originalGameMode ))
 	{
-		m_crcInfo->skipFirstCRC();
+		m_crcInfo->allowMissingFirstCRC();
 	}
 
 	readNextFrame();
