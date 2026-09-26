@@ -314,6 +314,78 @@ static void not_replayed_because(const std::string &file, const std::string &rea
 	printf("skip %s: %s\n", file.c_str(), reason.c_str());
 }
 
+/// A version 2 capture's draw_<n>.prog (DrawCapture.h), read back.
+struct ProgramFile
+{
+	bool VertexPresent, PixelPresent;
+	std::string VertexName, PixelName;
+	std::vector<uint32_t> VertexTokens, PixelTokens;
+	uint32_t Elements;
+	float VertexConstants[DRAW_CAPTURE_VS_CONSTANTS][4];
+	float PixelConstants[DRAW_CAPTURE_PS_CONSTANTS][4];
+};
+
+static bool read_programs(const std::string &path, ProgramFile &out)
+{
+	std::vector<uint8_t> b;
+	if (!read_file(path, b) || b.size() < 8 || memcmp(&b[0], "ZHPG", 4) != 0) {
+		return false;
+	}
+	size_t at = 4;
+	bool ok = true;
+	struct In
+	{
+		static uint32_t u32(const std::vector<uint8_t> &b, size_t &at, bool &ok)
+		{
+			uint32_t v = 0;
+			if (at + 4 > b.size()) { ok = false; return 0; }
+			memcpy(&v, &b[at], 4);
+			at += 4;
+			return v;
+		}
+		static void program(const std::vector<uint8_t> &b, size_t &at, bool &ok, bool &present, std::string &name,
+			std::vector<uint32_t> &tokens)
+		{
+			present = u32(b, at, ok) != 0;
+			if (!ok || !present) return;
+			if (at + DRAW_CAPTURE_PROGRAM_NAME > b.size()) { ok = false; return; }
+			name.assign((const char *)&b[at], strnlen((const char *)&b[at], DRAW_CAPTURE_PROGRAM_NAME));
+			at += DRAW_CAPTURE_PROGRAM_NAME;
+			const uint32_t count = u32(b, at, ok);
+			if (!ok || at + (size_t)count * 4 > b.size()) { ok = false; return; }
+			tokens.resize(count);
+			memcpy(&tokens[0], &b[at], (size_t)count * 4);
+			at += (size_t)count * 4;
+		}
+	};
+	ok = In::u32(b, at, ok) == 1;
+	In::program(b, at, ok, out.VertexPresent, out.VertexName, out.VertexTokens);
+	out.Elements = In::u32(b, at, ok);
+	at += (size_t)out.Elements * 8;
+	In::program(b, at, ok, out.PixelPresent, out.PixelName, out.PixelTokens);
+	if (!ok || at + sizeof(out.VertexConstants) + sizeof(out.PixelConstants) != b.size()) {
+		return false;
+	}
+	memcpy(out.VertexConstants, &b[at], sizeof(out.VertexConstants));
+	memcpy(out.PixelConstants, &b[at + sizeof(out.VertexConstants)], sizeof(out.PixelConstants));
+	return true;
+}
+
+/// The text a stub token stream wraps (d3dx9posix.cpp's POSIX D3DXAssembleShader, DrawCapture.h), or
+/// false for a stream that is not one.
+static bool stub_text(const std::vector<uint32_t> &tokens, std::string &text)
+{
+	if (tokens.size() < 5 || (tokens[1] & 0xFFFF) != 0xFFFE || tokens[2] != 0x5253485A) {
+		return false;
+	}
+	const uint32_t words = (tokens[1] >> 16) & 0x7FFF, length = tokens[3];
+	if (words < 2 || (size_t)length > (size_t)(words - 2) * 4 || 4 + (words - 2) > tokens.size()) {
+		return false;
+	}
+	text.assign((const char *)&tokens[4], length);
+	return true;
+}
+
 /// Replays one capture and compares.  `mutations` arms the reference (a control, which must fail);
 /// `picture` receives the device's, RGBA, when asked for.
 static void replay(PosixDevice9 *device, const std::string &directory, const std::string &file, unsigned mutations = 0,
@@ -326,11 +398,40 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	}
 	DrawCaptureHeader header;
 	memcpy(&header, &bytes[0], sizeof(header));
-	if (memcmp(header.Magic, "ZHDC", 4) == 0 && header.Version == DRAW_CAPTURE_VERSION_PROGRAMMABLE) {
-		not_replayed_because(file, "a programmable draw (version 2): a contributor's vs_1_1/ps_1_1 interpreter replays it");
-		return;
+	// A programmable draw (version 2): its programs from draw_<n>.prog.  The device draws the transcription
+	// of the program registered under the captured name (A3e); the reference runs the captured tokens
+	// through a contributor's interpreter (ffprogram.h), assembling the water's text itself where the tokens are the
+	// stub's.  A vertex program waits on the reference reading a declaration.
+	ProgramFile programs;
+	FFRef::Program reference_program;
+	const bool programmable = memcmp(header.Magic, "ZHDC", 4) == 0 && header.Version == DRAW_CAPTURE_VERSION_PROGRAMMABLE;
+	if (programmable) {
+		if (!read_programs(directory + "/" + file.substr(0, file.size() - 4) + ".prog", programs)) {
+			not_replayed_because(file, "a programmable draw whose programs file is missing or malformed");
+			return;
+		}
+		if (programs.VertexPresent) {
+			not_replayed_because(file, "a vertex program (the reference's declaration reading is to come)");
+			return;
+		}
+		std::vector<uint32_t> tokens = programs.PixelTokens;
+		std::string text;
+		if (stub_text(tokens, text)) {
+			std::string error;
+			std::vector<uint32_t> assembled;
+			if (!FFRef::assemblePixelProgram(text, assembled, error)) {
+				not_replayed_because(file, "the reference's assembler refused " + programs.PixelName + ": " + error);
+				return;
+			}
+			tokens = assembled;
+		}
+		if (!FFRef::decodeProgram(&tokens[0], tokens.size(), reference_program)) {
+			not_replayed_because(file, "the reference refused " + programs.PixelName + ": "
+				+ (reference_program.refusals.empty() ? std::string("?") : reference_program.refusals[0]));
+			return;
+		}
 	}
-	if (memcmp(header.Magic, "ZHDC", 4) != 0 || header.Version != DRAW_CAPTURE_VERSION) {
+	else if (memcmp(header.Magic, "ZHDC", 4) != 0 || header.Version != DRAW_CAPTURE_VERSION) {
 		not_replayed_because(file, "not a capture of this version");
 		return;
 	}
@@ -443,6 +544,20 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	state.viewport.minZ = header.Viewport.MinZ;
 	state.viewport.maxZ = header.Viewport.MaxZ;
 	device->SetFVF(header.FVF);
+	IDirect3DPixelShader9 *pixel_shader = NULL;
+	if (programmable) {
+		device->CreatePixelShader(&programs.PixelTokens[0], &pixel_shader);
+		PosixDevice_Name_Shader(pixel_shader, programs.PixelName.c_str());
+		device->SetPixelShader(pixel_shader);
+		device->SetVertexShaderConstantF(0, &programs.VertexConstants[0][0], DRAW_CAPTURE_VS_CONSTANTS);
+		device->SetPixelShaderConstantF(0, &programs.PixelConstants[0][0], DRAW_CAPTURE_PS_CONSTANTS);
+		state.pixelShaderBound = true;
+		state.pixelProgram = &reference_program;
+		for (int r = 0; r < DRAW_CAPTURE_VS_CONSTANTS; ++r)
+			for (int k = 0; k < 4; ++k) state.vertexConstants[r][k] = programs.VertexConstants[r][k];
+		for (int r = 0; r < DRAW_CAPTURE_PS_CONSTANTS; ++r)
+			for (int k = 0; k < 4; ++k) state.pixelConstants[r][k] = programs.PixelConstants[r][k];
+	}
 
 	// The cleared target on both.  Without a depth surface D3D9 draws with depth and stencil off, and
 	// the reference is told so the same way the device decides it.
@@ -504,6 +619,10 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	if (index_buffer != NULL) index_buffer->Release();
 	device->SetDepthStencilSurface(depth);
 	if (depth != NULL) depth->Release();
+	if (pixel_shader != NULL) {
+		device->SetPixelShader(NULL);
+		pixel_shader->Release();
+	}
 
 	const std::string label = file + " (" + std::string(header.Signature).substr(0, 60) + ")";
 	if (!drawn) {
