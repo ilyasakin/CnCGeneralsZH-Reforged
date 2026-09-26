@@ -54,6 +54,7 @@ inline FILE * zh_fopen(const char * path, const char * mode) { return fopen(path
 inline int zh_open(const char * path, int flags, int permissions) { return _open(path, flags, permissions); }
 inline int zh_access(const char * path, int mode) { return _access(path, mode); }
 inline int zh_remove(const char * path) { return remove(path); }
+inline int zh_unlink(const char * path) { return _unlink(path); }
 inline int zh_rename(const char * from, const char * to) { return rename(from, to); }
 inline int zh_mkdir(const char * path) { return _mkdir(path); }
 
@@ -65,6 +66,8 @@ FILE * zh_fopen(const char * path, const char * mode);
 int zh_open(const char * path, int flags, int permissions);
 int zh_access(const char * path, int mode);
 int zh_remove(const char * path);
+// One file: unlike zh_remove, never a directory, as DeleteFile and _unlink refuse one.
+int zh_unlink(const char * path);
 int zh_rename(const char * from, const char * to);
 // One directory, with permissions 0777 less the process's umask, as Windows' _mkdir takes none.
 int zh_mkdir(const char * path);
