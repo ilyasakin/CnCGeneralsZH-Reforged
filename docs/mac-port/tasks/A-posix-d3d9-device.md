@@ -157,14 +157,18 @@ a machine where Direct3D 11 failed to start.
   `D3DTOP_DISABLE`, the D3DX oracle comparison.
 
 **Findings on the way, not changed:**
-- W3DDisplay's Windows `CreateBMPFile` reads `(w+7)/8*h*24` bytes from a `3*w*h` image: an over-read on
-  every screenshot. The POSIX writer is correct; the Windows one is left, and reported.
+- W3DDisplay's Windows `CreateBMPFile` read `(w+7)/8*h*24` bytes from a `3*w*h` image: an over-read
+  whenever the width is not a multiple of 8, and a skewed picture when it is not a multiple of 4.
+  Defect #18, fixed after A1 by making the POSIX writer the one writer.
 - `d3dx9math.h`'s Windows `D3DXMatrixInverseFunction` returns `HRESULT` where D3DX returns a
   `D3DXMATRIX *`; nobody reads the result, so nothing breaks today.
 - `dx8fvf.h`'s `VertexFormatXYZNUV2DMAP` is 48 bytes against its FVF's 52; nothing sizes a buffer by
   either.
 - CMake's comment calls `dx8webbrowser.cpp` inert; its header sets `ENABLE_EMBEDDED_BROWSER` to 1.
-- Two pointer truncations (`surfaceclass.cpp`, `assetmgr.cpp`) were real on x64 and are fixed.
+- Two pointer truncations, fixed because clang refuses them, neither reachable by a player:
+  `surfaceclass.cpp`'s would fault above 4 GB but only `Font3D`, which the game never creates, calls it;
+  `assetmgr.cpp`'s subtracts two truncated pointers, which is right modulo 2^32. Both are in the
+  README's latent list. (An earlier report of mine called both shipping defects; that was wrong.)
 
 **Windows:** every changed `.cpp` compiles under MinGW-w64 against the Windows headers with no error it
 did not have before; the Windows `ww3d2` source set is unchanged. Not compiled with MSVC: WINDOWS-DEBT
