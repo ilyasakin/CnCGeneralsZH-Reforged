@@ -133,14 +133,16 @@ private:
 	int									PointSize;
 	StringClass							GDIFontName;
 #if defined(_WIN32)
-	// GDI draws each glyph (Store_GDI_Char).  Off Windows there is no rasteriser until D6
-	// (docs/mac-port/tasks/D6-text-rasterisation.md), and the glyphs are blank.
+	// GDI draws each glyph (Store_GDI_Char).  Off Windows FreeType does, through GlyphRasteriserClass,
+	// answering the same questions (D6, docs/mac-port/tasks/D6-text-rasterisation.md).
 	HFONT									OldGDIFont;
 	HBITMAP								OldGDIBitmap;
 	HBITMAP								GDIBitmap;	
 	HFONT									GDIFont;
 	uint8 *								GDIBitmapBits;
 	HDC									MemDC;
+#else
+	class GlyphRasteriserClass *	Rasteriser;	///< the font and its (2 x PointSize) square box: GDIFont, GDIBitmap and MemDC's part
 #endif
 	FontCharsClassCharDataStruct *					ASCIICharArray[256];
 	FontCharsClassCharDataStruct **					UnicodeCharArray;
