@@ -31,7 +31,7 @@
 // The factories Windows answers with W3DDevice classes cannot be answered here yet, and each stops the
 // game with a message that names what it waits for rather than hand back something that is not the
 // game (PosixGameEngine.h says why for the logic and the module factory).  Audio is the exception:
-// NullAudioManager, the silent device, until C4's upper half wires the real one.
+// MilesAudioManager, over the Miles surface on miniaudio (C4).
 
 #pragma once
 

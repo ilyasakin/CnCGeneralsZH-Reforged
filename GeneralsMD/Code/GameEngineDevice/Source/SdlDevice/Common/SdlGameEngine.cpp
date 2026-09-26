@@ -28,7 +28,7 @@
 #include "SdlDevice/Common/SdlGameEngine.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
 #include "SdlDevice/GameClient/SdlInput.h"
-#include "NullAudioManager.h"
+#include "MilesAudioDevice/MilesAudioManager.h"
 
 #include <SDL3/SDL.h>
 
@@ -242,8 +242,10 @@ ParticleSystemManager *SdlGameEngine::createParticleSystemManager( void )
 	return NULL;
 }
 
-// The silent device, until C4's upper half wires MilesAudioManager over miniaudio.
+// Win32GameEngine's, line for line: MilesAudioManager, here over the Miles surface on miniaudio (C4).
+// -headless needs nothing of its own: parseHeadless turns m_audioOn off, and openDevice returns on it
+// before AIL_startup, on Windows as here.
 AudioManager *SdlGameEngine::createAudioManager( void )
 {
-	return NEW NullAudioManager;
+	return NEW MilesAudioManager;
 }
