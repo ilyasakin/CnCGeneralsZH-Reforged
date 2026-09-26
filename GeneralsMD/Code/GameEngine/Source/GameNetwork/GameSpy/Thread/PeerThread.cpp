@@ -96,6 +96,10 @@ static UnsignedInt s_lastStateChangedHeartbeat = 0;
 static Bool s_wantStateChangedHeartbeat = FALSE;
 static UnsignedInt s_heartbeatInterval = 10000;
 
+#if !defined(_WIN32)
+// winsock's name for a failed socket call's result; POSIX calls return -1 (ControlServer.cpp does the same).
+#define SOCKET_ERROR (-1)
+#endif
 static SOCKET qr2Sock = INVALID_SOCKET;
 
 enum
@@ -1144,7 +1148,11 @@ void checkQR2Queries( PEER peer, SOCKET sock )
 {
 	static char indata[INBUF_LEN];
 	struct sockaddr_in saddr;
+#if defined(_WIN32)
 	int saddrlen = sizeof(struct sockaddr_in);
+#else
+	socklen_t saddrlen = sizeof(struct sockaddr_in);		// recvfrom's length is a socklen_t off Windows
+#endif
 	fd_set set;
 	struct timeval timeout = {0,0};
 	int error;
@@ -1769,7 +1777,7 @@ void PeerThreadClass::Thread_Function()
 		Switch_Thread();
 	}
 
-	DEBUG_LOG(("voluntarily ending peer thread %d\n", running));
+	DEBUG_LOG(("voluntarily ending peer thread %d\n", (Int)running.load()));	// an atomic cannot go through varargs; B14 made it one
 	peerShutdown( peer );
 
 	} catch ( ... ) {
