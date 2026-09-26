@@ -28,7 +28,14 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#if defined(_WIN32)
 #include <winsock.h>	// This one has to be here. Prevents collisions with winsock2.h
+#else
+#include <arpa/inet.h>		// inet_addr, inet_ntoa
+#include <netdb.h>				// gethostbyname
+#include <netinet/in.h>
+typedef struct hostent HOSTENT;		// winsock's name for it
+#endif
 
 #include "GameNetwork/GameSpy/GameResultsThread.h"
 #include "mutex.h"
@@ -213,11 +220,13 @@ void GameResultsThreadClass::Thread_Function()
 	InstallThreadExceptionTranslator(); // Hook that allows stack trace.
 	GameResultsRequest req;
 
+#if defined(_WIN32)
 	WSADATA wsaData;
 
 	// Fire up winsock (prob already done, but doesn't matter)
 	WORD wVersionRequested = MAKEWORD(1, 1);
 	WSAStartup( wVersionRequested, &wsaData );
+#endif
 
 	while ( running )
 	{
@@ -264,7 +273,9 @@ void GameResultsThreadClass::Thread_Function()
 		Switch_Thread();
 	}
 
+#if defined(_WIN32)
 	WSACleanup();
+#endif
 	} catch ( ... ) {
 		DEBUG_CRASH(("Exception in results thread!"));
 	}
@@ -272,6 +283,10 @@ void GameResultsThreadClass::Thread_Function()
 
 //-------------------------------------------------------------------------
 
+/* The results go to GameSpy's server over a winsock TCP connection, with winsock's error names in the
+	 log.  GameSpy is a dead service and only has to compile and link (the B5 survey: stub, do not port),
+	 so off Windows sendGameResults answers -1, which the thread reports as not sent. */
+#if defined(_WIN32)
 #ifdef DEBUG_LOGGING
 #define CASE(x) case (x): return #x;
 
@@ -389,6 +404,12 @@ Int GameResultsThreadClass::sendGameResults( UnsignedInt IP, UnsignedShort port,
 
 	return results.length();
 }
+#else
+Int GameResultsThreadClass::sendGameResults( UnsignedInt, UnsignedShort, const std::string& )
+{
+	return -1;
+}
+#endif
 
 
 //-------------------------------------------------------------------------

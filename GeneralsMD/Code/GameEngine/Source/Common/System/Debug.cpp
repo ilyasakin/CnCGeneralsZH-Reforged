@@ -56,6 +56,7 @@
 #endif
 #include "Common/Debug.h"
 #include "Common/EarlyCommandLine.h"
+#include "Common/MessageBoxFlags.h"
 #include "Common/ExecutableDirectory.h"
 #include "Platform/BreakIntoDebugger.h"
 #include "stringex.h"
@@ -70,7 +71,11 @@
 
 // Horrible reference, but we really, really need to know if we are windowed.
 extern bool DX8Wrapper_IsWindowed;
+#if defined(_WIN32)
 extern HWND ApplicationHWnd;
+#else
+#include <thread>		// the main thread's id, where Windows uses GetCurrentThreadId
+#endif
 
 extern char *gAppPrefix; /// So WB can have a different log file name.
 
@@ -111,7 +116,11 @@ static FILE *theLogFile = NULL;
 #define LARGE_BUFFER	8192
 static char theBuffer[ LARGE_BUFFER ];	// make it big to avoid weird overflow bugs in debug mode
 static int theDebugFlags = 0;
+#if defined(_WIN32)
 static DWORD theMainThreadID = 0;
+#else
+static std::thread::id theMainThreadID;
+#endif
 // ----------------------------------------------------------------------------
 // PUBLIC DATA 
 // ----------------------------------------------------------------------------
@@ -148,9 +157,24 @@ inline Bool ignoringAsserts()
 }
 
 // ----------------------------------------------------------------------------
+#if defined(_WIN32)
 inline HWND getThreadHWND()
 {
 	return (theMainThreadID == GetCurrentThreadId())?ApplicationHWnd:NULL;
+}
+#endif
+
+/* Before a message box in full screen the game's window is hidden, so that the box can be seen.  The
+	 window is Windows' ApplicationHWnd; off Windows there is none until C2 creates one. */
+static void hideFullScreenWindowForMessage( void )
+{
+#if defined(_WIN32)
+	if (!DX8Wrapper_IsWindowed) {
+		if (ApplicationHWnd) {
+			ShowWindow(ApplicationHWnd, SW_HIDE);
+		}
+	}
+#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -174,13 +198,25 @@ static Bool isUnattendedRun( void )
 	return cached != 0;
 }
 
-int MessageBoxWrapper( LPCSTR lpText, LPCSTR lpCaption, UINT uType )
+int MessageBoxWrapper( const char *lpText, const char *lpCaption, unsigned int uType )
 {
+#if defined(_WIN32)
 	HWND threadHWND = getThreadHWND();
 	if (!threadHWND || isUnattendedRun())
-		return (uType & MB_ABORTRETRYIGNORE)?IDIGNORE:IDYES;
+		return (uType & MSGBOX_ABORTRETRYIGNORE)?MSGBOX_ID_IGNORE:MSGBOX_ID_YES;
 
 	return ::MessageBox(threadHWND, lpText, lpCaption, uType);
+#else
+	/* No window to own a box until C2 (SDL_ShowMessageBox), so this is Windows' own no-window path
+		 above: the same answer, and the text where someone can read it - stderr, and the log if it is
+		 open (written directly: DebugLog can be the caller). */
+	fprintf(stderr, "%s%s%s\n", lpCaption, (lpCaption && lpCaption[0]) ? ": " : "", lpText);
+#ifdef DEBUG_LOGGING
+	if (theLogFile)
+		fprintf(theLogFile, "[message box] %s%s%s\n", lpCaption, (lpCaption && lpCaption[0]) ? ": " : "", lpText);
+#endif
+	return (uType & MSGBOX_ABORTRETRYIGNORE)?MSGBOX_ID_IGNORE:MSGBOX_ID_YES;
+#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -243,12 +279,12 @@ static const char *prepBuffer(const char* format, char *buffer, size_t bufferSiz
 	 nothing in the pathfinder, always beside a log line, and did not repeat on a rerun of the same
 	 seed. The file is flushed at most once a second now, and in full on every crash path before the
 	 process exits, so the last lines before a crash still reach it. */
-static const DWORD LOG_FLUSH_INTERVAL_MS = 1000;
-static DWORD theLastLogFlushMS = 0;
+static const UnsignedInt LOG_FLUSH_INTERVAL_MS = 1000;
+static UnsignedInt theLastLogFlushMS = 0;
 
 static void flushLogFileAtMostOnceASecond(void)
 {
-	const DWORD nowMS = Clock_Milliseconds_Coarse();
+	const UnsignedInt nowMS = Clock_Milliseconds_Coarse();
 	if (nowMS - theLastLogFlushMS < LOG_FLUSH_INTERVAL_MS)
 		return;
 	theLastLogFlushMS = nowMS;
@@ -292,15 +328,15 @@ static int doCrashBox(const char *buffer, Bool logResult)
 	int result;
 
 	if (!ignoringAsserts()) {
-		result = MessageBoxWrapper(buffer, "Assertion Failure", MB_ABORTRETRYIGNORE|MB_TASKMODAL|MB_ICONWARNING|MB_DEFBUTTON3);
+		result = MessageBoxWrapper(buffer, "Assertion Failure", MSGBOX_ABORTRETRYIGNORE|MSGBOX_TASKMODAL|MSGBOX_ICONWARNING|MSGBOX_DEFBUTTON3);
 		//result = MessageBoxWrapper(buffer, "Assertion Failure", MB_ABORTRETRYIGNORE|MB_TASKMODAL|MB_ICONWARNING);
 	}	else {
-		result = IDIGNORE;
+		result = MSGBOX_ID_IGNORE;
 	}
 
 	switch(result)
 	{
-		case IDABORT:
+		case MSGBOX_ID_ABORT:
 #ifdef DEBUG_LOGGING
 			if (logResult)
 				DebugLog("[Abort]\n");
@@ -309,14 +345,14 @@ static int doCrashBox(const char *buffer, Bool logResult)
 #endif
 			_exit(1);
 			break;
-		case IDRETRY:
+		case MSGBOX_ID_RETRY:
 #ifdef DEBUG_LOGGING
 			if (logResult)
 				DebugLog("[Retry]\n");
 #endif
 			breakIntoDebugger();
 			break;
-		case IDIGNORE:
+		case MSGBOX_ID_IGNORE:
 #ifdef DEBUG_LOGGING
 			// do nothing, just keep going
 			if (logResult)
@@ -384,7 +420,11 @@ void DebugInit(int flags)
 	{
 		theDebugFlags = flags;
 
+#if defined(_WIN32)
 		theMainThreadID = GetCurrentThreadId();
+#else
+		theMainThreadID = std::this_thread::get_id();
+#endif
 
 	#ifdef DEBUG_LOGGING
 
@@ -452,7 +492,7 @@ void DebugLog(const char *format, ...)
 #endif
 
 	if (theDebugFlags == 0)
-		MessageBoxWrapper("DebugLog - Debug not inited properly", "", MB_OK|MB_TASKMODAL);
+		MessageBoxWrapper("DebugLog - Debug not inited properly", "", MSGBOX_OK|MSGBOX_TASKMODAL);
 
 	format = prepBuffer(format, theBuffer, ARRAY_SIZE(theBuffer));
 
@@ -462,7 +502,7 @@ void DebugLog(const char *format, ...)
   va_end(arg);
 
 	if (strlen(theBuffer) >= sizeof(theBuffer))
-		MessageBoxWrapper("String too long for debug buffer", "", MB_OK|MB_TASKMODAL);
+		MessageBoxWrapper("String too long for debug buffer", "", MSGBOX_OK|MSGBOX_TASKMODAL);
 
 	whackFunnyCharacters(theBuffer);
 	doLogOutput(theBuffer);
@@ -488,12 +528,8 @@ void DebugCrash(const char *format, ...)
 	char theCrashBuffer[ LARGE_BUFFER ];	
 	if (theDebugFlags == 0)
 	{
-		if (!DX8Wrapper_IsWindowed) {
-			if (ApplicationHWnd) {
-				ShowWindow(ApplicationHWnd, SW_HIDE);
-			}
-		}
-		MessageBoxWrapper("DebugCrash - Debug not inited properly", "", MB_OK|MB_TASKMODAL);
+		hideFullScreenWindowForMessage();
+		MessageBoxWrapper("DebugCrash - Debug not inited properly", "", MSGBOX_OK|MSGBOX_TASKMODAL);
 	}
 
 	format = prepBuffer(format, theCrashBuffer, ARRAY_SIZE(theCrashBuffer));
@@ -510,12 +546,8 @@ void DebugCrash(const char *format, ...)
 
 	if (wanted < 0 || (size_t)wanted >= ARRAY_SIZE(theCrashBuffer) - used)
 	{
-		if (!DX8Wrapper_IsWindowed) {
-			if (ApplicationHWnd) {
-				ShowWindow(ApplicationHWnd, SW_HIDE);
-			}
-		}
-		MessageBoxWrapper("String too long for debug buffers", "", MB_OK|MB_TASKMODAL);
+		hideFullScreenWindowForMessage();
+		MessageBoxWrapper("String too long for debug buffers", "", MSGBOX_OK|MSGBOX_TASKMODAL);
 	}
 
 #ifdef DEBUG_LOGGING
@@ -537,18 +569,18 @@ void DebugCrash(const char *format, ...)
 
 	int result = doCrashBox(theCrashBuffer, true);
 
-	if (result == IDIGNORE && TheCurrentIgnoreCrashPtr != NULL) 
+	if (result == MSGBOX_ID_IGNORE && TheCurrentIgnoreCrashPtr != NULL) 
 	{
 		int yn;
 		if (!ignoringAsserts()) 
 		{
-			yn = MessageBoxWrapper("Ignore this crash from now on?", "", MB_YESNO|MB_TASKMODAL);
+			yn = MessageBoxWrapper("Ignore this crash from now on?", "", MSGBOX_YESNO|MSGBOX_TASKMODAL);
 		}	
 		else 
 		{
-			yn = IDYES;
+			yn = MSGBOX_ID_YES;
 		}
-		if (yn == IDYES)
+		if (yn == MSGBOX_ID_YES)
 			*TheCurrentIgnoreCrashPtr = 1;
 		if( TheKeyboard )
 			TheKeyboard->resetKeys();
@@ -762,11 +794,7 @@ void ReleaseCrash(const char *reason)
 
 	/// do additional reporting on the crash, if possible
 
-	if (!DX8Wrapper_IsWindowed) {
-		if (ApplicationHWnd) {
-			ShowWindow(ApplicationHWnd, SW_HIDE);
-		}
-	}
+	hideFullScreenWindowForMessage();
 //#if defined(_DEBUG) || defined(_INTERNAL)
 //	/* static */ char buff[8192]; // not so static so we can be threadsafe
 //	snprintf(buff, 8192, "Sorry, a serious error occurred. (%s)", reason);/
@@ -819,17 +847,14 @@ void ReleaseCrash(const char *reason)
 		theReleaseCrashLogFile = NULL;
 	}
 
-	if (!DX8Wrapper_IsWindowed) {
-		if (ApplicationHWnd) {
-			ShowWindow(ApplicationHWnd, SW_HIDE);
-		}
-	}
+	hideFullScreenWindowForMessage();
 	// the log is written by now; a run nobody is watching should die rather than wait for a click
 	if (isUnattendedRun())
 	{
 		_exit(1);
 	}
 
+#if defined(_WIN32)
 #if defined(_DEBUG) || defined(_INTERNAL)
 	/* static */ char buff[8192]; // not so static so we can be threadsafe
 	snprintf(buff, 8192, "Sorry, a serious error occurred. (%s)", reason);
@@ -846,6 +871,11 @@ void ReleaseCrash(const char *reason)
    MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
 
 
+#endif
+#else
+	// No window to own a box until C2; the release-crash log above is the report, and this is the line
+	// someone at a terminal sees.
+	fprintf(stderr, "Technical Difficulties...: a serious error occurred (%s)\n", reason);
 #endif
 
 	_exit(1);
@@ -871,16 +901,13 @@ void ReleaseCrashLocalized(const AsciiString& p, const AsciiString& m)
 
 	/// do additional reporting on the crash, if possible
 
-	if (!DX8Wrapper_IsWindowed) {
-		if (ApplicationHWnd) {
-			ShowWindow(ApplicationHWnd, SW_HIDE);
-		}
-	}
+	hideFullScreenWindowForMessage();
 
 	if (isUnattendedRun())
 	{
 		// nobody to read it; the log below is the report - see ReleaseCrash above
 	}
+#if defined(_WIN32)
 	else if (TheSystemIsUnicode)
 	{
 		// Win32's W API: WideChar and WCHAR are the same two bytes on Windows, which makes the cast honest.
@@ -897,6 +924,13 @@ void ReleaseCrashLocalized(const AsciiString& p, const AsciiString& m)
 		::SetWindowPos(ApplicationHWnd, HWND_NOTOPMOST, 0, 0, 0, 0,SWP_NOSIZE |SWP_NOMOVE);
 		::MessageBoxA(NULL, mesgA.str(), promptA.str(), MB_OK|MB_TASKMODAL|MB_ICONERROR);
 	}
+#else
+	else
+	{
+		// No window to own a box until C2: the localised text, as UTF-8, where someone can read it.
+		fprintf(stderr, "%s: %s\n", WideCharAsUtf8(prompt.str()).str(), WideCharAsUtf8(mesg.str()).str());
+	}
+#endif
 
 	char prevbuf[ _MAX_PATH ];
 	char curbuf[ _MAX_PATH ];
