@@ -39,6 +39,9 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "textureloader.h"
+#if !defined(_WIN32)
+#include "Platform/LoadTiming.h"
+#endif
 #include "Lib/Clock.h"
 #include "mutex.h"
 #include "thread.h"
@@ -1300,6 +1303,24 @@ bool TextureLoadTaskClass::Begin_Load(void)
 bool TextureLoadTaskClass::Load(void)
 {
 	WWMEMLOG(MEM_TEXTURE);
+#if !defined(_WIN32)
+	// PERF1's hitch hunt (Platform/LoadTiming.h): a texture load's time, and how much of it was reading.
+	struct LoadTimer
+	{
+		TextureBaseClass *Texture;
+		double Start, ReadStart;
+		explicit LoadTimer(TextureBaseClass *texture) : Texture(texture), Start(zhLoadTimingAsked() ? zhLoadNowMs() : 0.0),
+			ReadStart(zhLoadReadMs()) {}
+		~LoadTimer()
+		{
+			if (!zhLoadTimingAsked()) return;
+			const double took = zhLoadNowMs() - Start, read = zhLoadReadMs() - ReadStart;
+			if (took > ZH_LOAD_TIMING_REPORT_MS)
+				fprintf(stderr, "LOAD tex   t %10.1f ms  %7.1f ms  %s thread  read %.1f ms, parse and build %.1f ms  %s\n",
+					Start, took, zhLoadThread(), read, took - read, Texture ? (const char *)Texture->Get_Full_Path().Peek_Buffer() : "?");
+		}
+	} timer(Texture);
+#endif
 	WWASSERT(Peek_D3D_Texture());
 
 	bool loaded = false;
