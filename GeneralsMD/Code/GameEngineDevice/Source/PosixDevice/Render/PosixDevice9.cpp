@@ -99,6 +99,7 @@ public:
 		} while ((elements++)->Stream != 0xFF);
 	}
 	std::vector<D3DVERTEXELEMENT9> Elements;
+	std::vector<RenderUInt32> D3D8Tokens;	///< the engine's D3D8 declaration, when it came from one (capture v3)
 };
 
 }
@@ -788,6 +789,27 @@ RenderResult PosixDevice9::SetFVF(RenderUInt32 fvf)
 	FVF = fvf;
 	DeclarationIsCurrent = false;
 	return D3D_OK;
+}
+
+void PosixDevice_Keep_D3D8_Declaration(void *declaration, const unsigned int *d3d8_tokens)
+{
+	if (declaration == NULL || d3d8_tokens == NULL) {
+		return;
+	}
+	PosixVertexDeclaration9 *ours = static_cast<PosixVertexDeclaration9 *>(static_cast<IDirect3DVertexDeclaration9 *>(declaration));
+	ours->D3D8Tokens.clear();
+	const RenderUInt32 D3DVSD_END_TOKEN = 0xFFFFFFFF;
+	do {
+		ours->D3D8Tokens.push_back(*d3d8_tokens);
+	} while (*d3d8_tokens++ != D3DVSD_END_TOKEN);
+}
+
+void PosixDevice9::Declaration_D3D8_Tokens_Of(IDirect3DVertexDeclaration9 *declaration, std::vector<RenderUInt32> &tokens)
+{
+	tokens.clear();
+	if (declaration != NULL) {
+		tokens = static_cast<PosixVertexDeclaration9 *>(declaration)->D3D8Tokens;
+	}
 }
 
 void PosixDevice_Name_Shader(const void *shader, const char *name)

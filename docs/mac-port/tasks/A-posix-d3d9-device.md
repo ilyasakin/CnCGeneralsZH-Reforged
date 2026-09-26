@@ -924,6 +924,34 @@ The run: hidden window, 800x600, `-nologo`, no `-quickstart`, 300 s.
 - The plaza battle in A3d's picture is the menu's still background, which `-quickstart` shows in its place.
 - **Still open:** the capture set labelled "the main menu without the shell map (`-quickstart`)" holds 3D draws. They were made before the day's merge of feature/mac-port, and they aren't explained by the still background.
 
+### C1 settled: the GPU's quads, across an index buffer's shared edges (2026-09-26)
+
+- **Not my generated code.** The generated fixed-function programs use only implicit derivatives, and
+  sample in uniform control flow before any `clip`. Only the engine programs' shadow and bump helpers
+  have `ddx` or `ddy`, and C1's draws are fixed-function.
+- **Not quads shared in screen space.** `posix_gpu_draw_selfcheck` draws two triangles with 1x and 16x
+  texture scales meeting on an edge, and grids of 2- and 4-pixel triangles, unindexed. One call and a
+  call per triangle agree at every pixel.
+- **It's index sharing.** With `FFREF_SPLIT`, the harness draws a capture's triangles a second way.
+  - On the device, for three of the C1 draws, one indexed call differed from one call per triangle at
+    66, 9 and 34 pixels.
+  - One call of the same triangles unindexed (`FFREF_SPLIT=unshared`) matched the per-triangle picture at
+    every pixel.
+  - The miniature, two triangles sharing an indexed edge: 16 of the 32 pixels along the edge take the
+    other triangle's level, in 2x2 blocks.
+- **Conclusion:** Metal on Apple silicon forms a quad across an edge the index buffer shares. D3D9-era
+  hardware did not.
+- **What's recorded:** it is a known Mac-against-Windows difference, in the README's list, and left as it
+  is. C1 stays in the KNOWN list with that reading, and the test records the count without asserting it.
+- **C5 is C1.** The trees' shadow pass: draws 14 and 29 of the seed-1234 skirmish.
+  - -47 worked the mechanism out: per-layer texture alpha differed by 0.1 to 0.3.
+  - With the D3D9 filter LINEAR, forcing MAXANISOTROPY to 1 changed nothing, which confirms the sampler's
+    unit test.
+  - Drawn a triangle per call, both pass with 0 pixels outside, against 6 and 8 in one call. The C1
+    captures do the same: 0 against 20, 2 and 11.
+  - So every finding left in the capture sets is this GPU's quad sharing.
+||||||| e3cd8fae
+
 ### A3e-asm: Microsoft's own assembler as the oracle (-47, 2026-09-26)
 
 **Route 1, a PE loader, not Wine.** `Tests/d3dx_assemble/` (ctest `d3dx_assemble_oracle`, opt-in with
@@ -972,30 +1000,3 @@ table. The fields, per programmable draw:
 - for each stream the declaration names: its SetStreamSource stride and the byte offset of the draw's
   first vertex, so the D3D8 layout is read over the right bytes;
 - the D3D9 elements as today, kept for the comparison.
-
-### C1 settled: the GPU's quads, across an index buffer's shared edges (2026-09-26)
-
-- **Not my generated code.** The generated fixed-function programs use only implicit derivatives, and
-  sample in uniform control flow before any `clip`. Only the engine programs' shadow and bump helpers
-  have `ddx` or `ddy`, and C1's draws are fixed-function.
-- **Not quads shared in screen space.** `posix_gpu_draw_selfcheck` draws two triangles with 1x and 16x
-  texture scales meeting on an edge, and grids of 2- and 4-pixel triangles, unindexed. One call and a
-  call per triangle agree at every pixel.
-- **It's index sharing.** With `FFREF_SPLIT`, the harness draws a capture's triangles a second way.
-  - On the device, for three of the C1 draws, one indexed call differed from one call per triangle at
-    66, 9 and 34 pixels.
-  - One call of the same triangles unindexed (`FFREF_SPLIT=unshared`) matched the per-triangle picture at
-    every pixel.
-  - The miniature, two triangles sharing an indexed edge: 16 of the 32 pixels along the edge take the
-    other triangle's level, in 2x2 blocks.
-- **Conclusion:** Metal on Apple silicon forms a quad across an edge the index buffer shares. D3D9-era
-  hardware did not.
-- **What's recorded:** it is a known Mac-against-Windows difference, in the README's list, and left as it
-  is. C1 stays in the KNOWN list with that reading, and the test records the count without asserting it.
-- **C5 is C1.** The trees' shadow pass: draws 14 and 29 of the seed-1234 skirmish.
-  - -47 worked the mechanism out: per-layer texture alpha differed by 0.1 to 0.3.
-  - With the D3D9 filter LINEAR, forcing MAXANISOTROPY to 1 changed nothing, which confirms the sampler's
-    unit test.
-  - Drawn a triangle per call, both pass with 0 pixels outside, against 6 and 8 in one call. The C1
-    captures do the same: 0 against 20, 2 and 11.
-  - So every finding left in the capture sets is this GPU's quad sharing.

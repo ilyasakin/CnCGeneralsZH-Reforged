@@ -43,6 +43,10 @@
 **                            8 bytes each (u16 stream, u16 offset, u8 type, method, usage, usage index); the
 **                            pixel section - u32 present, and if present its name, count and tokens; then
 **                            f32 c0-c95 of the vertex shader constants and c0-c7 of the pixel ones, 4 each.
+**                            .prog version 2 (capture v3) then appends: u32 count and the engine's own D3D8
+**                            declaration tokens through D3DVSD_END (0 when the current declaration did not
+**                            come from one); u32 stream count and per stream u32 stream, stride, and the
+**                            byte offset of the draw's first vertex in the .cap's vertex bytes.
 **                            Written from the description sent to -47 (who reads no code of this).
 */
 
