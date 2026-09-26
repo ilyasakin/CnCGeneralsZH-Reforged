@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 
+# P2: the oldest macOS the app runs on.  It has to be set before project(), and every target and
+# vendored library built here inherits it (SDL3, freetype, glslang and the rest through add_subdirectory;
+# FFmpeg through FFMPEG_POSIX_CFLAGS below).  Unset, the tools stamp the build machine's own version into
+# every binary and the app refuses every Mac not on the newest macOS.  13.0: see docs/mac-port/tasks/
+# P2-macos-reach.md for why this and not an older one.  An explicit -DCMAKE_OSX_DEPLOYMENT_TARGET wins;
+# an empty one (as every earlier build cache holds) takes the default.
+if(CMAKE_HOST_APPLE AND "${CMAKE_OSX_DEPLOYMENT_TARGET}" STREQUAL "")
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "The oldest macOS the build runs on (P2)" FORCE)
+endif()
+
 project(GeneralsMD CXX C)
 
 # Which operating system this build is for.  MSVC used to answer that question too, because for
@@ -1745,7 +1755,8 @@ if(ZH_PLATFORM_POSIX)
     set(ZH_APP_BUNDLE_ID "io.github.olcayseygan.zero-hour-reforged" CACHE STRING "CFBundleIdentifier of the macOS app")
     option(ZH_APP_ART "Put the Reforged*.big art archives into the macOS app" ON)
     set(ZH_APP_ARGS --generals $<TARGET_FILE:generals> --overlay ${CMAKE_BINARY_DIR}/overlay
-        --build ${CMAKE_BINARY_DIR} --out "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app" --bundle-id ${ZH_APP_BUNDLE_ID})
+        --build ${CMAKE_BINARY_DIR} --out "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app" --bundle-id ${ZH_APP_BUNDLE_ID}
+        --min-macos ${CMAKE_OSX_DEPLOYMENT_TARGET})
     if(NOT ZH_APP_ART)
       list(APPEND ZH_APP_ARGS --no-art)
     endif()
@@ -1757,7 +1768,7 @@ if(ZH_PLATFORM_POSIX)
     # verifies, and a HUD-off INI, an unlicensed library and a write after signing are each caught
     add_test(NAME macos_app_check
              COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_macos_app.sh $<TARGET_FILE:generals>
-                     ${CMAKE_BINARY_DIR}/overlay ${CMAKE_BINARY_DIR})
+                     ${CMAKE_BINARY_DIR}/overlay ${CMAKE_BINARY_DIR} ${CMAKE_OSX_DEPLOYMENT_TARGET})
     set_tests_properties(macos_app_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
     # E1 on the bundle itself, "tests what ships": no -root, no -overlay, the seal checked after.  It needs
     # `ninja macos_app` first (outside ALL), and says so when it skips.
@@ -2446,6 +2457,23 @@ if(ZH_PLATFORM_POSIX)
                    lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager)
     if(TEST ${_zh_test})
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
+    endif()
+  endforeach()
+endif()
+
+# P2: on macOS our own code may not call an API newer than the deployment target without guarding it
+# (@available / __builtin_available): that is a build error here, not a crash on a player's older Mac.
+# Every target this file defines - the game, the port's libraries, the tests - but not the vendored
+# projects add_subdirectory brings in (SDL3, freetype, glslang, SPIRV-Cross, litehtml, GameSpy), which
+# guard their own calls and are not ours to fail.  Clang's unguarded-availability-new covers every API
+# introduced since macOS 10.13, so it reaches everything above a 13.0 target.
+if(APPLE)
+  get_property(_zh_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(_zh_target IN LISTS _zh_targets)
+    get_target_property(_zh_type ${_zh_target} TYPE)
+    if(_zh_type MATCHES "^(STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY|EXECUTABLE)$")
+      target_compile_options(${_zh_target} PRIVATE
+        $<$<COMPILE_LANGUAGE:C,CXX>:-Werror=unguarded-availability-new>)
     endif()
   endforeach()
 endif()
