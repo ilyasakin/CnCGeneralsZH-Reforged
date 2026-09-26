@@ -957,6 +957,10 @@ void ChallengeLoadScreen::init( GameInfo *game )
 
 	// create the new background video stream
 	m_videoStream = TheVideoPlayer->open( TheCampaignManager->getCurrentMission()->m_movieLabel );
+	// as SinglePlayerLoadScreen::init does: a movie that does not open (none headless, or a missing file) has
+	// no stream, and the buffer below read its size through NULL
+	if ( m_videoStream == NULL )
+		return;
 
 	// Create the new buffer
 	m_videoBuffer = TheDisplay->createVideoBuffer();

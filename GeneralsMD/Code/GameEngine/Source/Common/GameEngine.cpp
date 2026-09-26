@@ -124,6 +124,8 @@
 #include "GameLogic/Object.h"
 
 #include "GameNetwork/GameInfo.h"
+#include "GameClient/ChallengeGenerals.h"
+#include "GameClient/CampaignManager.h"
 #include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 #include "GameNetwork/LANAPI.h"
@@ -532,6 +534,8 @@ static AsciiString thePendingReplayFile;
 /* -loadsave <file>: same deferral, same reason. A save game rebuilds the whole world, and doing
 	 that before init()'s resetAll() would have resetAll tear it straight back down again. */
 static AsciiString thePendingSaveFile;
+/* -mission <map>: the map, started after init()'s resetAll() by startPendingMap(). */
+static AsciiString thePendingMapFile;
 
 /** Open the save game -loadsave named, once every subsystem has been reset.
 	*
@@ -579,6 +583,100 @@ static void startPendingSaveGame( void )
 		else
 			TheWritableGlobalData->m_shellMapOn = TRUE;
 	}
+}
+
+/** -----------------------------------------------------------------------------------------------
+ * -mission's challenge setup: what the challenge menu does before its Play button starts a game, which
+ * GameLogic reads for a challenge campaign.  Mirrors ChallengeMenu.cpp - ChallengeMenuInit creating and
+ * readying TheChallengeGameInfo (:335) and setGeneralCampaign() choosing the general's player template for
+ * slot 0 - so a change there has to be made here as well.  No window is touched.
+ */
+static Bool prepareChallengeMission( GameDifficulty difficulty )
+{
+	const Campaign *campaign = TheCampaignManager->getCurrentCampaign();
+	if (campaign == NULL || TheChallengeGenerals == NULL)
+		return FALSE;
+
+	const GeneralPersona *generals = TheChallengeGenerals->getChallengeGenerals();
+	Int general = -1;
+	for (Int i = 0; i < NUM_GENERALS && general < 0; ++i)
+		if (generals[i].getCampaign().compareNoCase( campaign->m_name ) == 0)
+			general = i;
+	if (general < 0)
+		return FALSE;
+	const Int templateNum = ThePlayerTemplateStore->getTemplateNumByName( generals[general].getPlayerTemplateName() );
+	const PlayerTemplate *playerTemplate = ThePlayerTemplateStore->getNthPlayerTemplate( templateNum );
+	if (playerTemplate == NULL)
+		return FALSE;
+
+	if (TheChallengeGameInfo == NULL)
+		TheChallengeGameInfo = NEW SkirmishGameInfo;
+	TheChallengeGameInfo->init();
+	TheChallengeGameInfo->clearSlotList();
+	TheChallengeGameInfo->reset();
+	TheChallengeGameInfo->enterGame();
+
+	TheChallengeGenerals->setCurrentPlayerTemplateNum( templateNum );
+	TheChallengeGenerals->setCurrentDifficulty( difficulty );
+	GameSlot slot;
+	slot.setState( SLOT_PLAYER, playerTemplate->getDisplayName() );
+	slot.setPlayerTemplate( templateNum );
+	TheChallengeGameInfo->setSlot( 0, slot );
+	TheChallengeGameInfo->setMap( TheCampaignManager->getCurrentMap() );
+	return TRUE;
+}
+
+/** -----------------------------------------------------------------------------------------------
+ * -mission <map>: start a single player game on the map as the shell would.  It first looks for the
+ * campaign or challenge mission that plays the map and starts that (MainMenu.cpp's setupGameStart and
+ * doGameStart; ChallengeMenu.cpp's Play button), at the difficulty asked for; a map no campaign has loads
+ * plain, as -file loads it.  A map that is not there is logged, and a headless run quits rather than sit
+ * at the main menu.  Options.ini is not written (the menu stores the difficulty there; a dev aid has no
+ * business changing the player's preferences).
+ *
+ * -file <map> starts in init() itself, as it always has; it is parsed only in _DEBUG and _INTERNAL
+ * builds, which is why -mission exists.
+ */
+static void startPendingMap( void )
+{
+	AsciiString mapFile = thePendingMapFile;
+	if (!TheFileSystem->doesFileExist( mapFile.str() ))
+	{
+		DEBUG_LOG(("-mission: '%s' is not there\n", mapFile.str()));
+		if (TheGlobalData->m_headless)
+			TheGameEngine->setQuitting( TRUE );
+		else
+			TheWritableGlobalData->m_shellMapOn = TRUE;
+		return;
+	}
+
+	const GameDifficulty difficulty = (GameDifficulty)TheGlobalData->m_initialFileDifficulty;
+	static const char *const difficultyNames[DIFFICULTY_COUNT] = { "easy", "normal", "hard" };
+	const char *difficultyName = difficultyNames[difficulty];
+	if (TheCampaignManager->setCampaignAndMissionForMap( mapFile ))
+	{
+		const Campaign *campaign = TheCampaignManager->getCurrentCampaign();
+		TheCampaignManager->setGameDifficulty( difficulty );
+		TheScriptEngine->setGlobalDifficulty( difficulty );
+		if (campaign->m_isChallengeCampaign && !prepareChallengeMission( difficulty ))
+			DEBUG_LOG(("-mission: no challenge general plays campaign '%s'\n", campaign->m_name.str()));
+		mapFile = TheCampaignManager->getCurrentMap();
+		DEBUG_LOG(("-mission: '%s' is campaign '%s' mission '%s'%s, %s\n", mapFile.str(), campaign->m_name.str(),
+			TheCampaignManager->getCurrentMission()->m_name.str(), campaign->m_isChallengeCampaign ? ", a challenge" : "",
+			difficultyName));
+	}
+	else
+	{
+		DEBUG_LOG(("-mission: no campaign plays '%s'; loading it as a plain single player map, %s\n", mapFile.str(),
+			difficultyName));
+	}
+
+	TheWritableGlobalData->m_pendingFile = mapFile;
+	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
+	msg->appendIntegerArgument( GAME_SINGLE_PLAYER );
+	msg->appendIntegerArgument( difficulty );
+	msg->appendIntegerArgument( TheCampaignManager->getRankPoints() );
+	InitRandom( 0 );
 }
 
 /** -----------------------------------------------------------------------------------------------
@@ -1269,7 +1367,15 @@ void GameEngine::init( int argc, char *argv[] )
 			AsciiString fname = TheGlobalData->m_initialFile;
 			fname.toLower();
 
-			if (fname.endsWithNoCase(".map"))
+			if (TheGlobalData->m_initialFileIsMission)
+			{
+				/* -mission: started below, after resetAll(), where the save and the replay start, by
+					 startPendingMap(), which also logs a map that is not there. */
+				TheWritableGlobalData->m_shellMapOn = FALSE;
+				TheWritableGlobalData->m_playIntro = FALSE;
+				thePendingMapFile = TheGlobalData->m_initialFile;	// the name as given, not lowercased
+			}
+			else if (fname.endsWithNoCase(".map"))
 			{
 				TheWritableGlobalData->m_shellMapOn = FALSE;
 				TheWritableGlobalData->m_playIntro = FALSE;
@@ -1402,6 +1508,12 @@ void GameEngine::init( int argc, char *argv[] )
 	{
 		startPendingSaveGame();
 		thePendingSaveFile.clear();
+	}
+
+	if (thePendingMapFile.isNotEmpty())
+	{
+		startPendingMap();
+		thePendingMapFile.clear();
 	}
 
 	if (TheGlobalData->m_netGameHosts.isNotEmpty() && TheGlobalData->m_initialFile.isEmpty())

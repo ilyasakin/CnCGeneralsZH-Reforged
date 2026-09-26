@@ -424,6 +424,8 @@ public:
 	AsciiString m_pendingFile;				///< If this is specified, use this map at the next game start
 	Int m_autoSkirmishPlayers;				///< -autoskirmish <n>: start an n player skirmish straight from the command line (0 = off)
 	Int m_autoSkirmishAIState;				///< SlotState the AI slots of an auto-started skirmish get (-aidiff)
+	Bool m_initialFileIsMission;			///< -mission <map>: start the map as the campaign or challenge mission that plays it
+	Int m_initialFileDifficulty;				///< -mission's GameDifficulty (normal unless named)
 	Bool m_autoSkirmishObserver;			///< -observer: the local slot of an auto-started skirmish watches instead of playing
 	Bool m_headless;							///< -headless: never draw a frame, never pace the logic tick, quit when the match ends
 	Bool m_turbo;									///< -turbo: draw, but run one logic frame a pass instead of pacing it to the wall clock

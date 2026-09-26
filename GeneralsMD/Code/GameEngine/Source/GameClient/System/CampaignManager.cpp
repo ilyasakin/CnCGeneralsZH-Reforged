@@ -277,6 +277,39 @@ Mission *CampaignManager::gotoNextMission( void )
 }
 
 //-----------------------------------------------------------------------------
+/** Make the mission that plays this map, in whichever campaign has it, the current one: what the
+	* shell's mission start has settled by the time it loads a map, found from the map instead of from the
+	* menus (-mission).  FALSE, and nothing changed, if no mission plays it. */
+Bool CampaignManager::setCampaignAndMissionForMap( AsciiString mapName )
+{
+	// A demo campaign (MD_USA_1_DEMO and the like) lists a mission of the real one again; the real one wins.
+	Campaign *foundCampaign = NULL;
+	Mission *foundMission = NULL;
+	for( CampaignListIt it = m_campaignList.begin(); it != m_campaignList.end(); ++it )
+	{
+		Campaign *camp = *it;
+		const Bool demo = camp->m_name.endsWithNoCase( "_demo" );
+		if( foundCampaign != NULL && demo )
+			continue;
+		for( Campaign::MissionListIt mit = camp->m_missions.begin(); mit != camp->m_missions.end(); ++mit )
+		{
+			if( (*mit)->m_mapName.compareNoCase( mapName ) == 0 )
+			{
+				foundCampaign = camp;
+				foundMission = *mit;
+				break;
+			}
+		}
+		if( foundCampaign != NULL && !foundCampaign->m_name.endsWithNoCase( "_demo" ) )
+			break;
+	}
+	if( foundCampaign == NULL )
+		return FALSE;
+	m_currentCampaign = foundCampaign;
+	m_currentMission = foundMission;
+	return TRUE;
+}
+
 void CampaignManager::setCampaignAndMission( AsciiString campaign, AsciiString mission )
 {
 	if(mission.isEmpty())
