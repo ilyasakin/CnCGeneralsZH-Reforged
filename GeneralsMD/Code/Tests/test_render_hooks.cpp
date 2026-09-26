@@ -55,6 +55,7 @@
 #include <vector>
 
 extern Bool testMinimumRequirements(ChipsetType *videoChipType, CpuType *cpuType, Int *cpuFreq, Int *numRAM, Real *intBenchIndex, Real *floatBenchIndex, Real *memBenchIndex);
+extern ChipsetType chipsetForPresets(ChipsetType detected, Bool overridden);
 extern void doSkyBoxSet(Bool startDraw);
 extern void oversizeTheTerrain(Int amount);
 extern int DX8Wrapper_PreserveFPU;
@@ -136,6 +137,28 @@ int main( void )
 		CPUDetectClass::Get_Processor_Manufacturer_Name(), (int)measured, (int)cpu, (int)mhz, (int)ram, (int)chip,
 		(double)intIndex, (double)floatIndex, (double)memIndex );
 	CHECK( chip == DC_MAX - 1, "chip %d, want %d, the top of the table: no device has been made, so getChipset cannot place one", (int)chip, (int)(DC_MAX - 1) );
+
+	// The mapping behind it, which a device with a GPU reaches (A3e: the POSIX device claims pixel shader
+	// 1.1, so getChipset places it only generically).  Unplaced or placed only by caps: the top.  A named
+	// chip, or any override: as it is.
+	{
+		const struct { ChipsetType detected; Bool overridden; ChipsetType want; } TABLE[] = {
+			{ DC_UNKNOWN, FALSE, (ChipsetType)(DC_MAX - 1) },
+			{ DC_GENERIC_PIXEL_SHADER_1_1, FALSE, (ChipsetType)(DC_MAX - 1) },
+			{ DC_GENERIC_PIXEL_SHADER_1_4, FALSE, (ChipsetType)(DC_MAX - 1) },
+			{ DC_GENERIC_PIXEL_SHADER_2_0, FALSE, (ChipsetType)(DC_MAX - 1) },
+			{ DC_GEFORCE3, FALSE, DC_GEFORCE3 },
+			{ DC_TNT2, FALSE, DC_TNT2 },
+			{ DC_GENERIC_PIXEL_SHADER_1_1, TRUE, DC_GENERIC_PIXEL_SHADER_1_1 },
+			{ DC_VOODOO2, TRUE, DC_VOODOO2 },
+		};
+		for (size_t i = 0; i < sizeof(TABLE) / sizeof(TABLE[0]); ++i)
+		{
+			const ChipsetType got = chipsetForPresets( TABLE[i].detected, TABLE[i].overridden );
+			CHECK( got == TABLE[i].want, "chipsetForPresets(%d, %s) is %d, want %d", (int)TABLE[i].detected,
+				TABLE[i].overridden ? "overridden" : "detected", (int)got, (int)TABLE[i].want );
+		}
+	}
 	CHECK( cpu == XX, "cpu type %d, want XX: CPUID is x86 under MSVC only, and XX is what sends a first launch to the benchmark", (int)cpu );
 	if (measured == CPUDETECT_UNMEASURED_PROCESSOR_MHZ)
 		CHECK( mhz > 0, "an unmeasured CPU reported %d MHz: decision 2 says treat it as fast", (int)mhz );
