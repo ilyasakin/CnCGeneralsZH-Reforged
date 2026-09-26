@@ -1423,6 +1423,13 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(test_water_tracks PRIVATE w3ddevice ww3d2 posixdevice gameengine test_harness)
   add_test(NAME test_water_tracks COMMAND test_water_tracks)
 
+  # W3DRoadBuffer's column count: at least two, never longer than the map.  See Tests/test_road_buffer.cpp.
+  add_executable(test_road_buffer ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_road_buffer.cpp)
+  set_target_properties(test_road_buffer PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_road_buffer PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_link_libraries(test_road_buffer PRIVATE w3ddevice ww3d2 posixdevice gameengine test_harness)
+  add_test(NAME test_road_buffer COMMAND test_road_buffer)
+
   add_executable(test_install_textures ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_textures.cpp)
   set_target_properties(test_install_textures PROPERTIES CXX_STANDARD 17)
   target_include_directories(test_install_textures PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)

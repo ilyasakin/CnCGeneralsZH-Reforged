@@ -196,6 +196,9 @@ class W3DRoadBuffer
 {	
 friend class BaseHeightMapRenderObjClass;
 public:
+	/// Columns a road section of this length is cut into: one a cell, at least two, and never more than a
+	/// map of these extents is long in cells, corner to corner.
+	static Int roadColumnCountFor(Real roadLen, Int xExtent, Int yExtent);
 
 	W3DRoadBuffer(void);
 	~W3DRoadBuffer(void);
@@ -268,6 +271,7 @@ protected:
 	void loadH(RoadSegment *pRoad, Vector2 loc1, Vector2 loc2, Bool flip, Real scale); ///< Fills the index and vertex buffers for drawing 1 h tee intersection.
 	void loadFloatSection(RoadSegment *pRoad, Vector2 loc, 
 														Vector2 roadVector, Real height, Real left, Real right, Real uOffset, Real vOffset, Real scale);
+	Int roadColumnCount(Real roadLen) const;	///< roadColumnCountFor, on this map
 	void loadFloat4PtSection(RoadSegment *pRoad, Vector2 loc, 
 														Vector2 roadNormal, Vector2 roadVector,
 														Vector2 *cornersP, 
