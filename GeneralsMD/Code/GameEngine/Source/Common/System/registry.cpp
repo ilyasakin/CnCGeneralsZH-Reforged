@@ -195,9 +195,10 @@ Bool GetUnsignedIntFromRegistry(AsciiString path, AsciiString key, UnsignedInt& 
 	 user and per machine, are one file here.
 
 	 Nothing in the engine writes the file: on Windows the installer writes the registry, and here that
-	 is the future launcher's or installer's job (C1's task file says so).  Until C1 places the user data
-	 directory, findUserDataDirectory has none, no file is read, and every caller keeps its compiled-in
-	 default - GetRegistryLanguage's "english", GetRegistryVersion's 65536. */
+	 is the future launcher's or installer's job (C1's task file says so).  Where there is no file, or
+	 no user data directory, every caller keeps its compiled-in default - GetRegistryLanguage's
+	 "english", GetRegistryVersion's 65536.  The user data directory is EarlyOptions.h's
+	 findUserDataDirectory (C1 (e)). */
 
 /** The value of one key in a Registry.ini file already chosen; FALSE if the file or the key is not there. */
 static Bool readRegistryFileAt( const char *file, const AsciiString &name, AsciiString &val )

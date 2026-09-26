@@ -340,6 +340,63 @@ mingw-w64 and run in `zh-e4`.
 
 WINDOWS-DEBT has the rows.
 
+## PR (e): the user data directory and the Desktop (2026-09-26)
+
+**The user data directory (D5), `EarlyOptions.h`'s POSIX `findUserDataDirectory`.**
+- **Where:**
+  - macOS: `~/Library/Application Support/Command and Conquer Generals Zero Hour Data`;
+  - Linux: `$XDG_DATA_HOME/Command and Conquer Generals Zero Hour Data`, with `$XDG_DATA_HOME` an
+    absolute path or else `~/.local/share`;
+  - `ZH_USER_DATA_DIR`, when set, is the directory itself.
+- **Home** is `$HOME`, or the password database's entry when `$HOME` is unset.
+- **Made on first use**, with any missing parents.
+- **Decided once a process**, as the Windows branch is.
+- **Keeps Windows' trailing `'\'`**, so `getPath_UserData() + "Save\"` and its kind are unchanged
+  and resolve through posixpath.
+- **No localized leaf off Windows:** there is no installer registry to name one.
+- **The path composition is a pure function**, `composeUserDataDirectory(convention, override,
+  home, dataHome)`, and the convention is a parameter, not an `#if`. So the Apple and XDG rules are
+  both tested on any machine; `findUserDataDirectory` passes the platform's.
+
+**The Desktop, and what uses it.** The replay menu's **Copy** button (`ReplayMenu.cpp`,
+`copyReplay`) puts a copy of the selected replay on the player's Desktop, under its listed name.
+On Windows that folder comes from the shell, as before. Off Windows, `findDesktopDirectory`:
+- macOS: `~/Desktop`;
+- Linux: the `XDG_DESKTOP_DIR` that xdg-user-dirs writes in `$XDG_CONFIG_HOME/user-dirs.dirs`
+  (default `~/.config`), as `"$HOME/..."` or an absolute path; the last assignment wins; anything
+  else is ignored. The fallback is `~/Desktop`.
+- It does not create the Desktop. If the folder is missing, the copy fails and the player sees the
+  system's reason, as with any failed copy. With no home directory at all, the button shows
+  `strerror(ENOENT)` and copies nothing.
+
+**Tests.** `test_userfolders`: 4 tests, 35 checks. They cover:
+- both conventions' paths;
+- the override (including a trailing `'\'`);
+- an XDG data home that is relative, and so ignored;
+- no home;
+- the process's own answer: made with parents, ending in `'\'`, fixed after the first call, and
+  refused rather than cut short in a small buffer;
+- the user-dirs file (the `$HOME` form, the absolute form, a relative value refused, a longer key
+  not matched, last wins, empty);
+- the Desktop under both conventions, with and without a user-dirs file and with `XDG_CONFIG_HOME`
+  moved.
+
+It writes only under `$TMPDIR`: checked, no folder appeared under the real Application Support.
+`test_gameengine`, when it runs off Windows, gets `ZH_USER_DATA_DIR` in the build tree, for the same
+reason.
+
+**Result.** `gameengine` compiles on macOS but for -18's three Winsock files (`Transport`,
+`IPEnumeration`, `udp`). `windows_view_diff`: all three changed C/C++ files are identical to MSVC. The
+CMake additions are POSIX-only.
+
+**Left for (d), and why it matters now.** Two readers open files in this directory with a raw
+`fopen`, and on POSIX a raw `fopen` takes the `'\'` before the leaf as part of a file name:
+- `EarlyOptions.h`'s `findEarlyOptionValue` (`Options.ini`);
+- `registry.cpp`'s `Registry.ini`.
+
+So until (d) moves them to `zh_fopen`, they find nothing and fall back to their defaults. The
+engine's own writes go through the file system and resolve correctly.
+
 ## Why
 
 `GameEngine` is an abstract class with a pure-virtual factory for every subsystem
