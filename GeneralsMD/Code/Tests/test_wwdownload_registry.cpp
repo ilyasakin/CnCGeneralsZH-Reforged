@@ -55,12 +55,19 @@ void start_empty()
 		initMemoryManager();
 		booted = true;
 	}
+	/* Without ZH_USER_DATA_DIR every write below would go to this user's real Registry.ini
+		 (findUserDataDirectory's own answer), which a test has no business touching - and this function
+		 deletes the file.  ctest sets the variable to a folder in the build tree; run by hand without it,
+		 stop before anything is written. */
 	const char *dir = getenv("ZH_USER_DATA_DIR");
-	if (dir != NULL && *dir) {
-		const std::string command = std::string("mkdir -p '") + dir + "'";
-		if (system(command.c_str()) != 0)
-			printf("  could not make %s\n", dir);
+	if (dir == NULL || *dir == 0) {
+		printf("FAIL: ZH_USER_DATA_DIR is not set; refusing to write the real Registry.ini (run through ctest)\n");
+		fflush(stdout);
+		exit(1);
 	}
+	const std::string command = std::string("mkdir -p '") + dir + "'";
+	if (system(command.c_str()) != 0)
+		printf("  could not make %s\n", dir);
 	remove(registry_path().c_str());
 }
 
