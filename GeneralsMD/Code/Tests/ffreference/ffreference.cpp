@@ -1,5 +1,5 @@
 /*
- * FFReference: see ffreference.h - its conventions, refusals and NAMED CHOICES (N1-N29) are the key to
+ * FFReference: see ffreference.h - its conventions, refusals and NAMED CHOICES (N1-N30) are the key to
  * every function here.  Each function names the learn.microsoft.com page (under
  * /windows/win32/direct3d9/) it follows.  Double precision throughout.
  */
@@ -923,8 +923,8 @@ void rasterTriangle( Raster &r, Triangle t )
 				{
 					const bool thisCanPass = alphaPasses( rs, all[k]->a ) || alphaPasses( rs, all[k]->a + fr.alphaRef )
 						|| alphaPasses( rs, all[k]->a - fr.alphaRef );
-					if (!thisCanPass)
-						continue;
+					if (!thisCanPass && !(zones & ZONE_ALPHA_TEST))
+						continue;		// N30: an undecided alpha test writes the hull of every variant
 					for (int d = 0; d < 3; ++d)
 					{
 						const Color b = blend( s, *all[k], dsts[d], tg.hasAlpha, ctx.mutations );
