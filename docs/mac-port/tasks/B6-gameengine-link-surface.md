@@ -124,6 +124,23 @@ MapObject member**.
   compile clean (659 -> 662 of 855 -> 858); the only lines that differ are `WorldHeightMap.cpp`'s same
   14 messages, 266 lines higher.
 
+**Step (1) done, 2026-09-26: the GameSpy SDK builds and links off Windows.** The `add_subdirectory`
+lost its Windows guard (the Windows lines are unchanged) and the SDK's `CMakeLists.txt` joined the
+common vendored list; `vendor.sh` already fetched it with both patches on POSIX. `libgamespy.a`:
+0 errors, 3 `-Wenum-compare` warnings in the SDK's own C. `unix_define_check` passes. With it linked,
+on `a6d97948` plus the keys: **41 undefined, no GameSpy symbol among them** (the census's 41 and the
+48 `PeerThread` added when it compiled - 89 entry points, all real). What is left:
+
+| Owner | Symbols |
+|:--|:--|
+| -18, Winsock (B5) | `Transport` 14, `UDP` 6, `IPEnumeration` 4 |
+| B6: registry writes (the agreed `Registry.ini` protocol, C1's task file) | the four `std::string` `Get/Set*Registry` |
+| B6: device hooks, null or B19 (c) | `doSkyBoxSet`, `oversizeTheTerrain`, `TheProjectedShadowManager`, `DX8Wrapper_PreserveFPU`, `testMinimumRequirements` (B19 (c)); and, new since `GameEngine.cpp` compiles, `CreateCDManager` and `DX8Wrapper_IsWindowed` |
+| B6's driver, for now; C2 for real | `CreateGameEngine`, `g_csfFile`, `g_strFile`, `gAppPrefix` |
+| Dead service | `MOTDSystem` (W3DMOTD), `FormatURLFromRegistry` (WWDownload) |
+
+Not measured: the SDK under GCC on Linux.
+
 **Stale below, corrected:**
 - *`ww3d2` is "real, and the hard one" (`D3DXVec4Transform`).* No longer: B17 made the D3DX maths
   portable (`d3dxportable.h`) and not one D3DX symbol is undefined. The only WW3D2 symbol left is
