@@ -132,6 +132,69 @@ bool decodeProgram( const uint32_t *tokens, size_t count, Program &out );
 /// anything the census does not hold.  (A second reading of what D3DXAssembleShader produces.)
 bool assemblePixelProgram( const std::string &text, std::vector<uint32_t> &tokens, std::string &error );
 
+// ---- running a vertex program ---------------------------------------------------------------------
+/*
+ * Plain double precision, as FFReference's fixed-function vertex stage is; the GPU's single precision
+ * is inside the rasterizer's edge freedom.  Named choices (P-items, ffprogram.cpp):
+ *   P1  mov to a0: "rounding to nearest" (mov - vs); ties are not defined, and go away from zero.  The
+ *       page's pseudocode rounds src.w where every other instruction works per component; a0.x is taken
+ *       from the component the swizzle names for x, and a vertex whose .x and .w differ is REPORTED
+ *       (VertexRun::addressAmbiguous), since no envelope can bound a different constant.
+ *   P2  rcp of 0: the pseudocode gives FLT_MAX, the text "infinity"; FLT_MAX is used and the vertex is
+ *       REPORTED (VertexRun::reciprocalOfZero).
+ *   P3  An output the program does not write has no documented value (Registers - vs_1_1: "None");
+ *       VertexRun says which were written, and the caller refuses a pixel stage that reads one.
+ * Inputs are as the declaration made them: a channel the stream does not supply is (0, 0, 0, 1)'s.
+ */
+struct VertexRun
+{
+	double position[4];		///< oPos
+	double colour[2][4];	///< oD0, oD1, as written (the pixel stage saturates, "Registers - ps_1_X")
+	double texture[8][4];	///< oT0-oT7
+	unsigned wroteColour;	///< bit n: oDn written
+	unsigned wroteTexture;	///< bit n: oTn written
+	bool addressAmbiguous;	///< P1: a0 was loaded from a source whose .x and .w differ
+	bool reciprocalOfZero;	///< P2
+};
+/// `constants`: c0..c(count-1); reads outside them (relative or not) give (0, 0, 0, 0), as "Constant
+/// Float Register" says.
+void runVertexProgram( const Program &program, const double (*constants)[4], int constantCount,
+	const double inputs[16][4], VertexRun &out );
+
+// ---- running a pixel program ----------------------------------------------------------------------
+/*
+ * Each register holds a nominal value and an interval every documented freedom allows:
+ *   P4  Range ("Registers - ps_1_X"): r# is -PixelShader1xMaxValue..+PixelShader1xMaxValue, a cap at
+ *       least 1; c# is -1..+1.  The nominal clamps at 1; the interval holds every cap from 1 up.
+ *   P5  Precision: "approximately eight bits for the fractional part" - every result written widens the
+ *       interval by 1/256 either way.
+ *   P6  dp3 writes its sum to x, y, z and w (the pseudocode); the remark that ps_1_1 dp3 writes "the
+ *       color channels" is read as the pipe it runs in, since shipped programs (monochrome.pso) read the
+ *       alpha of a full-mask dp3 and passed the runtime's validation.
+ *   P7  Co-issue: no page says whether the '+' instruction sees its partner's result; both are run
+ *       reading the registers as they were before the pair, and decoding refuses a pair where either
+ *       reads a channel the other writes (none shipped does).
+ *   P8  texbem's perturbation is read as signed (the page: "always interprets du and dv as signed");
+ *       the page gives defined results only for signed data, which the caller's sampler must supply.
+ * v# inputs are saturated to 0..1 on the way in, as the page says.  The result is r0.
+ */
+struct Interval4
+{
+	double nominal[4], lo[4], hi[4];
+};
+/// Samples stage `stage` at its interpolated coordinates moved by (du, dv) (texbem; 0 for tex): RGBA.
+typedef void (*StageSampler)( void *context, int stage, double du, double dv, double rgba[4] );
+struct PixelInputs
+{
+	double colour[2][4];		///< v0, v1: the iterated diffuse and specular
+	double constants[8][4];		///< c0-c7 as set (def overrides, as a program runs)
+	double bumpMatrix[4][4];	///< per stage: BUMPENVMAT00, 01, 10, 11
+	StageSampler sample;
+	void *context;
+};
+/// Runs `program` (a decoded ps_1_1); r0 in `out`.
+void runPixelProgram( const Program &program, const PixelInputs &in, Interval4 &out );
+
 }	// namespace FFRef
 
 #endif
