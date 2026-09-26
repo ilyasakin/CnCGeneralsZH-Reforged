@@ -16,9 +16,11 @@
 # happened, not where.  -DebugCRCFromFrame narrows it down afterwards.
 #
 # RULE 9: the game never runs with the real install as its root.  The root is a farm in a temporary
-# folder: the install's directories made anew and every file a symbolic link, with the fork's own data
-# (Code/Data) laid over it as generals' post-build lays it over Run/ on Windows.  A farm file is a link
-# into the install, so each overlaid one is unlinked before its copy is written.  The user data
+# folder: the install's directories made anew and every file a symbolic link, and nothing is written
+# into it.  The fork's own data is the overlay the app bundle carries (P1): staged by
+# Tools/stage-overlay.sh, the zh_overlay target's script, and passed with -overlay, so these runs
+# resolve every file as the shipped game does (packaging-resolution-check.sh proves that layout equal
+# to Windows' one folder).  The install is hashed before and after, and must be unchanged.  The user data
 # (ZH_USER_DATA_DIR) is in the same folder, and the folder is removed at the end.  The logs go next to
 # the executable, as on Windows, each under its own -logPrefix, and are removed once read.
 #
@@ -105,30 +107,30 @@ mkdir -p "$ROOT" "$USERDATA"
 ( cd "$INSTALL" && find . -type d ! -name '._*' ) | while IFS= read -r d; do mkdir -p "$ROOT/$d"; done
 ( cd "$INSTALL" && find . -type f ! -name '._*' ) | while IFS= read -r f; do ln -s "$INSTALL/${f#./}" "$ROOT/$f"; done
 
-overlay() {	# overlay <file or folder under Code/Data> <where under the root>
-	local src="$CODE/Data/$1" dst="$ROOT/$2"
-	if [ -d "$src" ]; then
-		( cd "$src" && find . -type f ) | while IFS= read -r f; do
-			mkdir -p "$(dirname "$dst/$f")"
-			rm -f -- "$dst/$f"
-			cp -- "$src/$f" "$dst/$f"
-		done
-	elif [ -f "$src" ]; then
-		mkdir -p "$(dirname "$dst")"
-		rm -f -- "$dst"
-		cp -- "$src" "$dst"
-	fi
+# The overlay as it ships (P1 step 3): its own folder, never written into the farm
+OVERLAY="$WORK/overlay"
+"$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
+
+# The install's contents, to compare at the end (P1 step 2's standard)
+hash_install() {
+	python3 - "$INSTALL" > "$1" <<'PYEOF'
+import hashlib, os, sys
+root = sys.argv[1]
+for base, dirs, files in os.walk(root):
+    dirs.sort()
+    for name in sorted(dirs + files):
+        p = os.path.join(base, name)
+        if os.path.isdir(p):
+            print(os.path.relpath(p, root), 'dir'); continue
+        h = hashlib.blake2b(digest_size=16)
+        with open(p, 'rb') as f:
+            for block in iter(lambda: f.read(1 << 20), b''):
+                h.update(block)
+        st = os.lstat(p)
+        print(os.path.relpath(p, root), st.st_size, int(st.st_mtime_ns), h.hexdigest())
+PYEOF
 }
-# generals' post-build list on Windows (CMakeLists.txt), in its order
-overlay INI Data/INI
-overlay Patch.str Data/Patch.str
-overlay Scripts Data/Scripts
-overlay Turkish Data/Turkish
-overlay Install_Final.bmp Install_Final.bmp
-overlay Art/Textures Art/Textures
-overlay Window Window
-overlay Scenarios Scenarios
-overlay Cinema Cinema
+hash_install "$WORK/install.before"
 
 # ---- a run ---------------------------------------------------------------------------------------
 # Sets RUN_CRC and RUN_FRAME from the run's last HEADLESS CRC line, RUN_RESULT from its HEADLESS
@@ -140,7 +142,7 @@ run_game() {	# run_game <log prefix> <switches...>
 	rm -f -- "$log"
 	# -noFPSLimit as replay-check.ps1 has it: nothing paces a headless run, and it cannot touch the
 	# logic.  -multiInstance so that a run does not wait on another copy's lock.
-	( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" "$GENERALS" -headless -root "$ROOT" -quickstart -noshellmap \
+	( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" "$GENERALS" -headless -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
 		-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" "$@" $EXTRA \
 		> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
 	RUN_STATUS=$?
@@ -215,6 +217,12 @@ for match in $MATCHES; do
 		failures=$((failures + 1))
 	fi
 done
+
+hash_install "$WORK/install.after"
+if ! cmp -s "$WORK/install.before" "$WORK/install.after"; then
+	echo "FAILED: THE INSTALL CHANGED during these runs:"; diff "$WORK/install.before" "$WORK/install.after" | head -5
+	failures=$((failures + 1))
+fi
 
 echo
 if [ "$failures" -eq 0 ]; then
