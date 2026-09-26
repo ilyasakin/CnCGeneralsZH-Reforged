@@ -214,6 +214,7 @@ you start. That commit is the lock.
 | D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done — merged; the Crusader on Metal and on Vulkan (lavapipe); D3's route taken as decision 4 | -a9 |
 | V1 | [Video playback off Windows](tasks/V1-video-playback.md) | M4 | A1 | done on macOS: the Bink player and FFmpeg 8.1.2 (built from its tarball, static, LGPL) decode all 70 install movies against their headers and a golden; sound through C4's mix; not yet on screen (A3) | -47 |
 | A3b | [FFReference](tasks/A-posix-d3d9-device.md) (the renderer's phase A3b, not the build.sh A3 above) | M4 | A3a | done: FFReference, independent, 29 tests / 280 checks; harness is -a9's | -47 |
+| PERF1 | [A performance baseline of the Mac renderer](tasks/PERF1-renderer-baseline.md) | M4 | A3e | in progress: timing aid built, measurement matrix running | -a9 |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`), the Mac baseline over a real fight, defect #20 fixed; parity needs a Windows run | -18 |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
 | P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | in progress: steps 1-4 merged (overlay root; read-only roots and logs; one staged overlay, W=P path by path, E1 on `-overlay`; root selection); step 5, the `.app`, held for disk | -47 |
