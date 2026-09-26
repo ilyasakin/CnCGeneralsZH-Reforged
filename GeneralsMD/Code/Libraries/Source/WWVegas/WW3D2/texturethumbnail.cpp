@@ -687,6 +687,7 @@ void ThumbnailManagerClass::Update_Thumbnail_File(const char* mix_file_name,bool
 
 	if (display_message_box && !message_box_displayed) {
 		message_box_displayed=true;
+#if defined(_WIN32)
 		::MessageBox(NULL,
 			"Some or all texture thumbnails need to be updated.\n"
 			"This will take a while. The update will only be done once\n"
@@ -694,6 +695,9 @@ void ThumbnailManagerClass::Update_Thumbnail_File(const char* mix_file_name,bool
 			"updated.",
 			"Updating texture thumbnails",
 			MB_OK);
+#else
+		WWDEBUG_SAY(("Updating texture thumbnails; this is done once each time a mix file changes\n"));
+#endif
 	}
 
 	// we don't currently have a thumbnail file (either we just deleted it or it never existed, we don't care)
@@ -719,6 +723,7 @@ void ThumbnailManagerClass::Pre_Init(bool display_message_box)
 	// Collect all mix file names
 	DynamicVectorClass<StringClass> mix_names;
 
+#if defined(_WIN32)	// nothing calls Pre_Init; off Windows it lists no mix files (C1's listing, if it is ever wanted)
 	char cur_dir[256];
 	GetCurrentDirectory(sizeof(cur_dir),cur_dir);
 	StringClass new_dir(cur_dir,true);
@@ -739,6 +744,7 @@ void ThumbnailManagerClass::Pre_Init(bool display_message_box)
 		}
 	}
 	SetCurrentDirectory(cur_dir);
+#endif
 
 	// First generate thumbnails for always.dat
 	Update_Thumbnail_File("always.dat",display_message_box);

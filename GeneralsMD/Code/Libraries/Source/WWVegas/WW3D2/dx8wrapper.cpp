@@ -380,11 +380,13 @@ static DynamicVectorClass<StringClass>					_RenderDeviceShortNameTable;
 static DynamicVectorClass<RenderDeviceDescClass>	_RenderDeviceDescriptionTable;
 
 
+#if defined(_WIN32)
 // d3d9.dll is loaded by hand rather than imported, the way d3d8.dll was, so a machine
 // without it gets the engine's own "no Direct3D" path instead of a loader error box.
 typedef IDirect3D9* (WINAPI *Direct3DCreate9Type) (UINT SDKVersion);
 Direct3DCreate9Type	Direct3DCreate9Ptr = NULL;
 HINSTANCE D3D9Lib = NULL;
+#endif
 
 static int Score_Render_Adapter(const RenderDeviceDescClass &desc)
 {
@@ -500,18 +502,24 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 	Invalidate_Cached_Render_States();
 
 	if (!lite) {
+#if defined(_WIN32)
 		D3D9Lib = LoadLibrary("D3D9.DLL");
 
 		if (D3D9Lib == NULL) return false;	// Return false at this point if init failed
 
 		Direct3DCreate9Ptr = (Direct3DCreate9Type) GetProcAddress(D3D9Lib, "Direct3DCreate9");
 		if (Direct3DCreate9Ptr == NULL) return false;
+#endif
 
 		/*
 		** Create the D3D interface object
 		*/
 		WWDEBUG_SAY(("Create Direct3D9\n"));
+#if defined(_WIN32)
 		D3DInterface = Direct3DCreate9Ptr(D3D_SDK_VERSION);
+#else
+		D3DInterface = Direct3DCreate9(D3D_SDK_VERSION);	// the device is linked in (posixd3d9): nothing to load
+#endif
 		if (D3DInterface == NULL) {
 			return(false);
 		}
@@ -570,10 +578,12 @@ void DX8Wrapper::Shutdown(void)
 		D3DInterface=NULL;
 	}
 
+#if defined(_WIN32)
 	if (D3D9Lib) {
 		FreeLibrary(D3D9Lib);
 		D3D9Lib = NULL;
 	}
+#endif
 
 	_RenderDeviceNameTable.Clear();		 // note - Delete_All() resizes the vector, causing a reallocation.  Clear is better. jba.
 	_RenderDeviceShortNameTable.Clear();
@@ -876,6 +886,7 @@ bool DX8Wrapper::Create_Device(void)
 	return true;
 }
 
+#if defined(_WIN32)
 // What the fullscreen display under the Direct3D 11 picture has changed on the desktop, so leaving
 // the game can put it back.  The gamma is the desktop's own ramp, read before the game's first one.
 static bool DisplayModeChanged = false;
@@ -984,6 +995,18 @@ void DX8Wrapper::Apply_Fullscreen_Display(bool shown)
 		set_desktop_gamma(&GameGammaRamp);
 	}
 }
+
+#else
+// Off Windows the display mode, the monitor and the desktop's gamma ramp are the window's (C2) and the
+// swap chain's (A3); the device changes none of them, so there is nothing here to set or put back.
+static bool GameGammaSet = false;
+static D3DGAMMARAMP GameGammaRamp;
+static void set_desktop_gamma(D3DGAMMARAMP *) {}
+static void save_desktop_gamma() {}
+static void restore_desktop_display() {}
+void DX8Wrapper::Set_Requested_Monitor(const char *) {}
+void DX8Wrapper::Apply_Fullscreen_Display(bool) {}
+#endif
 
 bool DX8Wrapper::Reset_Device(bool reload_assets)
 {
@@ -1107,11 +1130,21 @@ void DX8Wrapper::Enumerate_Devices()
 			desc.set_driver_name(id.Driver);
 
 			char buf[64];
+#if defined(_WIN32)
 			sprintf(buf,"%d.%d.%d.%d", //"%04x.%04x.%04x.%04x",
 				HIWORD(id.DriverVersion.HighPart),
 				LOWORD(id.DriverVersion.HighPart),
 				HIWORD(id.DriverVersion.LowPart),
 				LOWORD(id.DriverVersion.LowPart));
+#else
+			// DriverVersion is an int64_t off Windows: LARGE_INTEGER's halves, then their 16-bit words.
+			const unsigned long long driver_version = (unsigned long long)id.DriverVersion;
+			sprintf(buf,"%d.%d.%d.%d",
+				(int)((driver_version >> 48) & 0xFFFF),
+				(int)((driver_version >> 32) & 0xFFFF),
+				(int)((driver_version >> 16) & 0xFFFF),
+				(int)(driver_version & 0xFFFF));
+#endif
 
 			desc.set_driver_version(buf);
 
@@ -1349,7 +1382,7 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 	// at startup and created on a reset (an Alt-Tab) drew every building already standing as its
 	// shadow alone.
 	if (!reset_device && Direct3D11_Is_Enabled() && !Direct3D11_Is_Active()) {
-		const bool created = Direct3D11_Create((HWND)_Hwnd, ResolutionWidth, ResolutionHeight);
+		const bool created = Direct3D11_Create(_Hwnd, ResolutionWidth, ResolutionHeight);	// RenderWindow: the HWND on Windows
 		WWDEBUG_SAY(("-dx11: Direct3D 11 device %s\n", created ? "created" : "refused"));
 	}
 
@@ -1631,6 +1664,7 @@ bool DX8Wrapper::Set_Device_Resolution(int width,int height,int bits,int windowe
 		if (height != -1) {
 			_PresentParameters.BackBufferHeight = ResolutionHeight = height;
 		}
+#if defined(_WIN32)	// off Windows the window is C2's to size
 		if (resize_window)
 		{
 
@@ -1665,6 +1699,7 @@ bool DX8Wrapper::Set_Device_Resolution(int width,int height,int bits,int windowe
 									 SWP_NOZORDER | SWP_NOMOVE);
 			}
 		}
+#endif
 #pragma message("TODO: support changing windowed status and changing the bit depth")
 		Apply_Fullscreen_Display(true);
 		const bool reset = Reset_Device();
@@ -2640,7 +2675,7 @@ void DX8Wrapper::Draw(
 
 #ifdef MESH_RENDER_SNAPSHOT_ENABLED
 	if (WW3D::Is_Snapshot_Activated()) {
-		unsigned long passes=0;
+		RenderUInt32 passes=0;	// DWORD on Windows, which ValidateDevice writes
 		SNAPSHOT_SAY(("ValidateDevice: "));
 		RenderResult res=D3DDevice->ValidateDevice(&passes);
 		switch (res) {
@@ -4387,6 +4422,7 @@ void DX8Wrapper::Set_Gamma(float gamma,float bright,float contrast,bool calibrat
 		GameGammaSet = true;
 		set_desktop_gamma(&GameGammaRamp);
 	} else {
+#if defined(_WIN32)	// the desktop's ramp; off Windows the gamma is the swap chain's (A3)
 		HWND hwnd = GetDesktopWindow();
 		HDC hdc = GetDC(hwnd);
 		if (hdc)
@@ -4394,6 +4430,7 @@ void DX8Wrapper::Set_Gamma(float gamma,float bright,float contrast,bool calibrat
 			SetDeviceGammaRamp (hdc, &ramp);
 			ReleaseDC (hwnd, hdc);
 		}
+#endif
 	}
 }
 
