@@ -37,7 +37,11 @@
 #define SDLPROGRAMCACHE_H
 
 #include <map>
+#include <stddef.h>
+#include <stdint.h>
 #include <string>
+#include <unordered_map>
+#include <vector>
 #include <vector>
 
 struct SDL_GPUDevice;
@@ -80,6 +84,25 @@ public:
 private:
 	const SdlProgram &Make(std::map<std::string, SdlProgram> &cache, const std::string &key, bool generated,
 		const std::string &hlsl, bool vertex_stage);
+
+	/// The programs by the bytes of the description that asked for them (PERF1: D3's key strings are made
+	/// with snprintf, and making both for every draw was a fifth of the main thread).  Descriptions are
+	/// built with memset first, so equal ones are equal byte for byte, padding included; an unequal
+	/// padding byte could only cost a miss, which goes to the key and finds the same program.  The last
+	/// description found is checked first, and the rest by a hash of their bytes.
+	class ByBytes
+	{
+	public:
+		SdlProgram *Find(const void *bytes, size_t size);
+		void Add(const void *bytes, size_t size, SdlProgram *program);
+
+	private:
+		std::unordered_map<uint64_t, std::vector<std::pair<std::vector<uint8_t>, SdlProgram *> > > Table;
+		std::vector<uint8_t> LastBytes;
+		SdlProgram *Last = NULL;
+		size_t Entries = 0;
+	};
+	ByBytes VertexByBytes, PixelByBytes, EngineVertexByBytes, EnginePixelByBytes;
 
 	SDL_GPUDevice *Device;
 	std::map<std::string, SdlProgram> VertexPrograms;
