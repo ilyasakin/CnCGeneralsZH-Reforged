@@ -1321,6 +1321,15 @@ Linux - fixed.**
   descriptor count unchanged (9 and 9). A `UDP` bound twice holds one socket. **Armed:** on the old
   `udp.cpp` one failed init leaked 54,141 descriptors, and both tests fail.
 
+**Latent, not numbered: a challenge whose load movie does not open.**
+- **Where:** `ChallengeLoadScreen::init` read the movie stream's size through NULL when
+  `TheVideoPlayer->open` found no movie. `SinglePlayerLoadScreen::init` already returned in that case.
+- **When it shows:** on every platform, for a challenge whose movie is missing (a damaged install or a
+  mod). Shipped data has every challenge movie, so no number. Headless there is no video at all, so every
+  challenge started by `-mission` crashed (SIGSEGV).
+- **Fixed:** the challenge screen returns as the single player screen does
+  (`docs/mac-port/tasks/mission-start.md`).
+
 **Latent, not numbered: a missing coordinate set under a texture transform.**
 - **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
   D3D9 documents (0,0) ("the system defaults to the u and v coordinates (0,0)"). FFReference's N28 pads
