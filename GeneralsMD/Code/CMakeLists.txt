@@ -2174,6 +2174,10 @@ add_lib_test(test_ffreference ffreference)
 add_lib_test(test_ffprogram ffreference)
 # its assembler test reads the water's ps.1.1 text from the game's own source, so it cannot drift
 target_compile_definitions(test_ffprogram PRIVATE ZH_CODE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+# The engine's own D3D8 declarations in capture v3 against the device's D3D9 elements.  A tool, not a
+# test: captures are made on demand (ZH_GPU_CAPTURE) and never committed.  ffdecl_captures <dir>...
+add_executable(ffdecl_captures ${TESTS}/ffreference/ffdecl_captures.cpp)
+target_link_libraries(ffdecl_captures PRIVATE ffreference)
 if(ZH_GAME_DATA)
   set_tests_properties(test_ffprogram PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
 endif()
