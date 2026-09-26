@@ -573,3 +573,37 @@ above the tiles blend with soft edges. It has not been compared with a Windows f
 CrossOver run.
 
 **Known wrong in this picture:** the radar is empty. It is a render target, which is A3d.
+
+## A3d: render targets, read-back, the front buffer (2026-09-26)
+
+- **Render targets.** The frame draws into any render target: the back buffer, the first level of a
+  `D3DUSAGE_RENDERTARGET` texture, or a standalone render-target surface. There is one pass per target,
+  and a waiting clear stays with its own target.
+  - A render-target texture's GPU copy is a colour target that its later draws sample. It is uploaded
+    only when the CPU writes its image.
+  - A target smaller than the back buffer gets a size-matched scratch depth-stencil.
+  - Drawing into a target while sampling it is refused.
+- **The seam with -18**, agreed and built on both sides:
+  - `Gpu_Owns`;
+  - `Gpu_Download`, through their `posixWriteFromBgra`, which leaves `version()` alone;
+  - `Gpu_Download_Front`, from a copy of each presented frame;
+  - `Gpu_StretchRect`, a GPU blit.
+  -18's surface code calls them from Clear, `GetRenderTargetData`, `GetFrontBufferData`, `StretchRect`,
+  and the partial CPU writes that must download first.
+- **Checked** by `posix_gpu_draw_selfcheck`, through D3D9 calls, with Metal validation clean:
+  - a target drawn, then sampled onto the back buffer;
+  - `GetRenderTargetData`;
+  - `StretchRect` as a GPU blit;
+  - `GetFrontBufferData` after Present and a later clear;
+  - four mutations caught.
+
+**The game on it.** The windowed skirmish (seed 1234, 600 frames) and the shell map (`-quickstart`, 60 s)
+both run with **no refusals at all**:
+- the skirmish: 2,483 presents and 1,665,243 draws;
+- the shell map: 3,635 presents and 1,398,108 draws.
+Without `-quickstart` the intro movie plays through V1's Bink path.
+
+![The Zero Hour shell map on Metal, present 900](../a3d-shell-map-metal.png)
+
+The skirmish's empty radar is not the renderer's. Its draw callback, `W3DLeftHUDDraw`, is never called
+(lldb), so the question is the fork's HTML control bar and GUI. The PM has given it to -47.
