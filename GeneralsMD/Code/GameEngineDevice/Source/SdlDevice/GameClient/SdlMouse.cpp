@@ -1,0 +1,311 @@
+/*
+**	Command & Conquer Generals Zero Hour(tm)
+**	Copyright 2025 Electronic Arts Inc.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+// SdlMouse.cpp: see SdlMouse.h.  Each function is Win32Mouse's of the same name, on SDL.
+
+#include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+
+#include "Common/file.h"
+#include "Common/FileSystem.h"
+#include "GameClient/Display.h"
+#include "GameClient/GameClient.h"
+#include "SdlDevice/GameClient/AniCursor.h"
+#include "SdlDevice/GameClient/SdlInput.h"
+#include "SdlDevice/GameClient/SdlMouse.h"
+
+#include <SDL3/SDL.h>
+
+#include <vector>
+
+SdlMouse *SdlMouse::s_active = NULL;
+
+namespace {
+
+SDL_Cursor *theCursors[ Mouse::NUM_MOUSE_CURSORS ][ MAX_2D_CURSOR_DIRECTIONS ];
+
+SDL_Surface *surfaceFor( const AniCursorFrame &frame )
+{
+	SDL_Surface *surface = SDL_CreateSurface( frame.width, frame.height, SDL_PIXELFORMAT_RGBA32 );
+	if (surface == NULL)
+		return NULL;
+	for (Int y = 0; y < frame.height; ++y)
+		memcpy( (Uint8 *)surface->pixels + y * surface->pitch, &frame.rgba[ (size_t)y * frame.width * 4 ], (size_t)frame.width * 4 );
+	return surface;
+}
+
+/// A file through the engine's file system, which finds Data\Cursors\X.ANI whatever its case on disk
+Bool readWholeFile( const char *path, std::vector<UnsignedByte> &bytes )
+{
+	if (TheFileSystem == NULL)
+		return FALSE;
+	File *file = TheFileSystem->openFile( path, File::READ | File::BINARY );
+	if (file == NULL)
+		return FALSE;
+	const Int size = file->size();
+	bytes.resize( size > 0 ? size : 0 );
+	const Bool ok = size > 0 && file->read( &bytes[0], size ) == size;
+	file->close();
+	return ok;
+}
+
+}  // namespace
+
+SdlMouse::SdlMouse( void )
+{
+	memset( &m_eventBuffer, 0, sizeof( m_eventBuffer ) );
+	m_nextFreeIndex = 0;
+	m_nextGetIndex = 0;
+	m_currentSdlCursor = NONE;
+	m_directionFrame = 0;		// points up
+	m_lostFocus = FALSE;
+	m_cursorInWindow = TRUE;
+	m_positionReported = FALSE;
+	m_cursorConfined = FALSE;
+	s_active = this;
+	SdlInput_install();
+}
+
+SdlMouse::~SdlMouse( void )
+{
+	if (m_cursorConfined && SdlInput_gameWindow() != NULL)
+		SDL_SetWindowMouseGrab( SdlInput_gameWindow(), false );
+	if (s_active == this)
+		s_active = NULL;
+}
+
+void SdlMouse::init( void )
+{
+	Mouse::init();
+	m_inputMovesAbsolute = TRUE;	// events carry positions, not deltas, as window messages do
+}
+
+void SdlMouse::reset( void )
+{
+	Mouse::reset();
+}
+
+Bool SdlMouse::wantsConfinement( Bool coversScreen, Bool focused, Bool cursorInWindow )
+{
+	return coversScreen && focused && cursorInWindow;
+}
+
+void SdlMouse::update( void )
+{
+	SDL_Window *window = SdlInput_gameWindow();
+	if (window != NULL)
+	{
+		/* WndProc's WM_ACTIVATEAPP: without the focus the pointer is left alone, and with it back the
+			 game's cursor is put back.  SdlGameEngine's pump keeps the focus events, so ask SDL each frame. */
+		const Bool hasFocus = (SDL_GetWindowFlags( window ) & SDL_WINDOW_INPUT_FOCUS) != 0;
+		if (hasFocus == m_lostFocus)
+		{
+			lostFocus( !hasFocus );
+			if (hasFocus)
+				setCursor( getMouseCursor() );
+		}
+
+		// Win32Mouse::update: ask where the pointer is rather than trust the last event, until one comes
+		m_cursorInWindow = SDL_GetMouseFocus() == window;
+		if (!m_positionReported && m_cursorInWindow)
+		{
+			float wx = 0, wy = 0;
+			SDL_GetMouseState( &wx, &wy );
+			Int x, y;
+			SdlInput_toGamePixels( wx, wy, x, y );
+			setPosition( x, y );
+		}
+
+		// ...and hold the pointer in a window that covers its screen, which edge scrolling needs
+		const SDL_WindowFlags flags = SDL_GetWindowFlags( window );
+		Bool coversScreen = (flags & SDL_WINDOW_FULLSCREEN) != 0;
+		if (!coversScreen && (flags & SDL_WINDOW_BORDERLESS) != 0)
+		{
+			SDL_Rect bounds;
+			Int width = 0, height = 0;
+			SDL_GetWindowSize( window, &width, &height );
+			coversScreen = SDL_GetDisplayBounds( SDL_GetDisplayForWindow( window ), &bounds )
+				&& width >= bounds.w && height >= bounds.h;
+		}
+		const Bool focused = (flags & SDL_WINDOW_INPUT_FOCUS) != 0;
+		if (wantsConfinement( coversScreen, focused, m_cursorInWindow ))
+		{
+			if (!m_cursorConfined)
+				m_cursorConfined = SDL_SetWindowMouseGrab( window, true );
+		}
+		else if (m_cursorConfined && !(coversScreen && focused))
+		{
+			SDL_SetWindowMouseGrab( window, false );
+			m_cursorConfined = FALSE;
+		}
+	}
+	Mouse::update();
+}
+
+void SdlMouse::addEvent( EventKind kind, Int x, Int y, Button button, Int clicks, Int wheelDelta, UnsignedInt timeMs )
+{
+	// a full ring drops the event, as Win32Mouse's does
+	if (kind == EVENT_NONE || m_eventBuffer[ m_nextFreeIndex ].kind != EVENT_NONE)
+		return;
+	m_positionReported = TRUE;
+	SdlMouseEvent &slot = m_eventBuffer[ m_nextFreeIndex ];
+	slot.kind = kind;
+	slot.x = x;
+	slot.y = y;
+	slot.button = button;
+	slot.clicks = clicks;
+	slot.wheelDelta = wheelDelta;
+	slot.time = timeMs;
+	m_nextFreeIndex++;
+	if (m_nextFreeIndex >= Mouse::NUM_MOUSE_EVENTS)
+		m_nextFreeIndex = 0;
+}
+
+UnsignedByte SdlMouse::getMouseEvent( MouseIO *result, Bool flush )
+{
+	if (m_eventBuffer[ m_nextGetIndex ].kind == EVENT_NONE)
+		return MOUSE_NONE;
+	translateEvent( m_nextGetIndex, result );
+	m_eventBuffer[ m_nextGetIndex ].kind = EVENT_NONE;
+	m_nextGetIndex++;
+	if (m_nextGetIndex >= Mouse::NUM_MOUSE_EVENTS)
+		m_nextGetIndex = 0;
+	return MOUSE_OK;
+}
+
+void SdlMouse::translateEvent( UnsignedInt eventIndex, MouseIO *result )
+{
+	const SdlMouseEvent &event = m_eventBuffer[ eventIndex ];
+	const UnsignedInt frame = TheGameClient != NULL ? TheGameClient->getFrame() : 1;
+
+	result->leftState = result->middleState = result->rightState = MBS_Up;
+	result->leftFrame = result->middleFrame = result->rightFrame = 0;
+	result->pos.x = result->pos.y = result->wheelPos = 0;
+	result->time = event.time;
+	result->pos.x = event.x;
+	result->pos.y = event.y;
+
+	switch (event.kind)
+	{
+		case EVENT_BUTTON_DOWN:
+		case EVENT_BUTTON_UP:
+		{
+			/* Windows: down, up, double click, up, down, up...  SDL counts the clicks, by the system's
+				 own interval and distance: the second of each pair is Windows' double click. */
+			MouseButtonState state = MBS_Up;
+			if (event.kind == EVENT_BUTTON_DOWN)
+				state = (event.clicks >= 2 && event.clicks % 2 == 0) ? MBS_DoubleClick : MBS_Down;
+			switch (event.button)
+			{
+				case BUTTON_LEFT:		result->leftState = state; result->leftFrame = frame; break;
+				case BUTTON_MIDDLE:	result->middleState = state; result->middleFrame = frame; break;
+				case BUTTON_RIGHT:	result->rightState = state; result->rightFrame = frame; break;
+			}
+			break;
+		}
+		case EVENT_WHEEL:
+			result->wheelPos = event.wheelDelta;
+			break;
+		default:
+			break;		// a move carries only its position
+	}
+}
+
+void SdlMouse::setVisibility( Bool visible )
+{
+	Mouse::setVisibility( visible );
+	SdlMouse::setCursor( getMouseCursor() );
+}
+
+void SdlMouse::initCursorResources( void )
+{
+	for (Int cursor = FIRST_CURSOR; cursor < NUM_MOUSE_CURSORS; cursor++)
+	{
+		for (Int direction = 0; direction < m_cursorInfo[cursor].numDirections; direction++)
+		{
+			if (theCursors[cursor][direction] != NULL || m_cursorInfo[cursor].textureName.isEmpty())
+				continue;
+			char path[256];
+			if (m_cursorInfo[cursor].numDirections > 1)
+				snprintf( path, ARRAY_SIZE( path ), "data\\cursors\\%s%d.ANI", m_cursorInfo[cursor].textureName.str(), direction );
+			else
+				snprintf( path, ARRAY_SIZE( path ), "data\\cursors\\%s.ANI", m_cursorInfo[cursor].textureName.str() );
+			std::vector<UnsignedByte> bytes;
+			AniCursor decoded;
+			std::string why;
+			if (readWholeFile( path, bytes ) && AniCursor_decode( &bytes[0], bytes.size(), decoded, &why ))
+				theCursors[cursor][direction] = createCursor( decoded );
+			DEBUG_ASSERTCRASH( theCursors[cursor][direction], ("MissingCursor %s %s\n", path, why.c_str()) );
+		}
+	}
+}
+
+SDL_Cursor *SdlMouse::createCursor( const AniCursor &cursor )
+{
+	if (cursor.frames.empty() || cursor.steps.empty())
+		return NULL;
+	const AniCursorFrame &first = cursor.frames[ cursor.steps[0].frame ];
+	std::vector<SDL_Surface *> surfaces( cursor.frames.size(), (SDL_Surface *)NULL );
+	for (size_t i = 0; i < cursor.frames.size(); ++i)
+		surfaces[i] = surfaceFor( cursor.frames[i] );
+	SDL_Cursor *made = NULL;
+	if (cursor.steps.size() == 1)
+		made = surfaces[ cursor.steps[0].frame ] != NULL
+			? SDL_CreateColorCursor( surfaces[ cursor.steps[0].frame ], first.hotX, first.hotY ) : NULL;
+	else
+	{
+		std::vector<SDL_CursorFrameInfo> steps( cursor.steps.size() );
+		Bool complete = TRUE;
+		for (size_t i = 0; i < cursor.steps.size(); ++i)
+		{
+			steps[i].surface = surfaces[ cursor.steps[i].frame ];
+			steps[i].duration = cursor.steps[i].durationMs;
+			complete = complete && steps[i].surface != NULL;
+		}
+		if (complete)
+			made = SDL_CreateAnimatedCursor( &steps[0], (int)steps.size(), first.hotX, first.hotY );
+	}
+	for (size_t i = 0; i < surfaces.size(); ++i)
+		SDL_DestroySurface( surfaces[i] );
+	return made;
+}
+
+void SdlMouse::setCursor( MouseCursor cursor )
+{
+	Mouse::setCursor( cursor );
+	if (m_lostFocus)
+		return;		// Win32Mouse's rule: leave the pointer alone without the focus
+	if (cursor == NONE || !m_visible)
+		SDL_HideCursor();
+	else
+	{
+		SDL_Cursor *made = theCursors[cursor][m_directionFrame];
+		if (made != NULL)
+			SDL_SetCursor( made );
+		SDL_ShowCursor();
+	}
+	m_currentSdlCursor = m_currentCursor = cursor;
+}
+
+// Win32Mouse's are empty too (their SetCapture is commented out); SDL captures during a button press
+void SdlMouse::capture( void )
+{
+}
+
+void SdlMouse::releaseCapture( void )
+{
+}

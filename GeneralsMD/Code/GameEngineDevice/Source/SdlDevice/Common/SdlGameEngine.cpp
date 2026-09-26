@@ -27,6 +27,7 @@
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
+#include "SdlDevice/GameClient/SdlInput.h"
 #include "NullAudioManager.h"
 
 #include <SDL3/SDL.h>
@@ -162,6 +163,7 @@ void SdlGameEngine::destroyWindow( void )
 		 MSG_META_DEMO_INSTANT_QUIT, or, while it is still loading and nothing can carry a message, tells
 		 the engine to stop;
 	 - the application's focus (WM_ACTIVATEAPP) is the engine's isActive.
+	 Everything else goes to SdlInput_dispatch, which is WndProc's input half.
 	 Headless there is no SDL and nothing to pump. */
 void SdlGameEngine::serviceWindowsOS( void )
 {
@@ -193,6 +195,7 @@ void SdlGameEngine::serviceWindowsOS( void )
 				break;
 
 			default:
+				SdlInput_dispatch( event );		// keys, text and the mouse (C3): SdlInput.h
 				break;
 		}
 	}
