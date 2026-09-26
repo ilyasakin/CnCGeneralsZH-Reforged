@@ -50,6 +50,7 @@
 #include <atomic>
 #include <map>
 #include <string>
+#include <vector>
 
 class SdlGpuFrame;
 class SdlPipelineCache;
