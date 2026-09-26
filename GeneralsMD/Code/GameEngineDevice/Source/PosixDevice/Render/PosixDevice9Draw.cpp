@@ -263,12 +263,17 @@ bool PosixDevice9::Build_Vertex_Description(VertexPipelineDescription &descripti
 
 	// The same stages the combiner walk takes: the program only carries coordinates for those.  A
 	// disabled stage 0 is the one-stage diffuse combiner, which reads no coordinates but has a stage.
+	// With a pixel shader bound the cascade is the program's, and every stage still gets its coordinates
+	// from its TEXCOORDINDEX: the engine's programs sample stages whose COLOROP is DISABLE (the terrain's
+	// cloud and noise, the water's highlights and shroud), as dx11backend's every_stage has it (A3e-3:
+	// without this they sampled at (0, 0), found against a contributor's interpreter).
+	const bool every_stage = PixelShader != NULL;
 	description.StageCount = 0;
 	for (unsigned index = 0; index < MAXIMUM_VERTEX_STAGES; ++index) {
-		if (index > 0 && Stage_Ends_Cascade(index)) {
+		if (!every_stage && index > 0 && Stage_Ends_Cascade(index)) {
 			break;
 		}
-		if (index == 0 && Stage_Ends_Cascade(0)) {
+		if (!every_stage && index == 0 && Stage_Ends_Cascade(0)) {
 			description.StageCount = 1;
 			break;
 		}
