@@ -1155,26 +1155,14 @@ fixed-function draw of that shape is wrong there. Windows' trees escape only bec
 - The harness's new scenario, stage-1 texgen beside stage 0's set 0, fails without the fix and matches
   FFReference with it.
 
-**Direct3D 9 has it too - fixed in the following commit.** Its combiner shaders are always on
-(`W3DDisplay.cpp:1072`), are compiled `ps_2_0` (`ffshadercache.cpp:31`), and sit behind D3D9's
-fixed-function vertex pipeline. -47 read the pages: feeding ps_1_1-1_3 or ps_2_0, texture register *tN*
-holds stage *N*'s processed coordinates, after its own `TEXCOORDINDEX`, generation and
-`TEXTURETRANSFORMFLAGS`. The citation chain:
-- "ps_1_1..ps_1_4 Registers": the coordinates are "associated with a specific texture stage".
-- `D3DTSS_TEXCOORDINDEX` is "the texture coordinate set to use with this texture stage".
-- "Shader model 3" ignores `TEXCOORDINDEX` only from ps_3_0.
-
-Two caveats from the same reading:
-- No page says outright that the generated or transformed coordinates are what *tN* receives; it is
-  inferred from the stage association.
-- ps_1_4 decouples stage from register, which doesn't apply to ps_2_0.
-
-So D3D9's programs read *tk* where they should read *tN*, and the engine's texgen stages above 0 were
-wrong there too. Those are the terrain shaders' cloud, noise and shroud stages (`W3DShaderManager.cpp`:
-stage 1 at `:1973` and `:2550`, stage 2 at `:2286` and `:2577`, stage 3 at `:2313`; `TerrainTex.cpp`). It
-applies wherever such a draw runs fixed function with no engine pixel shader bound. The shader dump for
-that commit changes the new case's d3d9 text alone, one line (`tex2D(Sampler1, input.TexCoord0)` to
-`TexCoord1`). `WINDOWS-DEBT.md` has the row.
+**Direct3D 9 does not have it, by measurement.** Its combiner programs sit behind D3D9's own
+fixed-function vertex pipeline, whose register numbering was measured in bfb60e17 against a
+fixed-function frame. Reading the stage's own register instead of the set's took Flash Effect at frame
+400 from 0.25% to 0.81%, so D3D9 numbers by set. The shipping shroud agrees: stage 1 generates its
+coordinates and has been drawn through those programs, and it would sample stage 0's UVs if D3D9
+numbered by stage. -47's reading of the pages pointed toward stage, but by inference, not a quoted
+sentence. A commit following it (c6e52558) was reverted after -18's second read, and the D3D9 profile
+reads the set's register as before. The comment on `stage_register` records both. `WINDOWS-DEBT.md` has the row.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
