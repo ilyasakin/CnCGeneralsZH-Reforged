@@ -52,6 +52,7 @@
 #include "wwstring.h"
 #include "bittype.h"
 #include "obbox.h"
+#include "Platform/StrdupAsWindows.h"
 
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -226,7 +227,7 @@ ParameterClass::Set_Name (const char *new_name)
 	}
 
 	if (new_name != NULL) {
-		m_Name = ::strdup (new_name);
+		m_Name = strdupAsWindows(new_name);
 	}
 
 	return ;

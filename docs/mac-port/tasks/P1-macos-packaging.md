@@ -3,7 +3,8 @@
 - **Milestone:** M5
 - **Depends on:** C1 (file systems), C2 (entry point), V1 (FFmpeg's licence); E1 for the convergence step
 - **Blocks:** anything a player runs; E2's notarisation question
-- **Status:** design approved (2026-09-26); steps 1-3 merged; step 4 on its branch; step 5 (the `.app`) held until the PM says (disk)
+- **Status:** done (-47, 2026-09-26): steps 1-5 merged or on their branch; step 5 below. The by-hand check of the
+  root chooser is the user's (step 5, "By hand").
 - **Owner:** -47
 
 ## Why
@@ -447,3 +448,85 @@ There is no second chooser for the base game (minimal UI, the PM's call); the me
 **What it cannot see.** The dialog itself: SDL's folder panel and the message boxes need a person to
 click them, and have not been clicked. Players' real install locations beyond these names. A real
 signed bundle (step 5).
+
+## Step 5: the `.app` (-47, 2026-09-26)
+
+Built by `ninja macos_app` (Apple only, outside `ALL`) into `<build>/Zero Hour Reforged.app`, with its
+dSYM beside it. `Tools/make-macos-app.sh` is the one step.
+
+**Contents, as section 3 says**
+- **Info.plist.** `CFBundleExecutable generals`, the version from the build's `BuildVersion.h` (2.1.0),
+  `LSMinimumSystemVersion` read from the executable itself (27.0: no deployment target is set yet,
+  which E2 should choose), `NSHighResolutionCapable`, the strategy-games category, `AppIcon`.
+  - The bundle id is `ZH_APP_BUNDLE_ID`. It defaults to `io.github.olcayseygan.zero-hour-reforged`,
+    the project's home per the README; whoever ships may change it.
+- **PkgInfo.**
+- **`MacOS/generals`,** stripped (30.9 to 24.6 MB). Its 210 MB dSYM sits beside the bundle for C5.
+- **`AppIcon.icns`,** from `Generals.ico`'s 48 px image: soft on Retina, until a 1024 px master exists.
+- **`Resources/Overlay`,** the staged overlay. Its three art archives are **APFS clones** (`cp -c`)
+  of the files the staging links to. There is no fallback to a real copy: another volume or file
+  system fails the build.
+- **`Resources/Licenses`,** 15 files for 13 entries. `Tools/macos-app-licenses.txt` names the entry
+  for every static library on `generals`' link line (read from `build.ninja`: 42 libraries), plus zlib
+  and nanosvg, which are compiled into other libraries.
+  - A linked library missing from the table fails the build, naming it.
+  - FFmpeg's entry adds its source pointer.
+  - zlib's licence is extracted from `zlib.h`'s opening comment, since it has no licence file.
+  - Still open: FreeType's FTL wants a credit line in the in-game About text as well, which is not
+    this step.
+- **The HUD directive** (the user's): the build refuses, naming the file, if anything in the overlay
+  or the finished bundle sets `ShowHudOverlay` to No, false or 0.
+  - The check walks with `find -L`: this machine's `grep` is ugrep, whose `-r` does not follow the
+    staging's links to the art, and a recursive grep would have skipped it.
+- **The signature,** last: `codesign --force --sign - --timestamp=none`, then
+  `codesign --verify --deep --strict`.
+
+**Disk:** 8,097,152 KB free before, 7,764,784 after, lowest 7,728,392.
+- The build used 324 MB for a bundle `du` counts at 1.6 GB (the clones in full) plus its 210 MB dSYM.
+- The clones saved about 1.6 GB: the 34 MB of the bundle's own contents and the dSYM account for the
+  rest, with other sessions' writes.
+
+**Checks**
+- `macos_app_check` (16 checks) builds a bundle from this build's own inputs, without art, and checks
+  every item above, the seal, and the absence of a HUD-off line. Its armed controls:
+  - a planted `ShowHudOverlay = No` INI is refused and leaves no bundle;
+  - a link line with an unlicensed library is refused and leaves no bundle;
+  - a file written into the signed bundle makes the strict verify fail.
+- `replay_check_app`: `replay-check.sh --app` runs E1 on the bundle's own executable.
+  - No `-root` and no `-overlay`: Registry.ini's `InstallPath` names the farm, and HOME is an empty
+    folder. The game reported its overlay as `Contents/Resources/Overlay` and refused to delete the
+    farm's `INIZH.big`.
+  - The recording, its playback and a second run agree at frame 1200 on 0x0177BEF6, the same CRC as
+    the `-overlay` harness on the same seed.
+  - Afterwards the seal still verifies `--deep --strict`: nothing was written into the bundle.
+  - Its control: a bundle without its `Overlay` is reported ("did not report its own overlay") and
+    fails.
+  - It skips (77), saying why, when no bundle has been built.
+- The root chooser is tested only through `PosixCheckInstallFolder` (`test_install_root`, step 4),
+  never by opening it.
+
+**By hand (the user's check, not done here: it opens windows).**
+1. `ninja macos_app` in the build folder.
+2. Move `~/Library/Application Support/Command and Conquer Generals Zero Hour Data/Registry.ini` aside,
+   so no `InstallPath` is set.
+3. Open `Zero Hour Reforged.app` from Finder. A locally built bundle is not quarantined, so no
+   right-click Open is needed.
+4. The folder dialog, "Choose your Command & Conquer Generals Zero Hour folder":
+   - choose a folder that is not Zero Hour (e.g. Documents): a message says so, and the dialog asks
+     again;
+   - choose a Zero Hour folder whose base game is missing, if one is at hand: the message says to copy
+     Generals' `.big` files into `ZH_Generals`;
+   - then choose a real Zero Hour folder. A copy is safer than the install itself, although the
+     install root is read-only (steps 2 and 3).
+5. The game starts, with the corner HUD readout present. Quit.
+6. Registry.ini now holds `InstallPath`. Open the app again: no dialog.
+7. Once more with the key removed, pressing Cancel: the app ends without starting.
+8. `codesign --verify --deep --strict "Zero Hour Reforged.app"` still passes after these runs.
+9. Put the original Registry.ini back.
+
+**What this step cannot see**
+- Gatekeeper and a quarantined download of an ad-hoc app: E2's, with notarisation.
+- The chooser's dialogs, until the user has done the check above.
+- A bundle built on another volume or a non-APFS file system: refused by design, never tried.
+- The icon's look at Retina sizes.
+

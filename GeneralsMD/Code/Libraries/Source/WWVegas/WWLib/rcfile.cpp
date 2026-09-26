@@ -37,6 +37,7 @@
 
 #include "rcfile.h"
 #include <stdlib.h>
+#include "Platform/StrdupAsWindows.h"
 
 const char * RESOURCE_FILE_TYPE_NAME = "File";
 
@@ -76,7 +77,7 @@ char const * ResourceFileClass::Set_Name(char const *filename)
 		ResourceName = NULL;
 	}
 	if (filename) {
-		ResourceName = strdup(filename);
+		ResourceName = strdupAsWindows(filename);
 	} 
 	return ResourceName;
 }

@@ -83,6 +83,10 @@ Transport::Transport(void)
 	// a Transport that is used before init() would have run on whatever was on the heap.
 	m_useLatency = false;
 	m_usePacketLoss = false;
+#if !defined(_WIN32)
+	m_shareAddress = false;
+	m_broadcastsOnly = false;
+#endif
 }
 
 Transport::~Transport(void)
@@ -128,8 +132,15 @@ Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 	
 	int retval = -1;
 	time_t now = Clock_Milliseconds();
+#if !defined(_WIN32)
+	m_udpsock->ShareAddress(m_shareAddress);
+#endif
 	while ((retval != 0) && ((Clock_Milliseconds() - now) < 1000)) {
+#if !defined(_WIN32)
+		retval = m_broadcastsOnly ? m_udpsock->BindForBroadcasts(port) : m_udpsock->Bind(ip, port);
+#else
 		retval = m_udpsock->Bind(ip, port);
+#endif
 	}
 
 	if (retval != 0) {
@@ -176,6 +187,30 @@ Bool Transport::init( UnsignedInt ip, UnsignedShort port )
 
 	return true;
 }
+
+#if !defined(_WIN32)
+Bool Transport::initBroadcastListener( UnsignedShort port )
+{
+	m_broadcastsOnly = true;
+	return init( (UnsignedInt)INADDR_ANY, port );
+}
+
+void Transport::moveReceivedInto( Transport &inbox )
+{
+	Int slot = 0;
+	for (Int i = 0; i < MAX_MESSAGES; ++i)
+	{
+		if (m_inBuffer[i].length <= 0)
+			continue;
+		while (slot < MAX_MESSAGES && inbox.m_inBuffer[slot].length > 0)
+			++slot;
+		if (slot == MAX_MESSAGES)
+			return;
+		inbox.m_inBuffer[slot] = m_inBuffer[i];
+		m_inBuffer[i].length = 0;
+	}
+}
+#endif
 
 void Transport::reset( void )
 {

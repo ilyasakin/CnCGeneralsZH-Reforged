@@ -67,7 +67,7 @@ class UDP
 {
  // DATA
  private:
-  Int       fd; 
+  Int       fd; 	// -1 when there is no socket
   UnsignedInt       myIP;
   UnsignedShort       myPort;
   struct       sockaddr_in  addr;
@@ -100,6 +100,7 @@ class UDP
 // CODE
  private:
   Int           SetBlocking(Int block);
+  void          closeSocket(void);		///< closes fd, if open, and leaves it -1 (none)
 	
 	Int m_lastError;
 
@@ -123,6 +124,29 @@ class UDP
   int              GetInputBuffer(void);
   int              GetOutputBuffer(void);
 	Int						AllowBroadcasts(Bool status);
+
+#if !defined(_WIN32)
+  /* Defect #29.  Windows hands a broadcast to a socket bound to one unicast address, and the LAN lobby
+     relies on it; BSD and Linux sockets do not, so a POSIX lobby bound to its address heard no game
+     announcements at all.  The lobby therefore keeps a second socket, on the wildcard address, that
+     takes only broadcasts (LANAPI::listenForBroadcasts).
+
+     ShareAddress(TRUE) before Bind sets SO_REUSEADDR, which lets a socket bound to one address share
+     its port with such a wildcard listener - the lobby socket needs it once another copy on the host
+     is listening.  It does not let two sockets share one address and port: that bind still fails.
+
+     BindForBroadcasts binds the wildcard address with SO_REUSEADDR and SO_REUSEPORT (every copy on the
+     host has one, and each gets its own copy of a broadcast) and asks for each datagram's destination.
+     Read then passes only datagrams sent to 255.255.255.255, the only broadcast the game sends; a
+     unicast datagram that reaches the wildcard socket (one sent to a local address nobody bound) is
+     dropped, as a Windows lobby bound to its own address would never have seen it. */
+  void          ShareAddress(Bool share) { m_shareAddress = share; }
+  Int           BindForBroadcasts(UnsignedShort port);
+ private:
+  Bool          m_shareAddress;
+  Bool          m_broadcastsOnly;
+  Int           ReadBroadcast(unsigned char *msg,UnsignedInt len,sockaddr_in *from);
+#endif
 };
 
 #ifdef DEBUG_LOGGING

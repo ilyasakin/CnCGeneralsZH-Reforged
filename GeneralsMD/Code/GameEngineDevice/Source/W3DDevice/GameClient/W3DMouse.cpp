@@ -541,9 +541,10 @@ void W3DMouse::draw(void)
 				m_currentAnimFrame=fmod(m_currentAnimFrame,m_currentFrames);
 				m_lastAnimTime=msTime;
 
-				if ((Int)m_currentAnimFrame != m_currentD3DFrame)
+				const Int frame = mouseCursorFrame(m_currentAnimFrame, m_currentFrames);
+				if (frame != m_currentD3DFrame)
 				{
-					m_currentD3DFrame=(Int)m_currentAnimFrame;
+					m_currentD3DFrame=frame;
 					m_pDev->SetCursorProperties(m_currentHotSpot.x,m_currentHotSpot.y,m_currentD3DSurface[m_currentD3DFrame]->Peek_D3D_Surface());
 				}
 			}
@@ -713,9 +714,7 @@ void W3DMouse::setCursorDirection(MouseCursor cursor)
 			//Figure out which of our predrawn cursor orientations best matches the
 			//actual cursor direction.  Frame 0 is assumed to point right and continue
 			//clockwise.
-			m_directionFrame=(Int)(theta/(2.0f*M_PI/(Real)numDirections)+0.5f);
-			if (m_directionFrame >= numDirections)
-				m_directionFrame = 0;
+			m_directionFrame=mouseCursorDirection(theta, numDirections);
 		}
 		else
 		{

@@ -217,8 +217,9 @@ you start. That commit is the lock.
 | PERF1 | [A performance baseline of the Mac renderer](tasks/PERF1-renderer-baseline.md) | M4 | A3e | in review: measured and profiled (120 Hz held everywhere; work 4.2-5.3 ms p50, CPU-bound; the device's per-draw program-key printf is 19% of the main thread); three fixes proposed, none made | -a9 |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`), the Mac baseline over a real fight, defect #20 fixed; parity needs a Windows run | -18 |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | done: `m_exeCRC` takes a CRC-32 over the tracked sources on every platform; LF/CRLF and one-byte checks in ctest | -47 |
-| P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | in progress: steps 1-4 merged (overlay root; read-only roots and logs; one staged overlay, W=P path by path, E1 on `-overlay`; root selection); step 5, the `.app`, held for disk | -47 |
-| L1 | [LAN play on POSIX](tasks/L1-lan-play.md) | M5 | B1 B4 B5 N1 E1 E3 | in progress: recon merged; step 1 done (`net_check`: two headless copies on one Mac agree over the real network code, and a second seed is caught); next F1 (defect #29), F2, the Rosetta pair, the width asserts | -47 |
+| P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | done: steps 1-5; `ninja macos_app` builds a signed `Zero Hour Reforged.app` (art as APFS clones, licences checked against the link line, HUD directive enforced), and E1 runs on the bundle itself (`replay_check_app`). Open: the chooser by hand (the user), a deployment target and notarisation (E2), a 1024 px icon | -47 |
+| L1 | [LAN play on POSIX](tasks/L1-lan-play.md) | M5 | B1 B4 B5 N1 E1 E3 | done: two headless copies on one Mac keep one world over the real network code, arm64 against arm64 and against x86_64 under Rosetta (`net_check`); a POSIX lobby hears broadcasts (#29); network replays align to either recording and stay checked to the end; the argument widths pinned. Not seen: a Windows peer, two hosts, the firewall dialog. Step 6 deferred to E2 | -47 |
+| P2 | [The app runs on the Macs players have](tasks/P2-macos-reach.md) | M5 | P1 | in progress: deployment target 13.0 for every target and vendored library, unguarded newer APIs a build error, every shipped object's minimum checked by the bundle; universal2 recon reported. Not seen: a launch on a real macOS 13 or an Intel Mac | -47 |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
@@ -1226,6 +1227,108 @@ reads the set's register as before. The comment on `stage_register` records both
   `floatToIntAsMsvc`. `WINDOWS-DEBT.md` has the row: Windows' rank changes only where the old walk left
   the table.
 - **Not traced:** how far the out-of-table rank index then reached into later tables on Windows.
+
+**29. Fork-introduced: a POSIX LAN lobby hears no broadcasts - fixed.**
+
+- **Where:** `LANAPI::init` and `SetLocalIP` bind the lobby socket to one unicast address: the Options
+  choice, or IPEnumeration's first. Every game announcement goes to 255.255.255.255:8086.
+- **Why only off Windows:** Windows hands a broadcast to a socket bound to one address, and the lobby
+  (and `lan-play.ps1`) rely on it. BSD and Linux sockets do not. The UNIX half of `udp.cpp` was finished
+  in this fork (032b1b82), so the lobby that shipped on the Mac is the fork's.
+- **Measured on macOS (L1):** a socket bound to 192.168.1.103 received nothing sent to 255.255.255.255 or
+  to 192.168.1.255; one bound to the wildcard address received both. So no Mac lobby would ever list a
+  game, whether hosted on a Mac or on Windows. Directed messages arrived as before.
+- **Fixed, POSIX only** (`udp.h`, `Transport.h`, `LANAPI.h`; Windows' view of all six changed files is
+  identical by `windows_view_diff`):
+  - Each lobby keeps a second socket, on the wildcard address and the lobby port, with SO_REUSEADDR and
+    SO_REUSEPORT. It takes only datagrams whose destination is 255.255.255.255 (`IP_RECVDSTADDR` on
+    macOS and the BSDs, `IP_PKTINFO` on Linux, `#error` elsewhere). A unicast datagram reaching it, one
+    sent to a local address nobody bound, is dropped, as a Windows lobby would never have seen it.
+  - The lobby's own socket sets SO_REUSEADDR, so it can share the port with another copy's listener.
+    A second socket on the same address and port still fails to bind (checked).
+  - `LANAPI::update` moves what the listener heard into the lobby's inbox before its one loop. Every
+    message therefore passes that loop's own-address filter exactly once: a lobby's own broadcast comes
+    back to its listener with its own address and is dropped there, as on Windows.
+  - It is (re)bound whenever the lobby socket is bound to an address. It is not bound while the lobby
+    sits on the wildcard address, which hears broadcasts itself.
+- **Measured, `test_lan_broadcast`** (the real Transport and UDP, two copies on one host: one lobby at
+  127.0.0.1, one at the first non-loopback address):
+  - A broadcast reaches both listeners once each, and neither unicast socket.
+  - A directed message reaches only its own unicast socket.
+  - A stray unicast is dropped by the listener; the control, a plain wildcard socket, receives it.
+  - Each message is moved once, and a full inbox leaves the rest waiting.
+  - Armed mutations: the destination filter passing everything fails 1 check; the lobby socket without
+    SO_REUSEADDR fails 7; a move that leaves its source fails 2.
+- **What this cannot see:** a broadcast from another machine (one host's traffic never leaves the
+  kernel), and Linux, whose socket rules are the same by its documentation but not measured here.
+
+**30. A map's water-track file, which a network host can send, indexes past the wave table - fixed.**
+
+- **Where:** `W3DWaterTracks.cpp:1100-1111`. The loader reads the track count from the `.wak` file's last
+  four bytes, and each track's wave type as given.
+  - `waveTypeInfo[wtype]` is then indexed unchecked, on every platform, and `bindTrack` doesn't check it
+    either.
+  - A count past the records reads on.
+  - A duplicate as the last record looped past the count (`i++; goto`).
+- **Remote:** the map-transfer SENDER (`FileTransfer.cpp:250-285`) never sends a `.wak`. But the RECEIVER's
+  rules accept one (`NetworkUtil.cpp:335-343`, `{ ".wak", 128 * 1024 }`), and `IsSafeTransferPath` rejects
+  only `..`. So a hostile host can place `<map>.wak` beside the transferred map, and the loader reads exactly
+  that file. Traced by -18 in the code, not run.
+- **Fixed:** the count is capped by the file's size (`wakTrackCount`), and a short read ends the list. A
+  type outside `[WaveTypeFirst, WaveTypeMax)` is skipped, and a duplicate is skipped with `continue`.
+  `test_water_tracks` has 19 checks, armed.
+- **The shipped maps load exactly as before:** all 25 shipped `.wak` files were checked read-only. Every
+  count matches its size, every type is in the table, and none ends on a duplicate.
+- **Not done:** the receiver still accepts `.wak`, a file the sender never sends. Refusing it would close
+  the path, but it changes the network rules; that's recorded as an open question, not changed.
+
+**31. Port: a cloned particle emitter strdup()s a NULL user string, and the fog of war crashes the Mac and
+Linux - fixed.**
+
+- **Where:** `part_emt.cpp`'s copy constructor did `UserString(::strdup(src.UserString))`. The main
+  constructor sets `UserString(NULL)` (`:107`), and it stays NULL until a user string is set.
+- **Windows:** strdup is the UCRT's `_strdup`, which returns NULL for a NULL argument. This is -18's reading
+  of the UCRT, not measured here. So a Windows clone copies the NULL.
+- **Darwin and glibc:** strdup reads through the pointer and faults.
+- **Where it bites:** the fog of war clones every render object it ghosts. The stack from the game's crash
+  log is:
+  `PartitionData::getShroudedStatus` → `W3DGhostObject::snapShot` → `W3DRenderObjectSnapshot` →
+  `ParticleEmitterClass::Clone` → the copy constructor → `strdup` → `strlen`.
+  A stock map, Seaside Mutiny, crashed within seconds of a match. Found by -18's road-buffer probe over the
+  stock maps.
+- **Armed repro, headless on a rule-9 farm:** `-map "Maps\Seaside Mutiny\Seaside Mutiny.map"
+  -autoskirmish 2 -seed 1` gives SIGSEGV on the build without the fix, and runs to its frame limit with it.
+  A windowed game was not reproduced, but any emitter going under the fog takes the same path.
+- **Fixed:** a NULL copies as NULL.
+- **Swept:** every non-literal strdup in the engine's own code (40 sites) now goes through
+  `strdupAsWindows` (`Libraries/Include/Platform/StrdupAsWindows.h`, the one spelling). On Windows that is
+  `_strdup` itself, so nothing changes there. The per-site classification is in
+  `docs/mac-port/tasks/strdup-sweep.md`.
+
+**Latent, not numbered: a bind that fails leaks its socket - every platform, environment-triggered; fixed.**
+- **Where:** `UDP::Bind` made a new socket on every call and never closed one whose bind failed.
+  `Transport::init` retries `Bind` in a tight loop for up to a second while the port is taken, so a single
+  failed init left about 100,000 sockets open. `FirewallHelperClass::openSpareSocket` kept one per failure.
+- **When it shows:** whenever the game's port is already in use, on Windows as elsewhere (shared code).
+  Nothing in data reaches it, so no number. On 2026-09-26 two `net_check` runs from different worktrees
+  collided on the same address and port. Two orphaned peers held 127,052 and 61,370 sockets, the Mac's
+  system-wide file table (276,480) came within reach of full, and every other process's tests failed with
+  "too many open files in system".
+- **Fixed:** `Bind` closes the socket it had before making a new one, and closes the new one when its bind
+  fails. "No socket" is now -1 throughout; it was 0, a valid descriptor off Windows, while a failed
+  `socket()` left -1.
+- **Tested:** `test_lan_broadcast` holds a port, and a `Transport::init` on it fails with the process's
+  descriptor count unchanged (9 and 9). A `UDP` bound twice holds one socket. **Armed:** on the old
+  `udp.cpp` one failed init leaked 54,141 descriptors, and both tests fail.
+
+**Latent, not numbered: a challenge whose load movie does not open.**
+- **Where:** `ChallengeLoadScreen::init` read the movie stream's size through NULL when
+  `TheVideoPlayer->open` found no movie. `SinglePlayerLoadScreen::init` already returned in that case.
+- **When it shows:** on every platform, for a challenge whose movie is missing (a damaged install or a
+  mod). Shipped data has every challenge movie, so no number. Headless there is no video at all, so every
+  challenge started by `-mission` crashed (SIGSEGV).
+- **Fixed:** the challenge screen returns as the single player screen does
+  (`docs/mac-port/tasks/mission-start.md`).
 
 **Latent, not numbered: a missing coordinate set under a texture transform.**
 - **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
