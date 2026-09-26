@@ -4,8 +4,8 @@
 - **Depends on:** B1 B4 B5 (the wire formats, done), N1 (the compatibility CRC, done), E1 E3 (the
   determinism gate and the architecture axis, done)
 - **Blocks:** nothing in M5 but its own "it is a game"
-- **Status:** recon done (-47, 2026-09-26). The PM's order: 1, 3 (F1, defect #29), 2 (F2), 4, 5; 6
-  deferred until E2 needs it. Steps 1, 3 and 2 done (below).
+- **Status:** done (-47, 2026-09-26): recon, then steps 1, 3 (defect #29), 2 (F2), 4 and 5 in the
+  PM's order; step 6 deferred until E2 needs it. See "Close-out" at the end.
 
 ## Why
 
@@ -294,6 +294,64 @@ are identical as MSVC sees them; the new test is POSIX-only.
     frame 1500" and nowhere earlier;
   - copy 1's replay has frame 0's CRC records removed, which makes it the shape of a legacy recording.
     It aligns "legacy: frame 0 missing" and plays back clean.
+
+## Step 4 result: the cross-architecture LAN proof (-47, 2026-09-26)
+
+- **The build.** One x86_64 build directory (`CMAKE_OSX_ARCHITECTURES=x86_64`, E1's recipe), with only
+  `generals` built: 1.3 GB, under the 2.1 GB estimated. It had the same build fingerprint as the arm64
+  build (0xA39CAFCC), so it was the same source.
+- **Disk.** 8,165,068 KB free before the build and at least 6.4 GB free throughout, above the PM's
+  4 GB floor. A watcher would have killed the build and deleted the folder below it. The folder was
+  deleted right after the runs: 7,978,256 KB free after, other sessions' use included.
+- **Both slot orders**, seed 3, two AIs, Golden Oasis, 3000 frames, `net-check.sh --peer1`:
+
+| | copy 0 (127.0.0.1) | copy 1 (192.168.1.103) | result |
+|:--|:--|:--|:--|
+| A | arm64 | x86_64 under Rosetta | both 0x341D0C61 at frame 3000, 0 mismatches, 12 AI structures; both replays align "recorded from frame 0" and play back to it |
+| B | x86_64 under Rosetta | arm64 | the same |
+| control | arm64 | x86_64, on seed 4 | FAILED through the game's own "CRC Mismatch" after 8 s, exit 1 |
+
+  0x341D0C61 is also what the arm64-only recon match ended on. Run A waited for the game's ports,
+  which another session's run held, and then went ahead.
+- **What this adds to E1's architecture axis:** the live lockstep between the two instruction sets
+  over the real network code, not only a replay played on the other one.
+
+## Step 5 result: the argument widths pinned (-47, 2026-09-26)
+
+- `NetPacket.cpp` static_asserts the widths a game message's arguments travel at, on the wire and in
+  the replay file: `Int` 4, `Real` 4, `Bool` 1, `ObjectID` 4, `DrawableID` 4, `UnsignedInt` 4,
+  `Coord3D` 12, `ICoord2D` 8, `IRegion2D` 16, plus the 1- and 2-byte header types. That is beside what
+  B4/B5 pinned (the packed structs, `GameMessage::Type`, `WideChar`).
+- It compiles with clang on arm64 and x86_64. Armed: `Coord3D == 16` fails the compile, naming the
+  argument type.
+- MSVC compiles these for the first time; `WINDOWS-DEBT.md` has the row.
+
+## Close-out
+
+**What L1 proves, measured on one Mac:**
+- The network layer runs off Windows: sockets, the address list, broadcast, the lockstep and the CRC
+  exchange.
+- Two headless copies keep one world over the real network code and are caught when they do not.
+  That holds arm64 against arm64 and arm64 against x86_64, in either slot. `net_check` pins it in
+  ctest, with its controls.
+- A POSIX LAN lobby now hears broadcasts (#29), shown at the socket level with the real classes.
+- Network replays play back in sync against both kinds of recording, and the CRC check stays live to
+  the end (F2).
+- The argument widths on the wire are pinned for every compiler that builds the file.
+
+**What L1 cannot see:**
+- **A Windows peer.** MSVC's code generation, its 32-bit `long` and its CRT are outside this Mac.
+  Rosetta is x86-64 under clang, not Windows. E1's `1UL << (dt - 1)` agreed on arm64 and x86_64 and
+  differed only on Windows. Only a Windows peer, or a Windows-recorded replay, closes that.
+- **Two hosts.** One host's traffic between two addresses never leaves the kernel, so there is no real
+  latency, loss, reordering, MTU or switch. Lobby discovery across machines (#29's fix) is shown only
+  at the socket level on one host. Linux's socket rules are the same by documentation, but not
+  measured here.
+- **The firewall.** `net_check` skips while the macOS application firewall is on, rather than put up
+  its dialog. So a player's first LAN game on a Mac with the firewall on will see that dialog, which
+  nothing here exercises. Third-party filters are not seen either.
+- **Also:** NAT and Internet play (out of scope), more than two humans, and the lobby's GUI, map
+  transfer and chat.
 
 ## Do not
 

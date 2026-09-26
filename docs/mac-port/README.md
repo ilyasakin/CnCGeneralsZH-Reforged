@@ -218,7 +218,7 @@ you start. That commit is the lock.
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`), the Mac baseline over a real fight, defect #20 fixed; parity needs a Windows run | -18 |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | done: `m_exeCRC` takes a CRC-32 over the tracked sources on every platform; LF/CRLF and one-byte checks in ctest | -47 |
 | P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | in progress: steps 1-4 merged (overlay root; read-only roots and logs; one staged overlay, W=P path by path, E1 on `-overlay`; root selection); step 5, the `.app`, held for disk | -47 |
-| L1 | [LAN play on POSIX](tasks/L1-lan-play.md) | M5 | B1 B4 B5 N1 E1 E3 | in progress: recon, step 1 (`net_check`) and step 3 (defect #29) merged; step 2 done: a network replay's CRC check aligns to recordings with or without frame 0's CRC (d9eccdda) and stays live to the end; next the Rosetta pair, the width asserts | -47 |
+| L1 | [LAN play on POSIX](tasks/L1-lan-play.md) | M5 | B1 B4 B5 N1 E1 E3 | done: two headless copies on one Mac keep one world over the real network code, arm64 against arm64 and against x86_64 under Rosetta (`net_check`); a POSIX lobby hears broadcasts (#29); network replays align to either recording and stay checked to the end; the argument widths pinned. Not seen: a Windows peer, two hosts, the firewall dialog. Step 6 deferred to E2 | -47 |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
