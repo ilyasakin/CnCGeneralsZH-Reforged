@@ -442,3 +442,97 @@ TEST(engine_paths_resolve_on_a_case_sensitive_volume)
 	printf("  not needed off macOS: the default-volume run is already case-sensitive here\n");
 #endif
 }
+
+// P1 (decision 9): the fork's overlay, a read root searched before the install for every relative
+// path that is read, never written; listings the union of the roots.  The expectations are the
+// Windows result of copying the overlay's files into the install's folder, worked out by hand.
+TEST(overlay_reads_first_writes_never_lists_as_one_folder)
+{
+	const std::string base = temp_root("test_posixpath_overlay");
+	const std::string install = base + "/install", overlay = base + "/overlay";
+	make_directory(base);
+	make_directory(install);
+	make_directory(install + "/Data");
+	make_directory(install + "/Data/INI");
+	make_directory(install + "/Data/INI/Object");
+	write_file(install + "/Data/INI/GameData.ini", "install gamedata");
+	write_file(install + "/Data/INI/Weapon.ini", "install weapon");
+	write_file(install + "/Data/INI/Object/Tank.ini", "install tank");
+	write_file(install + "/INIZH.big", "install inizh");
+	write_file(install + "/TexturesZH.big", "install textures");
+	write_file(install + "/Patch.str", "install patch");
+	make_directory(overlay);
+	make_directory(overlay + "/data");						// another case, as a case-sensitive volume can hold
+	make_directory(overlay + "/data/ini");
+	make_directory(overlay + "/data/ini/Reforged");
+	write_file(overlay + "/data/ini/weapon.INI", "overlay weapon");	// the same file, another spelling
+	write_file(overlay + "/data/ini/FXListReforged.ini", "overlay fxlist");
+	write_file(overlay + "/data/ini/Reforged/Extra.ini", "overlay extra");
+	write_file(overlay + "/ReforgedTextures.big", "overlay textures");
+	write_file(overlay + "/Patch.str", "overlay patch");
+
+	char previous[4096];
+	CHECK(getcwd(previous, sizeof(previous)) != NULL);
+	CHECK_EQ(chdir(install.c_str()), 0);
+	PosixPath_Forget_All();
+
+	// armed control: with no overlay nothing of it is seen
+	PosixPath_Set_Overlays(std::vector<std::string>());
+	CHECK_STR(resolved_contents("Data\\INI\\FXListReforged.ini").c_str(), "");
+	CHECK_STR(resolved_contents("Patch.str").c_str(), "install patch");
+	CHECK_STR(listed("", "", "*.big", false).c_str(), "INIZH.big|TexturesZH.big");
+
+	char real_overlay[4096];
+	CHECK(realpath(overlay.c_str(), real_overlay) != NULL);
+	PosixPath_Set_Overlays(std::vector<std::string>(1, real_overlay));
+
+	// reads: the overlay's copy first, the install's where the overlay has none
+	CHECK_STR(resolved_contents("Data\\INI\\Weapon.ini").c_str(), "overlay weapon");
+	CHECK_STR(resolved_contents("Data\\INI\\FXListReforged.ini").c_str(), "overlay fxlist");
+	CHECK_STR(resolved_contents("Data\\INI\\GameData.ini").c_str(), "install gamedata");
+	CHECK_STR(resolved_contents("Patch.str").c_str(), "overlay patch");
+	CHECK_EQ(zh_access("ReforgedTextures.big", F_OK), 0);
+	FILE * read = zh_fopen("data\\INI\\WEAPON.ini", "rb");
+	CHECK(read != NULL);
+	if (read != NULL) fclose(read);
+
+	// listings: one folder holding both, one entry a name, byte order over the union
+	CHECK_STR(listed("", "", "*.big", false).c_str(), "INIZH.big|ReforgedTextures.big|TexturesZH.big");
+	CHECK_STR(listed("", "Data\\INI\\", "*.ini", false).c_str(),
+		"Data\\INI\\FXListReforged.ini|Data\\INI\\GameData.ini|Data\\INI\\weapon.INI");
+	CHECK_STR(listed("", "Data\\INI\\", "*.ini", true).c_str(),
+		"Data\\INI\\FXListReforged.ini|Data\\INI\\GameData.ini|Data\\INI\\weapon.INI"
+		"|Data\\INI\\Object\\Tank.ini|Data\\INI\\Reforged\\Extra.ini");
+
+	// writes: the install only, whatever the overlay holds
+	CHECK_STR(resolved("Patch.str", POSIX_PATH_CREATE_LEAF).c_str(), "Patch.str");
+	CHECK_STR(resolved("Patch.str", POSIX_PATH_EXISTING_IN_ROOT).c_str(), "Patch.str");
+	CHECK_STR(resolved("Data\\INI\\FXListReforged.ini", POSIX_PATH_EXISTING_IN_ROOT).c_str(), "(unresolved)");
+	CHECK(zh_unlink("Data\\INI\\FXListReforged.ini") != 0);		// only in the overlay: nothing to delete
+	CHECK_STR(read_file(overlay + "/data/ini/FXListReforged.ini").c_str(), "overlay fxlist");
+	CHECK_EQ(zh_unlink("Patch.str"), 0);							// in both: the install's goes
+	CHECK_STR(read_file(overlay + "/Patch.str").c_str(), "overlay patch");
+	CHECK_STR(read_file(install + "/Patch.str").c_str(), "");
+	FILE * written = zh_fopen("Data\\INI\\Weapon.ini", "r+b");		// an update: the install's copy
+	CHECK(written != NULL);
+	if (written != NULL) { fputs("X", written); fclose(written); }
+	CHECK_STR(read_file(install + "/Data/INI/Weapon.ini").c_str(), "Xnstall weapon");
+	CHECK_STR(read_file(overlay + "/data/ini/weapon.INI").c_str(), "overlay weapon");
+	const int handle = zh_open("ReforgedTextures.big", O_WRONLY, 0);	// in the overlay only
+	CHECK(handle < 0);
+	if (handle >= 0) close(handle);
+	FILE * created = zh_fopen("Data\\INI\\FXListReforged.ini", "wb");	// a create lands in the install
+	CHECK(created != NULL);
+	if (created != NULL) { fputs("install made", created); fclose(created); }
+	CHECK_STR(read_file(install + "/Data/INI/FXListReforged.ini").c_str(), "install made");
+	CHECK_STR(read_file(overlay + "/data/ini/FXListReforged.ini").c_str(), "overlay fxlist");
+	CHECK_STR(resolved_contents("Data\\INI\\FXListReforged.ini").c_str(), "overlay fxlist");	// reads still see the overlay's
+
+	// absolute paths are untouched
+	CHECK_STR(resolved_contents(install + "/Data/INI/Weapon.ini").c_str(), "Xnstall weapon");
+
+	PosixPath_Set_Overlays(std::vector<std::string>());
+	PosixPath_Forget_All();
+	CHECK_EQ(chdir(previous), 0);
+	remove_tree(base);
+}

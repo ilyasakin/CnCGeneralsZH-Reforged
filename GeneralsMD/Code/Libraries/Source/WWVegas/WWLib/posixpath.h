@@ -66,8 +66,21 @@ enum PosixPathIntent
 	POSIX_PATH_CREATE_LEAF,
 	// Any component may be missing; every missing one keeps the engine's spelling.  For walks that
 	// create the directories along a path.
-	POSIX_PATH_CREATE_PATH
+	POSIX_PATH_CREATE_PATH,
+	// Every component must exist, in the current directory only, never in an overlay: for whatever
+	// changes a file that is there (unlink, remove, rename's source, an open for writing).  The two
+	// CREATE intents resolve there too.  Reads alone see the overlays (P1).
+	POSIX_PATH_EXISTING_IN_ROOT
 };
+
+// P1 (decision 9): the fork's own data is an overlay, read roots searched BEFORE the current
+// directory (the install) for a relative path that is read, in the order given.  A relative path that
+// is written, created, removed or renamed resolves in the current directory only, so nothing ever
+// lands in an overlay.  A directory listing is the union of every root's (see
+// PosixPath_List_Like_Win32).  Absolute paths are untouched.  Set once, before the engine starts
+// (PosixMain); each entry is a real, absolute directory.
+void PosixPath_Set_Overlays(const std::vector<std::string> & real_directories);
+std::vector<std::string> PosixPath_Overlays();
 
 // Resolves engine_path for intent into real_path.  False when a component the intent needs does not
 // exist, or when the path is one no POSIX system can have (empty, a drive letter, a UNC path).
@@ -104,6 +117,10 @@ bool PosixPath_Matches_Pattern(const char * pattern, const char * name);
 // Entries are visited in byte order.  The caller's set compares without case and keeps the first of
 // two names that differ only in case - which a case-sensitive volume can hold and Windows cannot - so
 // byte order makes that first one the same every time, as decision D2 does for lookups.
+// - With overlays (P1), a relative directory is listed in every root that has it, and the listings
+//   are merged by name: one entry for a name however many roots hold it (the first root's spelling,
+//   which is also the copy a read opens), then byte order over the merged set.  So a directory that
+//   spans the overlay and the install lists as one Windows folder holding both would.
 void PosixPath_List_Like_Win32(const std::string & current_directory, const std::string & original_directory,
 	const std::string & search_name, bool search_subdirectories, std::vector<std::string> & found);
 
