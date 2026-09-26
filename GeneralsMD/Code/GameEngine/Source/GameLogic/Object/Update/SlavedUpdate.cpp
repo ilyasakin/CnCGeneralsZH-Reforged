@@ -49,6 +49,7 @@
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/SlavedUpdate.h"
 #include "GameLogic/Weapon.h"
+#include "Platform/MsvcFloatCasts.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -205,7 +206,7 @@ UpdateSleepTime SlavedUpdate::update( void )
 		{
 			Real health = body->getHealth();
 			Real maxHealth = body->getMaxHealth();
-			healthPercentage = (Int)(health / maxHealth * 100.0f);
+			healthPercentage = floatToIntAsMsvc(health / maxHealth * 100.0f);
 		}
 	}
 		

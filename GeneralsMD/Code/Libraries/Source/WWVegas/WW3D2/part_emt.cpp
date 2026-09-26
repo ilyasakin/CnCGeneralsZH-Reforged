@@ -82,7 +82,9 @@ ParticleEmitterClass::ParticleEmitterClass(float emit_rate, unsigned int burst_s
 			const W3dEmitterLinePropertiesStruct * line_props
 ) :
 	RenderObjClass(),
-	EmitRate(emit_rate > 0.0f ? (unsigned int)(1000.0f / emit_rate) : 1000U),
+	// a rate so small that its interval leaves an unsigned int (asset data) emits never rather than
+	// through an undefined conversion
+	EmitRate(emit_rate > 0.0f ? ((1000.0f / emit_rate) < 4294967295.0f ? (unsigned int)(1000.0f / emit_rate) : 0xFFFFFFFFu) : 1000U),
 	BurstSize(burst_size != 0	? burst_size : 1),
 	OneTimeBurstSize(1),
 	OneTimeBurst(false),

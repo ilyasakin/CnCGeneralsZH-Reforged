@@ -9983,7 +9983,10 @@ void InGameUI::drawSuperweaponStrip( void )
 	if( m_superweaponFlashDuration >= 1.0f )
 	{
 		const Real period = 2.0f * m_superweaponFlashDuration;
-		const Real phase = (Real)( TheGameLogic->getFrame() % (UnsignedInt)period ) / period;
+		// period is at least 2; an INI duration past an unsigned int's range is capped, not converted
+		// (undefined, and MSVC's answer could be 0, a modulo by zero)
+		const UnsignedInt periodFrames = period < 4294967295.0f ? (UnsignedInt)period : 0xFFFFFFFFu;
+		const Real phase = (Real)( TheGameLogic->getFrame() % periodFrames ) / period;
 		pulse = 0.5f - 0.5f * (Real)cos( 2.0 * PI * phase );
 	}
 

@@ -66,6 +66,7 @@
 #include "dx8vertexbuffer.h"
 #include "dx8indexbuffer.h"
 #include "vertmaterial.h"
+#include "Platform/MsvcFloatCasts.h"
 
 /*
 ** Registry value names
@@ -1341,10 +1342,12 @@ WWINLINE Vector4 DX8Wrapper::Convert_Color(unsigned color)
 
 WWINLINE unsigned int DX8Wrapper::Convert_Color(const Vector3& color, const float alpha)
 {
-	const unsigned int a = (unsigned int)(alpha * 255.0f) & 0xff;
-	const unsigned int r = (unsigned int)(color.X * 255.0f) & 0xff;
-	const unsigned int g = (unsigned int)(color.Y * 255.0f) & 0xff;
-	const unsigned int b = (unsigned int)(color.Z * 255.0f) & 0xff;
+	// A channel outside 0..1 wraps, as Windows' conversion did (-0.1 is 231); C leaves converting a
+	// negative float to unsigned undefined, and ARM64 made it 0.  Platform/MsvcFloatCasts.h.
+	const unsigned int a = (unsigned int)floatToIntAsMsvc(alpha * 255.0f) & 0xff;
+	const unsigned int r = (unsigned int)floatToIntAsMsvc(color.X * 255.0f) & 0xff;
+	const unsigned int g = (unsigned int)floatToIntAsMsvc(color.Y * 255.0f) & 0xff;
+	const unsigned int b = (unsigned int)floatToIntAsMsvc(color.Z * 255.0f) & 0xff;
 	return (a << 24) | (r << 16) | (g << 8) | b;
 }
 

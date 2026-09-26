@@ -108,6 +108,12 @@ static const float	HALF_PI						= 1.57079632679489661923f;
 // ----------------------------------------------------------------------------
 static unsigned int fixedAngle( float radians )
 {
+	// A NaN or an infinity has no angle.  The conversion below would be undefined for it; every platform
+	// happened to land on 0 (x86's INT64_MIN masked to its low 32 bits, ARM64's 0), so 0 it is, explicitly.
+	// Locomotor's calcArcTurnToGoal hands in a NaN whenever a missile's nose is already on its goal.
+	if( !(radians - radians == 0.0f) )
+		return 0;
+
 	double turns = (double)radians * TURNS_PER_RADIAN;
 	turns -= floor( turns );
 	return (unsigned int)((DetInt64)(turns * TURN_SCALE) & 0xFFFFFFFF);
@@ -164,6 +170,12 @@ static int fixedSin( unsigned int angle )
 // ----------------------------------------------------------------------------
 static int arcTanUnit( float ratio )
 {
+	// A NaN ratio (a NaN into ATan2, ACos or ASin, or ATan2 of two infinities) is taken as 0.  The
+	// conversion below would otherwise be undefined.  Every platform happened to answer as for 0: ARM64
+	// converts NaN to 0, and x86's INT64_MIN shifted down and cut to an int is index 0 as well.
+	if( ratio != ratio )
+		ratio = 0.0f;
+
 	// a ratio of exactly one scales to 2^32, so this is measured in 64 bits all
 	// the way down
 	DetInt64 fixed = (DetInt64)((double)ratio * TURN_SCALE);

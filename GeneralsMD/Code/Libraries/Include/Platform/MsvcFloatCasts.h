@@ -44,11 +44,29 @@
 #ifndef MSVCFLOATCASTS_H
 #define MSVCFLOATCASTS_H
 
+#include <type_traits>
+
 /// cvttss2si: toward zero into a 32-bit int, and INT_MIN (0x80000000) for NaN or anything outside
 /// the int range.
 inline int floatToIntAsMsvc(float value)
 {
 	return (value > -2147483648.0f && value < 2147483648.0f) ? (int)value : (int)(-2147483647 - 1);
+}
+
+/// cvttsd2si, the same for a double: toward zero, and INT_MIN for NaN or outside the int range.  An
+/// overload rather than a narrowing to float, which would round a double (or a large integer) first.
+inline int floatToIntAsMsvc(double value)
+{
+	return (value > -2147483649.0 && value < 2147483648.0) ? (int)value : (int)(-2147483647 - 1);
+}
+
+/// An integer (or enum) handed to one of BaseType.h's REAL_TO_ macros, as a few callers do: the plain
+/// conversion those macros always made, since no float is involved.  The float and double overloads
+/// above are exact matches for their types and win over this template.
+template <typename T, typename std::enable_if<std::is_integral<T>::value || std::is_enum<T>::value, int>::type = 0>
+inline int floatToIntAsMsvc(T value)
+{
+	return (int)value;
 }
 
 /// (unsigned char)value as MSVC computes it: the low byte of floatToIntAsMsvc.
