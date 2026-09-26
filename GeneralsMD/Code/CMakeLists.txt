@@ -1680,6 +1680,8 @@ if(ZH_PLATFORM_POSIX)
   endif()
   # Their install check (Tools/install-guard.sh) on a made-up install: a change, and a check that could not
   # be made, are told apart.  No game data.
+  # The stager keeps the HUD overlay on: it refuses a staged ShowHudOverlay = No, loose or in an archive.
+  add_test(NAME stage_overlay_hud_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_stage_overlay_hud.sh)
   add_test(NAME install_guard_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_guard.sh)
   # Decision 2 for the GPU: a first launch chooses the top detail preset (High), a later one keeps it, and
   # -noshaders (a Voodoo2, below every preset) chooses Low.  Read from Options.ini after real runs.
