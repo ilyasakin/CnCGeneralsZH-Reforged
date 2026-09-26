@@ -793,6 +793,56 @@ TEST(ffref_alpha_test)
 	CHECK_NEAR( t.hi[0].r, 1.0, EPS );
 }
 
+TEST(ffref_undecided_alpha_test_writes_the_hull)
+{
+	// N30.  Two texels, colour falling as alpha rises: (1, 0) and (.2, 1), so t along the pair gives
+	// alpha t and colour 1 - .8t.  Sampled at t = .485 (u = .4925, bilinear, clamped): the nominal alpha
+	// fails ALPHAREF 126 (.4941) even with the 1.5/255 alpha freedom, while a 1/128-texel shift gives
+	// t = .4928, which passes.  A sample between them, t = .489, passes within the alpha freedom too, and
+	// writes colour .6088 - above the passing variant's .6058.  The envelope must hold it.
+	Texture pair;
+	pair.type = TEXTURE_2D;
+	TextureLevel l;
+	l.width = 2; l.height = 1;
+	l.texels.push_back( rgba( 1, 1, 1, 0 ) );
+	l.texels.push_back( rgba( 0.2, 0.2, 0.2, 1 ) );
+	pair.levels.push_back( l );
+	DrawState s = screenState( 1, 1 );
+	s.textures[0] = &pair;
+	s.texCoordSets = 1;
+	s.texCoordSize[0] = 2;
+	s.stageState[0][TSS_COLOROP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_COLORARG1] = TA_TEXTURE;
+	s.stageState[0][TSS_ALPHAOP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_ALPHAARG1] = TA_TEXTURE;
+	s.samplerState[0][SAMP_MAGFILTER] = TEXF_LINEAR;
+	s.samplerState[0][SAMP_MINFILTER] = TEXF_LINEAR;
+	s.samplerState[0][SAMP_ADDRESSU] = TADDRESS_CLAMP;
+	s.samplerState[0][SAMP_ADDRESSV] = TADDRESS_CLAMP;
+	s.renderState[RS_ALPHATESTENABLE] = 1;
+	s.renderState[RS_ALPHAFUNC] = CMP_GREATEREQUAL;
+	s.renderState[RS_ALPHAREF] = 126;
+	Vertex v[3] = { screenVertex( -100, -100, 0.5, 1, rgba( 1, 1, 1, 1 ) ), screenVertex( 300, -100, 0.5, 1, rgba( 1, 1, 1, 1 ) ),
+		screenVertex( -100, 300, 0.5, 1, rgba( 1, 1, 1, 1 ) ) };
+	for (int i = 0; i < 3; ++i)
+	{
+		v[i].tex[0][0] = 0.4925; v[i].tex[0][1] = 0.5;
+	}
+	Target t = exactTarget( 1, 1 );
+	CHECK( draw( s, PT_TRIANGLELIST, v, 3, 0, 3, t ) );
+	CHECK_NEAR( at( t, 0, 0 ).r, 0.0, EPS );					// nominally rejected: the clear
+	CHECK( (t.zones[0] & ZONE_ALPHA_TEST) != 0 );
+	CHECK( t.hi[0].r >= 1.0 - 0.8 * 0.489 );					// the in-between pass
+	CHECK( t.hi[0].r <= 1.0 - 0.8 * (0.485 - 1.0 / 128.0) + EPS );	// and no more than the variants reach (the other shift)
+
+	// the control: a decided test (ALPHAREF far below) adds nothing from rejected variants
+	s.renderState[RS_ALPHAREF] = 10;
+	t.clear( rgba( 0, 0, 0, 0 ) );
+	CHECK( draw( s, PT_TRIANGLELIST, v, 3, 0, 3, t ) );
+	CHECK_EQ( t.zones[0] & ZONE_ALPHA_TEST, 0u );
+	CHECK_NEAR( at( t, 0, 0 ).r, 1.0 - 0.8 * 0.485, 1e-6 );
+}
+
 TEST(ffref_depth_and_stencil)
 {
 	DrawState s = screenState( 2, 2 );
