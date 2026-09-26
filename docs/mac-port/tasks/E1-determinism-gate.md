@@ -145,6 +145,14 @@ these three, not a general audit.
   - seed 1 at 12,000 frames agrees: fourteen checkpoint saves and still the recording's world, which
     is defect #20's end-to-end check.
 
+- **`--extended`** (not in ctest) is the wider backstop the xfer audit asked for: seeds 2 to 5, each at
+  2 and at 4 players, 12,000 frames, each checked against its checkpointed playback and a second run.
+  Each match prints its fight, per player. The results are below.
+- **Known limit, until P1:** the farm is the install plus `Code/Data`. It does not have the fork's own
+  art archives (`ReforgedTextures.big`, `ReforgedNormals.big`, `ReforgedTerrain.big`, which vendor.sh
+  puts in `Run/`), so the harness plays without them. Whether they reach anything the logic reads is
+  not measured here. P1 switches the harness to `-overlay`.
+
 **What it proves:** same-machine determinism only. A recording, its playback and a second run from
 one seed agree on this machine and this build. It says nothing about agreement with a Windows build,
 which needs a replay recorded on Windows.
@@ -158,6 +166,26 @@ after.
 |:--|:--|:--|:--|:--|:--|
 | `mac_baseline_seed0` | 0 | 12000 | 0x845181C8 | 46 structures | 26 / 45 / 54 / 8 and 20 / 61 / 85 / 8 |
 | `mac_baseline_seed1` | 1 | 12000 | 0xB5B11D73 | 52 structures | 25 / 95 / 135 / 25 and 29 / 82 / 118 / 17 |
+
+**The extended baseline** (`--extended`), same machine and build (feature/mac-port bcf6d8c4 plus the
+View::xfer fix, which is client only). Eight matches at 12,000 frames on the generator's own map size.
+Every one agreed with its checkpointed playback and with a second run. The install listing is
+identical before and after. The last column is per side: units built / lost / kills / peak units,
+then buildings.
+
+| name | seed | players | HEADLESS CRC | built after frame 0 | per side: units built/lost/kills/peak, buildings |
+|:--|:--|:--|:--|:--|:--|
+| `mac_baseline_extended_s2_p2` | 2 | 2 | 0x1F9140F1 | 35 | 68/8/11/83, 16; 85/11/8/100, 20 |
+| `mac_baseline_extended_s2_p4` | 2 | 4 | 0x7D64BB42 | 90 | 78/13/24/101, 26; 73/14/10/98, 22; 73/12/9/97, 25; 81/26/9/106, 20 |
+| `mac_baseline_extended_s3_p2` | 3 | 2 | 0x26FBBCCE | 28 | 79/13/13/94, 13; 45/13/13/65, 16 |
+| `mac_baseline_extended_s3_p4` | 3 | 4 | 0x16E34D91 | 78 | 72/25/27/83, 14; 74/12/14/91, 25; 78/23/8/67, 28; 47/26/36/72, 15 |
+| `mac_baseline_extended_s4_p2` | 4 | 2 | 0x6403793D | 62 | 91/22/21/96, 37; 68/21/22/80, 27 |
+| `mac_baseline_extended_s4_p4` | 4 | 4 | 0xB301D456 | 108 | 99/33/11/100, 33; 35/24/11/48, 22; 110/15/31/135, 27; 52/7/26/75, 30 |
+| `mac_baseline_extended_s5_p2` | 5 | 2 | 0x17BD8906 | 39 | 62/17/19/77, 23; 57/19/17/76, 18 |
+| `mac_baseline_extended_s5_p4` | 5 | 4 | 0x5FBD1BDE | 84 | 47/13/17/56, 25; 48/20/9/67, 20; 45/11/6/57, 20; 69/16/28/102, 23 |
+
+With seeds 0 and 1, that makes 10 matches and 140 checkpoint saves with no divergence. The same
+limits apply: this machine, this build, no Windows comparison, and no Reforged*.big archives.
 
 **Replaced:** the first pair (0xAC31075F, 0xEE8A5309) was taken at 128 cells. There, seed 1's starts
 sit 124 units apart and neither AI can build, so that pair covered an idle match (defect #19).
