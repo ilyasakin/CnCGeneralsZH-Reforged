@@ -1182,6 +1182,14 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(posixd3d9 PROPERTIES CXX_STANDARD 17)
   target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
 
+  # A2's half of the device (a contributor): the resources, the pixel codec, the image operations, the device's
+  # resource methods and Clear, and the caps, against D3D9's rules.  See Tests/test_posix_resources.cpp.
+  add_executable(test_posix_resources ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_resources.cpp)
+  target_include_directories(test_posix_resources PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  set_target_properties(test_posix_resources PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_posix_resources PRIVATE posixd3d9 ffshader test_harness)
+  add_test(NAME test_posix_resources COMMAND test_posix_resources)
+
   # ---- ww3d2 -----------------------------------------------------------------------------------------
   add_library(ww3d2 STATIC ${ZH_NOT_YET_PORTABLE} ${ZH_WW3D2_SOURCES} ${WW}/WW3D2/dx11runtime_posix.cpp)
   set_target_properties(ww3d2 PROPERTIES CXX_STANDARD 17)
