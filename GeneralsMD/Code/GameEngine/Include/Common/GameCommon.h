@@ -304,19 +304,29 @@ typedef UnsignedInt VeterancyLevelFlags;
 const VeterancyLevelFlags VETERANCY_LEVEL_FLAGS_ALL = 0xffffffff;
 const VeterancyLevelFlags VETERANCY_LEVEL_FLAGS_NONE = 0x00000000;
 
+/* A level's bit in VeterancyLevelFlags: bit (level - 1), as EA wrote it, the shift count taken modulo 32.
+	 LEVEL_REGULAR is 0, so EA's `1UL << (dt - 1)` shifted by -1.  Built as it shipped, with a 32-bit
+	 unsigned long and x86's shl reading the count's low five bits, that is bit 31, which ALL includes and
+	 "+REGULAR" sets.  With a 64-bit unsigned long (macOS, Linux) it was bit 63, outside the flags, so no
+	 die module with default flags ever ran for a regular unit.  The mask gives Windows' bit everywhere. */
+inline VeterancyLevelFlags veterancyLevelFlagBit(VeterancyLevel dt)
+{
+	return (VeterancyLevelFlags)1 << (((Int)dt - 1) & 31);
+}
+
 inline Bool getVeterancyLevelFlag(VeterancyLevelFlags flags, VeterancyLevel dt)
 {
-	return (flags & (1UL << (dt - 1))) != 0;
+	return (flags & veterancyLevelFlagBit(dt)) != 0;
 }
 
 inline VeterancyLevelFlags setVeterancyLevelFlag(VeterancyLevelFlags flags, VeterancyLevel dt)
 {
-	return (flags | (1UL << (dt - 1)));
+	return (flags | veterancyLevelFlagBit(dt));
 }
 
 inline VeterancyLevelFlags clearVeterancyLevelFlag(VeterancyLevelFlags flags, VeterancyLevel dt)
 {
-	return (flags & ~(1UL << (dt - 1)));
+	return (flags & ~veterancyLevelFlagBit(dt));
 }
 
 // ----------------------------------------------------------------------------------------------

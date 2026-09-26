@@ -1216,6 +1216,22 @@ hunting a crash or corruption that only one platform shows, look here first.**
   separator with the index test last in the `&&` chain, so a name with no separator read one byte
   before the buffer. The loop stops at -1 whatever that byte holds, so the outcome never changed. The
   index test now comes first. Found by ASan.
+- **The death-type and veterancy flags shifted by -1, and `unsigned long` is 64 bits off Windows (fixed;
+  every earlier Mac baseline had it).** `GameCommon.h`'s `get/set/clearVeterancyLevelFlag` and
+  `Damage.h`'s `get/set/clearDeathTypeFlag` made each value's bit as `1UL << (dt - 1)`. `LEVEL_REGULAR`
+  and `DEATH_NORMAL` are 0, so the count is -1, which is undefined. On Windows `unsigned long` is 32 bits
+  and x86's `shl` reads five bits of the count, so it was bit 31. That bit is inside `ALL`, and it is
+  what `+NORMAL` sets. On macOS and Linux `unsigned long` is 64 bits and both CPUs read six bits: bit 63,
+  which falls outside the 32-bit flags. So `DieMuxData::isDieApplicable` refused every die module with
+  default flags for a regular unit, and every one whose `DeathTypes` includes NORMAL for a normal
+  death. No slow death, no hulk, and no other die effect with default flags ever ran.
+  - Measured with probes over seed 0: `SlowDeathBehavior::onDie` was applicable 0 times in 108, and
+    `LifetimeUpdate` never ran, against `Object::onDie` at 306.
+  - arm64 and x86_64 agreed with each other, both LP64, so E1d's architecture axis could not see it.
+    Only Windows' LLP64 differs, and cross-play with Windows desynced at the first death.
+  - The bit is now `(UnsignedInt)1 << ((dt - 1) & 31)`, which is exactly Windows' value for every
+    input and defined everywhere. Found by -18's float sweep, chasing why `SlowDeathBehavior.cpp:189`
+    never ran.
 - **A `va_list` passed by `const` reference.** `StringClass::Format_Args` takes `const va_list &`.
   Where `va_list` is a pointer (MSVC, both arm64 ABIs) the `const` binds to the reference. Under
   x86-64 System V it is an array, the `const` binds to the elements, and it cannot be handed to

@@ -44,6 +44,8 @@
 #include "GameNetwork/LinkSimulation.h"
 #include "Common/Energy.h"
 #include "Common/RandomValue.h"
+#include "Common/GameCommon.h"
+#include "GameLogic/Damage.h"
 #include "GameClient/ChromaKeyboard.h"
 #include "GameClient/MetaEvent.h"
 #include "GameClient/ClickTolerance.h"
@@ -14060,6 +14062,38 @@ TEST(the_spectator_page_has_its_pieces_and_no_option_clicks)
 #include "test_camera_behavior.inc"
 #include "test_observer_camera.inc"
 #include "test_production_input.inc"
+// A veterancy level's or death type's flag bit is bit (value - 1) with the count taken modulo 32, which is
+// what EA's `1UL << (dt - 1)` gave on Windows, where unsigned long is 32 bits and shl reads five bits of the
+// count.  REGULAR and NORMAL are 0: bit 31, inside ALL.  With a 64-bit unsigned long it was bit 63, outside
+// the flags, and no die module with default flags ran for a regular unit or a normal death.
+TEST(death_and_veterancy_flags_put_value_zero_at_bit_31_as_windows_does)
+{
+	CHECK_EQ(deathTypeFlagBit(DEATH_NORMAL), 0x80000000u);
+	CHECK_EQ(veterancyLevelFlagBit(LEVEL_REGULAR), 0x80000000u);
+	for (Int dt = 1; dt < 32; ++dt) {
+		CHECK_EQ(deathTypeFlagBit((DeathType)dt), 1u << (dt - 1));
+		CHECK_EQ(veterancyLevelFlagBit((VeterancyLevel)dt), 1u << (dt - 1));
+	}
+	CHECK(getDeathTypeFlag(DEATH_TYPE_FLAGS_ALL, DEATH_NORMAL));
+	CHECK(getVeterancyLevelFlag(VETERANCY_LEVEL_FLAGS_ALL, LEVEL_REGULAR));
+	CHECK(!getDeathTypeFlag(DEATH_TYPE_FLAGS_NONE, DEATH_NORMAL));
+	CHECK_EQ(setDeathTypeFlag(DEATH_TYPE_FLAGS_NONE, DEATH_NORMAL), 0x80000000u);		// "+NORMAL"
+	CHECK_EQ(clearDeathTypeFlag(DEATH_TYPE_FLAGS_ALL, DEATH_NORMAL), 0x7fffffffu);	// "-NORMAL"
+	CHECK_EQ(setVeterancyLevelFlag(VETERANCY_LEVEL_FLAGS_NONE, LEVEL_REGULAR), 0x80000000u);
+	CHECK_EQ(clearVeterancyLevelFlag(VETERANCY_LEVEL_FLAGS_ALL, LEVEL_ELITE), 0xfffffffdu);
+	// every death type and level has a bit of its own
+	UnsignedInt seen = 0;
+	for (Int dt = 0; dt < DEATH_NUM_TYPES; ++dt) {
+		CHECK((seen & deathTypeFlagBit((DeathType)dt)) == 0);
+		seen |= deathTypeFlagBit((DeathType)dt);
+	}
+	seen = 0;
+	for (Int level = LEVEL_FIRST; level <= LEVEL_LAST; ++level) {
+		CHECK((seen & veterancyLevelFlagBit((VeterancyLevel)level)) == 0);
+		seen |= veterancyLevelFlagBit((VeterancyLevel)level);
+	}
+}
+
 #include "test_minimap_input.inc"
 #include "test_selection_priority.inc"
 #include "test_widechar_width.inc"
