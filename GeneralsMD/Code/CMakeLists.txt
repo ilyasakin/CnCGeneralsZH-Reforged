@@ -916,6 +916,9 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 #    DownloadManagerPosix.cpp defines it NULL.  DownloadMenu.cpp itself is built everywhere, because
 #    .wnd files bind its callbacks by name through FunctionLexicon, which must be the same on
 #    every platform.
+#  - MapObjectRenderPosix.cpp: MapObject's three RenderObjClass members.  Windows has them beside the
+#    W3D terrain code in gameenginedevice (WorldHeightMap.cpp); the data half is Common/MapObject.cpp
+#    on both.  B6.
 #  - IMEManager.cpp: the IMM32 input method editor (Chinese, Japanese and Korean text entry).  Its
 #    only exports are TheIMEManager and CreateIMEManagerInterface; GameClient::init handles a NULL
 #    manager and every other caller tests for one, and no test calls it.  IMEManagerPosix.cpp answers
@@ -926,7 +929,8 @@ if(ZH_PLATFORM_WINDOWS)
     ${GE}/Source/Common/System/StackDumpPosix.cpp
     ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp
     ${GE}/Source/GameNetwork/DownloadManagerPosix.cpp
-    ${GE}/Source/GameClient/GUI/IMEManagerPosix.cpp)
+    ${GE}/Source/GameClient/GUI/IMEManagerPosix.cpp
+    ${GE}/Source/Common/MapObjectRenderPosix.cpp)
 else()
   list(REMOVE_ITEM GAMEENGINE_SOURCES
     ${GE}/Source/Common/System/StackDump.cpp
