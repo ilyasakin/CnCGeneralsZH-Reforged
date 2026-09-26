@@ -1526,8 +1526,10 @@ set(ZH_POSIXLFS_SOURCES_NO_MAIN
   ${GE}/Source/Common/System/RAMFile.cpp ${GE}/Source/Common/System/registry.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFileSystem.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFile.cpp)
-add_executable(test_posixlocalfilesystem ${TESTS}/test_posixlocalfilesystem.cpp ${TESTS}/test_posixlocalfilesystem_stubs.cpp
-  ${ZH_POSIXLFS_SOURCES_NO_MAIN})
+# The same list with the test's own two files, as test_registryfile and test_wwdownload_registry take it.
+set(ZH_POSIXLFS_SOURCES
+  ${TESTS}/test_posixlocalfilesystem.cpp ${TESTS}/test_posixlocalfilesystem_stubs.cpp ${ZH_POSIXLFS_SOURCES_NO_MAIN})
+add_executable(test_posixlocalfilesystem ${ZH_POSIXLFS_SOURCES})
 target_include_directories(test_posixlocalfilesystem PRIVATE
   $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 target_compile_definitions(test_posixlocalfilesystem PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
