@@ -215,7 +215,7 @@ you start. That commit is the lock.
 | V1 | [Video playback off Windows](tasks/V1-video-playback.md) | M4 | A1 | done on macOS: the Bink player and FFmpeg 8.1.2 (built from its tarball, static, LGPL) decode all 70 install movies against their headers and a golden; sound through C4's mix; not yet on screen (A3) | -47 |
 | A3b | [FFReference](tasks/A-posix-d3d9-device.md) (the renderer's phase A3b, not the build.sh A3 above) | M4 | A3a | done: FFReference, independent, 29 tests / 280 checks; harness is -a9's | -47 |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`), the Mac baseline over a real fight, defect #20 fixed; parity needs a Windows run | -18 |
-| N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
+| N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | done: `m_exeCRC` takes a CRC-32 over the tracked sources on every platform; LF/CRLF and one-byte checks in ctest | -47 |
 | P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | in progress: steps 1-4 merged (overlay root; read-only roots and logs; one staged overlay, W=P path by path, E1 on `-overlay`; root selection); step 5, the `.app`, held for disk | -47 |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
@@ -406,8 +406,8 @@ still separates builds, which is what the executable CRC was for ("the game will
 they change"). What it gives up: detecting a binary modified after the build. The source is GPL,
 so that detection protected nothing. What it changes on Windows: the `m_exeCRC` value, which
 already changes with every rebuild, so no compatibility is lost that a rebuild would not already
-lose. Until it lands, the POSIX build hashes version and scripts only, which can match no Windows
-build, and says so where it is computed. Task: `tasks/N1-build-fingerprint.md`.
+lose. Landed 2026-09-26 (N1): `GeneralsMD/Code/BuildFingerprint.manifest` lists the tracked files, so no
+git is needed at build time. Task: `tasks/N1-build-fingerprint.md`.
 
 **6. Text is rasterised with FreeType off Windows (taken 2026-09-26; task D6).**
 The plan had no task for text. `WW3D2/render2dsentence.cpp` draws every glyph through GDI

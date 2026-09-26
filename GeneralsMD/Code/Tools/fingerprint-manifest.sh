@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#
+# Writes GeneralsMD/Code/BuildFingerprint.manifest: the tracked files the build fingerprint hashes (N1,
+# decision 5), from `git ls-files`, relative to GeneralsMD/Code, '/' separators, sorted bytewise.
+#
+#   fingerprint-manifest.sh            rewrite the manifest (run after adding, removing or renaming a file)
+#   fingerprint-manifest.sh --check    exit 1 if the committed manifest is out of date, 77 without git
+#
+# Left out, because a vendoring or build run rewrites their bytes and two checkouts of one commit would
+# then disagree: Libraries/Source/FFmpeg/dist/ (Windows' FFmpeg, rebuilt by Tools/ffmpeg-build.sh).
+# The manifest itself is left out too (it would hash its own list).
+
+set -euo pipefail
+
+CODE="$(cd "$(dirname "$0")/.." && pwd)"
+MANIFEST="$CODE/BuildFingerprint.manifest"
+
+if ! command -v git >/dev/null 2>&1 || ! git -C "$CODE" rev-parse --git-dir >/dev/null 2>&1; then
+	echo "skip: no git here, so the manifest cannot be checked (it is used as committed)"
+	exit 77
+fi
+
+list() {
+	git -C "$CODE" ls-files -z . | tr '\0' '\n' \
+		| grep -v '^Libraries/Source/FFmpeg/dist/' \
+		| grep -v '^BuildFingerprint\.manifest$' \
+		| LC_ALL=C sort
+}
+
+if [ "${1:-}" = "--check" ]; then
+	if list | cmp -s - "$MANIFEST"; then
+		echo "ok: BuildFingerprint.manifest lists exactly the tracked files ($(wc -l < "$MANIFEST" | tr -d ' '))"
+		exit 0
+	fi
+	echo "FAIL: BuildFingerprint.manifest is out of date; run Tools/fingerprint-manifest.sh and commit it:"
+	diff <(list) "$MANIFEST" | head -10
+	exit 1
+fi
+list > "$MANIFEST"
+echo "wrote $MANIFEST ($(wc -l < "$MANIFEST" | tr -d ' ') files)"
