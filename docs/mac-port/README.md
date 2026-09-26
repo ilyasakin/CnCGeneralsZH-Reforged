@@ -503,7 +503,10 @@ displays, and `METAL_PrepareDriver` refuses the dummy driver, which has no `Meta
 finer, 2026-09-27: raw Metal made a device, cleared and read back; SDL's device failed every way.
 Decided: a carried, hint-gated patch, `Libraries/Source/sdl3-metal-windowless.patch`, applied by
 `Tools/vendor.sh` (`vendor.ps1` does not fetch SDL3). With `ZH_SDL_GPU_METAL_WINDOWLESS` unset it is
-upstream's code. Only `-offscreen` sets it. Upstream (SDL main, 3.5.0, checked 2026-09-27) has the same
+upstream's code. `-offscreen` sets it; so would an environment variable of that name, since SDL's hints
+fall back to the environment, which is harmless: every real video driver has `Metal_CreateView`, so the
+OR changes nothing there. A configure on Apple stops, naming the patch, if the vendored SDL3 lacks it.
+Upstream (SDL main, 3.5.0, checked 2026-09-27) has the same
 check and no equivalent hint; the patch goes when SDL gains one, or when `-offscreen` is no longer
 needed on such hosts. Rejected: running the game in another account's desktop session, and asking for a
 GUI login on every worker. Second reader: -18.
