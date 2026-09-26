@@ -1008,6 +1008,23 @@ harness against FFReference (N4). **Fixed:**
 - No key and no unlit program changes.
 - The harness's point-light-with-ambient scenario now matches. `WINDOWS-DEBT.md` has the row.
 
+**24. Fork-introduced: a generated combiner program's `DOTPRODUCT3` does not write alpha - fixed; latent
+at both engine sites.** Direct3D 9's `D3DTOP_DOTPRODUCT3` as a colour operation writes its sum "to all
+color channels, including alpha" (`D3DTEXTUREOP`), whatever the stage's alpha operation says. `ffshader`'s
+programs took the alpha from the alpha operation instead. Those programs are what **both** Windows
+renderers draw fixed-function stages with: Direct3D 11, and Direct3D 9 too, where `W3DDisplay.cpp:1072`
+turns the generated combiner shaders on unconditionally and `dx8wrapper.cpp:2592-2605` binds them in
+place of the fixed-function stages. The engine's two DOT3 draws are the grayscale conversions, stage 1 of
+`Render2DClass`'s grayscale images (`render2d.cpp:687`) and of the black-and-white screen filter
+(`W3DShaderManager.cpp:791`). **Neither shows a difference today:** both draw with `_PresetOpaqueShader`
+(no blending, no alpha test), so the alpha they write is never read. It would be at the first DOT3 stage
+drawn with blending or an alpha test. Found by A3b's harness against FFReference (N17). **Fixed:** when the
+colour operation is `DOTPRODUCT3`, the stage's alpha is the same replicated sum. The shader dump changes
+one program, `ps_shroud_widest` (a DOT3 colour stage over a `MODULATE` alpha, the engine's shape), one
+line in each of the three targets. `ps_op_dotproduct3`, whose alpha operation is DOT3 as well, is
+byte-identical, as is everything else. The harness's DOTPRODUCT3 scenario now matches. `WINDOWS-DEBT.md`
+has the row.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and

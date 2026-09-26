@@ -559,7 +559,7 @@ static void scenarios_cascade(Harness &h)
 		h.tss(0, D3DTSS_COLORARG0, D3DTA_TFACTOR);
 		h.tss(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
 		h.draw(SCREEN, D3DPT_TRIANGLELIST, screen_quad(-0.5f, -0.5f, 63.5f, 63.5f, CORNERS));
-		h.check(OPS[i].name, false, OPS[i].op == D3DTOP_DOTPRODUCT3 ? "F3: DOTPRODUCT3 alpha" : NULL);
+		h.check(OPS[i].name);
 	}
 
 	h.begin(0xFF000000);
