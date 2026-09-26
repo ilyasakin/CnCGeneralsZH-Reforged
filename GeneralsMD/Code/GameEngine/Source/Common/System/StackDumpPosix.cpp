@@ -21,9 +21,9 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /* StackDump.cpp is the Windows body: dbghelp symbol lookup and an x64 context walk.  This is the
-	 same interface on POSIX, from execinfo's backtrace() and dladdr(), and it is the minimum: frame
-	 addresses with the nearest exported symbol and the module, no file or line.  Proper crash
-	 reporting - symbolication, minidumps, the context walk - is C5's.
+	 same interface on POSIX, from execinfo's backtrace() and dladdr(): frame addresses with the nearest
+	 exported symbol and the module, in Windows' line shape, with no file or line.  A crash signal is
+	 CrashHandlerPosix.cpp's, which writes ReleaseCrashInfo.txt without calling anything here.
 
 	 Nothing here allocates on the way to its output.  It may run on a crash path, where the heap
 	 cannot be trusted: with no callback it writes straight to stderr with backtrace_symbols_fd, and
@@ -35,6 +35,7 @@
 #include "Common/StackDump.h"
 
 #include <dlfcn.h>
+#include <stdint.h>
 #include <execinfo.h>
 #include <stdio.h>
 #include <string.h>
@@ -44,21 +45,26 @@ AsciiString g_LastErrorDump;
 
 static const unsigned int MAX_FRAMES = 64;
 
-/* One frame, as "  0x<address> <symbol>+0x<offset> (<module>)", into a caller's buffer. */
+/* One frame in StackDump.cpp's WriteStackLine shape, "  <file>(<line>) : <function> 0x<address>", into
+	 a caller's buffer.  In-process there is no line table, so the module stands where the file does and
+	 the line is 0 (C5's task file records this for whoever ports the launcher): "  generals(0) :
+	 GameEngine::update+0x1C4 0x0000000100E1F3A0".  Without a symbol the function is the module and its
+	 offset, which atos resolves offline.  The trailing newline is the caller's, as on Windows. */
 static void formatFrame( void *address, char *line, size_t lineSize )
 {
 	Dl_info info;
-	if (dladdr( address, &info ) != 0 && info.dli_sname != NULL)
-	{
-		const char *module = info.dli_fname ? strrchr( info.dli_fname, '/' ) : NULL;
-		snprintf( line, lineSize, "  %p %s+0x%lx (%s)", address, info.dli_sname,
-							(unsigned long)((char *)address - (char *)info.dli_saddr),
-							module ? module + 1 : (info.dli_fname ? info.dli_fname : "?") );
-	}
+	const bool found = dladdr( address, &info ) != 0;
+	const char *path = (found && info.dli_fname) ? info.dli_fname : "?";
+	const char *slash = strrchr( path, '/' );
+	const char *module = slash ? slash + 1 : path;
+	if (found && info.dli_sname != NULL)
+		snprintf( line, lineSize, "  %s(0) : %s+0x%lX 0x%016llX", module, info.dli_sname,
+							(unsigned long)((char *)address - (char *)info.dli_saddr), (unsigned long long)(uintptr_t)address );
+	else if (found && info.dli_fbase != NULL)
+		snprintf( line, lineSize, "  %s(0) : %s+0x%lX 0x%016llX", module, module,
+							(unsigned long)((char *)address - (char *)info.dli_fbase), (unsigned long long)(uintptr_t)address );
 	else
-	{
-		snprintf( line, lineSize, "  %p", address );
-	}
+		snprintf( line, lineSize, "  ?(0) : ? 0x%016llX", (unsigned long long)(uintptr_t)address );
 }
 
 void FillStackAddresses( void **addresses, unsigned int count, unsigned int skip )
@@ -91,6 +97,7 @@ void StackDumpFromAddresses( void **addresses, unsigned int count, void (*callba
 	{
 		formatFrame( addresses[ i ], line, sizeof( line ) );
 		callback( line );
+		callback( "\n" );		// WriteStackLine's two calls, so a callback sees the same pieces on both
 	}
 }
 

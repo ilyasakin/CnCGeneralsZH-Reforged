@@ -201,9 +201,10 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   # expensive to discover.
   add_compile_options(-fsigned-char)
   # -g for the reason /Zi is there: there is no debugger on the porting machine, so a symbolised
-  # stack is the only stack anyone gets.  Deliberately no -fno-omit-frame-pointer - that would be
-  # propping up StackDump.cpp's frame walk, and C5 replaces that mechanism with the platform's own
-  # rather than teaching an EBP chain to a machine that never had one.
+  # stack is the only stack anyone gets (atos reads the frames C5's crash handler writes).  No
+  # -fno-omit-frame-pointer: Darwin's ABI keeps frame pointers, which the crash handler walks from the
+  # signal's context, and on Linux it takes backtrace(), which unwinds by the .eh_frame -fexceptions
+  # keeps, not by frame pointers.
   add_compile_options(-g)
 else()
   message(FATAL_ERROR
@@ -602,7 +603,8 @@ target_link_libraries(dx11backend PUBLIC dx11device dx11state dx11layout dx11res
 # ---- ww3d2 (renderer core) ------------------------------------------------
 # wwshade is header-only here on purpose: no .dsp links wwshade.lib and its
 # shd*bump* sources need shdpp/NVASM-generated headers.  Revisit at exe link.
-# dx8webbrowser.cpp stays inert (ENABLE_EMBEDDED_BROWSER unset).
+# dx8webbrowser.cpp is the embedded browser: its header sets ENABLE_EMBEDDED_BROWSER to 1, so it is
+# live on Windows (the POSIX build leaves it out).
 add_library(ww3d2 STATIC
   ${WW}/WW3D2/FramGrab.cpp ${WW}/WW3D2/dx8webbrowser.cpp ${WW}/WW3D2/dx11runtime.cpp
   ${ZH_WW3D2_SOURCES}
@@ -940,8 +942,9 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 # Platform bodies of one interface: each side's file is left out of the other's build, so Windows
 # gets exactly the sources it had.  B5, bucket (c).
 #  - StackDump.cpp: dbghelp symbol lookup and a structured-exception context walk, Windows only.
-#    StackDumpPosix.cpp is the same Common/StackDump.h interface from backtrace() and dladdr();
-#    crash reporting proper is C5's.
+#    StackDumpPosix.cpp is the same Common/StackDump.h interface from backtrace() and dladdr(), and
+#    CrashHandlerPosix.cpp is what a crash signal writes (C5): ReleaseCrashInfo.txt, as Windows'
+#    structured-exception path writes it.
 #  - WebBrowser.cpp: an ATL/COM wrapper around Internet Explorer for the dead WOL service's pages.
 #    Nothing ever creates TheWebBrowser, on Windows either (Win32GameEngine::createWebBrowser has
 #    no caller), and every caller - INIWebpageURL, WOLLadderScreen, WOLLoginMenu - tests it for NULL
@@ -966,6 +969,7 @@ list(REMOVE_ITEM GAMEENGINE_SOURCES
 if(ZH_PLATFORM_WINDOWS)
   list(REMOVE_ITEM GAMEENGINE_SOURCES
     ${GE}/Source/Common/System/StackDumpPosix.cpp
+    ${GE}/Source/Common/System/CrashHandlerPosix.cpp
     ${GE}/Source/GameNetwork/WOLBrowser/WebBrowserPosix.cpp
     ${GE}/Source/GameNetwork/DownloadManagerPosix.cpp
     ${GE}/Source/GameClient/GUI/IMEManagerPosix.cpp
@@ -1230,9 +1234,9 @@ if(ZH_PLATFORM_POSIX)
 
   # ---- w3ddevice: GameEngineDevice's W3DDevice, gameenginedevice's renderer half ---------------------
   file(GLOB_RECURSE W3DDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/*.cpp)
-  # W3DMouse is a Win32Mouse, the hardware cursor through the window procedure: the platform layer's
-  # input (C3), not the renderer.  W3DGameClient leaves its keyboard and mouse to the subclass off Windows.
-  list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DMouse\\.cpp$")
+  # W3DMouse sits on SDL3's mouse off Windows (C3b), and W3DGameClient makes it and SDL3's keyboard, so
+  # w3ddevice takes sdlinput: the input half of the SDL layer, apart from sdldevice so that sdldevice can
+  # take w3ddevice for the engine's W3D factories without the two needing each other.
   # W3DWebBrowser is the embedded browser as a COM object, which only Win32GameEngine makes; GameEngine
   # has its own WebBrowser off Windows (B5).
   list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/W3DDevice/GameClient/W3DWebBrowser\\.cpp$")
@@ -1241,7 +1245,7 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(w3ddevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs ${CMAKE_CURRENT_SOURCE_DIR}/Main
             ${WW}/Miles6/include ${WW}/Bink/include)
-  target_link_libraries(w3ddevice PUBLIC gameengine ww3d2)
+  target_link_libraries(w3ddevice PUBLIC gameengine ww3d2 sdlinput)
 
   # A1's link checkpoint: all of w3ddevice and ww3d2, whole archive, against what the POSIX game links.
   add_executable(w3d_link_probe ${CMAKE_CURRENT_SOURCE_DIR}/Tests/w3d_link_probe.cpp)
@@ -1429,12 +1433,21 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(milesaudiomanager PROPERTIES CXX_STANDARD 17)
   target_link_libraries(milesaudiomanager PUBLIC gameengine milesaudio)
 
+  # SDL3's input (C3): the keyboard, the mouse, the text input's hooks, the .ANI cursors.  Its own
+  # library because w3ddevice's W3DGameClient and W3DMouse need it, and sdldevice needs w3ddevice.
+  file(GLOB SDLINPUT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/SdlDevice/GameClient/*.cpp)
+  add_library(sdlinput STATIC ${SDLINPUT_SOURCES})
+  target_include_directories(sdlinput PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+  set_target_properties(sdlinput PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(sdlinput PUBLIC gameengine SDL3::SDL3-static)
+
   file(GLOB_RECURSE SDLDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/SdlDevice/*.cpp)
+  list(FILTER SDLDEVICE_SOURCES EXCLUDE REGEX "/SdlDevice/GameClient/")
   add_library(sdldevice STATIC ${SDLDEVICE_SOURCES})
   target_include_directories(sdldevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
-  target_link_libraries(sdldevice PUBLIC posixdevice SDL3::SDL3-static milesaudiomanager)
+  target_link_libraries(sdldevice PUBLIC posixdevice SDL3::SDL3-static milesaudiomanager sdlinput)
 
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
@@ -1830,6 +1843,15 @@ target_link_libraries(test_early_command_line PRIVATE test_harness wwlib wwdebug
 # test_harness takes the first argument as its name filter; the options follow it.
 add_test(NAME test_early_command_line COMMAND test_early_command_line early_command_line
   -logPrefix pre -headless -root "/tmp/zh_ä" -jobthreads 3 -last)
+
+# C5: the crash handler from the real CrashHandlerPosix.cpp, in a child process per way of crashing;
+# the report, the exit signal, and two armed controls.  See the test file.
+add_executable(test_crash_reporting ${TESTS}/test_crash_reporting.cpp ${GE}/Source/Common/System/CrashHandlerPosix.cpp)
+target_include_directories(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+target_compile_definitions(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(test_crash_reporting PROPERTIES CXX_STANDARD 17)
+target_link_libraries(test_crash_reporting PRIVATE wwlib wwdebug)
+add_test(NAME test_crash_reporting COMMAND test_crash_reporting)
 
 # The BIG archive reader on POSIX, against the real game data under rule 9 (C1 (f)): every path's
 # owning archive against an independent reading of the mount order, and the bytes of a sample against
