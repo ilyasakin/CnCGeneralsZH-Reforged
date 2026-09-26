@@ -1416,6 +1416,13 @@ if(ZH_PLATFORM_POSIX)
 
   # A2's checkpoint: every texture of the install through WW3D2's loader into the POSIX device on a
   # null-window (-headless) WW3D, read back and checked against the file.  Needs ZH_GAME_DATA, else Skipped.
+  # The .wak loader's rules: a wave type from the wave table, and no more tracks than the file holds.
+  add_executable(test_water_tracks ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_water_tracks.cpp)
+  set_target_properties(test_water_tracks PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_water_tracks PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_link_libraries(test_water_tracks PRIVATE w3ddevice ww3d2 posixdevice gameengine test_harness)
+  add_test(NAME test_water_tracks COMMAND test_water_tracks)
+
   add_executable(test_install_textures ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_textures.cpp)
   set_target_properties(test_install_textures PROPERTIES CXX_STANDARD 17)
   target_include_directories(test_install_textures PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
