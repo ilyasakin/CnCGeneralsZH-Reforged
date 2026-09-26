@@ -14062,6 +14062,30 @@ TEST(the_spectator_page_has_its_pieces_and_no_option_clicks)
 #include "test_camera_behavior.inc"
 #include "test_observer_camera.inc"
 #include "test_production_input.inc"
+// The dynamic LOD level follows this machine's frame rate, so nothing the simulation reads may come from
+// it: SlowDeathScale (how long a death takes) and DebrisSkipMask (whether a debris object is created) are
+// parsed from GameLOD.ini and deliberately not applied (GameLOD.cpp, applyDynamicLODLevel).  A peer on a
+// slower machine would otherwise run different deaths and split a network game.
+TEST(dynamic_lod_never_reaches_what_the_simulation_reads)
+{
+	GameLODManager lod;
+	for (Int level = 0; level < DYNAMIC_GAME_LOD_COUNT; ++level) {
+		lod.m_dynamicGameLODInfo[level].m_slowDeathScale = 0.5f;		// as a GameLOD.ini line would set them
+		lod.m_dynamicGameLODInfo[level].m_dynamicDebrisSkipMask = 0xFF;
+	}
+	// visit every level, each from a different one, so every application actually runs
+	const DynamicGameLODLevel order[] = { DYNAMIC_GAME_LOD_LOW, DYNAMIC_GAME_LOD_MEDIUM, DYNAMIC_GAME_LOD_VERY_HIGH,
+		DYNAMIC_GAME_LOD_HIGH };
+	for (Int i = 0; i < (Int)(sizeof(order) / sizeof(order[0])); ++i) {
+		CHECK(lod.setDynamicLODLevel(order[i]));
+		CHECK_EQ(lod.getSlowDeathScale(), 1.0f);
+		Int skipped = 0;
+		for (Int n = 0; n < 256; ++n)
+			skipped += lod.isDebrisSkipped() ? 1 : 0;
+		CHECK_EQ(skipped, 0);
+	}
+}
+
 // A veterancy level's or death type's flag bit is bit (value - 1) with the count taken modulo 32, which is
 // what EA's `1UL << (dt - 1)` gave on Windows, where unsigned long is 32 bits and shl reads five bits of the
 // count.  REGULAR and NORMAL are 0: bit 31, inside ALL.  With a 64-bit unsigned long it was bit 63, outside
