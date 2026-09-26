@@ -9088,8 +9088,9 @@ void InGameUI::updateFloatingText( void )
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 /** A one-line heads-up overlay: render rate and elapsed game time.
-	* Off unless ShowHudOverlay is set in Options.ini.  Retail only ever showed the frame rate, and
-	* only behind -displayDebug together with a screenful of engine internals. */
+	* On in every build (GlobalData's m_showHudOverlay, TRUE unless a GameData.ini says ShowHudOverlay =
+	* No, which nothing shipped does; the staged overlay refuses one).  Retail only ever showed the frame
+	* rate, and only behind -displayDebug together with a screenful of engine internals. */
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 /** How the last ten seconds of peace time animate, as fractions of one second. */

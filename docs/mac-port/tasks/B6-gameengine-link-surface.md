@@ -174,10 +174,11 @@ with the old speed (cpudetect's 0) it fails. `FormatURLFromRegistry` moved to th
 portable code that reads the registry API. Left: 33 undefined - Winsock 24 (-18), registry 5 (B6,
 waiting on -18's `Common/RegistryFile.h` and C1 (d)), and the entry point's 4.
 
-**Not yet shown, and B6's to show when `test_gameengine` links:** that `GameLODManager`, run for real
-on a first and a later launch, chooses the same preset and the same shell-map setting. Also open for
-the D track: with the chipset `DC_UNKNOWN`, GameLOD presumes a TNT2, below every shipped preset's GF3,
-so every POSIX machine gets the Low preset until a renderer reports a chipset.
+**Shown 2026-09-26 by `lod_first_run_check` (real launches, not `test_gameengine`):** `GameLODManager`
+chooses the same preset, High, on a first and a later launch. The shell-map setting follows from the CPU
+rule's 3049 MHz, which is above ReallyLowMHz (`test_render_hooks`); no launch reads it back. The Low preset
+that every POSIX machine used to get is gone. That was the chipset `DC_UNKNOWN`, presumed a TNT2, below
+every shipped preset's GF3; decision 2 now covers the GPU (README).
 
 **`test_gameengine` compiles on POSIX, 2026-09-26, and links but for 29 owed symbols.** What it took:
 - A POSIX shim block at the top of `test_gameengine.cpp` (`#if !defined(_WIN32)`), so each test's text
