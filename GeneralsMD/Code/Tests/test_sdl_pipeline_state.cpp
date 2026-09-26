@@ -23,7 +23,7 @@
 //   - the pipeline key from a headless device's own states: D3D9's defaults as SDL3 state, a disabled
 //     blend as one key whatever its factors, D3D9's BOTHSRCALPHA shorthand, separate alpha, two-sided
 //     stencil onto the counter-clockwise face, a fan drawn as a list, point fill refused;
-//   - the sampler description: D3D9's default, anisotropic, a mip filter of NONE pinned to MAXMIPLEVEL,
+//   - the sampler description: D3D9's default, anisotropic, a mip filter of NONE held at MAXMIPLEVEL,
 //     border addressing refused;
 //   - on this machine's GPU (skipped without one): pipelines and samplers the device accepts, and a
 //     repeat is the same object.
@@ -191,11 +191,11 @@ static void check_samplers()
 	std::string refusal;
 	CHECK(Sdl_Sampler_Description(states, &info, refusal));
 	CHECK(info.min_filter == SDL_GPU_FILTER_NEAREST && info.address_mode_u == SDL_GPU_SAMPLERADDRESSMODE_REPEAT);
-	CHECK(info.min_lod == 0.0f && info.max_lod == 0.0f && !info.enable_anisotropy);
+	CHECK(info.min_lod == 0.0f && info.max_lod == 0.25f && !info.enable_anisotropy);
 
 	states[D3DSAMP_MAXMIPLEVEL] = 2;
 	CHECK(Sdl_Sampler_Description(states, &info, refusal));
-	CHECK(info.min_lod == 2.0f && info.max_lod == 2.0f);		// no mip filter: that level and no other
+	CHECK(info.min_lod == 2.0f && info.max_lod == 2.25f);	// no mip filter: that level, and minification kept
 
 	states[D3DSAMP_MINFILTER] = D3DTEXF_ANISOTROPIC;
 	states[D3DSAMP_MIPFILTER] = D3DTEXF_LINEAR;

@@ -186,12 +186,17 @@ public:
 	// ---- The draw's resolve (A3c, PosixDevice9Draw.cpp): the state as set, read the way dx11backend
 	// reads it, into D3's generator descriptions and the constants their programs read.
 
-	/// The texture stages, walked until COLOROP is DISABLE.  A disabled stage 0 means no texturing, which
-	/// D3D9 defines as the diffuse colour and alpha: one SELECTARG1(DIFFUSE) stage.
+	/// The texture stages, walked until one ends the cascade (Stage_Ends_Cascade).  Ended at stage 0 means
+	/// no texturing, which D3D9 defines as the diffuse colour and alpha: one SELECTARG1(DIFFUSE) stage.
 	void Build_Combiner_Description(CombinerDescription &description) const;
-	/// Lighting, material sources, the enabled lights packed down, fog and each stage's coordinates.
-	/// False when more lights are enabled than the generator carries.
-	bool Build_Vertex_Description(VertexPipelineDescription &description) const;
+	/// COLOROP DISABLE, or a COLORARG1 of D3DTA_TEXTURE with no texture bound.
+	bool Stage_Ends_Cascade(unsigned int stage) const;
+	/// Lighting, material sources, the enabled lights packed down, fog and each stage's coordinates,
+	/// with D3D9's own simplifications made first: no lighting for pretransformed vertices, and a
+	/// material source naming a colour the vertex does not supply reads the material.  False, with the
+	/// reason, for what the generator does not carry: more lights than it has, table fog, fog from the
+	/// specular alpha.
+	bool Build_Vertex_Description(VertexPipelineDescription &description, std::string *refusal = NULL) const;
 	/// The two constant blocks, packed to match the descriptions above.
 	void Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants &pixel) const;
 
