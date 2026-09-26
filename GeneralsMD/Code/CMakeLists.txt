@@ -1248,6 +1248,15 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(posix_gpu_draw_selfcheck PRIVATE posixd3d9 SDL3::SDL3-static)
   add_test(NAME posix_gpu_draw_selfcheck COMMAND posix_gpu_draw_selfcheck)
   set_tests_properties(posix_gpu_draw_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
+
+  # A3b's harness: the device's draws on this machine's GPU against FFReference, scenario by scenario,
+  # with two armed controls that must fail (77 without a GPU).
+  add_executable(ffref_gpu_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_ffref_gpu.cpp)
+  set_target_properties(ffref_gpu_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(ffref_gpu_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(ffref_gpu_selfcheck PRIVATE posixd3d9 ffreference SDL3::SDL3-static)
+  add_test(NAME ffref_gpu_selfcheck COMMAND ffref_gpu_selfcheck)
+  set_tests_properties(ffref_gpu_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(sdl_gpu_frame_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
   # A2's half of the device (-18): the resources, the pixel codec, the image operations, the device's

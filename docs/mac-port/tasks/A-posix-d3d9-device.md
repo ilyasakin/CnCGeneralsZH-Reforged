@@ -484,3 +484,55 @@ X8 alpha left as stored, and a clear after draws ignored.
 - a run of the game with a window: shell map and skirmish, refusal counts;
 - the FFReference comparison (A3b's harness, next);
 - the on-disk program cache and warm-up list.
+
+## A3b: the harness against FFReference (2026-09-26)
+
+`Tests/test_ffref_gpu.cpp` (`ffref_gpu_selfcheck`; 77 without a GPU) draws each scenario twice:
+
+- on the device's GPU draw, through D3D9 calls;
+- through -47's FFReference (`Tests/ffreference/ffreference.h`, whose header is the only part of it
+  read here).
+
+One helper sets every state on both sides, and `FFRef::compare` sorts each pixel into exact, inside a
+documented freedom, or outside. There are 61 scenarios:
+
+- rasterisation, perspective-correct colours and depth;
+- point and bilinear filtering, and the three address modes;
+- mips with each filter, and texture transforms;
+- all 22 colour operations, and two stages;
+- specular add;
+- every light type, with and without specular and the local viewer;
+- vertex fog in all three modes, and table fog's refusal;
+- the alpha test, five blends, and the colour write mask;
+- two armed controls (D3D10 pixel centres; texel centres at corners), which must come out outside.
+
+Four GPU-side mutations were each caught: no half-pixel shift, XYZRHW read as three floats, MIPFILTER
+NONE pinned, and an unbound texture read as white.
+
+**Fixed on A3c from the first run** (`fix(posixdevice): read D3D9's rules the reference found
+missing`; 50 of 56 scenarios were failing before, 0 after):
+
+- XYZRHW read as four floats;
+- MIPFILTER NONE keeps minification;
+- an unbound COLORARG1 texture ends the cascade (N20);
+- pretransformed vertices are never lit;
+- a material source the vertex cannot supply reads the material;
+- table fog is refused by name.
+
+**Findings waiting on a decision.** The harness reports each one as KNOWN, and fails if one starts
+passing, so the list cannot go stale. F1-F4 and F6 are in D3's shared generator (`ffvertex`,
+`ffshader`), which Windows' D3D11 backend runs too, so a fix changes Windows' frames as well:
+
+| # | What differs from D3D9 | Engine exposure |
+|---|---|---|
+| F1 | No per-light ambient. ffvertex.cpp:512 says W3D's lights leave it black, but light environments give point lights `getPointAmbient` (dx8wrapper.cpp:3776), and `Set_Light` copies `LightClass`'s ambient (3699). | Point lights: explosions, fires. |
+| F2 | `LOCALVIEWER` is ignored: the halfway vector is always the infinite viewer's. D3D9's default is TRUE, and the engine never turns it off (W3DWater sets TRUE). | Every specular highlight. |
+| F3 | `DOTPRODUCT3` as a colour op does not replicate into alpha. | render2d.cpp:687 and W3DShaderManager.cpp:791, stage 1. |
+| F4 | 2D texture coordinates under `TTFF_COUNT2` are padded (u, v, 0, 1), so the translation is read from `_41`/`_42`. D3D9 pads (u, v, 1, 0), and the engine's scrolling mappers write `_31`/`_32` (mapper.cpp:183). | Scrolling textures do not scroll. |
+| F6 | No vertex specular: the post-cascade specular add has nothing to add unlit. | No engine FVF found with a specular colour. |
+| F7 | An absent vertex specular: FFReference reads 0xFFFFFFFF (N7, from the D3DTA page), the GPU adds nothing. -47 and I disagreed; the page decides it, so this is a finding. | SPECULARENABLE on an FVF without specular: not seen in the engine. |
+| F8 | Flat shading is not generated (Gouraud always). | Only the volumetric shadows (W3DVolumetricShadow.cpp:3805), which write stencil. |
+| F11 | Apple's LOD: +0.10 to +0.20 on average against the exact derivative, up to +0.58 on an anisotropic footprint (the harness's LOD probe). That fits an L1-like ρ (up to +0.5) plus 2x2 differencing. FFReference's LOD freedom is ±0.2. | Mip transitions shift by up to half a level. -47 owns the freedom. |
+
+Not findings: table fog (refused by name; the engine never sets it), and N6 (lit specular only with
+SPECULARENABLE, which the GPU matches).
