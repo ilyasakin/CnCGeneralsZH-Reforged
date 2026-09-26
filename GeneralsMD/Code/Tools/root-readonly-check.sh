@@ -9,9 +9,9 @@
 # clean-up). Afterwards:
 #   - the planted file is still there, and the run reports (stderr) that the deletion was refused;
 #   - the farm's listing (every name, and every link's target) is what it was before the run;
-#   - the install's listing (every file's size and modification time, read with stat alone) is what
-#     it was. That is the rule-9 listing diff, and the one that matters: a write through a farm link
-#     would land in the install.
+#   - the install's listing (every file's size, modification time and BLAKE2 hash, taken before this
+#     script writes anything and again after both runs) is what it was. That is the rule-9 listing
+#     diff, and the one that matters: a write through a farm link would land in the install.
 # The armed control: a run with -writableRoot must delete the planted file, so the check can see a
 # write when one happens. It runs in a root holding only that file, never in a farm of the install.
 #
@@ -96,11 +96,20 @@ stage_overlay() {	# the shipped overlay, as overlay-crc-check.sh stages it
 	fi
 }
 
-# snapshot <dir> <out>: every entry, with a link's target or a file's size and mtime, stat only
+# snapshot <dir> <out> [hash]: every entry, with a link's target or a file's size and mtime; with
+# "hash", each regular file's BLAKE2 as well (read only), since a write that keeps the size and the time
+# would pass a size-and-mtime diff. The install is hashed; the farms are links and folders.
 snapshot() {
-	python3 - "$1" > "$2" <<'EOF'
-import os, sys
+	python3 - "$1" "${3:-}" > "$2" <<'EOF'
+import hashlib, os, sys
 root = sys.argv[1]
+hashing = len(sys.argv) > 2 and sys.argv[2] == 'hash'
+def digest(path):
+    h = hashlib.blake2b(digest_size=16)
+    with open(path, 'rb') as f:
+        for block in iter(lambda: f.read(1 << 20), b''):
+            h.update(block)
+    return h.hexdigest()
 for base, dirs, files in os.walk(root):
     dirs.sort()
     for name in sorted(dirs + files):
@@ -110,7 +119,10 @@ for base, dirs, files in os.walk(root):
             print(rel, '->', os.readlink(p))
         else:
             st = os.lstat(p)
-            print(rel, 'dir' if os.path.isdir(p) else st.st_size, int(st.st_mtime_ns))
+            if os.path.isdir(p):
+                print(rel, 'dir', int(st.st_mtime_ns))
+            else:
+                print(rel, st.st_size, int(st.st_mtime_ns), digest(p) if hashing else '')
 EOF
 }
 
@@ -126,7 +138,7 @@ run() {	# run <name> <root> <switches...>; RUN_EXE overrides the executable
 
 # The install's listing first, before this script writes anything anywhere, so that a write by the
 # harness itself is caught as well as one by the game.
-snapshot "$INSTALL" "$WORK/install.before"
+snapshot "$INSTALL" "$WORK/install.before" hash
 mkdir -p "$WORK/overlay"
 stage_overlay "$WORK/overlay"
 status=0
@@ -136,7 +148,6 @@ farm "$WORK/R"
 plant "$WORK/R"
 snapshot "$WORK/R" "$WORK/farm.before"
 run R "$WORK/R" -overlay "$WORK/overlay"
-snapshot "$INSTALL" "$WORK/install.after"
 snapshot "$WORK/R" "$WORK/farm.after"
 
 if ! grep -aq 'HEADLESS CRC: 0x' "$LOG" 2>/dev/null; then
@@ -156,11 +167,6 @@ if cmp -s "$WORK/farm.before" "$WORK/farm.after"; then
 	echo "ok: the farm is as it was ($(wc -l < "$WORK/farm.before" | tr -d ' ') entries)"
 else
 	echo "FAIL: the farm changed:"; diff "$WORK/farm.before" "$WORK/farm.after" | head -10; status=1
-fi
-if cmp -s "$WORK/install.before" "$WORK/install.after"; then
-	echo "ok: the install is as it was ($(wc -l < "$WORK/install.before" | tr -d ' ') entries, sizes and times)"
-else
-	echo "FAIL: THE INSTALL CHANGED:"; diff "$WORK/install.before" "$WORK/install.after" | head -10; status=1
 fi
 grep -a 'refused to' "$WORK/R.err" 2>/dev/null | sed 's/^/  stderr: /' | head -5
 
@@ -187,8 +193,11 @@ if [ -f "$WORK/user_W/Logs/${TAG}WDebugLogFile.txt" ] && ! ls "$WORK/Fake.app/Co
 else
 	echo "FAIL: the bundled run's log is not where it belongs:"; ls "$WORK/Fake.app/Contents/MacOS" "$WORK/user_W" "$WORK/user_W/Logs" 2>&1 | head; status=1
 fi
-snapshot "$INSTALL" "$WORK/install.final"
-if ! cmp -s "$WORK/install.before" "$WORK/install.final"; then
-	echo "FAIL: THE INSTALL CHANGED during the control:"; diff "$WORK/install.before" "$WORK/install.final" | head -5; status=1
+# The install once more, hashed, after both runs: the rule-9 listing diff, by content
+snapshot "$INSTALL" "$WORK/install.after" hash
+if cmp -s "$WORK/install.before" "$WORK/install.after"; then
+	echo "ok: the install is as it was ($(wc -l < "$WORK/install.before" | tr -d ' ') entries: sizes, times and contents)"
+else
+	echo "FAIL: THE INSTALL CHANGED:"; diff "$WORK/install.before" "$WORK/install.after" | head -10; status=1
 fi
 exit $status
