@@ -21,7 +21,9 @@
 // PosixD3D9Caps.cpp).  See PosixDevice9.h for who owns what and how a device without a window behaves.
 
 #include "PosixDevice9.h"
+#include "SdlGpuFrame.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -70,6 +72,7 @@ public:
 
 PosixDevice9::PosixDevice9(PosixDirect3D9 *adapter, RenderWindow window, const D3DPRESENT_PARAMETERS &parameters) :
 	Adapter(adapter),
+	Gpu(NULL),
 	Window(window),
 	Parameters(parameters),
 	BackBuffer(NULL),
@@ -132,7 +135,45 @@ PosixDevice9::~PosixDevice9()
 	Posix_Bind(Declaration, (IDirect3DVertexDeclaration9 *)NULL);
 	Posix_Bind(VertexShader, (IDirect3DVertexShader9 *)NULL);
 	Posix_Bind(PixelShader, (IDirect3DPixelShader9 *)NULL);
+	delete Gpu;
 	Adapter->Release();
+}
+
+RenderResult PosixDevice9::Create_Gpu_Frame()
+{
+	if (Window == NULL) {
+		return D3D_OK;		// -headless: no GPU device at all
+	}
+	std::string error;
+	Gpu = SdlGpuFrame::Create(Window, Parameters.BackBufferWidth, Parameters.BackBufferHeight, error);
+	if (Gpu == NULL) {
+		fprintf(stderr, "PosixDevice9: a window, and no SDL3 GPU device for it: %s\n", error.c_str());
+		return D3DERR_NOTAVAILABLE;
+	}
+	return D3D_OK;
+}
+
+RenderResult PosixDevice9::Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, RenderUInt32 flags, D3DCOLOR color,
+	float z, RenderUInt32 stencil)
+{
+	if (Gpu == NULL) {
+		return D3DERR_INVALIDCALL;
+	}
+	const bool whole_target = (count == 0 || rects == NULL)
+		&& RenderTargets[0] == BackBuffer
+		&& Viewport.X == 0 && Viewport.Y == 0
+		&& Viewport.Width == Parameters.BackBufferWidth && Viewport.Height == Parameters.BackBufferHeight;
+	if (!whole_target) {
+		static bool said = false;
+		if (!said) {
+			said = true;
+			fprintf(stderr, "PosixDevice9::Clear: part of a target, or a target not the back buffer, waits for A3c's clear draw; refused\n");
+		}
+		return D3DERR_INVALIDCALL;
+	}
+	Gpu->Clear_Back_Buffer((flags & D3DCLEAR_TARGET) != 0, (flags & D3DCLEAR_ZBUFFER) != 0,
+		(flags & D3DCLEAR_STENCIL) != 0, color, z, stencil);
+	return D3D_OK;
 }
 
 void PosixDevice9::Release_Surfaces()
@@ -218,18 +259,28 @@ RenderResult PosixDevice9::Reset(D3DPRESENT_PARAMETERS *parameters)
 	Viewport.Height = Parameters.BackBufferHeight;
 	Viewport.MinZ = 0.0f;
 	Viewport.MaxZ = 1.0f;
+	if (Gpu != NULL && !Gpu->Resize(Parameters.BackBufferWidth, Parameters.BackBufferHeight)) {
+		return D3DERR_OUTOFVIDEOMEMORY;
+	}
 	return Create_Implicit_Surfaces();
 }
 
 RenderResult PosixDevice9::Present(const RenderRect *, const RenderRect *, RenderWindow, const void *)
 {
-	// With no window there is nothing to present to.  With one, the frame reaches it in A3.
-	if (Window != NULL) {
+	// With no window there is nothing to present to.  With one, the back buffer goes to it through the
+	// gamma ramp (SdlGpuFrame::Present); D3DGAMMARAMP is the three 256-entry ramps, red, green, blue.
+	if (Gpu == NULL) {
+		return D3D_OK;
+	}
+	static_assert(offsetof(D3DGAMMARAMP, green) == 512 && offsetof(D3DGAMMARAMP, blue) == 1024,
+		"D3DGAMMARAMP is the three ramps back to back, as SdlGpuFrame::Present reads it");
+	if (!Gpu->Present(reinterpret_cast<const uint16_t (*)[256]>(&GammaRamp))) {
 		static bool said = false;
 		if (!said) {
 			said = true;
-			fprintf(stderr, "PosixDevice9::Present: nothing reaches the window until the SDL3 GPU draw (A3)\n");
+			fprintf(stderr, "PosixDevice9::Present: the GPU refused the frame\n");
 		}
+		return D3DERR_DRIVERINTERNALERROR;
 	}
 	return D3D_OK;
 }

@@ -120,7 +120,10 @@ RenderResult PosixDirect3D9::CreateDevice(unsigned int adapter, D3DDEVTYPE type,
 	}
 
 	PosixDevice9 *created = new PosixDevice9(this, window, *parameters);
-	const RenderResult result = created->Create_Implicit_Surfaces();
+	RenderResult result = created->Create_Gpu_Frame();
+	if (Render_Succeeded(result)) {
+		result = created->Create_Implicit_Surfaces();
+	}
 	if (Render_Failed(result)) {
 		created->Release();
 		return result;
