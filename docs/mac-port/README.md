@@ -213,7 +213,7 @@ you start. That commit is the lock.
 | D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | D6a merged; D6b (FontCharsClass on FreeType) on its branch | -47 |
 | D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done — merged; the Crusader on Metal and on Vulkan (lavapipe); D3's route taken as decision 4 | -a9 |
 | V1 | [Video playback off Windows](tasks/V1-video-playback.md) | M4 | A1 | not started | |
-| E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`) and a first Mac baseline; the skirmish AI does not build yet, so the baseline covers a nearly idle match | -18 |
+| E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`), the Mac baseline over a real fight, defect #20 fixed; parity needs a Windows run | -18 |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
@@ -958,6 +958,45 @@ multiple of 4 gives a skewed picture as well. Found writing A1's POSIX branch. *
 writer A1 wrote, which reads exactly the image and pads each row, is the one writer on every platform
 (checked on a 5x3 image under AddressSanitizer and by macOS's own decoder). `WINDOWS-DEBT.md` has the
 row.
+
+**19. Fork-introduced: a random map smaller than the generator's own sizes can put two starts on top
+of each other.** Recorded, not fixed (command line only). `-randommap <seed> <players> <cells>` takes
+any cell count from 64 up. At 128 cells for two players (below the generator's small size, 184, and its
+normal size, 248), seed 1 puts `Player_1_Start` at (980,1040) and `Player_2_Start` at (950,920), 124
+units apart. Both AIs then judge every build site unsafe, because the enemy command centre is inside
+`isLocationSafe`'s ~350 radius, and the match stays idle. The generator's own
+`start_positions_land_inside_the_map_with_room_between_them` requires more than 32 cells (320 units)
+between starts, but only tests the default size per player count.
+- **Who can reach it:** only the command line. The skirmish menu always generates for eight players
+  at `cellsFor(size, 8)`, 304 cells or more (SkirmishMapSelectMenu.cpp:130). A map rebuilt from its
+  name carries whatever size made it.
+- **Visible now:** `replay-check.ps1` passed 128, and both harnesses now leave the size to the
+  generator. `replay_check` keeps seed 1 at 128 cells as the IDLE guard's armed control. The integer
+  generator should make the same map on Windows; expected, not verified.
+- Found by E1's harness (-18).
+
+**20. Fork-introduced: saving the game nudged every object's heading, so a replay watched with
+checkpoints parted from its recording - fixed.** `Object::xfer` read the transform, transferred it and
+set it back in both directions. `Thing::setTransformMatrix` recomputes the cached angle from the matrix
+(`Get_Z_Rotation`, a round trip that does not return the angle the logic set) and clears the cached
+flags. So every save replaced each object's exact heading with a reconstructed one, and the logic's
+next `setOrientation` built a matrix an ULP or two away.
+- **Why it mattered now:** EA's save had the same side effect, but a save used to end a session. The
+  fork's replay viewer saves a checkpoint every 900 frames of playback (InGameUI.cpp,
+  `takeReplayCheckpoint`).
+- **Measured on macOS**, seed 1 at 12,000 frames:
+  - the recording and a second run agree (0xB5B11D73);
+  - the playback, with 14 checkpoints, reached 0x352D97A4;
+  - bisection: identical through frame 8,259. At 8,260 exactly one object differs: a GLA Stinger
+    Soldier whose position is bit-identical and whose rotation terms are 1-2 ULP off;
+  - with checkpoints skipped, or with the setter guarded, the playback matches.
+- **Fixed:** `Object::xfer` and `Drawable::xfer` set the transform only when loading. A save now leaves
+  the world exactly as it found it. Normal play, recording and network CRCs (`Object::crc` is a
+  separate function) are unchanged.
+- **On Windows:** checkpointed playback now matches its recording, which it did not before; expected,
+  not verified.
+- `replay_check` plays seed 1 at full length as the end-to-end check. `WINDOWS-DEBT.md` has the row.
+  Found by E1's harness (-18).
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
