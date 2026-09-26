@@ -2,7 +2,7 @@
 
 - **Milestone:** M4
 - **Depends on:** A3e
-- **Status:** in review: measured and profiled; the three largest costs and their fixes are proposed to the PM, and nothing is changed yet
+- **Status:** in progress: fix 1 made and measured; the long frames traced to the shared machine's memory pressure; fix 2 measured and deferred; fix 3 and the second-machine matrix to be measured on finer (see "After the PM's decisions")
 - **Owner:** -a9
 
 ## Why
@@ -79,10 +79,9 @@ load average is recorded before and after every run, and every configuration is 
   Even serialised, it is not the limit.
 - **The device's recording is over half of the work:** 2.3 to 2.9 ms for 1,200 to 1,800 draws, which is
   1.6 to 1.9 microseconds a draw. Record+submit adds 0.5 to 1.0 ms. The engine's own CPU is 1.4 to 1.8 ms.
-- **Long frames:** three of the twelve skirmish runs had a single frame of 0.5 to 0.65 s. It fell at a
-  different logic frame each time (246, 290, 747), which isn't something the seeded game does. The load
-  reached 20 to 30 in those minutes, so it is most likely the shared machine. Not explained, and not
-  pursued.
+- **Long frames:** three of the twelve skirmish runs had a single frame of 0.5 to 0.65 s, at a different
+  logic frame each time (246, 290, 747), which isn't something the seeded game does. Traced later: see
+  "The long frames" below.
 
 ## Profile
 
@@ -166,3 +165,128 @@ nearest caller in the game's own binary:
 - **Resolution:** the cost does not grow with the pixels.
 
 **Kept:** the sample output and the matrix logs, a few MB in scratch. No xctrace trace was recorded.
+
+## After the PM's decisions (2026-09-26)
+
+The PM's calls: fix 1 go; fix 3 go after it, as its own commit; fix 2 held; and the long frames chased
+before the fixes are called done.
+
+### Fix 1: programs found by their description's bytes (46f95c30)
+
+`SdlProgramCache` finds a program by the description's own bytes: a last-used fast path by `memcmp`, then
+an FNV-hashed table capped at 16,384 entries. The key string is built only on a miss, and kept on the
+program, where the capture signature reads it.
+
+Before (6c334876) and after (46f95c30), the same six configurations, three runs each, the load 9 to 55.
+The medians over the three runs:
+
+| Configuration | Work p50 | Work p99 | Device draw p50 | Device draw mean | Record+submit mean |
+|---|---|---|---|---|---|
+| skirmish, 800x600 | 5.15 → 3.42 | 7.39 → 5.20 | 2.93 → 1.38 | 2.94 → 1.38 | 0.59 → 0.55 |
+| skirmish, 1920x1080 | 4.51 → 3.07 | 5.52 → 4.72 | 2.57 → 1.21 | 2.58 → 1.22 | 0.49 → 0.47 |
+| skirmish, 2560x1440 | 4.56 → 3.39 | 7.27 → 6.61 | 2.60 → 1.25 | 2.60 → 1.26 | 0.49 → 0.54 |
+| shell, 800x600 | 5.25 → 4.20 | 8.54 → 8.28 | 2.60 → 1.43 | 2.83 → 1.59 | 1.00 → 1.05 |
+| shell, 1920x1080 | 4.35 → 3.19 | 6.36 → 4.65 | 2.28 → 1.15 | 2.26 → 1.15 | 0.60 → 0.61 |
+| shell, 2560x1440 | 4.67 → 3.38 | 6.91 → 5.44 | 2.46 → 1.21 | 2.44 → 1.21 | 0.64 → 0.65 |
+
+- **The device's recording halved:** 1.2 to 1.4 ms at p50, from 2.3 to 2.9. The work fell by 1.1 to
+  1.7 ms, as proposed.
+- **Signatures:** a capture run before and after: the same 50 signatures. 29 files are byte-identical;
+  the rest differ in their matrices only (plus one vertex set and one texture name), which is the camera
+  at the moment of capture, not the draw.
+- **The replay:** 50 of 50 against FFReference, with the known C1.
+- **The suites:** ctest 22 of 22 in the subsets run.
+
+### Fix 2: the engine allocator's mutex, measured and deferred
+
+About 11% of the main thread in the profile: `MemoryPool::allocateBlock` 3.7%,
+`DynamicMemoryAllocator::freeBytes` 3.4%, `allocateBytes` 3.1%, `operator delete` 1.1%. That is up to
+about 0.9 ms a frame. Held by the PM. One constraint for whoever takes it: the engine's lock is a
+CRITICAL_SECTION on Windows, which is recursive; `os_unfair_lock` is not, so it is no drop-in
+replacement.
+
+### Fix 3: the per-draw copies and clears
+
+- **Done, not yet measured:** the batch's three arenas (stream, upload, constants) grow without
+  zero-filling: `std::vector<ArenaByte>`, a byte with an empty constructor, in place of
+  `std::vector<uint8_t>`. What is staged is written in full at once; alignment gaps keep what they held,
+  and are uploaded but never read. The profile put the fill at about 1% of the main thread.
+- **Signatures:** fix 3 off and on, both on 8d3bef8e: the same 50 signatures. 29 byte-identical, the
+  other 21 in matrices only (one each also in vertices, a texture name, render states), as with fix 1.
+- **The A/B** is to run on finer, a quiet second machine: the user asked for no more work on the shared
+  Mac, whose load made the three-run ranges wide anyway.
+- **Not done, and why:**
+  - *Staged bytes written straight into the mapped transfer buffer:* the memmove is 3.4%, but mapping
+    the transfer buffer across a batch changes when it is cycled and when it is safe to write, which is
+    exactly the hazard class the PM listed as suspect 1. Not worth it before the A/B shows what is left.
+  - *Constants rebuilt only when dirty:* `Build_Constants` is 1.2%, about 0.1 ms. A dirty flag has to be
+    set by every Set* path that feeds the blocks, and one missed path is a stale colour. The gain does not
+    carry that risk yet.
+
+### The long frames: the shared machine's memory pressure
+
+**Instruments** (all off unless asked, committed on this branch):
+- `ZH_GPU_TIMING`'s long-frame line: every frame over 50 ms, split into the device's draw, its flushes,
+  its present and swapchain wait, and the engine's own rest.
+- `ZH_GPU_CREATION_LOG`: every program, pipeline, sampler, texture, retexture, buffer and rebuffer, with
+  its time and duration; a draw over 20 ms with its phases, the GPU copies split into textures, samplers
+  and buffers; a mirror-lock wait over 5 ms; a texture call over 5 ms. Kept in memory and written once a
+  present (8d3bef8e), so the log no longer stalls the draws it times; a write over 5 ms says so.
+- `ZH_GPU_CREATION_TRACE=WxH`: the caller of every 500th texture of that size.
+- `ZH_LOAD_TIMING`: every file open and read over 20 ms, and every W3D model and texture load over 20 ms,
+  split into reading and building, with the thread.
+- `vm_stat 1` beside each run, and the load and `kern.num_files` before it.
+
+**What was found**, hidden skirmishes at 2560x1440, 19 runs in 4 batches:
+- **No loading:** no file open or read, and no model or texture load, over 20 ms in the match.
+- **No device cause:** in every slow draw, the flushes, the staging, the constants, the samplers and the
+  buffers were 0.00 ms, and no mirror-lock wait reached 5 ms. That rules out the PM's suspects 1 to 3: a
+  buffer reused while the GPU reads it, a ring growing or waiting for a fence, and the mirror's lock held
+  by another thread.
+- **Every device-side long frame coincided with a blocked write under measured memory pressure.** Each
+  slow draw's time was one `SdlResourceMirrors::Texture` or `Buffer` call, and inside it the creation
+  log's own unbuffered writes to stderr: 8 to 12 ms (runs A1, A2), 264 and 27 ms (G2), 551.46 ms of a
+  551.70 ms draw (G3, the size of the 577 ms first seen), each to within 0.1 ms. One G2 call of 348 ms
+  held a timed write of 269 ms; the other 79 ms came after it, where the only work left was the log's
+  second, untimed line (its own report of the slow write).
+- **None was seen in the unlogged runs** (B1, B2, C1, C2: device draw 1 to 5 ms in every long frame).
+- **The engine-side stalls in C2 coincided with free pages at 15 MB:** 15 long frames in the match,
+  1,096 and 950 ms among them, device draw 1 to 5 ms, logic at most 106 ms, so the engine's client and
+  render work. `vm_stat` at the same second: 975 free pages, 150,000 decompressions and 247,000
+  compressions. B1 had four frames of 120 to 225 ms at 3 to 4 s into the match, the worst a 222 ms
+  logic tick, with free pages around 60 MB.
+- **The machine:** 36 GB, shared by several agent sessions each running copies of the game (about 0.9 GB
+  each), OrbStack (1.8 GB) and the user's own applications; about 2.1 million pages (34 GB) in the
+  compressor; the load 15 to 64 during these runs. The game itself was about 0.4 GB.
+- **Fix 3 neither causes nor hides it:** the G runs were on fix 1 and the instruments only.
+- **Excluded:** runs A3, B3 and F1 to F3 (22:25 to 22:31), when two other harnesses had filled the
+  machine's file table. They were rerun as G1 to G3 and C1 to C2.
+- **What this cannot see:** there was no run on an unloaded machine. Whether a quiet Mac has any long
+  frame in the match is for the finer runs below.
+
+**The load-time frames**, measured, with no action:
+- **The shell build:** one frame of 655 to 839 ms at 0.3 s after the first present, all the engine's own.
+- **First use:** one frame of 88 to 123 ms at about 2 s (299 ms once, at load 62): the first-use
+  program compiles (29 to 66 ms of device draw) and the engine's own rest.
+
+### Observations
+
+- **Text textures, made anew every frame.** About 3,500 64x64 A4R4G4B4 textures a match, two most frames:
+  `PosixDevice9::CreateTexture <- D3DX9Posix_Create_Texture <- DX8Wrapper::_Create_DX8_Texture <-
+  TextureClass::TextureClass <- Render2DSentenceClass::Build_Textures <- Render2DSentenceClass::Render <-
+  W3DDisplayString::draw`, called from `Drawable::drawConstructPercent`, `Drawable::drawHealthBar` and
+  the HUD overlay's `litehtml::el_text::draw`. Text that changes gets new textures. On Windows the driver
+  absorbs it; here each creation costs a mirror texture and an upload. A candidate for a glyph or
+  text-texture cache only if a profile shows the cost.
+- **A crash after the Mac slept:** a run's present blocked through a 17-minute clamshell sleep, and the
+  process crashed one second after waking, in `WindowLayout::hide` (null) from
+  `GameLogic::clearGameData` on the -maxframes exit. Handed to -18 as a player question: does closing a
+  MacBook's lid mid-game crash it?
+
+### A second machine: finer (to do)
+
+The PERF1 matrix and fix 3's A/B, on finer (M3 Pro, 11 cores, 36 GB, macOS 26.5), hidden and with
+`-noaudio`, with the HUD on, `vm_stat` and the load recorded, and finer's native resolution as the third
+column.
+
+**Installed or created on finer** (the user wants it all reverted at the end): none yet.
