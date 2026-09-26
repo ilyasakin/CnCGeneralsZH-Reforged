@@ -200,6 +200,11 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   # which is the point, because the default is the kind of thing that is cheap to state and
   # expensive to discover.
   add_compile_options(-fsigned-char)
+  # -Wno-unknown-pragmas: the tree's #pragma warning lines (67, B4) are MSVC's diagnostics controls,
+  # and clang has none of those warnings to control.  Off now so that a future -Wall is usable rather
+  # than 19,000 lines of them.  B4 checked every pragma for meaning first: none that clang ignores
+  # changes code (docs/mac-port/tasks/B4-pragma-audit.md).
+  add_compile_options(-Wno-unknown-pragmas)
   # -g for the reason /Zi is there: there is no debugger on the porting machine, so a symbolised
   # stack is the only stack anyone gets (atos reads the frames C5's crash handler writes).  No
   # -fno-omit-frame-pointer: Darwin's ABI keeps frame pointers, which the crash handler walks from the
