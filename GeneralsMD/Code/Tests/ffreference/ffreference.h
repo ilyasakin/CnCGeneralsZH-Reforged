@@ -325,6 +325,19 @@ enum Zone			///< why a pixel's envelope is wider than its nominal value (the doc
 	ZONE_PROGRAM = 128		///< a pixel program's range cap or precision changes it (ffprogram.h P4, P5)
 };
 
+/// What the last triangle that nominally wrote a pixel did there: for reading a disagreement (C5).
+struct PixelDetail
+{
+	int primitive;			///< its index among the draw's primitives; -1 when none wrote the pixel
+	int layers;				///< how many of the draw's triangles nominally wrote the pixel
+	Color source;			///< its colour before the blend; its alpha is the one the alpha test read
+	bool alphaPassed;
+	double uv[2][2];		///< stages 0 and 1: the coordinates sampled
+	double lod[2];			///< and the LOD they were sampled at (bias included); -1e9 when not sampled
+	double axes[2][2];		///< the footprint's two axes there, level-0 texels per pixel along x and y
+	double screen[3][2];	///< the triangle's vertices on screen
+};
+
 struct Target
 {
 	int width, height;
@@ -337,6 +350,8 @@ struct Target
 	std::vector<uint32_t> stencil;
 	std::vector<uint32_t> zones;		///< Zone bits, accumulated over the draws that touched the pixel
 	std::vector<uint8_t> depthAmbiguous, stencilAmbiguous;
+	bool recordDetail;					///< fill `detail` as draws write (off unless asked for)
+	std::vector<PixelDetail> detail;	///< per pixel, when recordDetail; sized by the first draw that records
 
 	void create( int w, int h, bool alpha = true, int stencilBits = 8 );
 	void clear( Color c, double z = 1.0, uint32_t s = 0 );

@@ -1260,3 +1260,45 @@ TEST(ffref_lod_freedom_reaches_every_level_inside_its_window)
 	CHECK_NEAR( tn.hi[i].r, 0.7, 1e-9 );		// lambda 1.3: .7 of level 1
 	CHECK_NEAR( tn.lo[i].r, 0.3, 1e-9 );
 }
+
+TEST(ffref_pixel_detail_names_the_last_writer)
+{
+	// Two overlapping full-target triangles, blended: every pixel is written twice, the second last
+	DrawState s = screenState( 2, 2 );
+	s.renderState[RS_ALPHABLENDENABLE] = 1;
+	s.renderState[RS_SRCBLEND] = BLEND_SRCALPHA;
+	s.renderState[RS_DESTBLEND] = BLEND_INVSRCALPHA;
+	Target t = exactTarget( 2, 2 );
+	t.recordDetail = true;
+	const Color a = rgba( 1, 0, 0, 0.5 ), b = rgba( 0, 1, 0, 0.25 );
+	const Vertex v[6] = { screenVertex( -100, -100, 0.5, 1, a ), screenVertex( 300, -100, 0.5, 1, a ), screenVertex( -100, 300, 0.5, 1, a ),
+		screenVertex( -100, -100, 0.5, 1, b ), screenVertex( 300, -100, 0.5, 1, b ), screenVertex( -100, 300, 0.5, 1, b ) };
+	CHECK( draw( s, PT_TRIANGLELIST, v, 6, 0, 6, t ) );
+	CHECK_EQ( t.detail.size(), (size_t)4 );
+	CHECK_EQ( t.detail[3].primitive, 1 );
+	CHECK_EQ( t.detail[3].layers, 2 );
+	CHECK_NEAR( t.detail[3].source.a, 0.25, EPS );
+	CHECK( t.detail[3].alphaPassed );
+	CHECK_NEAR( t.detail[3].screen[1][0], 300.0, EPS );
+	t.clear( rgba( 0, 0, 0, 0 ) );		// cleared with the pixels
+	CHECK( t.detail.empty() );
+	// the footprint: a 4x4 texture across the 2x2 target is 2 level-0 texels per pixel on each axis
+	Texture tex = ramp4();
+	DrawState ts = screenState( 2, 2 );
+	ts.textures[0] = &tex;
+	ts.texCoordSets = 1;
+	ts.texCoordSize[0] = 2;
+	Vertex tv[3] = { screenVertex( 0, 0, 0.5, 1, rgba( 1, 1, 1, 1 ) ), screenVertex( 4, 0, 0.5, 1, rgba( 1, 1, 1, 1 ) ),
+		screenVertex( 0, 4, 0.5, 1, rgba( 1, 1, 1, 1 ) ) };
+	tv[1].tex[0][0] = 2.0;		// u 0..2 over 4 pixels: .5 per pixel, 2 texels of a 4-wide level 0
+	tv[2].tex[0][1] = 2.0;
+	Target tt = exactTarget( 2, 2 );
+	tt.recordDetail = true;
+	CHECK( draw( ts, PT_TRIANGLELIST, tv, 3, 0, 3, tt ) );
+	CHECK_NEAR( tt.detail[0].axes[0][0], 2.0, EPS );
+	CHECK_NEAR( tt.detail[0].axes[0][1], 2.0, EPS );
+	// and nothing is recorded unless asked
+	Target quiet = exactTarget( 2, 2 );
+	CHECK( draw( s, PT_TRIANGLELIST, v, 6, 0, 6, quiet ) );
+	CHECK( quiet.detail.empty() );
+}
