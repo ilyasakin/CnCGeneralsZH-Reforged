@@ -433,24 +433,47 @@ static void check_render_targets(PosixDevice9 *device)
 	CHECK(device->Draws_Recorded() == recorded);
 	CHECK(device->Draw_Refusals().count("sampling the render target it draws into") == 1);
 
-	// The target's right half into the back buffer's top-left quarter, on the GPU.  Through the seam's
-	// Gpu_StretchRect until a contributor's StretchRect calls it (then through StretchRect itself).
+	// The target read back through GetRenderTargetData into a system-memory surface: the GPU's pixels,
+	// green on the left and red on the right, not the CPU image's zeroes.
+	IDirect3DSurface9 *copy = NULL;
+	CHECK(device->CreateOffscreenPlainSurface(16, 16, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &copy, NULL) == D3D_OK);
+	CHECK(device->GetRenderTargetData(target, copy) == D3D_OK);
+	D3DLOCKED_RECT locked;
+	CHECK(copy->LockRect(&locked, NULL, D3DLOCK_READONLY) == D3D_OK);
+	const uint32_t *row = (const uint32_t *)((const uint8_t *)locked.pBits + 8 * locked.Pitch);
+	CHECK(row[2] == GREEN && row[13] == RED);
+	copy->UnlockRect();
+	copy->Release();
+
+	// The target's right half into the back buffer's top-left quarter, a GPU blit through StretchRect.
 	CHECK(device->SetRenderTarget(0, back) == D3D_OK);
 	device->SetTexture(0, NULL);
 	device->Clear(0, NULL, D3DCLEAR_TARGET, BLUE, 1.0f, 0);
 	const RenderRect from = { 8, 0, 16, 16 };
 	const RenderRect to = { 0, 0, 16, 16 };
-	CHECK(device->Gpu_StretchRect(target, &from, back, &to, D3DTEXF_POINT) == D3D_OK);
+	CHECK(device->StretchRect(target, &from, back, &to, D3DTEXF_POINT) == D3D_OK);
 	read_back(device);
 	CHECK_PIXEL(8, 8, RED);
 	CHECK_PIXEL(24, 24, BLUE);
 
-	// The target cleared on its own: nothing else moves.
+	// The front buffer is what Present showed, even after the back buffer has been cleared again.
+	CHECK(device->Present(NULL, NULL, NULL, NULL) == D3D_OK);
+	device->Clear(0, NULL, D3DCLEAR_TARGET, GREEN, 1.0f, 0);
+	IDirect3DSurface9 *front = NULL;
+	CHECK(device->CreateOffscreenPlainSurface(SIZE, SIZE, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &front, NULL) == D3D_OK);
+	CHECK(device->GetFrontBufferData(0, front) == D3D_OK);
+	CHECK(front->LockRect(&locked, NULL, D3DLOCK_READONLY) == D3D_OK);
+	CHECK(((const uint32_t *)((const uint8_t *)locked.pBits + 8 * locked.Pitch))[8] == RED);
+	CHECK(((const uint32_t *)((const uint8_t *)locked.pBits + 24 * locked.Pitch))[24] == BLUE);
+	front->UnlockRect();
+	front->Release();
+
+	// The target cleared on its own: nothing else moves, and the back buffer keeps its green.
 	CHECK(device->SetRenderTarget(0, target) == D3D_OK);
 	device->Clear(0, NULL, D3DCLEAR_TARGET, YELLOW, 1.0f, 0);
 	CHECK(device->SetRenderTarget(0, back) == D3D_OK);
 	read_back(device);
-	CHECK_PIXEL(24, 24, BLUE);
+	CHECK_PIXEL(24, 24, GREEN);
 
 	target->Release();
 	back->Release();
