@@ -28,6 +28,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 #include "Platform/SleepMilliseconds.h"
 #include "Lib/Clock.h"
 #include "Lib/WideCharFns.h"
@@ -2405,8 +2406,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	g_UT_curThing = TheThingFactory->firstTemplate();
 	g_UT_startTiming = true;
 	g_UT_gotUnit = false;
-	g_UT_timingLog = fopen("TimingLog.txt", "w");	 
-	g_UT_commaLog = fopen("TimingCDL.txt", "w");
+	g_UT_timingLog = zh_fopen("TimingLog.txt", "w");	 
+	g_UT_commaLog = zh_fopen("TimingCDL.txt", "w");
 	fputs("Full,100*ms,NoPart-NoSpawn,,No Spawn,100*ms,Logic,100*ms,Thing,Model,Kind,Side,DrawCalls All,DrawCalls NoPart-NoSpawn,DrawCalls NoSpawn\n", g_UT_commaLog); 
 
 	// Turn off shadows
@@ -2798,7 +2799,7 @@ void GameLogic::writeMismatchDump( Int numPlayers )
 	fname.concat( "MismatchDump.txt" );
 
 	// a file the user's disk may refuse to give us - the one place a guard is earned
-	FILE *fp = fopen( fname.str(), "w" );
+	FILE *fp = zh_fopen( fname.str(), "w" );
 	if( fp == NULL )
 	{
 		DEBUG_LOG(( "writeMismatchDump - could not open %s\n", fname.str() ));

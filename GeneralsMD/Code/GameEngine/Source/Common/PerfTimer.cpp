@@ -27,6 +27,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 #include "Lib/Clock.h"
 
 #include "Common/PerfTimer.h"
@@ -361,7 +362,7 @@ static UnsignedInt s_framesAccumulated = 0;
 	strlcpy(tmp, s_buf, ARRAY_SIZE(tmp));
 	strlcat(tmp, ".csv", ARRAY_SIZE(tmp));
 
-	s_perfStatsFile = fopen(tmp, "w");
+	s_perfStatsFile = zh_fopen(tmp, "w");
 	s_perfDumpOptions = options;
 
 	if (s_perfStatsFile == NULL)

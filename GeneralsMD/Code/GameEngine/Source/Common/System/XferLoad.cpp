@@ -29,6 +29,7 @@
 
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
+#include "zhio.h"
 #include "Common/Debug.h"
 #include "Common/GameState.h"
 #include "Common/Snapshot.h"
@@ -80,7 +81,7 @@ void XferLoad::open( AsciiString identifier )
 	Xfer::open( identifier );
 
 	// open the file
-	m_fileFP = fopen( identifier.str(), "rb" );
+	m_fileFP = zh_fopen( identifier.str(), "rb" );
 	if( m_fileFP == NULL )
 	{
 		

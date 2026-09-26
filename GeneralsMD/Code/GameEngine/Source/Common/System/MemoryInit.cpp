@@ -42,6 +42,7 @@
 //
 // ----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "zhio.h"
 
 // SYSTEM INCLUDES
 
@@ -769,7 +770,7 @@ void userMemoryManagerInitPools()
 	getExecutableDirectory(buf, sizeof(buf), FALSE);
 	strlcat(buf, "\\Data\\INI\\MemoryPools.ini", ARRAY_SIZE(buf));
 
-	FILE* fp = fopen(buf, "r");
+	FILE* fp = zh_fopen(buf, "r");
 	if (fp)
 	{
 		char poolName[256];
