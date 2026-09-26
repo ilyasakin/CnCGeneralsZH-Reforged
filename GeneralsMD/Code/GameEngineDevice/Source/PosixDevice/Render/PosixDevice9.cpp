@@ -173,20 +173,45 @@ RenderResult PosixDevice9::Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, R
 	if (Gpu == NULL) {
 		return D3DERR_INVALIDCALL;
 	}
-	const bool whole_target = (count == 0 || rects == NULL)
-		&& RenderTargets[0] == BackBuffer
-		&& Viewport.X == 0 && Viewport.Y == 0
-		&& Viewport.Width == Parameters.BackBufferWidth && Viewport.Height == Parameters.BackBufferHeight;
-	if (!whole_target) {
+	if ((flags & D3DCLEAR_TARGET) != 0 && RenderTargets[0] != BackBuffer) {
 		static bool said = false;
 		if (!said) {
 			said = true;
-			fprintf(stderr, "PosixDevice9::Clear: part of a target, or a target not the back buffer, waits for A3c's clear draw; refused\n");
+			fprintf(stderr, "PosixDevice9::Clear: a render target other than the back buffer waits for A3d; refused\n");
 		}
 		return D3DERR_INVALIDCALL;
 	}
-	Gpu->Clear_Back_Buffer((flags & D3DCLEAR_TARGET) != 0, (flags & D3DCLEAR_ZBUFFER) != 0,
-		(flags & D3DCLEAR_STENCIL) != 0, color, z, stencil);
+	const bool colour = (flags & D3DCLEAR_TARGET) != 0;
+	const bool depth = (flags & D3DCLEAR_ZBUFFER) != 0;
+	const bool stencil_too = (flags & D3DCLEAR_STENCIL) != 0;
+	// D3D9 clears each rectangle cut to the viewport, or the viewport itself when there are none.  What
+	// covers the whole target is the next pass's load operation; anything less is a clear draw.
+	const int target_width = (int)Parameters.BackBufferWidth;
+	const int target_height = (int)Parameters.BackBufferHeight;
+	const RenderUInt32 passes = (count == 0 || rects == NULL) ? 1 : count;
+	for (RenderUInt32 index = 0; index < passes; ++index) {
+		int left = (int)Viewport.X, top = (int)Viewport.Y;
+		int right = left + (int)Viewport.Width, bottom = top + (int)Viewport.Height;
+		if (count != 0 && rects != NULL) {
+			if (rects[index].x1 > left) left = rects[index].x1;
+			if (rects[index].y1 > top) top = rects[index].y1;
+			if (rects[index].x2 < right) right = rects[index].x2;
+			if (rects[index].y2 < bottom) bottom = rects[index].y2;
+		}
+		if (left < 0) left = 0;
+		if (top < 0) top = 0;
+		if (right > target_width) right = target_width;
+		if (bottom > target_height) bottom = target_height;
+		if (right <= left || bottom <= top) {
+			continue;
+		}
+		if (left == 0 && top == 0 && right == target_width && bottom == target_height) {
+			Gpu->Clear_Back_Buffer(colour, depth, stencil_too, color, z, stencil);
+		}
+		else {
+			Gpu->Clear_Rect(left, top, right - left, bottom - top, colour, depth, stencil_too, color, z, stencil);
+		}
+	}
 	return D3D_OK;
 }
 
