@@ -558,6 +558,28 @@ install_freetype() {
   step "FreeType 2.14.3 -> Libraries/Source/freetype"
 }
 
+# --- FFmpeg 8.1.2, the release Windows' dist/ is built from (Tools/ffmpeg-build.sh): the decoder
+# under the Bink API off Windows (V1). Only the tarball is kept, checked against its published hash;
+# CMake's POSIX build unpacks it into the build tree, builds the few components the movies need
+# (Tools/ffmpeg-build-posix.sh), and deletes the unpacked tree again - 11.7MB here instead of 110MB.
+install_ffmpeg() {
+  local destination="$libraries/Source/FFmpeg/ffmpeg-8.1.2.tar.xz"
+  local sha='464beb5e7bf0c311e68b45ae2f04e9cc2af88851abb4082231742a74d97b524c'
+  if [ -e "$destination" ] && [ -z "$force" ] && [ "$(sha256_of "$destination")" = "$sha" ]; then return 0; fi
+  rm -f "$destination"
+  local archive hash
+  archive=$(get_file 'https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz' "$work/ffmpeg-8.1.2.tar.xz")
+  hash=$(sha256_of "$archive")
+  if [ "$hash" != "$sha" ]; then
+    rm -f "$archive"
+    echo "[vendor] ERROR: ffmpeg-8.1.2.tar.xz has hash $hash, and the release was published as $sha" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$destination")"
+  cp -f "$archive" "$destination"
+  step "FFmpeg 8.1.2 (source tarball) -> Libraries/Source/FFmpeg"
+}
+
 get_channel_url() {
   if [ -n "${ZHR_CHANNEL_URL:-}" ]; then printf '%s/\n' "${ZHR_CHANNEL_URL%/}"; return 0; fi
   local launcher
@@ -664,5 +686,6 @@ install_glslang
 install_spirv_cross
 install_shadercross
 install_freetype
+install_ffmpeg
 install_art
 step 'everything the build needs is in place'

@@ -28,7 +28,7 @@
 #include "SdlDevice/Common/SdlGameEngine.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
 #include "SdlDevice/GameClient/SdlInput.h"
-#include "SdlDevice/Common/PosixW3DGameClient.h"
+#include "W3DDevice/GameClient/W3DGameClient.h"
 #include "MilesAudioDevice/MilesAudioManager.h"
 #include "Common/GlobalData.h"		// -nodevice picks the radar, as on Windows
 #include "Common/WindowMode.h"
@@ -253,7 +253,7 @@ void SdlGameEngine::serviceWindowsOS( void )
 // HeadlessRadar only under -nodevice, where there is no device to hold W3DRadar's textures.  -headless
 // makes the device with no window (decision 8, refined), so it keeps W3DRadar, as on Windows.
 GameLogic *SdlGameEngine::createGameLogic( void ) { return NEW W3DGameLogic; }
-GameClient *SdlGameEngine::createGameClient( void ) { return NEW PosixW3DGameClient; }
+GameClient *SdlGameEngine::createGameClient( void ) { return NEW W3DGameClient; }
 ModuleFactory *SdlGameEngine::createModuleFactory( void ) { return NEW W3DModuleFactory; }
 ThingFactory *SdlGameEngine::createThingFactory( void ) { return NEW W3DThingFactory; }
 FunctionLexicon *SdlGameEngine::createFunctionLexicon( void ) { return NEW W3DFunctionLexicon; }
