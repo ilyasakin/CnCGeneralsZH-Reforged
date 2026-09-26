@@ -397,6 +397,30 @@ CMake additions are POSIX-only.
 So until (d) moves them to `zh_fopen`, they find nothing and fall back to their defaults. The
 engine's own writes go through the file system and resolve correctly.
 
+## Registry.ini: the protocol (agreed 2026-09-26 by -a9 (C1), -18 (registry.cpp) and -47 (B6))
+
+Off Windows, `Registry.ini` in the user data directory stands in for the registry.
+- **Path:** `findRegistryFile` (`EarlyOptions.h`), which is `findUserDataDirectory()` +
+  `"Registry.ini"`. Every reader and writer takes it from there.
+- **Opened with** `zh_fopen`: the path is spelled the Windows way, so a raw `fopen` finds nothing
+  (fixed in C1 (d) for `registry.cpp` and `Options.ini`).
+- **Format:** `key = value`, one per line, LF.
+- **Reading:** `EarlyOptions`' `findEarlyOptionValueIn`. Keys are matched case-insensitively and
+  whitespace-trimmed, and the last one wins. A value is at most 255 bytes.
+- **Keys:** `registry.cpp`'s `registryFileKey`. That is the path below Zero Hour's key without
+  leading backslashes, then `'\'`, then the value name. Original-Generals values have `"Generals\"`
+  in front. DWORDs are decimal text.
+- **Writing** (-47's POSIX bodies of the WWDownload registry calls, in gameengine):
+  - Read the whole file.
+  - Replace the **last** line whose key matches by the reader's rules, keeping every other line
+    and comment, or append one.
+  - Refuse a value containing a newline or longer than 255 bytes, which the reader would truncate.
+  - Write it all to `<path>.<pid>` with `zh_fopen("w")`, then `zh_rename` it over `<path>`, so a
+    reader sees the old file or the new one, never half.
+  - No locking; the last writer wins.
+- **Shared code:** -18 exposes `readRegistryFileAt` and `registryFileKey` in `Common/RegistryFile.h`
+  on top of C1 (d), so the writers' getters read back through the same parser.
+
 ## Why
 
 `GameEngine` is an abstract class with a pure-virtual factory for every subsystem
