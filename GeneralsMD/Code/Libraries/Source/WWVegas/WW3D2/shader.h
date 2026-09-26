@@ -44,7 +44,9 @@
 
 #include "always.h"
 
-#if defined (SR_OS_SOLARIS)
+// Solaris's and macOS's <limits.h> define PASS_MAX (the longest password getpass() takes), which would
+// turn ShaderClass's enumerator into a number.  Nothing in the engine means that one.
+#if defined (SR_OS_SOLARIS) || (!defined(_WIN32) && defined(PASS_MAX))
 #undef PASS_MAX
 #endif
 
