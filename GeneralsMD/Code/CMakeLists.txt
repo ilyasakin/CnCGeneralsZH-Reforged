@@ -1722,6 +1722,11 @@ function(add_lib_test name)
   endif()
 endfunction()
 
+# Platform/MsvcFloatCasts.h: float-to-unsigned conversions as MSVC computes them.  Built on every
+# platform; on Windows it also holds MSVC's own cast to the same bytes.
+add_lib_test(test_msvc_float_casts)
+target_include_directories(test_msvc_float_casts PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+
 add_lib_test(test_wwmath wwmath wwlib wwsaveload wwdebug)
 target_include_directories(test_wwmath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
 
