@@ -48,6 +48,8 @@
 
 #include <atomic>
 
+class SdlGpuFrame;
+
 /// AddRef and Release for one of the interfaces, counted as COM counts.
 template <class Interface>
 class PosixRefCounted : public Interface
@@ -154,6 +156,17 @@ public:
 	const D3DPRESENT_PARAMETERS & Get_Present_Parameters() const { return Parameters; }
 	RenderWindow Get_Window() const { return Window; }
 
+	/// With a window, the SDL3 GPU frame the device draws and presents through (A3); without one, none.
+	/// CreateDevice calls it; a window whose GPU device cannot be made fails the device, loudly.
+	RenderResult Create_Gpu_Frame();
+	SdlGpuFrame * Get_Gpu() const { return Gpu; }
+
+	/// Clear with a window, where the back buffer's pixels are the GPU's (the A3 design's render-target
+	/// seam): a contributor's Clear calls this when Get_Gpu() is not null.  A3a takes a clear of the whole back
+	/// buffer; a clear of part of it, or of another target, is refused until A3c's clear draw.
+	RenderResult Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, RenderUInt32 flags, D3DCOLOR color, float z,
+		RenderUInt32 stencil);
+
 	/// Makes the implicit back buffer (and depth surface, when the present parameters ask for one) from
 	/// the present parameters, and binds them as render target 0 and the depth surface.  CreateDevice and
 	/// Reset call it, with every implicit surface already released.  a contributor's, in PosixDevice9Resources.cpp.
@@ -257,6 +270,7 @@ protected:
 	RenderResult Draw_Unavailable(const char *what);
 
 	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
+	SdlGpuFrame *Gpu;					///< the SDL3 GPU frame, with a window only
 	RenderWindow Window;				///< null under -headless
 	D3DPRESENT_PARAMETERS Parameters;
 
