@@ -217,6 +217,20 @@ RenderResult PosixDevice9::Create_Gpu_Frame(bool offscreen)
 	return D3D_OK;
 }
 
+void PosixDevice9::Present_Offscreen(unsigned int hz)
+{
+	if (Gpu != NULL) {
+		Gpu->Set_Offscreen_Presents(hz);
+		const bool paced = hz > 0 && hz <= 1000;
+		fprintf(stderr, "PosixDevice9: offscreen, %ux%u, %s\n", Gpu->Width(), Gpu->Height(), paced ? "paced" : "unpaced");
+		if (paced) {
+			fprintf(stderr, "PosixDevice9:   at %u frames a second\n", hz);
+		} else if (hz > 1000) {
+			fprintf(stderr, "PosixDevice9:   ZH_OFFSCREEN_HZ %u is out of range (1 to 1000)\n", hz);
+		}
+	}
+}
+
 RenderResult PosixDevice9::Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, RenderUInt32 flags, D3DCOLOR color,
 	float z, RenderUInt32 stencil)
 {

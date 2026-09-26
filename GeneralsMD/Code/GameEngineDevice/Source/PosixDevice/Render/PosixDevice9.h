@@ -172,6 +172,8 @@ public:
 	/// CreateDevice calls it; a window whose GPU device cannot be made fails the device, loudly.  A test
 	/// asks for an offscreen frame on a device made without a window: it draws, and Present only flushes.
 	RenderResult Create_Gpu_Frame(bool offscreen = false);
+	/// -offscreen's presents, paced at hz a second (0: unpaced); SdlGpuFrame::Set_Offscreen_Presents.
+	void Present_Offscreen(unsigned int hz);
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.

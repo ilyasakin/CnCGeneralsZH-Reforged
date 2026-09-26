@@ -153,6 +153,15 @@ void SdlMouse::update( void )
 			m_cursorConfined = FALSE;
 		}
 	}
+	else if (SDL_GetHintBoolean( "ZH_OFFSCREEN_FRAMES", false ))
+	{
+		/* -offscreen (SdlGameEngine::startOffscreen): no window, so as a hidden one is - never focused, the
+			 pointer never in it.  Left as it starts, the pointer is in the window at (0,0), and edge scrolling
+			 carries the view off to the map's corner. */
+		if (!m_lostFocus)
+			lostFocus( TRUE );
+		m_cursorInWindow = FALSE;
+	}
 	Mouse::update();
 }
 

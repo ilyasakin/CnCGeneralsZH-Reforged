@@ -497,6 +497,21 @@ the install. Until packaging (M5) implements that search order, E1's harness ass
 with the overlay copied over it, as C2's first run did. Owner of the implementation: packaging (E2/M5)
 with C1's file system.
 
+**10. One vendored library is modified: SDL3 may make a Metal GPU device with no window (taken
+2026-09-27).** A host with no window server (a worker reached over ssh as an account with no GUI login,
+CI) has Metal, but SDL3 3.4.16 will not make its GPU device there: the cocoa video driver adds no
+displays, and `METAL_PrepareDriver` refuses the dummy driver, which has no `Metal_CreateView`. Measured on
+finer, 2026-09-27: raw Metal made a device, cleared and read back; SDL's device failed every way.
+Decided: a carried, hint-gated patch, `Libraries/Source/sdl3-metal-windowless.patch`, applied by
+`Tools/vendor.sh` (`vendor.ps1` does not fetch SDL3). With `ZH_SDL_GPU_METAL_WINDOWLESS` unset it is
+upstream's code. `-offscreen` sets it; so would an environment variable of that name, since SDL's hints
+fall back to the environment, which is harmless: every real video driver has `Metal_CreateView`, so the
+OR changes nothing there. A configure on Apple stops, naming the patch, if the vendored SDL3 lacks it.
+Upstream (SDL main, 3.5.0, checked 2026-09-27) has the same
+check and no equivalent hint; the patch goes when SDL gains one, or when `-offscreen` is no longer
+needed on such hosts. Rejected: running the game in another account's desktop session, and asking for a
+GUI login on every worker. Second reader: -18.
+
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
 Added 2026-09-22 after two Windows-only breaks in one afternoon, both with the same shape and

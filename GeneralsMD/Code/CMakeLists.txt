@@ -149,6 +149,17 @@ foreach(vendored ${VENDORED})
     message(FATAL_ERROR "${vendored} is missing. ${VENDOR_HINT}")
   endif()
 endforeach()
+# SDL3's one patch (Libraries/Source/sdl3-metal-windowless.patch, decision 10).  A tree fetched before
+# it and never given a vendor.sh run since still builds, and -offscreen then fails on a host with no
+# window server with SDL's own "no supported SDL_GPU backend", which names nothing.  Said here instead.
+# Apple only: the patch is to the Metal backend.
+if(APPLE)
+  file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/SDL3/src/gpu/metal/SDL_gpu_metal.m _zh_sdl3_patched
+       REGEX "ZH_SDL_GPU_METAL_WINDOWLESS")
+  if(NOT _zh_sdl3_patched)
+    message(FATAL_ERROR "Libraries/Source/SDL3 lacks sdl3-metal-windowless.patch. ${VENDOR_HINT}")
+  endif()
+endif()
 
 # The _CRT_ pair only tells MSVC's own headers to stop deprecating the C library this code is
 # written against.  They mean nothing to any other compiler and cost nothing there, so they stay
@@ -2514,6 +2525,19 @@ if(ZH_PLATFORM_POSIX)
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
     endif()
   endforeach()
+
+  # The SDL3 GPU selfchecks draw offscreen only.  On Apple they take SDL's dummy video driver and the
+  # windowless Metal hint (decision 10), so a host with no window server (a worker over ssh) runs them
+  # where it used to skip them, and every Mac takes the one path.  Linux keeps its own video driver: the
+  # patch is Metal's.
+  if(APPLE)
+    foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
+                     posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck)
+      if(TEST ${_zh_test})
+        set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=dummy" "ZH_SDL_GPU_METAL_WINDOWLESS=1")
+      endif()
+    endforeach()
+  endif()
 endif()
 
 # P2: on macOS our own code may not call an API newer than the deployment target without guarding it
