@@ -376,7 +376,7 @@ void SurfaceClass::Copy(Vector2i &min,Vector2i &max, const unsigned char *other)
 
 	D3DLOCKED_RECT lock_rect;	
 	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	RECT rect;
+	RenderRect rect;
 	rect.left=min.I;
 	rect.right=max.I;
 	rect.top=min.J;
@@ -478,7 +478,7 @@ void SurfaceClass::Copy(
 	Get_Description(sd);
 	const_cast <SurfaceClass*>(other)->Get_Description(osd);
 
-	RECT src;
+	RenderRect src;
 	src.left=srcx;
 	src.right=srcx+width;
 	src.top=srcy;
@@ -489,14 +489,14 @@ void SurfaceClass::Copy(
 
 	if (sd.Format==osd.Format && sd.Width==osd.Width && sd.Height==osd.Height)
 	{
-		POINT dst;
+		RenderPoint dst;
 		dst.x=dstx;
 		dst.y=dsty;	
 		DX8Wrapper::_Copy_DX8_Rects(other->D3DSurface,&src,1,D3DSurface,&dst);
 	}
 	else
 	{
-		RECT dest;
+		RenderRect dest;
 		dest.left=dstx;
 		dest.right=dstx+width;
 		dest.top=dsty;
@@ -535,13 +535,13 @@ void SurfaceClass::Stretch_Copy(
 	Get_Description(sd);
 	const_cast <SurfaceClass*>(other)->Get_Description(osd);
 
-	RECT src;
+	RenderRect src;
 	src.left=srcx;
 	src.right=srcx+srcwidth;
 	src.top=srcy;	
 	src.bottom=srcy+srcheight;
 
-	RECT dest;
+	RenderRect dest;
 	dest.left=dstx;
 	dest.right=dstx+dstwidth;
 	dest.top=dsty;
@@ -586,8 +586,8 @@ void SurfaceClass::FindBB(Vector2i *min,Vector2i*max)
 
 	D3DLOCKED_RECT lock_rect;
 	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	RECT rect;
-	::ZeroMemory(&rect, sizeof(RECT));
+	RenderRect rect;
+	::ZeroMemory(&rect, sizeof(RenderRect));
 
 	rect.bottom=max->J;
 	rect.top=min->J;
@@ -664,8 +664,8 @@ bool SurfaceClass::Is_Transparent_Column(unsigned int column)
 
 	D3DLOCKED_RECT lock_rect;
 	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	RECT rect;
-	::ZeroMemory(&rect, sizeof(RECT));
+	RenderRect rect;
+	::ZeroMemory(&rect, sizeof(RenderRect));
 
 	rect.bottom=sd.Height;
 	rect.top=0;
@@ -718,8 +718,8 @@ void SurfaceClass::Get_Pixel(Vector3 &rgb, int x,int y)
 
 	D3DLOCKED_RECT lock_rect;
 	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	RECT rect;
-	::ZeroMemory(&rect, sizeof(RECT));
+	RenderRect rect;
+	::ZeroMemory(&rect, sizeof(RenderRect));
 
 	rect.bottom=y+1;
 	rect.top=y;
@@ -814,8 +814,8 @@ void SurfaceClass::DrawPixel(const unsigned int x,const unsigned int y, unsigned
 
 	D3DLOCKED_RECT lock_rect;
 	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	RECT rect;
-	::ZeroMemory(&rect, sizeof(RECT));
+	RenderRect rect;
+	::ZeroMemory(&rect, sizeof(RenderRect));
 
 	rect.bottom=y+1;
 	rect.top=y;
@@ -911,8 +911,8 @@ void SurfaceClass::DrawHLine(const unsigned int y,const unsigned int x1, const u
 
 	D3DLOCKED_RECT lock_rect;
 	::ZeroMemory(&lock_rect, sizeof(D3DLOCKED_RECT));
-	RECT rect;
-	::ZeroMemory(&rect, sizeof(RECT));
+	RenderRect rect;
+	::ZeroMemory(&rect, sizeof(RenderRect));
 
 	rect.bottom=y+1;
 	rect.top=y;

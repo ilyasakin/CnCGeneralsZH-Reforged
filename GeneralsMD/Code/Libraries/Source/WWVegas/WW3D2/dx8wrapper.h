@@ -49,6 +49,7 @@
 #include "always.h"
 #include "dllist.h"
 #include <d3d9.h>
+#include "Platform/RenderTypes.h"	// the Win32 types the device interface crosses with, engine-named
 #include "d3dx9runtime.h"
 #include "d3dx9math.h"
 #include "matrix4.h"
@@ -88,11 +89,11 @@ const int MAX_Z_BIAS_LEVEL=15;
 // This renderer creates one implicit swap chain and never asks about another.
 const UINT PRIMARY_SWAP_CHAIN=0;
 // D3D9 can bind several render targets at once and indexes them; this renderer binds one.
-const DWORD PRIMARY_RENDER_TARGET=0;
+const uint32 PRIMARY_RENDER_TARGET=0;
 // D3D8's GetAdapterIdentifier took D3DENUM_NO_WHQL_LEVEL to skip a slow WHQL signature
 // check.  D3D9 removed the flag and never does that check unless asked, so zero is what
 // the old call was actually asking for.
-const DWORD NO_ADAPTER_IDENTIFIER_FLAGS=0;
+const uint32 NO_ADAPTER_IDENTIFIER_FLAGS=0;
 const unsigned MAX_VERTEX_STREAMS=2;
 const unsigned MAX_VERTEX_SHADER_CONSTANTS=96;
 const unsigned MAX_PIXEL_SHADER_CONSTANTS=8;
@@ -469,7 +470,7 @@ public:
 
 	static void Clear(bool clear_color, bool clear_z_stencil, const Vector3 &color, float dest_alpha=0.0f, float z=1.0f, unsigned int stencil=0);
 
-	static void	Set_Viewport(CONST D3DVIEWPORT9* pViewport);
+	static void	Set_Viewport(const D3DVIEWPORT9* pViewport);
 
 	static void Set_Vertex_Buffer(const VertexBufferClass* vb, unsigned stream=0);
 	static void Set_Vertex_Buffer(const DynamicVBAccessClass& vba);
@@ -508,7 +509,7 @@ public:
 
 	static void Set_DX8_Light(int index,D3DLIGHT9* light);
 	static void Set_DX8_Render_State(D3DRENDERSTATETYPE state, unsigned value);
-	static void Set_DX8_Clip_Plane(DWORD Index, CONST float* pPlane);
+	static void Set_DX8_Clip_Plane(uint32 Index, const float* pPlane);
 	static void Set_DX8_Texture_Stage_State(unsigned stage, D3DTEXTURESTAGESTATETYPE state, unsigned value);
 	static void Set_DX8_Texture_Stage_State(unsigned stage, D3DSAMPLERSTATETYPE state, unsigned value);
 	static void Set_DX8_Texture(unsigned int stage, IDirect3DBaseTexture9* texture);
@@ -686,10 +687,10 @@ public:
 
 	static void _Copy_DX8_Rects(
 			IDirect3DSurface9* pSourceSurface,
-			CONST RECT* pSourceRectsArray,
+			const RenderRect* pSourceRectsArray,
 			UINT cRects,
 			IDirect3DSurface9* pDestinationSurface,
-			CONST POINT* pDestPointsArray
+			const RenderPoint* pDestPointsArray
 	);
 
 	static void _Update_Texture(TextureClass *system, TextureClass *video);
@@ -752,7 +753,7 @@ public:
 	**	DX8Wrapper::Set_Render_Target ((IDirect3DSurface9 *)NULL);
 	**
 	*/
-	static IDirect3DSwapChain9 *	Create_Additional_Swap_Chain (HWND render_window);
+	static IDirect3DSwapChain9 *	Create_Additional_Swap_Chain (RenderWindow render_window);
 
 	/*
 	** Render target interface. If render target format is WW3D_FORMAT_UNKNOWN, current display format is used.
@@ -799,14 +800,14 @@ public:
 
 	// D3D8's SetVertexShader took a DWORD that was either an FVF code or a shader
 	// handle, and the engine used it both ways.  D3D9 splits them, so these do too.
-	static void Set_Vertex_Format(DWORD fvf);
+	static void Set_Vertex_Format(uint32 fvf);
 	static void Set_Vertex_Shader(IDirect3DVertexShader9 * vertex_shader);
 	static void Set_Pixel_Shader(IDirect3DPixelShader9 * pixel_shader);
 
 	static void Set_Vertex_Shader_Constant(int reg, const void* data, int count);
 	static void Set_Pixel_Shader_Constant(int reg, const void* data, int count);
 
-	static DWORD Get_Vertex_Processing_Behavior() { return Vertex_Processing_Behavior; }
+	static uint32 Get_Vertex_Processing_Behavior() { return Vertex_Processing_Behavior; }
 
 	// Needed by scene lighting class
 	static void						Set_Ambient(const Vector3& color);
@@ -954,7 +955,7 @@ protected:
 	static D3DMATRIX						old_prj;
 
 	// shader system updates KJM v
-	static DWORD							Vertex_Format;
+	static uint32							Vertex_Format;
 	static IDirect3DVertexShader9 *			Vertex_Shader;
 	static IDirect3DPixelShader9 *			Pixel_Shader;
 
@@ -964,7 +965,7 @@ protected:
 	static LightEnvironmentClass*		Light_Environment;
 	static RenderInfoClass*				Render_Info;
 
-	static DWORD							Vertex_Processing_Behavior;
+	static uint32							Vertex_Processing_Behavior;
 
 	static ZTextureClass*				Shadow_Map[MAX_SHADOW_MAPS];
 
@@ -1024,7 +1025,7 @@ protected:
 };
 
 // shader system updates KJM v
-WWINLINE void DX8Wrapper::Set_Vertex_Format(DWORD fvf)
+WWINLINE void DX8Wrapper::Set_Vertex_Format(uint32 fvf)
 {
 #if 0 //(gth) some code is bypassing this acessor function so we can't count on this variable...
 	// may be incorrect if shaders are created and destroyed dynamically
@@ -1157,8 +1158,8 @@ WWINLINE void DX8Wrapper::Set_Fog(bool enable, const Vector3 &color, float start
 	ShaderClass::Invalidate();
 
 	// Set renderstates which are not affected by the shader
-	Set_DX8_Render_State(D3DRS_FOGSTART, *(DWORD *)(&start));
-	Set_DX8_Render_State(D3DRS_FOGEND,   *(DWORD *)(&end));
+	Set_DX8_Render_State(D3DRS_FOGSTART, *(uint32 *)(&start));
+	Set_DX8_Render_State(D3DRS_FOGEND,   *(uint32 *)(&end));
 }
 
 
@@ -1240,7 +1241,7 @@ WWINLINE void DX8Wrapper::Set_DX8_Render_State(D3DRENDERSTATETYPE state, unsigne
 	DX8_RECORD_RENDER_STATE_CHANGE();
 }
 
-WWINLINE void DX8Wrapper::Set_DX8_Clip_Plane(DWORD Index, CONST float* pPlane)
+WWINLINE void DX8Wrapper::Set_DX8_Clip_Plane(uint32 Index, const float* pPlane)
 {
 	DX8CALL(SetClipPlane( Index, pPlane ));
 }
@@ -1462,7 +1463,7 @@ WWINLINE void DX8Wrapper::Set_DX8_ZBias(int zbias)
 		// along (d3d8types.cpp, CalcDepthBias), so the bias stays where the picture
 		// already has it.
 		const float depth_bias=ZBias*Get_Depth_Buffer_Epsilon();
-		Set_DX8_Render_State(D3DRS_DEPTHBIAS,*(const DWORD*)&depth_bias);
+		Set_DX8_Render_State(D3DRS_DEPTHBIAS,*(const uint32*)&depth_bias);
 	}
 }
 

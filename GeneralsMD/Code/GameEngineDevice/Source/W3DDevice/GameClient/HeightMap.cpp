@@ -1661,7 +1661,7 @@ void HeightMapRenderObjClass::updateCenter(CameraClass *camera , RefRenderObjLis
 			 milliseconds - a visible stutter - and something as small as one grid cell being lowered
 			 by a building foundation asks for it (W3DTerrainVisual::setRawMapHeight).  Logged with
 			 its cost so a stutter report can be tied to it instead of guessed at. */
-		const DWORD fullUpdateStart = Clock_Milliseconds();
+		const UnsignedInt fullUpdateStart = Clock_Milliseconds();
 		updateBlock(0, 0, m_x-1, m_y-1, m_map, pLightsIterator);
 		DEBUG_LOG(("TERRAIN FULL UPDATE: %d ms at frame %d\n",
 							 (Int)(Clock_Milliseconds() - fullUpdateStart),

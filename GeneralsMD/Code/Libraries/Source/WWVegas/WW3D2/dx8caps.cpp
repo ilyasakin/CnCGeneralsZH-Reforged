@@ -712,7 +712,7 @@ void DX8Caps::Check_Texture_Format_Support(WW3DFormat display_format,const D3DCA
 		}
 		else {
 			WW3DFormat format=(WW3DFormat)i;
-			SupportTextureFormat[i]=SUCCEEDED(
+			SupportTextureFormat[i]=Render_Succeeded(
 				Direct3D->CheckDeviceFormat(
 					caps.AdapterOrdinal,
 					caps.DeviceType,
@@ -744,7 +744,7 @@ void DX8Caps::Check_Render_To_Texture_Support(WW3DFormat display_format,const D3
 		}
 		else {
 			WW3DFormat format=(WW3DFormat)i;
-			SupportRenderToTextureFormat[i]=SUCCEEDED(
+			SupportRenderToTextureFormat[i]=Render_Succeeded(
 				Direct3D->CheckDeviceFormat(
 					caps.AdapterOrdinal,
 					caps.DeviceType,
@@ -787,7 +787,7 @@ void DX8Caps::Check_Depth_Stencil_Support(WW3DFormat display_format, const D3DCA
 		else 
 		{
 			WW3DZFormat format=(WW3DZFormat)i;
-			SupportDepthStencilFormat[i]=SUCCEEDED
+			SupportDepthStencilFormat[i]=Render_Succeeded
 			(
 				Direct3D->CheckDeviceFormat
 				(
