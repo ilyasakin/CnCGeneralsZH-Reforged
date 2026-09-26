@@ -5,7 +5,7 @@
   determinism gate and the architecture axis, done)
 - **Blocks:** nothing in M5 but its own "it is a game"
 - **Status:** recon done (-47, 2026-09-26). The PM's order: 1, 3 (F1, defect #29), 2 (F2), 4, 5; 6
-  deferred until E2 needs it. Step 1 done (below).
+  deferred until E2 needs it. Steps 1 and 3 done (below).
 
 ## Why
 
@@ -218,6 +218,14 @@ The harness is as step 1 describes, with the PM's constraints.
 - **The replays** are played back only after a match that kept one world. F2's message is printed
   but does not fail the run until step 2 settles it.
 
+- **Two later hardenings,** found by running it:
+  - In a `ctest -j4` it came up Skipped in 0.6 s: the game's ports were taken, most likely by the same
+    test in another checkout at the same moment. It now waits for busy ports (`NET_CHECK_PORT_WAIT`,
+    600 s) and skips only if they stay taken. Checked both ways with a socket holding 8088: it skipped
+    after a 4 s wait, and it went ahead when the port was freed during a 60 s wait.
+  - A signal (a ctest timeout, ^C, a closed pipe) now exits through the cleanup trap. Checked with
+    TERM mid-match: exit 130, both copies stopped, the work folder and logs gone, the install verified.
+
 ctest `net_check` (TIMEOUT 900, in the `zh_install` lock with the other farm tests), `-V`, 138 s:
 
 | check | result |
@@ -225,6 +233,27 @@ ctest `net_check` (TIMEOUT 900, in the `zh_install` lock with the other farm tes
 | 0. the firewall gate's control: fakes reporting on, stealth and block-all | each skips (77) before any copy starts |
 | 1. seed 3, two AIs, Golden Oasis, 1800 frames, 127.0.0.1 and 192.168.1.103 | both 0x3453DF90 at frame 1800, 0 mismatches, 5 AI structures; both replays play back to 0x3453DF90 |
 | 2. the control: the second copy on seed 4 | FAILED through the game's own "CRC Mismatch", stopped after 6 s of match; exit 1 |
+
+## Step 3 result: F1 fixed, defect #29 (-47, 2026-09-26)
+
+README defect #29 has the full entry. In short:
+- Each POSIX lobby keeps a wildcard listener on the lobby port (SO_REUSEADDR + SO_REUSEPORT) that
+  passes only datagrams sent to 255.255.255.255.
+- The lobby socket sets SO_REUSEADDR so that it can share the port with another copy's listener.
+- `LANAPI::update` moves what the listener heard into the lobby's inbox. Each message then meets the
+  own-address filter once.
+
+Measured before the code, on macOS:
+- With both copies' sockets laid out that way, a broadcast reached both listeners once each and neither
+  unicast socket.
+- Directed messages reached only their own socket.
+- `IP_RECVDSTADDR` reported 255.255.255.255 for the broadcasts.
+- A copy on 127.0.0.1 cannot send a broadcast at all (EADDRNOTAVAIL). A real lobby binds a real
+  address, so play is not affected, but a one-host test has to broadcast from the non-loopback copy.
+
+`test_lan_broadcast` (3 tests, 31 checks, 4 s) runs that layout through the real classes. It has a
+control and three armed mutations (1, 7 and 2 checks fail). `windows_view_diff`: the six changed files
+are identical as MSVC sees them; the new test is POSIX-only.
 
 ## Do not
 
