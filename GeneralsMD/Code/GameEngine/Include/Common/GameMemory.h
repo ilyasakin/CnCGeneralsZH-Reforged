@@ -823,9 +823,11 @@ extern Bool isMemoryManagerOfficiallyInited();
 	call to shutdownMemoryManager() [since there's no safe way to ensure that shutdownMemoryManager
 	will execute after all static destructors].
 
-	(Note: this function is actually not externally visible, but is documented here for clarity.)
+	The global operators new and delete call it, and so do AsciiString and UnicodeString, which
+	allocate from TheDynamicMemoryAllocator directly: a string a static constructor builds (LogClass's
+	file name, for one) would otherwise find it NULL whenever that constructor runs first.
 */
-/* extern void preMainInitMemoryManager(); */
+extern void preMainInitMemoryManager();
 
 /**
 	Shut down the memory manager. Throw away TheMemoryPoolFactory and 

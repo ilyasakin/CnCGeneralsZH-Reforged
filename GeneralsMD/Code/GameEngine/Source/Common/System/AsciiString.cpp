@@ -137,6 +137,8 @@ void AsciiString::ensureUniqueBufferOfSize(int numCharsNeeded, Bool preserveData
 	if (minBytes > MAX_LEN)
 		throw ERROR_OUT_OF_MEMORY;
 
+	if (TheDynamicMemoryAllocator == NULL)
+		preMainInitMemoryManager();	// a string built by a static constructor, before main (GameMemory.h)
 	int actualBytes = TheDynamicMemoryAllocator->getActualAllocationSize(minBytes);
 	AsciiStringData* newData = (AsciiStringData*)TheDynamicMemoryAllocator->allocateBytesDoNotZero(actualBytes, "STR_AsciiString::ensureUniqueBufferOfSize");
 	/* Placement-new rather than assignment.  allocateBytesDoNotZero hands back raw bytes that are

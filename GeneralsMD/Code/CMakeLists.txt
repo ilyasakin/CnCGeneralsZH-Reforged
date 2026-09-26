@@ -1064,6 +1064,21 @@ target_compile_definitions(gametext_csf PRIVATE $<TARGET_PROPERTY:gameengine,COM
 set_target_properties(gametext_csf PROPERTIES CXX_STANDARD 17)
 target_link_libraries(gametext_csf PRIVATE ${ZH_ZHIO_LIBS})
 add_test(NAME gametext_csf COMMAND gametext_csf)
+# Strings built by a static constructor before anything starts the memory manager, as file-scope
+# LogClass objects build them: the real strings and memory manager, each string type first in one of
+# the two.  See Tests/test_premain_strings.cpp.
+foreach(name test_premain_strings test_premain_unicode)
+  add_executable(${name} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_premain_strings.cpp
+    ${GE}/Source/Common/System/GameMemory.cpp ${GE}/Source/Common/System/MemoryInit.cpp
+    ${GE}/Source/Common/System/UnicodeString.cpp ${GE}/Source/Common/System/AsciiString.cpp
+    ${GE}/Source/Common/System/WideCharFns.cpp)
+  target_include_directories(${name} PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(${name} PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+  set_target_properties(${name} PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(${name} PRIVATE ${ZH_ZHIO_LIBS})
+  add_test(NAME ${name} COMMAND ${name})
+endforeach()
+target_compile_definitions(test_premain_unicode PRIVATE ZH_PREMAIN_UNICODE_FIRST)
 set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
 if(ZH_GAME_DATA)
   set_tests_properties(gametext_csf PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
