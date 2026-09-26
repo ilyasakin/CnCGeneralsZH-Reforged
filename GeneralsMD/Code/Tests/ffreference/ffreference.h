@@ -141,6 +141,7 @@
 #ifndef FFREFERENCE_H
 #define FFREFERENCE_H
 
+#include "ffreference/ffprogram.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string>
@@ -272,7 +273,16 @@ struct DrawState
 	Rect scissor;
 	const Texture *textures[MAX_STAGES];	///< NULL where no texture is bound
 
-	bool vertexShaderBound, pixelShaderBound;	///< refused when set
+	bool vertexShaderBound, pixelShaderBound;	///< refused when set and no program below is given
+
+	// A3e: the programmable stages (ffprogram.h), run from the programs' own tokens.  NULL: fixed function.
+	// A vertex program comes with a pixel program (every shipped one does); fog and texture transforms
+	// with a vertex program are refused (not in the census).
+	const Program *vertexProgram, *pixelProgram;
+	double vertexConstants[96][4];		///< c0-c95
+	double pixelConstants[8][4];		///< c0-c7 (a program's def overrides, as it runs)
+	int vertexInput[16];				///< the declaration: the Vertex element each vN reads (VertexInput)
+	int vertexInputSize[16];			///< how many components it supplies; the rest are (0, 0, 0, 1)'s
 
 	// The vertex format (what the FVF or declaration supplies)
 	bool pretransformed;				///< D3DFVF_XYZRHW: position is (X, Y, Z, RHW) on screen
@@ -285,6 +295,9 @@ struct DrawState
 	/// automatic depth-stencil.  The viewport and scissor cover width x height.
 	void setDefaults( int width, int height );
 };
+
+/// What a vertex program's vN reads (the declaration's element), by Vertex member
+enum VertexInput { INPUT_NONE, INPUT_POSITION, INPUT_NORMAL, INPUT_DIFFUSE, INPUT_SPECULAR, INPUT_TEXCOORD0 };	///< + set
 
 struct Vertex
 {
@@ -303,7 +316,8 @@ enum Zone			///< why a pixel's envelope is wider than its nominal value (the doc
 	ZONE_ALPHA_TEST = 8,	///< its alpha is within Freedoms::alphaRef of ALPHAREF
 	ZONE_DEPTH = 16,		///< its depth test is a tie, or the depth under it was ambiguous
 	ZONE_STENCIL = 32,		///< the stencil under it was ambiguous
-	ZONE_UNDEFINED = 64		///< a state the pages call undefined changes it (N29): allowed, never a clean pass
+	ZONE_UNDEFINED = 64,	///< a state the pages call undefined changes it (N29): allowed, never a clean pass
+	ZONE_PROGRAM = 128		///< a pixel program's range cap or precision changes it (ffprogram.h P4, P5)
 };
 
 struct Target
@@ -356,6 +370,7 @@ struct Report
 	long pixelsCovered, pixelsAmbiguous, pixelsWritten;
 	unsigned zonesSeen;
 	double minLod, maxLod;				///< over sampled pixels; minLod > maxLod when none
+	long programVerticesReported;		///< vertices a vertex program ran through ffprogram.h's P1 or P2
 	Report();
 };
 
@@ -390,7 +405,7 @@ struct Comparison
 	long exact;			///< within base of the nominal value, every channel
 	long inFreedom;		///< not exact, but inside the envelope widened by base: a documented freedom
 	long outside;		///< neither: a failure
-	long zoneCounts[7];	///< for inFreedom pixels, how many carried each Zone bit (bit order)
+	long zoneCounts[8];	///< for inFreedom pixels, how many carried each Zone bit (bit order)
 	long histogram[256];///< max channel |gpu - nominal| in 1/255 steps, all pixels
 	int worstX, worstY;	///< the worst outside pixel, or -1
 	double worst;		///< its distance outside the envelope, 0..1
