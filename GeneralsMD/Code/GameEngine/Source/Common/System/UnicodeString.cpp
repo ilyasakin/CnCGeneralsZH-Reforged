@@ -99,6 +99,8 @@ void UnicodeString::ensureUniqueBufferOfSize(int numCharsNeeded, Bool preserveDa
 	if (minBytes > MAX_LEN)
 		throw ERROR_OUT_OF_MEMORY;
 
+	if (TheDynamicMemoryAllocator == NULL)
+		preMainInitMemoryManager();	// a string built by a static constructor, before main (GameMemory.h)
 	int actualBytes = TheDynamicMemoryAllocator->getActualAllocationSize(minBytes);
 	UnicodeStringData* newData = (UnicodeStringData*)TheDynamicMemoryAllocator->allocateBytesDoNotZero(actualBytes, "STR_UnicodeString::ensureUniqueBufferOfSize");
 	newData->m_refCount = 1;

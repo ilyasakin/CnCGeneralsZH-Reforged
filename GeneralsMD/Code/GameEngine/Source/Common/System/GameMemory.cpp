@@ -224,7 +224,6 @@ static void memset32(void* ptr, Int value, Int bytesToFill);
 static void doStackDumpOutput(const char* m);
 static void doStackDump(void **stacktrace, int size);
 #endif
-static void preMainInitMemoryManager();
 
 // ----------------------------------------------------------------------------
 // PRIVATE FUNCTIONS 
@@ -3556,9 +3555,10 @@ Bool isMemoryManagerOfficiallyInited()
 /**
 	Initialize the memory manager, and create TheMemoryPoolFactory and TheDynamicMemoryAllocator.
 	This is only called if memory is allocated prior to the normal call to initMemoryManager
-	(generally via a static C++ ctor).
+	(generally via a static C++ ctor): by the global operators new and delete, and by AsciiString and
+	UnicodeString when TheDynamicMemoryAllocator is not there yet.
 */
-static void preMainInitMemoryManager()
+void preMainInitMemoryManager()
 {
 	if (TheMemoryPoolFactory == NULL)
 	{

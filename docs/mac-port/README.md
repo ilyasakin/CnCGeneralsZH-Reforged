@@ -844,6 +844,23 @@ hunting a crash or corruption that only one platform shows, look here first.**
   as meaning. MSVC in C++17 mode and clang apply the same order, so both platforms produce the same
   bytes. Changing it would make every saved GameSpy login unreadable, so it stays (PM decision).
 
+- **Strings built before main, and the memory manager's start - fixed.** File-scope `LogClass`
+  objects (`WOLLobbyMenu.cpp`, `WOLQuickMatchMenu.cpp`, `PeerThread.cpp` twice) build an
+  `AsciiString` in their constructors. The strings allocate from `TheDynamicMemoryAllocator` directly,
+  and it is NULL until something starts the memory manager. The global operator new starts it on
+  first use (`preMainInitMemoryManager`), so Windows survives only because some other static
+  constructor there happens to call operator new first: nothing orders C++ static initialisation
+  across translation units. On macOS a `LogClass` ran first and the process died with
+  `EXC_BAD_ACCESS` before main (found by B6). Fixed (B5): `AsciiString` and `UnicodeString` call
+  `preMainInitMemoryManager` themselves when the allocator is NULL, as operator new does; that costs
+  one not-taken branch on their allocation path. Off Windows the start then reached a second case of
+  the same class: `userMemoryManagerInitPools` looks for its pool-size file through `zh_fopen`, and
+  the path resolver's caches were file-scope `std::map`s, used before their own constructors ran (and
+  emptied when those did). They are now built on first use. `test_premain_strings` and
+  `test_premain_unicode` build each string type first in a static constructor. **The general rule:**
+  anything reachable from a static constructor must not depend on another file's statics; on Windows
+  the link order happens to work.
+
 ### "ctest is green" was not what it looked like
 
 Recorded 2026-09-22, because this plan's own status reports leaned on it. A1's `PENDING_MACOS`
