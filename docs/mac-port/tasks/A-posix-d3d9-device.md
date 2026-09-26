@@ -903,117 +903,6 @@ answered `DC_UNKNOWN`:
     the merge changed what `-quickstart` shows.
 - **The user closes game windows.** Several windowed runs today ended early, and the likeliest cause is the
   user closing them. Evidence runs now use a hidden window (the item raised with the PM).
-||||||| f76ffaf3
-
-## A3e: the independent shader oracle (-47, 2026-09-26)
-
-The game's own vs_1_1/ps_1_1 programs are run on the CPU from their **original tokens**, inside
-FFReference as its programmable stages, so that -a9's recognised-and-substituted HLSL can be compared
-against them. The code is `Tests/ffreference/ffprogram.{h,cpp}`. It is written from Microsoft's
-reference pages only, one page cited per instruction. The numbers the pages leave out (opcodes,
-register types, modifiers, version tokens) come from Microsoft's d3d8types.h (PM's ruling). They are
-written as the file's own constants, and `ffprogram_values_check` static_asserts them against
-MinGW-w64's d3d8types.h and d3d9types.h, with an armed control. Independence: it never read
-engineshader, ffshader, ffvertex, dx11backend or -a9's shader substitution. -a9's capture replay was
-read once, for C1/C2, before this task.
-
-**The census.** The install's archives hold 16 programs, byte-identical across ShadersZH.big,
-ZH_Generals/shaders.big and generals/shaders.big: ps_1_1 ×13 and vs_1_1 ×3 (Trees, MotionBlur, wave).
-W3DWater.cpp adds 4 ps.1.1 texts (river, environment, trapezoid, and the fork's mirror).
-- ps_1_1 uses tex, texbem, mov, mul, mad, add, dp3, lrp and def. It also uses complement, _x2, the
-  .rgb/.a masks, the .a replicate and co-issue.
-- vs_1_1 uses mov, add, mad, mul, dp4, m4x4 and rcp, with negate, arbitrary swizzles, a0-relative
-  constants, and the outputs oPos, oD and oT.
-Exactly that is implemented. Everything else is refused by name, and so are the pages' own
-validation rules: read-after-write, texbem's no-reread rule and m > n, m4x4's and rcp's restrictions,
-a0 loaded before relative use, and r0 fully written.
-
-**Named choices** (the pages are silent or contradict themselves):
-
-| | Choice | Why |
-| --- | --- | --- |
-| P1 | `mov a0` rounds to nearest, ties away from zero, from the swizzle's x component. A vertex whose .x and .w differ is REPORTED. | The page's pseudocode rounds `src.w`. **Settled by data (capture v2, 2026-09-26):** Trees.vso's `mov a0.x, v1` reads a FLOAT3 whose .w is always 1. Its .x runs 1-10 over 21,028 vertices, and the engine fills exactly c8-c18. Component-wise indexing reaches c9-c18; `.w` would read c9 for every tree and leave c10-c18 unused. So the pseudocode's `.w` is a documentation error. The report still fires on every tree vertex, kept as the trail. |
-| P2 | `rcp(0)` gives FLT_MAX, and the vertex is REPORTED. | The pseudocode says FLT_MAX; the text says infinity. |
-| P3 | Reading a vertex output that was never written is refused. | Its default is "None". |
-| P4 | The ps range cap is at least 1. The nominal value clamps at 1; the envelope's interval covers every cap. | D3DCAPS9 requires data *within* the cap to pass unclamped, and says nothing beyond it. |
-| P5 | Each new pixel value widens the interval by ±1/256. | The pages allow "approximately eight bits". |
-| P6 | dp3 writes all four channels. | The pseudocode says so, and monochrome.pso reads a full-mask dp3's alpha and passed validation. |
-| P7 | A co-issued pair where one half reads a channel the other writes is refused. | No page defines it, and no shipped pair does it. |
-| P8 | texbem's du/dv are signed. | texbem's own page. |
-| P9 | "ps.1.1" is accepted as well as ps_1_1. | The game uses it, and the runtime accepted it. |
-
-**In the draw.** A vertex program replaces the fixed-function vertex stage, and a pixel program
-replaces the texture cascade. Sampling, LOD, raster, fog, alpha test, blend, depth and stencil stay
-FFReference's, so the LOD and texel freedoms apply unchanged. A pixel program's interval enters the
-envelope as ZONE_PROGRAM.
-
-Not in the census, so refused: a vertex program without a pixel program, fog or texture transforms
-with a vertex program, and pretransformed input.
-
-**Tests.**
-- `test_ffprogram`: 11 tests, 165 checks.
-  - All 16 shipped programs decode, and all 4 water texts assemble and decode.
-  - Every instruction is checked against values computed by hand from the pseudocode.
-  - A vs+ps pair draws exactly what its fixed-function twin draws.
-  - Twelve mutations each fail the tests.
-- `ffprogram_values_check`: the constants against MinGW-w64's headers.
-- Not yet: a Metal-vs-oracle replay. That needs -a9's capture v2, whose format is to come as a
-  written description.
-
-**Finding for a decision (PM): the mirror water depends on the range cap.** The fork's mirror program
-does `add r1, r1, r1` twice, and its comment says "four times and clamped". The clamp is P4's cap.
-Over a mid-grey object the water comes out 0.750 with a cap of 1, and 0.49 on a device that does not
-clamp at 1; the oracle's envelope holds both.
-- What Windows reference hardware reports for PixelShader1xMaxValue could not be established: there
-  is no Windows machine, and no citable per-vendor value was found. The documented floor is 1.0 for
-  ps 1.0-1.3.
-- Our device's value: asked of -a9.
-
-## A3e-3: the engine's shaders against -47's interpreter (2026-09-26)
-
-**Capture version 2** (64df2991) writes a programmable draw's programs beside it, as `draw_<n>.prog`:
-- each stage's registered name and its tokens, as the device received them;
-- the vertex declaration, recorded only while it is D3D9's current vertex format;
-- the constant banks, c0 to c95 and c0 to c7.
-
-The format went to -47 as a written description, because -47 must not read this code.
-
-**The replay** (f8400156): for a draw with a pixel program,
-- the device draws the transcription registered under the captured name;
-- FFReference runs the captured tokens through -47's `decodeProgram`. The water's stub text goes through
-  -47's own `assemblePixelProgram` first.
-
-Draws with a vertex program (Trees) wait on the interpreter reading a declaration.
-
-**Its first result was a device defect of mine** (c47ec97e).
-- **The defect:** with a pixel shader bound, the device's vertex description stopped giving coordinates at
-  the first COLOROP DISABLE. But D3D9 gives every stage its coordinates, from its TEXCOORDINDEX.
-- **Its effect:** the transcribed terrain's cloud and noise stages, and the water's highlight and shroud
-  stages, sampled at (0, 0).
-- **How big:**
-  - before the fix, terrainnoise2 had 11,367 of 20,252 pixels outside the envelope, and the trapezoid water
-    all 665;
-  - after it, both pass, with 33 pixels and 1 pixel in a freedom and the rest exact.
-- By looks the terrain had seemed right. dx11backend gets this right (`every_stage`).
-- **The seed-1234 skirmish now:** 46 of 50 captures compare, 0 fail, 1 is known (C1), and the 4 Trees draws
-  wait.
-
-**The ps_1_x range, read against the transcriptions.** Registers are signed, [-1, 1], and only `_sat` and
-the final write clamp to [0, 1] (the PM's decision). The transcriptions saturate every step to [0, 1].
-That differs from ps_1_1 only where an intermediate can go below zero, because above one, the cap of 1
-and `saturate` agree. No transcribed program has such an intermediate:
-- **trapezoid and river water:** products and sums of texels and vertex colours, all in [0, 1];
-- **the reflection:** a `dp3` with a third, `1 - x`, two doublings, `mul` by the strength, and `1 - x`.
-  All are non-negative, and the collapsed `saturate(4x)` equals the two clamped doublings.
-- **monochrome:** `dp3`, `mul` by a non-negative tint, and `lrp`;
-- **the terrain and road chains:** products only.
-
-So the decision changes no transcribed program's output. The one program where the sign matters, texbem's
-environment water, has no transcription and is refused. What is wrong is the transcriptions' comment
-"every ps_1_1 instruction clamps its result to zero and one". It is to be corrected in engineshader.cpp,
-a comment-only change to shared code, under the generator-fix process. -47's interpreter holds the
-signed range, and the replay above passing is the measured half of this reading.
-
 ### The real shell map, re-checked (2026-09-26)
 
 The run: hidden window, 800x600, `-nologo`, no `-quickstart`, 300 s.
@@ -1061,3 +950,53 @@ The run: hidden window, 800x600, `-nologo`, no `-quickstart`, 300 s.
   - Drawn a triangle per call, both pass with 0 pixels outside, against 6 and 8 in one call. The C1
     captures do the same: 0 against 20, 2 and 11.
   - So every finding left in the capture sets is this GPU's quad sharing.
+||||||| e3cd8fae
+
+### A3e-asm: Microsoft's own assembler as the oracle (-47, 2026-09-26)
+
+**Route 1, a PE loader, not Wine.** `Tests/d3dx_assemble/` (ctest `d3dx_assemble_oracle`, opt-in with
+ZH_D3DX9_X64 like d3dx_oracle, skipped (77) without it).
+- The loader maps Microsoft's genuine d3dx9_43.dll and D3DCompiler_43.dll (June 2010 x64, from the
+  Steam redist; sha256 84b900db…67b4 and 44c3a7e3…850e8a, Wine builtins refused). It applies their
+  relocations, binds about 130 imports to Microsoft-ABI stubs over the C library, and traps every
+  other import by name (102 are never called here). It runs both DLLs' own entry points and calls
+  `D3DXAssembleShader` exactly as W3DWater.cpp does, x86_64 under Rosetta, with no window.
+- D3DXAssembleShader does not assemble by itself. It loads D3DCompiler_43 and calls its D3DAssemble,
+  and the loader answers that LoadLibraryA with Microsoft's own D3DCompiler. The run prints what was
+  loaded, and fails unless D3DCompiler_43 came first.
+
+**The departure, the only one:** three C-runtime sites per DLL that read the Windows thread block
+through `gs`. On x86_64 macOS, `gs` holds the pthread slots instead.
+- `__chkstk` (the stack limit at gs:0x10) is patched to a plain `ret`, since this stack is committed.
+- The startup lock's two reads of gs:0x30 are pointed at a stand-in block whose stack-base field is a
+  non-zero id.
+- Every site's bytes are checked before it is patched. No assembler code is touched.
+
+**Result, 2026-09-26:**
+- For all four water texts, Microsoft's tokens equal `FFRef::assemblePixelProgram`'s word for word
+  (37, 21, 23 and 35 words). Microsoft adds no comment tokens.
+- Microsoft's tokens decode under the census. The armed control (one bit of ours flipped) is found.
+- `d3dx_assemble_stub_selfcheck` (native, always run) pins goal (b): the port's stub carries each
+  text exactly (99, 63, 91 and 143 words, with the version token, "ZHSR", the length and zero
+  padding). It has its own armed control.
+
+**What it cannot see:**
+- The shader validator. D3DCompiler loads d3d9.dll for `Direct3DShaderValidatorCreate9`, and d3dx
+  loads it for `DebugSetMute`. Here that load answers NULL, so validation is skipped. A validator can
+  only accept or reject, and these programs run on Windows.
+- Error paths. Only valid text was assembled; an exception stops the run.
+- Any other D3DX build: the patch sites are this build's.
+- What the device does with the text: that is the A3e replay's job.
+
+**Decision (PM, 2026-09-26): the port's D3DXAssembleShader stays a text carrier, not an assembler.**
+The device picks a transcription by the name the engine registers, and (b) pins what it is handed.
+Revisit only if a shader appears that no name identifies.
+
+**Capture v3, wanted (low priority, -a9's writer): the engine's own D3D8 declaration.** Then the
+oracle would decode the vN mapping from the D3DVSD pages instead of taking the device's D3D8-to-D3D9
+table. The fields, per programmable draw:
+- the DWORD stream the engine passed as CreateVertexShader's `pDeclaration`, through `D3DVSD_END()`
+  (D3DVSD_STREAM, D3DVSD_REG with its D3DVSDT type, D3DVSD_SKIP, D3DVSD_CONST blocks included);
+- for each stream the declaration names: its SetStreamSource stride and the byte offset of the draw's
+  first vertex, so the D3D8 layout is read over the right bytes;
+- the D3D9 elements as today, kept for the comparison.

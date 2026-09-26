@@ -1205,6 +1205,14 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(d3dx9posix_selfcheck PRIVATE ${WW}/WWLib ${WW}/WWDebug ${WW}/WWMath)
   target_link_libraries(d3dx9posix_selfcheck PRIVATE d3dx9runtime)
   add_test(NAME d3dx9posix_selfcheck COMMAND d3dx9posix_selfcheck)
+  # A3e-asm (b): the port's D3DXAssembleShader carries each water text to the device exactly (decision:
+  # it is not an assembler).  Microsoft's tokens for the same texts: d3dx_assemble_oracle.
+  add_executable(d3dx_assemble_stub_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_d3dx_assemble_stub.cpp)
+  set_target_properties(d3dx_assemble_stub_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(d3dx_assemble_stub_selfcheck PRIVATE ${WW}/WWLib ${WW}/WWDebug ${WW}/WWMath)
+  target_compile_definitions(d3dx_assemble_stub_selfcheck PRIVATE ZH_CODE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  target_link_libraries(d3dx_assemble_stub_selfcheck PRIVATE d3dx9runtime)
+  add_test(NAME d3dx_assemble_stub_selfcheck COMMAND d3dx_assemble_stub_selfcheck)
 
   # ---- posixd3d9: the device, in the place d3d9.lib has on Windows -----------------------------------
   file(GLOB_RECURSE POSIXD3D9_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render/*.cpp)
@@ -2254,6 +2262,14 @@ add_test(NAME d3dx_oracle
                  ${CMAKE_CURRENT_SOURCE_DIR}
                  ${CMAKE_CURRENT_BINARY_DIR}/d3dx_oracle)
 set_tests_properties(d3dx_oracle PROPERTIES SKIP_RETURN_CODE 77)
+# A3e-asm: Microsoft's own D3DXAssembleShader (d3dx9_43 and the D3DCompiler_43 it loads, run as PE images
+# under Rosetta) against FFReference's ps.1.1 assembler on the water's four programs.  Opt-in like
+# d3dx_oracle: ZH_D3DX9_X64 at run time, skipped without it.  Tests/d3dx_assemble/run_assemble_oracle.sh.
+if(ZH_PLATFORM_POSIX)
+  add_test(NAME d3dx_assemble_oracle
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/d3dx_assemble/run_assemble_oracle.sh ${CMAKE_CURRENT_SOURCE_DIR})
+  set_tests_properties(d3dx_assemble_oracle PROPERTIES SKIP_RETURN_CODE 77)
+endif()
 
 if(RELEASE_DEBUG_LOGGING)
   target_compile_definitions(gameengine PRIVATE RELEASE_DEBUG_LOGGING)
