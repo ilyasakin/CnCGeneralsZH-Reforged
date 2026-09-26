@@ -652,6 +652,13 @@ The same run with `-side 0 FactionAmerica` draws the radar. Not compared with a 
 - **One substitution,** made on both sides and counted: ANISOTROPIC is replayed as LINEAR. The game asks
   for MAXANISOTROPY 16 on nearly every draw, and FFReference refuses anisotropy above 1. What goes
   unchecked is the device's anisotropic sampler.
+  - -47 accepted this on two conditions, and both are met.
+    - Every run prints "N draws: ANISOTROPIC replayed as LINEAR".
+    - The device's own translation has a unit test in `sdl_pipeline_state_selfcheck`. ANISOTROPIC, for
+      either the minification or the magnification filter, turns on the sampler's anisotropy. MAXANISOTROPY
+      is held to 1..16: that is the caps' `MaxAnisotropy` and Metal's range, and SDL3 passes the value
+      through unchecked.
+  - What nothing here can see is whether the anisotropic picture matches Windows.
 - **A triage aid:** `FFREF_CAPTURE_NO_MIPS=1` replays with mipmapping off on both sides.
 
 **Without captures it runs a round trip,** so it checks something on every machine with a GPU:
@@ -708,11 +715,25 @@ is given.
   - 7 to 10 pixels of the 25,000 to 36,000 written are up to 8/255 past the envelope, in the alpha-test and texel zones.
   - With mipmapping off it is worse (unmipped foliage aliases), so it is not C1. Unclassified.
 - **C3: `ALPHAOP DISABLE` under an enabled `COLOROP`.** Three signatures in the skirmish and one in the
-  shell map. FFReference refuses them: D3DTEXTUREOP calls it undefined. The game does it, and the device
-  draws something. What that something should be is a ruling.
-- **C4: a `TEXCOORDINDEX` naming a set the vertices lack.** One signature in the shell map, refused by
-  FFReference.
+  shell map. D3DTEXTUREOP calls it undefined.
+  - **Settled by -47's N29.** FFReference now draws that stage's alpha as an envelope over pass-through, 0
+    and 1. The pixels it moves carry the new `ZONE_UNDEFINED`, so they never read as a clean pass.
+  - All four signatures compare and pass.
+  - What Windows drivers did here only a Windows capture could tell.
+- **C4: a `TEXCOORDINDEX` naming a set the vertices lack.** One signature in the shell map.
+  - D3DTSS_TEXCOORDINDEX documents this case: "the system defaults to the u and v coordinates (0,0)".
+  - **Settled by -47's N28:** FFReference reads (0,0), padded (0,0,1,0).
+  - The device already reads (0,0) there. `ffvertex` gives a missing set (0,0,0,1), and a draw without a
+    texture transform reads only u and v. The captured draw is pretransformed, with TTFF 0, and passes.
+  - **A latent difference, not acted on:** under a texture transform, N28 pads a missing set as (0,0,1,0)
+    and `ffvertex` as (0,0,0,1). The two pick different rows of the matrix. No captured draw has a missing
+    set, XYZ vertices and a texture transform all together. `ffvertex` is shared with Windows, so the
+    change waits for a draw that needs it, and then goes through the generator-fix process.
 
-**A3 is not done.** Both runs draw with no refusals. But "every key checked" still waits on C1 to C4, and
+**After -47's N28 and N29** (feature/mac-port at 54e5e88f), every capture compares:
+- **Skirmish:** 49 of 49, 11 drew nothing, 0 failed, 3 known (C1, C2).
+- **Shell map:** 67 of 67, 25 drew nothing, 0 failed, 5 known (C1, C2).
+
+**A3 is not done.** Both runs draw with no refusals. But "every key checked" still waits on C1 and C2, and
 on the draws that drew nothing. Those need a capture of the pixels, depth and stencil under the draw, which
 version 1 does not have.
