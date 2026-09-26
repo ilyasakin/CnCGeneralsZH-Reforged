@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** nothing (no typedef flip needed)
 - **Blocks:** nothing, but it clears B1's last loose end
-- **Status:** **superseded for correctness; the remaining removals are optional cleanup.** See the 2026-09-26 section below.
+- **Status:** closed: superseded by B1's funnel; the remaining %ls removals are optional cleanup
 - **Size:** 32 specifiers in 24 formats. Sized as a morning.
 
 ## Decided 2026-09-26: the funnel does it, so this task is cleanup

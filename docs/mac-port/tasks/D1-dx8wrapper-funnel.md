@@ -3,7 +3,7 @@
 - **Milestone:** M3
 - **Depends on:** nothing — **this is Windows-side work and can start on day one**
 - **Blocks:** D2
-- **Status:** in progress — PR1 (the wrapper methods) on `feature/mac-port-D1-pr1`; PRs 2-8 need Windows
+- **Status:** blocked: PRs 2-8 need Windows; PR1 merged (`d1310b4f`) (was -8d)
 - **Size:** 170 call sites across 22 files — 148 device calls through 89 escapes from the wrapper,
   plus 22 `DX8CALL` sites outside `dx8wrapper.{cpp,h}`; 22 WW3D2 headers expose D3D9 types.
   Measured 2026-09-22; see the recon findings below. (The earlier "60 reaches" and "92 DX8CALL

@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** A1
 - **Blocks:** B6, and M2 leans on it
-- **Status:** in review (B17). macOS half merged (`cc93d068`); the Windows flip (decision 1 in the README) awaits its second read
+- **Status:** done: the macOS half and the Windows flip (decision 1) merged (`0af6b53d`); E1's comparison against a Windows capture is still owed (no Windows machine)
 - **Risk:** the highest left in M1. This is arithmetic on the replay and network CRC path.
 
 ## Why

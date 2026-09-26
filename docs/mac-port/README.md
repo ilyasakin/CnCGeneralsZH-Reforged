@@ -182,7 +182,7 @@ you start. That commit is the lock.
 | B1 | [WideChar to char16_t](tasks/B1-widechar-char16.md) | M1 | A1 | done on macOS: flip merged, `.csf` test (`gametext_csf`) on `feature/mac-port-B1-csf`; Windows half is debt | -47 |
 | B2 | [Time shim](tasks/B2-time-shim.md) | M1 | A1 | done: merged; not verified on Windows (was -8d) | |
 | B3 | [CRT and string shims](tasks/B3-crt-shims.md) | M1 | A1 | done: merged; later CRT spellings land in `MSVCCompat.h` as found (was -95) | |
-| B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | recon done, waits on B1 |  |
+| B4 | [Pragma audit](tasks/B4-pragma-audit.md) | M1 | A1 **B1** | done: no pragma splits Windows' and POSIX simulation arithmetic; wire-layout asserts completed; `-Wno-unknown-pragmas` | -47 |
 | B5 | [Win32 scalar types](tasks/B5-win32-types.md) | M1 | A1 | in progress: `GameEngine` half on `feature/mac-port-B5-gameengine`; the `wwlib` pass is done (-a9) | -18 |
 | B6 | [Trim the gameengine link surface](tasks/B6-gameengine-link-surface.md) | M1 | B1 B2 B3 B4 B5 B7 B8 | done on macOS: `test_gameengine` passes under ctest (443 tests); Windows is debt | -47 |
 | B7 | [W3D file format layout asserts](tasks/B7-w3d-layout-asserts.md) — **see [findings](B7-w3d-layout.md)** | M1 | A1 | done: merged with B10 (was -14) | |
@@ -192,7 +192,7 @@ you start. That commit is the lock.
 | B11 | [CriticalSection](tasks/B11-criticalsection.md) | M1 | A1 | done: merged (was -83) | |
 | B13 | [AsciiString's refcount](tasks/B13-asciistring-refcount.md) | M1 | A1 | done: merged (was -83) | |
 | B14 | [WWVegas' threading primitives](tasks/B14-wwvegas-threading.md) | M1 | A1 | done: merged; not verified on Windows (was -8d) | |
-| B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | superseded for correctness by B1's funnel (2026-09-26); remaining removals optional | |
+| B15 | [Remove the wide-format %ls](tasks/B15-wide-format-removal.md) | M1 | — | closed: superseded by B1's funnel; the remaining %ls removals are optional cleanup | |
 | B16 | [wwdebug's Windows dependency](tasks/B16-wwdebug-windows.md) | M1 | — | **done** — wwdebug 3/3, wwmath 36/36; not verified on Windows | -18 |
 | B17 | [D3DX maths on the CRC path](tasks/B17-d3dx-math-on-the-crc-path.md) — **see defect #7** | M1 | A1 | done: macOS half and the Windows flip (decision 1) merged; not verified on Windows | -47 |
 | B19 | [CPU detection and the tick clock on arm64](tasks/B19-cpu-detection-arm64.md) | M1 | B5 | done: merged; tier decided (option (c), decision 2); verifiable once `gameengine` compiles | -a9 |
@@ -202,21 +202,21 @@ you start. That commit is the lock.
 | T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | done: T1a (height data and maths in gameengine, three-way golden) and T1c (defect 17 fixed) merged; T1b and T1d dropped by decision 8 | -47 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | done: path resolver, POSIX local and BIG file systems, file operations, user-data dir, replay stream, PosixGameEngine (abstract until T1); `test_bigfilesystem` byte-identical over 25,293 files | -a9 |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | claimed | -18 |
-| C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | C3a merged; C3b (the game makes the SDL input via W3DGameClient) on its branch | -47 |
+| C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | done: C3a and C3b merged (`a2083900`): SDL input behind W3DGameClient's factories | -47 |
 | C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | done on macOS: lower half (the Miles API on miniaudio, -a9) and upper half (MilesAudioManager, -47) merged; not yet heard by a person | -a9, -47 |
 | C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | done: merged; macOS arm64 measured, x86_64 and Linux written but unexecuted | -18 |
-| D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | in progress: recon and PR1 merged; PRs 2-8 need Windows (was -8d) | |
+| D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | blocked: PRs 2-8 need Windows; PR1 merged (`d1310b4f`) (was -8d) | |
 | D2 | [Abstract the backend interface](tasks/D2-backend-interface.md) | M3 | D1 | not started | |
 | D3 | [Shader generators target SDL3 GPU](tasks/D3-shader-generators-ir.md) (decision 4) | M3 | — | done: SDL3 target, compile seam, POSIX twin test and D4's contract; 49/49 on Metal and Vulkan (-a9) | |
 | D4 | [SDL3 GPU backend](tasks/D4-metal-backend.md) (file keeps its old name) | M4 | D3 | not started | |
 | D5 | [Texture formats](tasks/D5-texture-formats.md) | M4 | D4 | not started | |
-| D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | D6a merged; D6b (FontCharsClass on FreeType) on its branch | -47 |
+| D6 | [Text rasterisation off Windows](tasks/D6-text-rasterisation.md) (decision 6) | M4 | — | done: D6a and D6b merged (`c1270c87`): FontCharsClass rasterises through FreeType off Windows | -47 |
 | D-spike | [One real model through SDL3 GPU](tasks/D-spike-sdl3-gpu-model.md) | M4 | — | done — merged; the Crusader on Metal and on Vulkan (lavapipe); D3's route taken as decision 4 | -a9 |
 | V1 | [Video playback off Windows](tasks/V1-video-playback.md) | M4 | A1 | done on macOS: the Bink player and FFmpeg 8.1.2 (built from its tarball, static, LGPL) decode all 70 install movies against their headers and a golden; sound through C4's mix; not yet on screen (A3) | -47 |
 | A3b | [FFReference](tasks/A-posix-d3d9-device.md) (the renderer's phase A3b, not the build.sh A3 above) | M4 | A3a | done: FFReference, independent, 29 tests / 280 checks; harness is -a9's | -47 |
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`), the Mac baseline over a real fight, defect #20 fixed; parity needs a Windows run | -18 |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | not started | |
-| P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | in progress: steps 1-3 merged (overlay root; read-only roots and logs; one staged overlay, W=P path by path, E1 on `-overlay`); step 4 (root selection, SDL's folder chooser) on its branch; the `.app` held (disk) | -47 |
+| P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | in progress: steps 1-4 merged (overlay root; read-only roots and logs; one staged overlay, W=P path by path, E1 on `-overlay`; root selection); step 5, the `.app`, held for disk | -47 |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.

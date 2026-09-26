@@ -3,7 +3,7 @@
 - **Milestone:** M4
 - **Depends on:** C2, D4
 - **Blocks:** nothing
-- **Status:** C3a merged; C3b on its branch (-47)
+- **Status:** done: C3a and C3b merged (`a2083900`)
 - **Size:** `Win32Mouse.cpp`, `Win32DIKeyboard.cpp` (`Win32DIMouse.cpp` is already out of the
   build)
 
