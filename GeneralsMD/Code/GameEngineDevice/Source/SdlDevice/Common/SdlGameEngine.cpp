@@ -90,6 +90,12 @@ void SdlGameEngine::createWindow( void )
 	if (m_request.headless)
 		return;		// no SDL video at all: a headless run must work with no display
 
+	// Fullscreen as the game has it on Windows: the display is the game's.  macOS would otherwise put the
+	// window in a fullscreen Space, whose menu bar and Dock slide in when the pointer reaches the top or
+	// bottom edge - where the game scrolls the view.  SDL reads this once, when its video starts.
+	if (!m_request.windowed)
+		SDL_SetHint( SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "0" );
+
 	if (!SDL_Init( SDL_INIT_VIDEO ))
 	{
 		char why[ 512 ];
