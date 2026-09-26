@@ -29,12 +29,16 @@
 #          [--link-ninja <build.ninja>]
 #   --min-macos   LSMinimumSystemVersion, and the newest minimum any shipped object may carry (the build's
 #                 CMAKE_OSX_DEPLOYMENT_TARGET)
+#   --x86-64-generals <exe>
+#                 universal2 (P2, option A, a release-time step): an x86_64 build of generals, lipo'd with
+#                 --generals into one executable before dsymutil; the minimum-macOS check reads every slice,
+#                 and the x86_64 build's own libraries too when its folder holds a build.ninja
 #   --link-ninja  the build.ninja whose generals link line is checked (default <build>/build.ninja)
 # Exit status: 0 built, signed and verified; 1 refused or failed (the partial bundle is removed).
 
 set -u
 
-GENERALS="" OVERLAY="" BUILD="" OUT="" BUNDLE_ID="" ART=1 NINJA="" MIN_MACOS=""
+GENERALS="" OVERLAY="" BUILD="" OUT="" BUNDLE_ID="" ART=1 NINJA="" MIN_MACOS="" X86=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
@@ -43,6 +47,7 @@ while [ $# -gt 0 ]; do
 		--out) OUT="$2"; shift 2;;
 		--bundle-id) BUNDLE_ID="$2"; shift 2;;
 		--min-macos) MIN_MACOS="$2"; shift 2;;
+		--x86-64-generals) X86="$2"; shift 2;;
 		--no-art) ART=0; shift;;
 		--link-ninja) NINJA="$2"; shift 2;;
 		*) echo "make-macos-app: unknown argument $1" >&2; exit 2;;
@@ -94,7 +99,7 @@ hud_check "$OVERLAY"
 minos_check() {	# minos_check <what> <files...>: fails naming every object built for a newer macOS than MIN_MACOS
 	local what="$1"; shift
 	local newer
-	newer="$(for f in "$@"; do printf '== %s\n' "$f"; otool -l "$f" 2>/dev/null; done | python3 -c '
+	newer="$(for f in "$@"; do printf '== %s\n' "$f"; otool -arch all -l "$f" 2>/dev/null; done | python3 -c '
 import re, sys
 limit = tuple(int(x) for x in sys.argv[1].split("."))
 current, member, pending, bad = None, None, None, {}
@@ -126,6 +131,27 @@ while IFS= read -r a; do
 done < "$LIBPATHS"
 minos_check "linked libraries" "${libs[@]}"
 
+# ---- universal2: the x86_64 slice, checked before anything is written ---------------------------------------
+if [ -n "$X86" ]; then
+	[ -f "$X86" ] || fail "--x86-64-generals: no file at $X86"
+	[ "$(lipo -archs "$X86" 2>/dev/null)" = x86_64 ] || fail "--x86-64-generals: $X86 is not an x86_64 executable ($(lipo -archs "$X86" 2>&1))"
+	case " $(lipo -archs "$GENERALS" 2>/dev/null) " in *" x86_64 "*) fail "--generals already holds an x86_64 slice";; esac
+	minos_check "the x86_64 executable" "$X86"
+	x86build="$(cd "$(dirname "$X86")" && pwd)"
+	if [ -f "$x86build/build.ninja" ]; then		# its own link line's libraries, as the arm64 ones above
+		python3 - "$x86build/build.ninja" "$LIBPATHS.x86" <<'LINK86_EOF' || fail "cannot read the x86_64 build's link line"
+import re, sys
+text = open(sys.argv[1]).read()
+m = re.search(r"^build generals: CXX_EXECUTABLE_LINKER.*?\n  LINK_LIBRARIES = (.*?)\n", text, re.S | re.M)
+open(sys.argv[2], "w").write("\n".join(sorted(set(t for t in m.group(1).split() if t.endswith(".a")))) + "\n")
+LINK86_EOF
+		libs86=()
+		while IFS= read -r a; do [ -n "$a" ] || continue; case "$a" in /*) libs86+=("$a");; *) libs86+=("$x86build/$a");; esac; done < "$LIBPATHS.x86"
+		rm -f -- "$LIBPATHS.x86"
+		minos_check "the x86_64 build's linked libraries" "${libs86[@]}"
+	fi
+fi
+
 # ---- the bundle ---------------------------------------------------------------------------------------------
 rm -rf -- "${OUT:?}"
 STARTED=1
@@ -134,8 +160,14 @@ mkdir -p "$C/MacOS" "$C/Resources/Overlay" "$C/Resources/Licenses" || fail "cann
 
 # the executable, stripped, and its symbols beside the bundle
 rm -rf -- "${OUT:?}.dSYM"
-dsymutil "$GENERALS" -o "$OUT.dSYM" >/dev/null 2>&1 || fail "dsymutil failed"
-cp "$GENERALS" "$C/MacOS/generals" && strip -S -x "$C/MacOS/generals" || fail "cannot place the executable"
+EXE="$GENERALS"
+if [ -n "$X86" ]; then
+	EXE="$(mktemp -d "${TMPDIR:-/tmp}/zh-universal.XXXXXX")/generals"
+	lipo -create "$GENERALS" "$X86" -output "$EXE" || fail "lipo -create failed"
+fi
+dsymutil "$EXE" -o "$OUT.dSYM" >/dev/null 2>&1 || fail "dsymutil failed"
+cp "$EXE" "$C/MacOS/generals" && strip -S -x "$C/MacOS/generals" || fail "cannot place the executable"
+[ "$EXE" = "$GENERALS" ] || rm -rf -- "$(dirname "$EXE")"
 
 # Info.plist, from the build's version header and the executable's own minimum macOS
 version="$(awk '/#define VERSION_MAJOR/ {a=$3} /#define VERSION_MINOR/ {b=$3} /#define VERSION_BUILDNUM/ {c=$3} END {print a"."b"."c}' "$BUILD/generated/BuildVersion.h")"
@@ -236,4 +268,4 @@ minos_check "the bundle's executables" "${machos[@]}"
 # ---- the signature, last, over the final contents ------------------------------------------------------------
 codesign --force --sign - --timestamp=none "$OUT" 2>/dev/null || fail "codesign failed"
 codesign --verify --deep --strict "$OUT" 2>/dev/null || fail "the fresh signature does not verify"
-echo "make-macos-app: $OUT: version $version, minimum macOS $minos, $(printf '%s\n' $ENTRIES | wc -l | tr -d ' ') licence entries for $(printf '%s\n' $linked | wc -l | tr -d ' ') linked libraries, art $( [ "$ART" -eq 1 ] && echo cloned || echo left out); signed ad hoc and verified"
+echo "make-macos-app: $OUT: $(lipo -archs "$C/MacOS/generals"), version $version, minimum macOS $minos, $(printf '%s\n' $ENTRIES | wc -l | tr -d ' ') licence entries for $(printf '%s\n' $linked | wc -l | tr -d ' ') linked libraries, art $( [ "$ART" -eq 1 ] && echo cloned || echo left out); signed ad hoc and verified"

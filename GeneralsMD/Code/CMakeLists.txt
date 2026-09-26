@@ -1760,6 +1760,11 @@ if(ZH_PLATFORM_POSIX)
     if(NOT ZH_APP_ART)
       list(APPEND ZH_APP_ARGS --no-art)
     endif()
+    # P2 universal2, option A (release time, E2): an x86_64 build's generals, lipo'd into the bundle's
+    set(ZH_X86_64_GENERALS "" CACHE FILEPATH "An x86_64 build's generals, to make the macOS app universal2 (P2)")
+    if(ZH_X86_64_GENERALS)
+      list(APPEND ZH_APP_ARGS --x86-64-generals ${ZH_X86_64_GENERALS})
+    endif()
     add_custom_target(macos_app
       COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/make-macos-app.sh ${ZH_APP_ARGS}
       DEPENDS generals zh_overlay
