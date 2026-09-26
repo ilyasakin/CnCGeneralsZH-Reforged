@@ -44,11 +44,10 @@
 // not own.  Only dx9_smoke calls it.  It is E1's capture, and the one thing that can observe
 // which body a real Windows machine selects, so it must keep calling Microsoft's code.
 //
-// On other platforms there is no DLL, so the non-Windows branch declares only the types
-// GameEngine reaches, D3DXVECTOR4 and D3DXMATRIX, and includes no d3d9.h, so GameLogic's path
-// through BezierSegment.h does not pull in the Direct3D header there.  The renderer's names are
-// absent on purpose: nothing outside WW3D2 and GameEngineDevice uses them, neither compiles off
-// Windows yet, and the renderer backend (D2) will decide what they become.
+// On other platforms there is no DLL.  The non-Windows branch declares the same types and names
+// (decision 7: the renderer speaks D3D9 there too), but includes only D3D9's vector and matrix,
+// not Platform/D3D9Posix.h, so GameLogic's path through BezierSegment.h does not pull in the rest
+// of Direct3D.  Its matrix functions are plain functions in d3dx9posix.cpp.
 
 #ifndef D3DX9MATH_H
 #define D3DX9MATH_H
@@ -184,8 +183,29 @@ inline D3DXMATRIX * D3DXMatrixIdentity(D3DXMATRIX * out)
 
 #else // !_WIN32
 
-// Laid out exactly as the D3DX types are, so that a struct holding one of these has the same
-// shape on both platforms.
+// D3D9's vector and matrix and nothing else of Direct3D's (Platform/D3D9PosixMath.h says why), so
+// that D3DXVECTOR3 and D3DXMATRIX derive from them as they do on Windows and the renderer hands a
+// D3DXMATRIX to SetTransform unchanged.  Laid out exactly as the D3DX types are, so a struct holding
+// one of these has the same shape on both platforms.
+#include "Platform/D3D9PosixMath.h"
+
+#define D3DX_PI	(3.141592654f)
+
+struct D3DXVECTOR3 : public D3DVECTOR
+{
+public:
+	D3DXVECTOR3() {}
+	D3DXVECTOR3(float x_value, float y_value, float z_value)
+	{
+		x = x_value;
+		y = y_value;
+		z = z_value;
+	}
+
+	operator float * () { return &x; }
+	operator const float * () const { return &x; }
+};
+
 struct D3DXVECTOR4
 {
 public:
@@ -202,7 +222,7 @@ public:
 	float w;
 };
 
-struct D3DXMATRIX
+struct D3DXMATRIX : public D3DMATRIX
 {
 public:
 	D3DXMATRIX() {}
@@ -223,20 +243,50 @@ public:
 	float & operator()(unsigned int row, unsigned int column) { return m[row][column]; }
 	float operator()(unsigned int row, unsigned int column) const { return m[row][column]; }
 
-	// D3DMATRIX's own layout: the named elements and the array alias each other.
-	union {
-		struct {
-			float _11, _12, _13, _14;
-			float _21, _22, _23, _24;
-			float _31, _32, _33, _34;
-			float _41, _42, _43, _44;
-		};
-		float m[4][4];
-	};
+	// Defined below, once D3DXMatrixMultiply has been declared.
+	D3DXMATRIX operator*(const D3DXMATRIX & right) const;
+	D3DXMATRIX & operator*=(const D3DXMATRIX & right);
 };
 
+static_assert(sizeof(D3DXVECTOR3) == 12, "D3DXVECTOR3 is three floats");
 static_assert(sizeof(D3DXVECTOR4) == 16, "D3DXVECTOR4 is four floats");
 static_assert(sizeof(D3DXMATRIX) == 64, "D3DXMATRIX is sixteen floats");
+
+// The renderer's matrix functions, which Windows binds out of d3dx9_43.dll: here they are plain
+// functions, in d3dx9posix.cpp, with D3DX's own signatures - D3DXMatrixInverse returns the result,
+// or null when the matrix is singular.  The simulation calls none of them (only the two at the
+// bottom of this file), so their rounding is the picture's business and not the CRC's.
+D3DXMATRIX * D3DXMatrixInverse(D3DXMATRIX * out, float * determinant, const D3DXMATRIX * matrix);
+D3DXMATRIX * D3DXMatrixMultiply(D3DXMATRIX * out, const D3DXMATRIX * left, const D3DXMATRIX * right);
+D3DXMATRIX * D3DXMatrixTranspose(D3DXMATRIX * out, const D3DXMATRIX * matrix);
+D3DXMATRIX * D3DXMatrixScaling(D3DXMATRIX * out, float x, float y, float z);
+D3DXMATRIX * D3DXMatrixTranslation(D3DXMATRIX * out, float x, float y, float z);
+D3DXMATRIX * D3DXMatrixRotationZ(D3DXMATRIX * out, float angle);
+D3DXVECTOR4 * D3DXVec3Transform(D3DXVECTOR4 * out, const D3DXVECTOR3 * vector, const D3DXMATRIX * matrix);
+
+inline D3DXMATRIX D3DXMATRIX::operator*(const D3DXMATRIX & right) const
+{
+	D3DXMATRIX product;
+	D3DXMatrixMultiply(&product, this, &right);
+	return product;
+}
+
+inline D3DXMATRIX & D3DXMATRIX::operator*=(const D3DXMATRIX & right)
+{
+	D3DXMatrixMultiply(this, this, &right);
+	return *this;
+}
+
+inline D3DXMATRIX * D3DXMatrixIdentity(D3DXMATRIX * out)
+{
+	out->m[0][1] = out->m[0][2] = out->m[0][3] =
+	out->m[1][0] = out->m[1][2] = out->m[1][3] =
+	out->m[2][0] = out->m[2][1] = out->m[2][3] =
+	out->m[3][0] = out->m[3][1] = out->m[3][2] = 0.0f;
+
+	out->m[0][0] = out->m[1][1] = out->m[2][2] = out->m[3][3] = 1.0f;
+	return out;
+}
 
 #endif // _WIN32
 
