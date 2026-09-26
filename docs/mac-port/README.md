@@ -221,6 +221,7 @@ you start. That commit is the lock.
 | L1 | [LAN play on POSIX](tasks/L1-lan-play.md) | M5 | B1 B4 B5 N1 E1 E3 | done: two headless copies on one Mac keep one world over the real network code, arm64 against arm64 and against x86_64 under Rosetta (`net_check`); a POSIX lobby hears broadcasts (#29); network replays align to either recording and stay checked to the end; the argument widths pinned. Not seen: a Windows peer, two hosts, the firewall dialog. Step 6 deferred to E2 | -47 |
 | P2 | [The app runs on the Macs players have](tasks/P2-macos-reach.md) | M5 | P1 | in progress: deployment target 13.0 for every target and vendored library, unguarded newer APIs a build error, every shipped object's minimum checked by the bundle; universal2 recon reported. Not seen: a launch on a real macOS 13 or an Intel Mac | -47 |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
+| G1 | [Gamepad controls](tasks/G1-gamepad.md): Steam Input first, then native SDL3 gamepad; tested on the user's Steam Deck | M5 | W1 C3 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
 
