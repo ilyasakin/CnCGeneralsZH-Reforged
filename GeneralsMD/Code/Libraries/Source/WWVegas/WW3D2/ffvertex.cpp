@@ -710,8 +710,9 @@ std::string VertexShader_Key(const VertexPipelineDescription & description)
 		key += field;
 	}
 
-	// Only a lit, specular program reads the local viewer, so only its key carries it.
-	if (description.LightingEnabled && description.SpecularEnabled && description.LocalViewer) {
+	// Every lit program writes the halfway vector, the local viewer's or the fixed one, whether or not
+	// its specular is kept; so every lit program's key says which, and a key names one text.
+	if (description.LightingEnabled && description.LocalViewer) {
 		key += ":V";
 	}
 

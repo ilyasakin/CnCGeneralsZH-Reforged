@@ -982,7 +982,8 @@ is inside a comment). With it on, the specular halfway vector points towards the
 to the eye ("Specular Lighting"). `ffvertex.cpp` always used the fixed (0, 0, 1), and its comment said
 the reverse ("the engine never turns it on"). The **Direct3D 11 renderer** and the SDL3 GPU device run
 these programs; Direct3D 9 does not. **Fixed in the vertex program:** a `LocalViewer` field in the
-description, read from the state by `dx11backend` and the SDL3 device. `dx11state` now starts
+description, read from the state by `dx11backend` and the SDL3 device, and a `:V` in the key of every lit program that
+has it (each writes the halfway vector, kept or not). `dx11state` now starts
 `D3DRS_LOCALVIEWER` at Direct3D 9's TRUE, as it zeroed every state it did not list. Only a lit specular
 program's text and key change. **Not yet visible on screen:** the pixel programs never add the specular
 colour to the pixel (defect #25), so no generated program shows a lit highlight at all. This fix is what
@@ -1007,6 +1008,9 @@ harness against FFReference (N4). **Fixed:**
   also move by one.
 - No key and no unlit program changes.
 - The harness's point-light-with-ambient scenario now matches. `WINDOWS-DEBT.md` has the row.
+- The reach is wider than point lights: `Set_Light(LightClass)` gives every W3D light, directional
+  included, its ambient times its intensity (`dx8wrapper.cpp:3699-3704`, -18's second read). So any lit
+  geometry whose lights carry an ambient moves toward Direct3D 9's brightness on Direct3D 11.
 
 **24. Fork-introduced: a generated combiner program's `DOTPRODUCT3` does not write alpha - fixed; latent
 at both engine sites.** Direct3D 9's `D3DTOP_DOTPRODUCT3` as a colour operation writes its sum "to all
