@@ -84,9 +84,10 @@ stage_overlay() {	# stage_overlay <folder>: the shipped overlay, by the zh_overl
 	"$CODE/Tools/stage-overlay.sh" "$CODE/Data" "$RUNDIR" "$1"
 }
 
+. "$CODE/Tools/install-guard.sh"	# the install's listing: install_snapshot, install_verify
+
 # snapshot <dir> <out> [hash]: every entry, with a link's target or a file's size and mtime; with
-# "hash", each regular file's BLAKE2 as well (read only), since a write that keeps the size and the time
-# would pass a size-and-mtime diff. The install is hashed; the farms are links and folders.
+# "hash", each regular file's BLAKE2 as well (read only). The farms' listing: links and folders.
 snapshot() {
 	python3 - "$1" "${3:-}" > "$2" <<'EOF'
 import hashlib, os, sys
@@ -126,7 +127,10 @@ run() {	# run <name> <root> <switches...>; RUN_EXE overrides the executable
 
 # The install's listing first, before this script writes anything anywhere, so that a write by the
 # harness itself is caught as well as one by the game.
-snapshot "$INSTALL" "$WORK/install.before" hash
+if ! install_snapshot "$INSTALL" "$WORK/install.before"; then
+	echo "FAIL: COULD NOT VERIFY the install: its listing before the run could not be made; nothing was run"
+	exit 1
+fi
 mkdir -p "$WORK/overlay"
 stage_overlay "$WORK/overlay"
 status=0
@@ -182,10 +186,5 @@ else
 	echo "FAIL: the bundled run's log is not where it belongs:"; ls "$WORK/Fake.app/Contents/MacOS" "$WORK/user_W" "$WORK/user_W/Logs" 2>&1 | head; status=1
 fi
 # The install once more, hashed, after both runs: the rule-9 listing diff, by content
-snapshot "$INSTALL" "$WORK/install.after" hash
-if cmp -s "$WORK/install.before" "$WORK/install.after"; then
-	echo "ok: the install is as it was ($(wc -l < "$WORK/install.before" | tr -d ' ') entries: sizes, times and contents)"
-else
-	echo "FAIL: THE INSTALL CHANGED:"; diff "$WORK/install.before" "$WORK/install.after" | head -10; status=1
-fi
+install_verify "$INSTALL" "$WORK/install.before" "$WORK/install.after" || status=1
 exit $status

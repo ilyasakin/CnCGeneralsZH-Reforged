@@ -611,5 +611,14 @@ The engine does not lock render targets anywhere known (screenshots and smudges 
 `GetRenderTargetData` into SYSTEMMEM). If a path turns up, the fix is a hook at the surface or texture
 `LockRect` (which knows its owner) that downloads first.
 
-The skirmish's empty radar is not the renderer's. Its draw callback, `W3DLeftHUDDraw`, is never called
-(lldb), so the question is the fork's HTML control bar and GUI. The PM has given it to -47.
+**The empty radar is the game's rule, not a fault (-47, 2026-09-26).** Seed 1234 seats the local player as
+GLA (`GLAToxinGeneral`), and GLA starts without radar. A probe in `W3DLeftHUDDraw` shows the callback
+running every frame with `hasRadar()` false, so `TheRadar->draw` is rightly skipped. (An earlier lldb
+run had reported the callback never called; the probe contradicts it.) In the install's `INIZH.big`:
+- `AmericaCommandCenter` grants `Upgrade_AmericaRadar` when it is built;
+- China's `RadarUpgrade` waits for the bought `Upgrade_ChinaRadar`;
+- `GLACommandCenter` has no radar module at all.
+
+The same run with `-side 0 FactionAmerica` draws the radar. Not compared with a Windows run.
+
+![The radar on Metal: -side 0 FactionAmerica, present 800; GLA starts without radar](../a3d-radar-america-metal.png)

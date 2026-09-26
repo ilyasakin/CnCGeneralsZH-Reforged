@@ -43,8 +43,10 @@
 #                     matches), at --maxframes (default 12000).  --seeds and --players are ignored
 #   --keep            leave the temporary folder and the logs, and say where
 # Exit status: the number of matches that failed (0 when all agree).  77 when there is no game data.
-# 99 when the install changed during the run: every file of it is hashed before the farm is built and
-# again at the end, and any difference is reported and fails the run whatever the matches said.
+# 99 when the install changed during the run, or when that could not be checked: every file of it is
+# listed with its hash before the farm is built and again at the end (Tools/install-guard.sh). A
+# difference is "THE INSTALL CHANGED"; a listing that is missing or could not be made is "COULD NOT
+# VERIFY", never a change. Either fails the run whatever the matches said.
 
 set -u
 
@@ -94,27 +96,30 @@ ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="rc$$_"		# every log this run writes starts with it
 
-# The install, hashed before anything else happens (RULE 9: a farm entry is a link into it, so a write
+# The install, listed before anything else happens (RULE 9: a farm entry is a link into it, so a write
 # through one would change it).  Checked again on the way out, however the run ends.
-install_hashes() { ( cd "$INSTALL" && find . -type f ! -name '._*' -print0 | sort -z | xargs -0 shasum -a 256 ); }
+. "$(dirname "$0")/install-guard.sh"	# install_snapshot, install_verify
 INSTALL_VERIFIED=0
 verify_install() {
 	[ "$INSTALL_VERIFIED" -eq 1 ] && return 0
 	INSTALL_VERIFIED=1
-	install_hashes > "$WORK/install-after.sha"
-	if ! cmp -s "$WORK/install-before.sha" "$WORK/install-after.sha"; then
-		echo "INSTALL CHANGED during this run (rule 9) - the files that differ:" >&2
-		diff "$WORK/install-before.sha" "$WORK/install-after.sha" >&2
-		return 1
-	fi
-	return 0
+	install_verify "$INSTALL" "$WORK/install-before.list" "$WORK/install-after.list" > "$WORK/install-verdict.txt" 2>&1
+	local verdict=$?
+	[ "$verdict" -eq 0 ] && return 0
+	cat "$WORK/install-verdict.txt" >&2 2>/dev/null || echo "FAIL: COULD NOT VERIFY the install: its work folder $WORK is gone" >&2
+	return 1
 }
 
 cleanup() {
 	if ! verify_install; then
-		KEEP=1
 		trap - EXIT
-		echo "kept for inspection: $WORK" >&2
+		# the install controls fail on purpose, and leave nothing behind; a real failure keeps the folder
+		if [ -n "${REPLAY_CHECK_CONTROL_INSTALL:-}" ]; then
+			rm -rf -- "${WORK:?}"
+			rm -f -- "$EXEDIR/${TAG}"*DebugLogFile*.txt
+		else
+			echo "kept for inspection: $WORK" >&2
+		fi
 		exit 99
 	fi
 	if [ "$KEEP" -eq 1 ]; then
@@ -126,12 +131,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-install_hashes > "$WORK/install-before.sha"
-# The check's own armed control, which never touches the install: it spoils the saved snapshot, so the
-# comparison at the end must find a difference.  Used by Tests/run_replay_check.sh.
-if [ -n "${REPLAY_CHECK_CONTROL_INSTALL:-}" ]; then
-	echo "0000000000000000000000000000000000000000000000000000000000000000  ./replay-check-control" >> "$WORK/install-before.sha"
-fi
+install_snapshot "$INSTALL" "$WORK/install-before.list"	# a failure here is found by verify_install
+# The check's own armed controls, which never touch the install (used by Tests/run_replay_check.sh):
+#   REPLAY_CHECK_CONTROL_INSTALL=changed  spoils the saved listing, so the end must report a change;
+#   REPLAY_CHECK_CONTROL_INSTALL=missing  removes it, so the end must say it COULD NOT VERIFY.
+case "${REPLAY_CHECK_CONTROL_INSTALL:-}" in
+	"") ;;
+	missing) rm -f -- "$WORK/install-before.list" ;;
+	*) echo "replay-check-control 0 0 00000000000000000000000000000000" >> "$WORK/install-before.list" ;;
+esac
 
 # ---- the farm ------------------------------------------------------------------------------------
 mkdir -p "$ROOT" "$USERDATA"
