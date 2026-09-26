@@ -96,6 +96,10 @@ LANAPI::LANAPI( void ) : m_transport(NULL)
 	m_lastUpdate = 0;
 	m_transport = new Transport;
 	m_isActive = TRUE;
+#if !defined(_WIN32)
+	m_transport->shareAddress(TRUE);		// defect #29: another copy's broadcast listener may hold the port
+	m_broadcastListener = new Transport;
+#endif
 }
 
 LANAPI::~LANAPI( void )
@@ -103,6 +107,9 @@ LANAPI::~LANAPI( void )
 	reset();
 	if (m_transport)
 		delete m_transport;
+#if !defined(_WIN32)
+	delete m_broadcastListener;
+#endif
 }
 
 void LANAPI::init( void )
@@ -112,6 +119,9 @@ void LANAPI::init( void )
 	m_transport->reset();
 	m_transport->init(m_localIP, lobbyPort);
 	m_transport->allowBroadcasts(true);
+#if !defined(_WIN32)
+	listenForBroadcasts();
+#endif
 
 	m_pendingAction = ACT_NONE;
 	m_expiration = 0;
@@ -346,6 +356,9 @@ void LANAPI::update( void )
 			LANSocketErrorDetected = TRUE;
 		}
 	}
+#if !defined(_WIN32)
+	collectBroadcasts();
+#endif
 
 	// Handle any new messages
 	int i;
@@ -1277,6 +1290,30 @@ void LANAPI::addPlayer( LANPlayer *player )
 	}
 }
 
+#if !defined(_WIN32)
+void LANAPI::listenForBroadcasts( void )
+{
+	m_broadcastListener->reset();
+	/* A lobby bound to the wildcard address (init() before SetLocalIP chooses one) hears broadcasts
+		 itself, and a second wildcard socket would take each one twice. */
+	if (m_localIP == 0 || m_localIP == INADDR_ANY)
+		return;
+	if (!m_broadcastListener->initBroadcastListener(lobbyPort))
+	{
+		DEBUG_LOG(("LANAPI::listenForBroadcasts - no broadcast listener on port %d (error %d): other hosts' games will not be listed\n",
+			lobbyPort, lastSocketError()));
+	}
+}
+
+void LANAPI::collectBroadcasts( void )
+{
+	if (!m_broadcastListener->isOpen())
+		return;
+	m_broadcastListener->update();
+	m_broadcastListener->moveReceivedInto( *m_transport );
+}
+#endif
+
 Bool LANAPI::SetLocalIP( UnsignedInt localIP )
 {
 	Bool retval = TRUE;
@@ -1285,6 +1322,9 @@ Bool LANAPI::SetLocalIP( UnsignedInt localIP )
 	m_transport->reset();
 	retval = m_transport->init(m_localIP, lobbyPort);
 	m_transport->allowBroadcasts(true);
+#if !defined(_WIN32)
+	listenForBroadcasts();
+#endif
 
 	return retval;
 }
