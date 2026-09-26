@@ -63,6 +63,12 @@ struct PosixFormatLayout
 /** The layout of a format that can hold pixels; false for UNKNOWN, VERTEXDATA and anything not listed. */
 bool posixFormatLayout( D3DFORMAT format, PosixFormatLayout *layout );
 
+/** Called with the object's address as a texture (2D, cube, volume), a standalone surface, or a vertex or
+	* index buffer is destroyed, first thing in its destructor, on whatever thread drops the last reference
+	* (the texture loader's included).  A3c drops that object's GPU copy by it, using the address only as a
+	* key.  Null (the default, and headless) calls nothing. */
+extern void (*posixResourceDestroyed)( const void *resource );
+
 /** D3D9's own error for a failed allocation. */
 #define POSIX_D3D_OUTOFMEMORY			((RenderResult)0x8007000Eu)
 /** COM's "no such interface", which GetContainer answers for a container that is not the one asked for. */
@@ -345,6 +351,9 @@ public:
 
 	PosixBufferStorage &storage() { return m_storage; }
 
+protected:
+	virtual ~PosixVertexBuffer9();
+
 private:
 	PosixVertexBuffer9() : m_fvf( 0 ) {}
 	PosixBufferStorage m_storage;
@@ -367,6 +376,9 @@ public:
 
 	PosixBufferStorage &storage() { return m_storage; }
 	D3DFORMAT format() const { return m_format; }
+
+protected:
+	virtual ~PosixIndexBuffer9();
 
 private:
 	PosixIndexBuffer9() : m_format( D3DFMT_INDEX16 ) {}

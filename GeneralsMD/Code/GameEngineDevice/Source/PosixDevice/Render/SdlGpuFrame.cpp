@@ -92,12 +92,11 @@ SdlGpuFrame::SdlGpuFrame() :
 	DepthFormat(SDL_GPU_TEXTUREFORMAT_INVALID),
 	BackWidth(0),
 	BackHeight(0),
-	ClearColour(false),
-	ClearDepth(false),
-	ClearStencil(false),
-	ClearArgb(0),
-	ClearZ(1.0f),
-	ClearStencilValue(0),
+	BatchNumber(1),
+	StreamBuffer(NULL),
+	StreamBufferSize(0),
+	Transfer(NULL),
+	TransferSize(0),
 	GammaVertex(NULL),
 	GammaPixel(NULL),
 	GammaPipeline(NULL),
@@ -105,6 +104,7 @@ SdlGpuFrame::SdlGpuFrame() :
 	RampTexture(NULL),
 	PointSampler(NULL)
 {
+	LastConstants[0] = LastConstants[1] = LastConstantsSize[0] = LastConstantsSize[1] = 0;
 }
 
 SdlGpuFrame * SdlGpuFrame::Create(RenderWindow window, unsigned int width, unsigned int height, std::string & error)
@@ -144,6 +144,10 @@ SdlGpuFrame::~SdlGpuFrame()
 		return;
 	}
 	Release_Targets();
+	Commands.clear();
+	End_Batch();
+	if (StreamBuffer != NULL) SDL_ReleaseGPUBuffer(GpuDevice, StreamBuffer);
+	if (Transfer != NULL) SDL_ReleaseGPUTransferBuffer(GpuDevice, Transfer);
 	if (GammaPipeline != NULL) SDL_ReleaseGPUGraphicsPipeline(GpuDevice, GammaPipeline);
 	if (GammaVertex != NULL) SDL_ReleaseGPUShader(GpuDevice, GammaVertex);
 	if (GammaPixel != NULL) SDL_ReleaseGPUShader(GpuDevice, GammaPixel);
@@ -184,60 +188,28 @@ void SdlGpuFrame::Release_Targets()
 
 bool SdlGpuFrame::Resize(unsigned int width, unsigned int height)
 {
+	// What is recorded runs first: the GPU copies count the uploads it carries as done.
+	Flush();
 	Release_Targets();
-	ClearColour = ClearDepth = ClearStencil = false;
 	return Create_Targets(width, height);
 }
 
 void SdlGpuFrame::Clear_Back_Buffer(bool colour, bool depth, bool stencil, uint32_t argb, float z, uint32_t stencil_value)
 {
-	if (colour) {
-		ClearColour = true;
-		ClearArgb = argb;
+	if (!colour && !depth && !stencil) {
+		return;
 	}
-	if (depth) {
-		ClearDepth = true;
-		ClearZ = z;
-	}
-	if (stencil) {
-		ClearStencil = true;
-		ClearStencilValue = stencil_value;
-	}
+	Command command;
+	memset(&command, 0, sizeof(command));
+	command.Colour = colour;
+	command.Depth = depth;
+	command.Stencil = stencil;
+	command.Argb = argb;
+	command.Z = z;
+	command.StencilValue = stencil_value;
+	Commands.push_back(command);
 }
 
-// A pass over the back buffer whose only work is its load operations: the recorded clear.  In A3c the
-// recorded draws follow in the same pass.
-bool SdlGpuFrame::Record_Clear_Pass(SDL_GPUCommandBuffer * commands)
-{
-	if (!ClearColour && !ClearDepth && !ClearStencil) {
-		return true;
-	}
-	SDL_GPUColorTargetInfo colour;
-	SDL_zero(colour);
-	colour.texture = BackBuffer;
-	colour.clear_color.a = (float)((ClearArgb >> 24) & 0xFF) / 255.0f;
-	colour.clear_color.r = (float)((ClearArgb >> 16) & 0xFF) / 255.0f;
-	colour.clear_color.g = (float)((ClearArgb >> 8) & 0xFF) / 255.0f;
-	colour.clear_color.b = (float)(ClearArgb & 0xFF) / 255.0f;
-	colour.load_op = ClearColour ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
-	colour.store_op = SDL_GPU_STOREOP_STORE;
-	SDL_GPUDepthStencilTargetInfo depth;
-	SDL_zero(depth);
-	depth.texture = DepthStencil;
-	depth.clear_depth = ClearZ;
-	depth.clear_stencil = (Uint8)ClearStencilValue;
-	depth.load_op = ClearDepth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
-	depth.store_op = SDL_GPU_STOREOP_STORE;
-	depth.stencil_load_op = ClearStencil ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
-	depth.stencil_store_op = SDL_GPU_STOREOP_STORE;
-	SDL_GPURenderPass * pass = SDL_BeginGPURenderPass(commands, &colour, 1, &depth);
-	if (pass == NULL) {
-		return false;
-	}
-	SDL_EndGPURenderPass(pass);
-	ClearColour = ClearDepth = ClearStencil = false;
-	return true;
-}
 
 bool SdlGpuFrame::Flush()
 {
@@ -245,8 +217,10 @@ bool SdlGpuFrame::Flush()
 	if (commands == NULL) {
 		return false;
 	}
-	const bool recorded = Record_Clear_Pass(commands);
-	return SDL_SubmitGPUCommandBuffer(commands) && recorded;
+	const bool recorded = Record_Batch(commands);
+	const bool submitted = SDL_SubmitGPUCommandBuffer(commands);
+	End_Batch();
+	return submitted && recorded;
 }
 
 SDL_GPUGraphicsPipeline * SdlGpuFrame::Gamma_Pipeline(unsigned int format)
@@ -413,7 +387,7 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 	if (commands == NULL) {
 		return false;
 	}
-	bool ok = Record_Clear_Pass(commands);
+	bool ok = Record_Batch(commands);
 	if (Window != NULL) {
 		SDL_GPUTexture * swapchain = NULL;
 		Uint32 width = 0;
@@ -424,7 +398,9 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 				&& ok;
 		}
 	}
-	return SDL_SubmitGPUCommandBuffer(commands) && ok;
+	const bool submitted = SDL_SubmitGPUCommandBuffer(commands);
+	End_Batch();
+	return submitted && ok;
 }
 
 bool SdlGpuFrame::Present_To(SDL_GPUTexture * target, unsigned int width, unsigned int height,
@@ -434,9 +410,11 @@ bool SdlGpuFrame::Present_To(SDL_GPUTexture * target, unsigned int width, unsign
 	if (commands == NULL) {
 		return false;
 	}
-	bool ok = Record_Clear_Pass(commands);
+	bool ok = Record_Batch(commands);
 	ok = Present_Into(commands, target, width, height, BACK_BUFFER_FORMAT, ramp) && ok;
-	return SDL_SubmitGPUCommandBuffer(commands) && ok;
+	const bool submitted = SDL_SubmitGPUCommandBuffer(commands);
+	End_Batch();
+	return submitted && ok;
 }
 
 bool SdlGpuFrame::Upload_Back_Buffer(const std::vector<uint8_t> & bgra)
