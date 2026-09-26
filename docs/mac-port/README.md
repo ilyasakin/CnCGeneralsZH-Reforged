@@ -954,6 +954,15 @@ These are not style preferences. Breaking one of them costs somebody else a day.
    reason. Comments are not checked. Found by B1: `Keyboard.cpp`'s UK euro key had held three raw
    bytes for years, and MSVC read them as one wrong character.
 
+9. **Never start the engine with the real game install as its root.** `GameEngine::init` deletes
+   `Data\INI\INIZH.big` (a leftover of patch 1.01) from its install root, and the Steam install on
+   `/Volumes/External` has that file, as a Windows install does. Only the engine does this, and only
+   at start-up, so reading the install's archives from a test (as `gametext_csf` and
+   `test_miles_miniaudio` do) is safe. What is forbidden is any process that runs
+   `GameEngine::init` - a headless game, E1's replay runs, an engine-level test - with that folder as
+   its working directory or install root. Use a copy of the files it needs, or a read-only mount.
+   Found by C1 (c) while moving that delete behind `TheLocalFileSystem`.
+
 ## Open questions that need an answer before the milestone that depends on them
 
 - **BC textures.** The art is DXT/BC (44 files in WW3D2 reference it). SDL3's GPU API exposes BC
