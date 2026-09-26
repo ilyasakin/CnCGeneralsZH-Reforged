@@ -37,6 +37,10 @@ exists).
 
 ## Link census, 2026-09-26 (-47) - read this first; the sections after it predate B1, B5 and B17
 
+**There is no small headless closure: one INI parse reaches everything.** A driver that boots the
+memory manager, the name keys and the file system and parses one INI file needs 309 of the 311
+undefined symbols the whole engine needs, so B6's list is the whole list.
+
 **What was measured.** `feature/mac-port` at `7d6e3a84`, arm64 macOS, Release. `ninja -k 0 gameengine`:
 **586 of 603 translation units compile**; the 17 that do not are listed below. The 586 objects were
 archived and linked three ways, with `wwlib wwmath wwsaveload wwdebug wwutil compression benchmark
@@ -81,6 +85,44 @@ link adds (not run: Linux is a milestone-boundary check now). Windows, where not
    library (a debt row), and `test_gameengine_stubs.cpp` loses its copies.
 3. **Winsock needs an owner.** LAN play is in scope; `Transport`/`udp`/`IPEnumeration` are plain BSD
    sockets underneath, the way B5 found `ControlServer.cpp` to be.
+
+**Step (2) done, 2026-09-26: the keys and MapObject's data half are gameengine's.** Re-measured on
+`9070a9fd` (after -18's B5-msgbox): 591/603 compile, 342 undefined (the new files add GameSpy SDK
+entry points and `gAppPrefix`); after the move 595 objects, **230 undefined, none of them a key or a
+MapObject member**.
+- `Common/WellKnownKeys.cpp` defines `INSTANTIATE_WELL_KNOWN_KEYS` and includes the header: all 128
+  keys, once. `WorldHeightMap.cpp` no longer defines the macro, so it only declares them.
+- `Common/MapObject.cpp` holds the data half, moved verbatim (every removed line reappears; only the
+  section banner differs): the two statics, `validateName`, the constructor and destructor,
+  `duplicate`, `validate`/`verifyValidTeam`/`verifyValidUniqueID`/`fastAssignAllUniqueIDs`,
+  `setName`/`setThingTemplate`/`getThingTemplate`, the four waypoint accessors and
+  `countMapObjectsWithOwner`.
+- **How the split is expressed:** the class in `Common/MapObject.h` is not touched, so its layout is
+  what it was - `m_renderObj` and `m_bridgeTowers[]` stay members, pointers to a forward-declared
+  `RenderObjClass`. Only the three members that take a reference on one (`setRenderObj`,
+  `setBridgeRenderObject`, `getBridgeRenderObject`) are defined outside `gameengine`: in
+  `WorldHeightMap.cpp` on Windows, as before, and in `Common/MapObjectRenderPosix.cpp` elsewhere
+  (left out of the Windows build like the other `*Posix.cpp`), which keeps the pointer, holds no
+  reference and asserts it was given NULL, since nothing creates a `RenderObjClass` off Windows yet.
+  The constructor and destructor still call them, as they always did.
+- `test_gameengine_stubs.cpp` lost its keys and its own `MapObject` - which was not the game's: its
+  constructor skipped `validateName` and the default property sheet, and its `getThingTemplate`
+  skipped `getFinalOverride`. It keeps the three render members under `_WIN32` only, because on
+  Windows they live in `gameenginedevice`, which the test does not link.
+- **Proof of one definition each, on Windows' side** - mingw-as-MSVC objects and `nm`, where they
+  build: `MapObject.o` defines every data member once (the constructor as C1/C2 at one address, the
+  destructor as D0/D1/D2 - one definition each), `WellKnownKeys.o` all 128 keys and `MapObject.o`
+  none (its 12 `.refptr.TheKey_*` entries are mingw's COMDAT indirections to them, listed undefined
+  by `nm -u`). `WorldHeightMap.cpp` does not build under mingw before or after (28 errors each, the
+  same 28: its terrain texture types), so it is a **grep proof**: the three render members are its
+  only `MapObject::` definitions and `INSTANTIATE_WELL_KNOWN_KEYS` is defined nowhere but
+  `WellKnownKeys.cpp`. The render half has three bodies and no link sees two: Windows'
+  `gameenginedevice`, the POSIX-only file, and the `_WIN32` test stub in a test that links
+  `gameengine` alone.
+- mingw-as-MSVC differential over every Windows-side `.cpp` (`GameEngine`, `GameEngineDevice`, `Main`,
+  `WW3D2`), nothing suppressed: 3,658 distinct error lines before and after; the three new files
+  compile clean (659 -> 662 of 855 -> 858); the only lines that differ are `WorldHeightMap.cpp`'s same
+  14 messages, 266 lines higher.
 
 **Stale below, corrected:**
 - *`ww3d2` is "real, and the hard one" (`D3DXVec4Transform`).* No longer: B17 made the D3DX maths
