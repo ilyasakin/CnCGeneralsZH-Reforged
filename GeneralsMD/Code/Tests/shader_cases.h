@@ -291,6 +291,16 @@ inline std::vector<ShaderCase> Shader_Cases()
 		cases.push_back(vertex("vs_extra_lit_no_colour", false, description));
 	}
 	{
+		// Specular with D3D9's default local viewer, as every lit specular draw of the engine's is.
+		VertexPipelineDescription description = plain_vertex();
+		description.LightingEnabled = true;
+		description.SpecularEnabled = true;
+		description.LocalViewer = true;
+		description.LightCount = 1;
+		description.Lights[0].Type = FF_LIGHT_DIRECTIONAL;
+		cases.push_back(vertex("vs_extra_specular_local_viewer", false, description));
+	}
+	{
 		// A scrolling texture as W3D's mappers set one up: the vertex's own set through a COUNT2
 		// transform whose translation is in _31 and _32 (mapper.cpp).
 		VertexPipelineDescription description = plain_vertex();

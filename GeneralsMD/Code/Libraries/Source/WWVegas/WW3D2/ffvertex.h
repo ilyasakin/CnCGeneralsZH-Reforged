@@ -109,6 +109,12 @@ struct VertexPipelineDescription
 	bool LightingEnabled;
 	bool SpecularEnabled;
 
+	// D3DRS_LOCALVIEWER, whose Direct3D 9 default is TRUE and which the engine never turns off: the
+	// specular halfway vector is taken towards the vertex's own direction to the eye rather than the
+	// fixed (0, 0, 1).  Only a lit, specular program reads it.  Initialised here for a caller that fills
+	// the rest field by field.
+	bool LocalViewer = false;
+
 	// D3DRS_COLORVERTEX.  With it off the vertex colour is ignored whatever the material sources
 	// say, which is how a lit draw with a colour in its vertices still comes out unlit by it.
 	bool ColourVertexEnabled;

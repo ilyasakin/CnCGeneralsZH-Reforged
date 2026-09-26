@@ -103,7 +103,8 @@ static bool material_source_expression(FixedFunctionValue source, const char * m
 	}
 }
 
-static void append_light(std::string & body, unsigned index, FixedFunctionValue type, const char * accumulator)
+static void append_light(std::string & body, unsigned index, FixedFunctionValue type, const char * accumulator,
+	bool local_viewer)
 {
 	char line[1024];
 
@@ -152,10 +153,13 @@ static void append_light(std::string & body, unsigned index, FixedFunctionValue 
 		accumulator, index);
 	body += line;
 
-	// The specular term is Blinn's half vector, which is what D3D9's fixed-function pipeline uses
-	// with D3DRS_LOCALVIEWER off - and the engine never turns it on.
+	// The specular term is Blinn's half vector ("Specular Lighting"): between the light and the eye,
+	// where the eye is the vertex's own direction to the camera with D3DRS_LOCALVIEWER, which is D3D9's
+	// default and which the engine never turns off, and the fixed (0, 0, 1) without it.
+	body += local_viewer
+		? "        float3 half_vector = normalize(to_light + normalize(-view_position.xyz));\n"
+		: "        float3 half_vector = normalize(to_light + float3(0.0, 0.0, 1.0));\n";
 	snprintf(line, sizeof(line),
-		"        float3 half_vector = normalize(to_light + float3(0.0, 0.0, 1.0));\n"
 		"        float highlight = pow(max(dot(view_normal, half_vector), 0.0), MaterialPower.x);\n"
 		"        specular_light += Light%uSpecular.rgb * highlight * attenuation"
 		" * step(0.0001, lambert);\n"
@@ -528,7 +532,8 @@ bool VertexShader_Generate(const VertexPipelineDescription & description,
 		body += "    float3 specular_light = float3(0.0, 0.0, 0.0);\n";
 		for (unsigned index = 0; index < description.LightCount; ++index) {
 			const FixedFunctionValue type = description.Lights[index].Type;
-			append_light(body, index, type, type == FF_LIGHT_DIRECTIONAL ? "diffuse_light" : "local_light");
+			append_light(body, index, type, type == FF_LIGHT_DIRECTIONAL ? "diffuse_light" : "local_light",
+				description.LocalViewer);
 		}
 		body += "    diffuse_light += local_light;\n";
 
@@ -693,6 +698,11 @@ std::string VertexShader_Key(const VertexPipelineDescription & description)
 		snprintf(field, sizeof(field), ":T%lu,%lu", (unsigned long)description.Stages[stage].TextureCoordinateIndex,
 			(unsigned long)description.Stages[stage].TextureTransformFlags);
 		key += field;
+	}
+
+	// Only a lit, specular program reads the local viewer, so only its key carries it.
+	if (description.LightingEnabled && description.SpecularEnabled && description.LocalViewer) {
+		key += ":V";
 	}
 
 	snprintf(field, sizeof(field), ":F%u,%lu", description.FogEnabled ? 1u : 0u,
