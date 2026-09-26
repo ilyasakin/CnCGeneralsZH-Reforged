@@ -1094,6 +1094,12 @@ endif()
 # so drive it with --target.
 if(ZH_PLATFORM_POSIX)
   file(GLOB_RECURSE POSIXDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/*.cpp)
+  # The BIG archive reader is Win32Device's own, built here as it is (C1 (f)): it has no Win32 in it but
+  # ntohl and one message box, both behind #if, and one copy keeps the mount order - which archive wins
+  # which path, and so the INI CRC - the same on every platform.
+  list(APPEND POSIXDEVICE_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/Win32Device/Common/Win32BIGFile.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/Win32Device/Common/Win32BIGFileSystem.cpp)
   add_library(posixdevice STATIC ${ZH_NOT_YET_PORTABLE} ${POSIXDEVICE_SOURCES})
   target_include_directories(posixdevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
   set_target_properties(posixdevice PROPERTIES CXX_STANDARD 17)
@@ -1510,8 +1516,7 @@ target_include_directories(test_posixpath PRIVATE ${WW}/WWLib ${WW}/WWDebug)
 # gameengine does not link on macOS yet.  The few names those sources reach and the test does not are
 # in its _stubs.cpp, which says why each one is there.  Not on Linux yet, for fpucontrol_selfcheck's
 # reason (BaseType.h's min/max against libstdc++); registered DISABLED there.
-set(ZH_POSIXLFS_SOURCES
-  ${TESTS}/test_posixlocalfilesystem.cpp ${TESTS}/test_posixlocalfilesystem_stubs.cpp
+set(ZH_POSIXLFS_SOURCES_NO_MAIN
   ${GE}/Source/Common/System/GameMemory.cpp ${GE}/Source/Common/System/MemoryInit.cpp
   ${GE}/Source/Common/System/CriticalSection.cpp ${GE}/Source/Common/System/JobSystem.cpp
   ${GE}/Source/GameLogic/System/FPUControl.cpp ${GE}/Source/Common/System/ExecutableDirectory.cpp
@@ -1521,7 +1526,8 @@ set(ZH_POSIXLFS_SOURCES
   ${GE}/Source/Common/System/RAMFile.cpp ${GE}/Source/Common/System/registry.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFileSystem.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFile.cpp)
-add_executable(test_posixlocalfilesystem ${ZH_POSIXLFS_SOURCES})
+add_executable(test_posixlocalfilesystem ${TESTS}/test_posixlocalfilesystem.cpp ${TESTS}/test_posixlocalfilesystem_stubs.cpp
+  ${ZH_POSIXLFS_SOURCES_NO_MAIN})
 target_include_directories(test_posixlocalfilesystem PRIVATE
   $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 target_compile_definitions(test_posixlocalfilesystem PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
@@ -1581,6 +1587,31 @@ target_compile_definitions(test_userfolders PRIVATE $<TARGET_PROPERTY:gameengine
 set_target_properties(test_userfolders PROPERTIES CXX_STANDARD 17)
 target_link_libraries(test_userfolders PRIVATE test_harness wwlib wwdebug)
 add_test(NAME test_userfolders COMMAND test_userfolders)
+
+# The BIG archive reader on POSIX, against the real game data under rule 9 (C1 (f)): every path's
+# owning archive against an independent reading of the mount order, and the bytes of a sample against
+# an independent parser.  Built from the real sources, as test_posixlocalfilesystem is.  Needs
+# ZH_GAME_DATA; without it the test is Skipped (77).
+add_executable(test_bigfilesystem ${TESTS}/test_bigfilesystem.cpp ${TESTS}/test_bigfilesystem_stubs.cpp
+  ${ZH_POSIXLFS_SOURCES_NO_MAIN}
+  ${GE}/Source/Common/System/ArchiveFileSystem.cpp ${GE}/Source/Common/System/ArchiveFile.cpp
+  ${GE}/Source/Common/System/StreamingArchiveFile.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/Win32Device/Common/Win32BIGFile.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/Win32Device/Common/Win32BIGFileSystem.cpp)
+target_include_directories(test_bigfilesystem PRIVATE
+  $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+target_compile_definitions(test_bigfilesystem PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+set_target_properties(test_bigfilesystem PROPERTIES CXX_STANDARD 17)
+target_link_libraries(test_bigfilesystem PRIVATE test_harness wwlib wwdebug)
+add_test(NAME test_bigfilesystem COMMAND test_bigfilesystem)
+set_tests_properties(test_bigfilesystem PROPERTIES SKIP_RETURN_CODE 77)
+if(ZH_GAME_DATA)
+  set_tests_properties(test_bigfilesystem PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+endif()
+if(ZH_PLATFORM_LINUX)
+  set_target_properties(test_bigfilesystem PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  set_tests_properties(test_bigfilesystem PROPERTIES DISABLED TRUE)
+endif()
 
 # The POSIX half of the Wine listing oracle (Tests/fs_oracle.cpp; its Windows half is built with
 # mingw-w64 and run under Wine, as C1's task file records).
