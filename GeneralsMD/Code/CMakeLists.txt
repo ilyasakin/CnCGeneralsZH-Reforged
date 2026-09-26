@@ -1910,6 +1910,14 @@ add_lib_test(test_gameengine gameengine)
 # T1's terrain golden against the moved code (GameLogic/WorldHeightMapData, TerrainHeightSampling):
 # nine shipped maps out of the install's archives, which must sample exactly as Tests/terrain_golden.txt
 # says the original W3D code did.  Needs ZH_GAME_DATA; Skipped (77) without it.
+# Defect #29: the LAN lobby's broadcast listener off Windows, through the real Transport and UDP, in the
+# layout two copies of the game on one host build (see the test's header).  POSIX only: the listener is.
+if(ZH_PLATFORM_POSIX)
+  add_lib_test(test_lan_broadcast gameengine)
+  # the exe's names and the device layer, as test_terrain_golden links them
+  target_sources(test_lan_broadcast PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
+  target_link_libraries(test_lan_broadcast PRIVATE posixdevice w3ddevice)
+endif()
 add_lib_test(test_terrain_golden gameengine)
 target_compile_definitions(test_terrain_golden PRIVATE
   TERRAIN_GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/Tests/terrain_golden.txt")

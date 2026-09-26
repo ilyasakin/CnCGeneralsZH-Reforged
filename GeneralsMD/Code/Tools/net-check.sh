@@ -43,7 +43,8 @@
 #               different worlds from one command stream; the match must be reported FAILED with a CRC
 #               mismatch, so a pass means the check can see one
 # Exit status: 0 the match agrees; 1 it does not; 77 skipped (no data, no second address, a port in
-# use, the firewall on, or no python3 for the probe); 99 the install changed or could not be checked.
+# use for NET_CHECK_PORT_WAIT seconds (600), the firewall on, or no python3 for the probe); 99 the install
+# changed or could not be checked.
 
 set -u
 
@@ -105,7 +106,8 @@ if ! command -v python3 >/dev/null 2>&1; then
 	echo "skip: no python3 for the address probe"
 	exit 77
 fi
-PROBE="$(python3 - <<'PROBE_EOF'
+probe() {
+	python3 - <<'PROBE_EOF'
 import re, socket, subprocess, sys
 
 def candidates():
@@ -164,10 +166,23 @@ for c in candidates():
     tried.append(c)
 print("NONE " + " ".join(tried))
 PROBE_EOF
-)"
+}
+# A copy of this harness in another checkout, or a game someone is playing, holds the ports: wait for
+# them (NET_CHECK_PORT_WAIT seconds, default 600) rather than skip, so two ctest runs on one machine
+# queue instead of one of them passing as Skipped.
+PORT_WAIT="${NET_CHECK_PORT_WAIT:-600}"
+port_deadline=$(( $(date +%s) + PORT_WAIT ))
+while :; do
+	PROBE="$(probe)"
+	case "$PROBE" in "BUSY "*) ;; *) break;; esac
+	[ "$(date +%s)" -ge "$port_deadline" ] && break
+	[ -n "${said_waiting:-}" ] || echo "net-check: waiting up to ${PORT_WAIT} s for the game's ports (${PROBE#BUSY })"
+	said_waiting=1
+	sleep 5
+done
 case "$PROBE" in
 	"ADDR "*) SECOND="${PROBE#ADDR }";;
-	"BUSY "*) echo "skip: the game's ports are in use (${PROBE#BUSY }): another copy of the game is running"; exit 77;;
+	"BUSY "*) echo "skip: the game's ports stayed in use for ${PORT_WAIT} s (${PROBE#BUSY }): another copy of the game is running"; exit 77;;
 	*) echo "skip: no up, non-loopback IPv4 address delivers to and from 127.0.0.1 (tried: ${PROBE#NONE })"; exit 77;;
 esac
 HOSTS="127.0.0.1,$SECOND"
@@ -208,6 +223,9 @@ cleanup() {
 	rm -f -- "$(dirname "${EXE[0]}")/${TAG}"*DebugLogFile*.txt "$(dirname "${EXE[1]}")/${TAG}"*DebugLogFile*.txt
 }
 trap cleanup EXIT
+# a signal (a ctest timeout, ^C, a closed pipe) exits through the EXIT trap too, so the copies are
+# stopped, the work folder removed and the install checked however the run ends
+trap 'exit 130' INT TERM HUP PIPE
 install_snapshot "$INSTALL" "$WORK/install-before.list"
 
 # ---- the farm, and the overlay as it ships ------------------------------------------------------------

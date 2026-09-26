@@ -218,7 +218,7 @@ you start. That commit is the lock.
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`), the Mac baseline over a real fight, defect #20 fixed; parity needs a Windows run | -18 |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | done: `m_exeCRC` takes a CRC-32 over the tracked sources on every platform; LF/CRLF and one-byte checks in ctest | -47 |
 | P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | in progress: steps 1-4 merged (overlay root; read-only roots and logs; one staged overlay, W=P path by path, E1 on `-overlay`; root selection); step 5, the `.app`, held for disk | -47 |
-| L1 | [LAN play on POSIX](tasks/L1-lan-play.md) | M5 | B1 B4 B5 N1 E1 E3 | in progress: recon merged; step 1 done (`net_check`: two headless copies on one Mac agree over the real network code, and a second seed is caught); next F1 (defect #29), F2, the Rosetta pair, the width asserts | -47 |
+| L1 | [LAN play on POSIX](tasks/L1-lan-play.md) | M5 | B1 B4 B5 N1 E1 E3 | in progress: recon merged; step 1 merged (`net_check`); step 3 done: defect #29 fixed (a POSIX lobby now hears broadcasts, `test_lan_broadcast`); next F2, the Rosetta pair, the width asserts | -47 |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
@@ -1226,6 +1226,40 @@ reads the set's register as before. The comment on `stage_register` records both
   `floatToIntAsMsvc`. `WINDOWS-DEBT.md` has the row: Windows' rank changes only where the old walk left
   the table.
 - **Not traced:** how far the out-of-table rank index then reached into later tables on Windows.
+
+**29. Fork-introduced: a POSIX LAN lobby hears no broadcasts - fixed.**
+
+- **Where:** `LANAPI::init` and `SetLocalIP` bind the lobby socket to one unicast address: the Options
+  choice, or IPEnumeration's first. Every game announcement goes to 255.255.255.255:8086.
+- **Why only off Windows:** Windows hands a broadcast to a socket bound to one address, and the lobby
+  (and `lan-play.ps1`) rely on it. BSD and Linux sockets do not. The UNIX half of `udp.cpp` was finished
+  in this fork (032b1b82), so the lobby that shipped on the Mac is the fork's.
+- **Measured on macOS (L1):** a socket bound to 192.168.1.103 received nothing sent to 255.255.255.255 or
+  to 192.168.1.255; one bound to the wildcard address received both. So no Mac lobby would ever list a
+  game, whether hosted on a Mac or on Windows. Directed messages arrived as before.
+- **Fixed, POSIX only** (`udp.h`, `Transport.h`, `LANAPI.h`; Windows' view of all six changed files is
+  identical by `windows_view_diff`):
+  - Each lobby keeps a second socket, on the wildcard address and the lobby port, with SO_REUSEADDR and
+    SO_REUSEPORT. It takes only datagrams whose destination is 255.255.255.255 (`IP_RECVDSTADDR` on
+    macOS and the BSDs, `IP_PKTINFO` on Linux, `#error` elsewhere). A unicast datagram reaching it, one
+    sent to a local address nobody bound, is dropped, as a Windows lobby would never have seen it.
+  - The lobby's own socket sets SO_REUSEADDR, so it can share the port with another copy's listener.
+    A second socket on the same address and port still fails to bind (checked).
+  - `LANAPI::update` moves what the listener heard into the lobby's inbox before its one loop. Every
+    message therefore passes that loop's own-address filter exactly once: a lobby's own broadcast comes
+    back to its listener with its own address and is dropped there, as on Windows.
+  - It is (re)bound whenever the lobby socket is bound to an address. It is not bound while the lobby
+    sits on the wildcard address, which hears broadcasts itself.
+- **Measured, `test_lan_broadcast`** (the real Transport and UDP, two copies on one host: one lobby at
+  127.0.0.1, one at the first non-loopback address):
+  - A broadcast reaches both listeners once each, and neither unicast socket.
+  - A directed message reaches only its own unicast socket.
+  - A stray unicast is dropped by the listener; the control, a plain wildcard socket, receives it.
+  - Each message is moved once, and a full inbox leaves the rest waiting.
+  - Armed mutations: the destination filter passing everything fails 1 check; the lobby socket without
+    SO_REUSEADDR fails 7; a move that leaves its source fails 2.
+- **What this cannot see:** a broadcast from another machine (one host's traffic never leaves the
+  kernel), and Linux, whose socket rules are the same by its documentation but not measured here.
 
 **30. A map's water-track file, which a network host can send, indexes past the wave table - fixed.**
 

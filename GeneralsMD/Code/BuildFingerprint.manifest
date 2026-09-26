@@ -2677,6 +2677,7 @@ Tests/test_harness.h
 Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
+Tests/test_lan_broadcast.cpp
 Tests/test_main.cpp
 Tests/test_miles_miniaudio.cpp
 Tests/test_milesaudiomanager.cpp
