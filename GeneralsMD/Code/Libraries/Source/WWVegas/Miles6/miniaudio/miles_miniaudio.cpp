@@ -43,6 +43,8 @@
 #include <thread>
 #include <vector>
 
+#include "zhio.h"	// the capture's path is the engine's spelling (C4)
+
 #include "miniaudio.h"
 
 #include "MSS/MSS.h"
@@ -1092,7 +1094,9 @@ S32 AILCALL AIL_ex_start_capture(const char *pathname)
 		return 0;
 	}
 
-	FILE *file = fopen(pathname, "wb");
+	/* zh_fopen, not fopen: the manager names the file as the engine names paths, "<user data>Videos\\
+		 <name>.wav", and a plain fopen off Windows made one file with a backslash in its name (C4). */
+	FILE *file = zh_fopen(pathname, "wb");
 	if (file == NULL) {
 		return 0;
 	}
