@@ -1227,6 +1227,26 @@ reads the set's register as before. The comment on `stage_register` records both
   the table.
 - **Not traced:** how far the out-of-table rank index then reached into later tables on Windows.
 
+**30. A map's water-track file, which a network host can send, indexes past the wave table - fixed.**
+
+- **Where:** `W3DWaterTracks.cpp:1100-1111`. The loader reads the track count from the `.wak` file's last
+  four bytes, and each track's wave type as given.
+  - `waveTypeInfo[wtype]` is then indexed unchecked, on every platform, and `bindTrack` doesn't check it
+    either.
+  - A count past the records reads on.
+  - A duplicate as the last record looped past the count (`i++; goto`).
+- **Remote:** the map-transfer SENDER (`FileTransfer.cpp:250-285`) never sends a `.wak`. But the RECEIVER's
+  rules accept one (`NetworkUtil.cpp:335-343`, `{ ".wak", 128 * 1024 }`), and `IsSafeTransferPath` rejects
+  only `..`. So a hostile host can place `<map>.wak` beside the transferred map, and the loader reads exactly
+  that file. Traced by -18 in the code, not run.
+- **Fixed:** the count is capped by the file's size (`wakTrackCount`), and a short read ends the list. A
+  type outside `[WaveTypeFirst, WaveTypeMax)` is skipped, and a duplicate is skipped with `continue`.
+  `test_water_tracks` has 19 checks, armed.
+- **The shipped maps load exactly as before:** all 25 shipped `.wak` files were checked read-only. Every
+  count matches its size, every type is in the table, and none ends on a duplicate.
+- **Not done:** the receiver still accepts `.wak`, a file the sender never sends. Refusing it would close
+  the path, but it changes the network rules; that's recorded as an open question, not changed.
+
 **Latent, not numbered: a missing coordinate set under a texture transform.**
 - **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
   D3D9 documents (0,0) ("the system defaults to the u and v coordinates (0,0)"). FFReference's N28 pads
