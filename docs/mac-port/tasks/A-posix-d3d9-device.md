@@ -538,7 +538,7 @@ passing, so the list cannot go stale. F1-F4 and F6 are in D3's shared generator 
 | F6 | No vertex specular: the post-cascade specular add has nothing to add unlit. | No engine FVF found with a specular colour. |
 | F7 | An absent vertex specular: FFReference reads 0xFFFFFFFF (N7, from the D3DTA page), the GPU adds nothing. -47 and I disagreed; the page decides it, so this is a finding. | SPECULARENABLE on an FVF without specular: not seen in the engine. |
 | F8 | Flat shading is not generated (Gouraud always). | Only the volumetric shadows (W3DVolumetricShadow.cpp:3805), which write stencil. |
-| F11 | Apple's LOD: +0.10 to +0.20 on average against the exact derivative, up to +0.58 on an anisotropic footprint (the harness's LOD probe). That fits an L1-like ρ (up to +0.5) plus 2x2 differencing. FFReference's LOD freedom is ±0.2. | Mip transitions shift by up to half a level. -47 owns the freedom. |
+| F11 | Apple's LOD: +0.10 to +0.20 on average against the exact derivative, up to +0.58 on an anisotropic footprint (the harness's LOD probe). That fits an L1-like ρ (up to +0.5) plus 2x2 differencing. **-47's ruling:** a symmetric ±0.6, since D3D9 never defines the footprint norm and anything from L∞ to L1 is within √2 of L2, plus 0.1 for differencing. The harness sets it now. Still KNOWN until FFReference also evaluates the integer λ crossings inside the widened interval: with the endpoints alone, linear mips went from 213 outside to 424 (worst 19/255), and point mips kept 4 (worst 126/255, a level jump). | Mip transitions shift by up to half a level, which is inside the ruled freedom. |
 
 Not findings: table fog (refused by name; the engine never sets it), and N6 (lit specular only with
 SPECULARENABLE, which the GPU matches).
