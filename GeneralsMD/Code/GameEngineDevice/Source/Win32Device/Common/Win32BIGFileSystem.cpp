@@ -295,7 +295,8 @@ ArchiveFile * Win32BIGFileSystem::openArchiveFile(const Char *filename) {
 		} while (buffer[pathIndex] != 0);
 
 		Int filenameIndex = pathIndex;
-		while ((buffer[filenameIndex] != '\\') && (buffer[filenameIndex] != '/') && (filenameIndex >= 0)) {
+		// the index test first: a name with no separator used to read buffer[-1] before the test stopped it
+		while ((filenameIndex >= 0) && (buffer[filenameIndex] != '\\') && (buffer[filenameIndex] != '/')) {
 			--filenameIndex;
 		}
 
