@@ -3,7 +3,7 @@
 - **Milestone:** M1
 - **Depends on:** B1 B2 B3 B4 B5
 - **Blocks:** C1 C5 E1
-- **Status:** in progress — the `debuglib` and `dinput8` drops only (-18); the rest is unclaimed
+- **Status:** in progress (-47, from 2026-09-26): link census done, below; nothing changed yet. The `debuglib`/`dinput8` drops were -18's
 - **Size:** `CMakeLists.txt` lines 515–539, plus whatever stubbing the link errors demand
 
 ## Why
@@ -34,6 +34,65 @@ cannot link.
 `GeneralsMD/Code/CMakeLists.txt`, the `gameengine` and `test_gameengine` blocks, plus new stub
 sources under `GeneralsMD/Code/Stubs/` (which already holds `NullAudioManager.h`, so the pattern
 exists).
+
+## Link census, 2026-09-26 (-47) - read this first; the sections after it predate B1, B5 and B17
+
+**What was measured.** `feature/mac-port` at `7d6e3a84`, arm64 macOS, Release. `ninja -k 0 gameengine`:
+**586 of 603 translation units compile**; the 17 that do not are listed below. The 586 objects were
+archived and linked three ways, with `wwlib wwmath wwsaveload wwdebug wwutil compression benchmark
+litehtml gumbo` and PosixDevice's two objects:
+
+| Link | Undefined symbols |
+|:--|--:|
+| every object force-loaded, trivial `main` | 311 |
+| D1: `test_gameengine`'s boot (memory manager, name keys, `FileSystem`) and one `INI::load` | 309 |
+| D2: D1 and `TheGameLogic->update()` | 309 |
+
+So there is no small headless closure: one INI parse reaches, through the parse tables and
+`FunctionLexicon`, all but two of the 311 (`CreateGameEngine`, `GameState::addPostProcessSnapshot`).
+B6's list is the whole list.
+
+**What it cannot see.** Symbols that only the 17 uncompiled files reference - they appear when those
+files compile, and `GameEngine.cpp`'s device factories will be most of them. Anything a Linux/GCC
+link adds (not run: Linux is a milestone-boundary check now). Windows, where nothing changes yet.
+
+**The 311, by owner:**
+
+| Owner | Symbols | What |
+|:--|--:|:--|
+| **Missing portable piece - B6's own work** | 112 | 105 `TheKey_*` well-known Dict keys and 7 `MapObject` members, read by `GameLogic`, `Team`, `Player`, `Object`, `SidesList`, `TerrainLogic`, `AIPlayer`, `MapUtil`: simulation data. Their only definition is `GameEngineDevice/.../W3DDevice/GameClient/WorldHeightMap.cpp`, which instantiates the keys (`INSTANTIATE_WELL_KNOWN_KEYS`) and defines `MapObject`; `test_gameengine_stubs.cpp` carries its own copies of both. They belong in `gameengine`. `MapObject` holds `RenderObjClass *` (`REF_PTR_SET` in `setRenderObj`/`setBridgeRenderObject`), so its move is a split, not a cut and paste. |
+| Pending compile - -18, B5 (in flight on `B5-msgbox`/`B5-frontend`) | 21 | `GameEngine.cpp` 3 (`TheGameEngine`, `GameEngine_startSkirmish`, `GameEngine_logicCatchupMaxFrames`), `Debug.cpp` 5 (`DebugInit/Log/GetFlags/SetFlags`, `ReleaseCrash`), `StagingRoomGameInfo.cpp` 9, `PeerThread.cpp` 2, `GameResultsThread.cpp` 1, `PingThread.cpp` 1 |
+| Pending compile - C1 by subject (file operations: `CopyFile`, `DeleteFile`, `CreateDirectory`, `Get/SetCurrentDirectory`, `FindFirstFile`); ownership to confirm with -a9 | 99 | `InGameUI.cpp` 50, `GameState.cpp` 13, `Recorder.cpp` 12, `Image.cpp` 8, `PeerDefs.cpp` 6, `PopupReplay.cpp` 5, `ReplayMenu.cpp` 5; `GameStateMap.cpp` fails too but nothing links against it yet |
+| Pending compile - **unowned**: Winsock | 24 | `Transport.cpp` 14, `udp.cpp` 6, `IPEnumeration.cpp` 4 - LAN play's transport (`WSAStartup`, `SOCKET_ERROR`, `WORD`) |
+| C1: registry writes | 4 | `Set/GetStringFromRegistry` and `Set/GetUnsignedIntFromRegistry` taking `std::string`: `WWDownload/registry.h`'s API, which `OptionsMenu` (proxy), `ScoreScreen` (`dc`/`se`), `PopupPlayerInfo`/`SkirmishGameOptionsMenu` (`Preorder`) and `MainMenuUtils` (`Version`) use. The engine's own POSIX `registry.cpp` has the `AsciiString` getters only. |
+| C1/C2: entry point | 3 | `CreateGameEngine`, `g_csfFile`, `g_strFile` - all `Main/WinMain.cpp` |
+| Device layer, W3D (D-track; a null PosixDevice body until D4) | 5 | `doSkyBoxSet` (W3DWater) and `oversizeTheTerrain` (BaseHeightMap), both called by `ScriptActions`; `TheProjectedShadowManager` (W3DProjectedShadow); `testMinimumRequirements` (W3DShaderManager, from `GameLOD`); `DX8Wrapper_PreserveFPU` (WW3D2 `dx8wrapper.cpp`, from `CommandLine`) |
+| Dead service | 43 | GameSpy SDK: `gp*` 18, `gstats` 13 + `gcd_gamename`/`gcd_secret_key`, `ghttp*` 7, `getQR2HostingStatus`; `MOTDSystem` (W3DMOTD); `FormatURLFromRegistry` (WWDownload) |
+
+**Decisions this needs, with recommendations:**
+
+1. **GameSpy SDK: build it, do not stub it.** It built clean on arm64 on 2026-09-22 (below) and
+   CMake adds it only on Windows today. One `add_subdirectory` off Windows answers 41 symbols with the
+   real code, and nothing reaches a server unless a player opens the online menus.
+2. **The keys and `MapObject` move into `gameengine`**, the keys to a `Common/WellKnownKeys.cpp` of
+   their own and `MapObject`'s data half to `Common/MapObject.cpp`. This contradicts "Do not reach for
+   `GameEngineDevice`" below; that rule was written for the platform layer, and these are map data
+   the simulation reads that happened to be defined there. Windows sees the same code in another
+   library (a debt row), and `test_gameengine_stubs.cpp` loses its copies.
+3. **Winsock needs an owner.** LAN play is in scope; `Transport`/`udp`/`IPEnumeration` are plain BSD
+   sockets underneath, the way B5 found `ControlServer.cpp` to be.
+
+**Stale below, corrected:**
+- *`ww3d2` is "real, and the hard one" (`D3DXVec4Transform`).* No longer: B17 made the D3DX maths
+  portable (`d3dxportable.h`) and not one D3DX symbol is undefined. The only WW3D2 symbol left is
+  `DX8Wrapper_PreserveFPU`.
+- *Items 2 and 3 (`eabrowserdispatch`, `wwdownload`: stub them).* Done by B5: `WebBrowserPosix.cpp`
+  and `DownloadManagerPosix.cpp`. What is left of `wwdownload` is `FormatURLFromRegistry` and the
+  `std::string` registry API.
+- *"Done when": `test_gameengine` links and runs.* It does not compile on POSIX yet, independent of the
+  link: `test_gameengine.cpp` calls MSVC's `_controlfp` (`real_to_int_does_not_care_what_rounding_mode_it_is_called_in`,
+  and again at `:3452`) and `test_gameengine_stubs.cpp` includes `<windows.h>`. Both are B6's.
+- *`gameengine` "is blocked on `wwdebug.cpp:46` and `BaseType.h:137`".* Both long fixed (B16, B3).
 
 ## B6 prep findings, 2026-09-22 — item 1 was wrong and item 4 was pessimistic
 
