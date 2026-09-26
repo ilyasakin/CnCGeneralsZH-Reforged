@@ -14,6 +14,7 @@ Tests/test_gameengine.cpp	wchar_t	the same EarlyCommandLine.h test's command lin
 Tests/test_early_command_line.cpp	L"	option names passed to EarlyCommandLine.h's wchar_t reader, the test's subject
 Tests/test_early_command_line.cpp	L'	the separator in processCommandLineW's wchar_t command line, which the test walks
 Tests/test_early_command_line.cpp	wchar_t	processCommandLineW's wchar_t command line, which the test walks
+Main/PosixMain.cpp	L"	-multiInstance, passed to EarlyCommandLine.h's wchar_t reader as WinMain.cpp does
 Tests/test_wwlib.cpp	*	tests WWLib's wchar_t helpers (WideStringClass, wcstrim, wcslcpy), which are not WideChar
 Libraries/Source/WWVegas/WWLib/trim.cpp	*	WWLib's wchar_t wcstrim; takes wchar_t*, so WideChar text cannot reach it without a compile error
 Libraries/Source/WWVegas/WWLib/trim.h	*	declares WWLib's wchar_t wcstrim (see trim.cpp)
