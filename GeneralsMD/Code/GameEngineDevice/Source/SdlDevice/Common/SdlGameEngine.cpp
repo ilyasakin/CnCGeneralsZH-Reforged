@@ -24,7 +24,10 @@
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
 #include "GameClient/ApplicationWindowTitle.h"
+#include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
+#include "SdlDevice/Common/SdlMessageBox.h"
+#include "SdlDevice/GameClient/SdlInput.h"
 #include "NullAudioManager.h"
 
 #include <SDL3/SDL.h>
@@ -87,6 +90,12 @@ void SdlGameEngine::createWindow( void )
 	if (m_request.headless)
 		return;		// no SDL video at all: a headless run must work with no display
 
+	// Fullscreen as the game has it on Windows: the display is the game's.  macOS would otherwise put the
+	// window in a fullscreen Space, whose menu bar and Dock slide in when the pointer reaches the top or
+	// bottom edge - where the game scrolls the view.  SDL reads this once, when its video starts.
+	if (!m_request.windowed)
+		SDL_SetHint( SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "0" );
+
 	if (!SDL_Init( SDL_INIT_VIDEO ))
 	{
 		char why[ 512 ];
@@ -95,14 +104,23 @@ void SdlGameEngine::createWindow( void )
 		return;
 	}
 	m_sdlVideoStarted = TRUE;
+	ThePlatformDisplays = &TheSdlDisplays;		// Monitors.h answers from SDL's displays from here on
 
 	SDL_WindowFlags flags = 0;
 	if (!m_request.windowed)
 		flags |= SDL_WINDOW_FULLSCREEN;
-	if (m_request.borderless)
+	int width = INITIAL_WINDOW_WIDTH;
+	int height = INITIAL_WINDOW_HEIGHT;
+	SDL_Rect bounds;
+	if (m_request.borderless && SDL_GetDisplayBounds( SDL_GetPrimaryDisplay(), &bounds ))
+	{
+		// Borderless is a frameless window covering the display, as WinMain makes it.
 		flags |= SDL_WINDOW_BORDERLESS;
+		width = bounds.w;
+		height = bounds.h;
+	}
 
-	m_window = SDL_CreateWindow( "Command and Conquer Generals Zero Hour", INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT, flags );
+	m_window = SDL_CreateWindow( "Command and Conquer Generals Zero Hour", width, height, flags );
 	if (m_window == NULL)
 	{
 		char why[ 512 ];
@@ -110,11 +128,12 @@ void SdlGameEngine::createWindow( void )
 		RELEASE_CRASH( why );
 		return;
 	}
-	DEBUG_LOG(( "SdlGameEngine: window %dx%d, %s%s\n", INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT,
+	DEBUG_LOG(( "SdlGameEngine: window %dx%d, %s%s\n", width, height,
 		m_request.windowed ? "windowed" : "fullscreen", m_request.borderless ? ", borderless" : "" ));
 
 	s_titledWindow = m_window;
 	TheApplicationWindowTitleHook = setTitleOfWindow;
+	setSdlMessageBoxOwner( m_window );
 }
 
 void SdlGameEngine::destroyWindow( void )
@@ -126,11 +145,13 @@ void SdlGameEngine::destroyWindow( void )
 			TheApplicationWindowTitleHook = NULL;
 			s_titledWindow = NULL;
 		}
+		setSdlMessageBoxOwner( NULL );
 		SDL_DestroyWindow( m_window );
 		m_window = NULL;
 	}
 	if (m_sdlVideoStarted)
 	{
+		ThePlatformDisplays = NULL;
 		SDL_QuitSubSystem( SDL_INIT_VIDEO );
 		m_sdlVideoStarted = FALSE;
 	}
@@ -141,6 +162,7 @@ void SdlGameEngine::destroyWindow( void )
 		 MSG_META_DEMO_INSTANT_QUIT, or, while it is still loading and nothing can carry a message, tells
 		 the engine to stop;
 	 - the application's focus (WM_ACTIVATEAPP) is the engine's isActive.
+	 Everything else goes to SdlInput_dispatch, which is WndProc's input half.
 	 Headless there is no SDL and nothing to pump. */
 void SdlGameEngine::serviceWindowsOS( void )
 {
@@ -172,6 +194,7 @@ void SdlGameEngine::serviceWindowsOS( void )
 				break;
 
 			default:
+				SdlInput_dispatch( event );		// keys, text and the mouse (C3): SdlInput.h
 				break;
 		}
 	}

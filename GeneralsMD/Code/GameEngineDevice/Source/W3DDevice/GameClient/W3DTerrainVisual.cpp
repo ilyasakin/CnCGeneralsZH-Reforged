@@ -923,6 +923,15 @@ void W3DTerrainVisual::addWaterVelocity( Real worldX, Real worldY,
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
+void W3DTerrainVisual::updateWaterGrid( UnsignedInt logicFrame )
+{
+	// whether or not the grid is drawn: the simulation reads it either way, as update() stepped it
+	if( m_waterRenderObject )
+		m_waterRenderObject->updateMeshMotion( logicFrame );
+}  // end updateWaterGrid
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 Bool W3DTerrainVisual::getWaterGridHeight( Real worldX, Real worldY, Real *height)
 {
 	Real gridX, gridY;

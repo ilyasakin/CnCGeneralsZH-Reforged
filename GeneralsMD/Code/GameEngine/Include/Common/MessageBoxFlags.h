@@ -49,10 +49,12 @@ enum MessageBoxFlag : unsigned int
 
 enum MessageBoxAnswer
 {
+	MSGBOX_ID_OK							= 1,
 	MSGBOX_ID_ABORT						= 3,
 	MSGBOX_ID_RETRY						= 4,
 	MSGBOX_ID_IGNORE					= 5,
 	MSGBOX_ID_YES							= 6,
+	MSGBOX_ID_NO							= 7,
 };
 
 #if defined(_WIN32)
@@ -63,11 +65,21 @@ static_assert( MSGBOX_ICONERROR == MB_ICONERROR, "MSGBOX_ICONERROR must be MB_IC
 static_assert( MSGBOX_ICONWARNING == MB_ICONWARNING, "MSGBOX_ICONWARNING must be MB_ICONWARNING" );
 static_assert( MSGBOX_DEFBUTTON3 == MB_DEFBUTTON3, "MSGBOX_DEFBUTTON3 must be MB_DEFBUTTON3" );
 static_assert( MSGBOX_TASKMODAL == MB_TASKMODAL, "MSGBOX_TASKMODAL must be MB_TASKMODAL" );
+static_assert( MSGBOX_ID_OK == IDOK, "MSGBOX_ID_OK must be IDOK" );
 static_assert( MSGBOX_ID_ABORT == IDABORT, "MSGBOX_ID_ABORT must be IDABORT" );
 static_assert( MSGBOX_ID_RETRY == IDRETRY, "MSGBOX_ID_RETRY must be IDRETRY" );
 static_assert( MSGBOX_ID_IGNORE == IDIGNORE, "MSGBOX_ID_IGNORE must be IDIGNORE" );
 static_assert( MSGBOX_ID_YES == IDYES, "MSGBOX_ID_YES must be IDYES" );
+static_assert( MSGBOX_ID_NO == IDNO, "MSGBOX_ID_NO must be IDNO" );
 #endif
 
 /** The engine's message box: text, caption, and MSGBOX_ flags; answers an MSGBOX_ID_.  See Debug.cpp. */
 int MessageBoxWrapper( const char *lpText, const char *lpCaption, unsigned int uType );
+
+#if !defined(_WIN32)
+/** Off Windows the box is the platform layer's (C2's SdlGameEngine, SDL_ShowMessageBox), which gameengine
+	* does not link: it sets this while it has a window.  Answers an MSGBOX_ID_, or -1 when it cannot show
+	* one (not the main thread), and MessageBoxWrapper then takes Windows' no-window path. */
+typedef int (*MessageBoxHook)( const char *text, const char *caption, unsigned int flags );
+inline MessageBoxHook TheMessageBoxHook = nullptr;
+#endif
