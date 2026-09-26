@@ -204,7 +204,7 @@ void TextureFilterClass::_Init_Filters(TextureFilterMode filter_type)
 	// Set default to best. The level of best filter mode is controlled by the input parameter.
 	// Anisotropy level: retail hard-coded 2x (2003 fill-rate budget); take what the device
 	// offers, capped at 16x, which is what every modern GPU does at no visible cost.
-	DWORD maxAnisotropy = 1;
+	uint32 maxAnisotropy = 1;
 	if (filter_type==TEXTURE_FILTER_ANISOTROPIC) {
 		maxAnisotropy = dx8caps.MaxAnisotropy;
 		if (maxAnisotropy > 16) maxAnisotropy = 16;

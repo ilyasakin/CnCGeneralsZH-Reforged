@@ -463,8 +463,8 @@ void W3DView::buildCameraTransform( Matrix3D *transform )
 	//WST 11/12/2002 New camera shaker system
 	// This runs once per render frame (and again on every scrollBy), not once per 30Hz
 	// tick, so step the shaker by real elapsed time to keep shakes framerate-independent.
-	static DWORD prevShakeTime = Clock_Milliseconds();
-	DWORD nowShakeTime = Clock_Milliseconds();
+	static UnsignedInt prevShakeTime = Clock_Milliseconds();
+	UnsignedInt nowShakeTime = Clock_Milliseconds();
 	Real shakeDt = (nowShakeTime - prevShakeTime) * 0.001f;
 	prevShakeTime = nowShakeTime;
 	if (shakeDt > 1.0f/30.0f)
@@ -1206,9 +1206,9 @@ void W3DView::update(void)
 	// call per 30Hz engine tick; update() now runs once per render frame. Step them on
 	// the original wall-clock cadence so camera motion speed is framerate-independent,
 	// while the camera transform itself still updates every render frame.
-	static DWORD prevCameraStepTime = 0;
-	DWORD nowCameraStepTime = Clock_Milliseconds();
-	Bool stepTime = (nowCameraStepTime - prevCameraStepTime) >= (DWORD)TheW3DFrameLengthInMsec;
+	static UnsignedInt prevCameraStepTime = 0;
+	UnsignedInt nowCameraStepTime = Clock_Milliseconds();
+	Bool stepTime = (nowCameraStepTime - prevCameraStepTime) >= (UnsignedInt)TheW3DFrameLengthInMsec;
 	// During a scripted frozen-time pan, W3DDisplay::draw's inner loop calls us and
 	// paces itself to ~30fps already; gating on top of that ran the pan at half speed.
 	if (isTimeFrozen() && !isCameraMovementFinished())
@@ -1218,15 +1218,15 @@ void W3DView::update(void)
 		// carry the remainder instead of discarding it: with a render cadence that is not
 		// a multiple of 33ms (the shell caps at 45fps), discarding ran the steppers at a
 		// fraction of real speed and beat against the render rate as visible judder
-		prevCameraStepTime += (DWORD)TheW3DFrameLengthInMsec;
-		if (nowCameraStepTime - prevCameraStepTime >= (DWORD)TheW3DFrameLengthInMsec)
+		prevCameraStepTime += (UnsignedInt)TheW3DFrameLengthInMsec;
+		if (nowCameraStepTime - prevCameraStepTime >= (UnsignedInt)TheW3DFrameLengthInMsec)
 			prevCameraStepTime = nowCameraStepTime;	// fell far behind (hitch, pause) - resync
 	}
 
 	// the scripted waypoint pan interpolates by milliseconds, so it does not need the
 	// 33ms gate at all: advance it below by the real time this render frame took, which
 	// is what makes shell-map camera moves smooth at any framerate
-	static DWORD prevWaypointTime = 0;
+	static UnsignedInt prevWaypointTime = 0;
 	Int waypointElapsedMs = (Int)(nowCameraStepTime - prevWaypointTime);
 	prevWaypointTime = nowCameraStepTime;
 	if (waypointElapsedMs < 0)
@@ -1508,7 +1508,7 @@ void W3DView::update(void)
 	// render frame instead and convert m_cameraAdjustSpeed into the equivalent rate for the
 	// time this frame actually took, so the zoom is smooth and its speed stays the same.
 	//
-	static DWORD prevZoomStepTime = 0;
+	static UnsignedInt prevZoomStepTime = 0;
 	Real zoomSteps = (Real)(nowCameraStepTime - prevZoomStepTime) / (Real)TheW3DFrameLengthInMsec;
 	prevZoomStepTime = nowCameraStepTime;
 	if (zoomSteps <= 0.0f || zoomSteps > 10.0f)

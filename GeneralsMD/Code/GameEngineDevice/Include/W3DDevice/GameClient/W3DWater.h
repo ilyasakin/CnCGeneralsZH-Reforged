@@ -40,6 +40,7 @@
 #include "Lib/BaseType.h"
 #include "Common/GameType.h"
 #include "Common/Snapshot.h"
+#include "Platform/RenderTypes.h"
 
 #define INVALID_WATER_HEIGHT 0.0f	///water height guaranteed to be below all terrain.
 
@@ -237,12 +238,12 @@ protected:
 		TextureClass	*waterTexture;
 		Int				waterRepeatCount;
 		Real			skyTexelsPerUnit;	//texel density of sky plane (higher value repeats texture more).
-		DWORD			vertex00Diffuse;		
-		DWORD			vertex10Diffuse;		
-		DWORD			vertex11Diffuse;		
-		DWORD			vertex01Diffuse;
-		DWORD			waterDiffuse;
-		DWORD			transparentWaterDiffuse;
+		UnsignedInt			vertex00Diffuse;		
+		UnsignedInt			vertex10Diffuse;		
+		UnsignedInt			vertex11Diffuse;		
+		UnsignedInt			vertex01Diffuse;
+		UnsignedInt			waterDiffuse;
+		UnsignedInt			transparentWaterDiffuse;
 		Real			uScrollPerMs;		
 		Real			vScrollPerMs;
 	};
@@ -255,7 +256,7 @@ protected:
 	void testCurvedWater(void);	///<draw the sky layer (clouds, stars, etc.)
 	void renderSkyBody(Matrix3D *mat);	///<draw the sky body (sun, moon, etc.)
 	void renderWaterMesh(void);			///<draw the water surface mesh (deformed 3d mesh).
-	HRESULT initBumpMap(LPDIRECT3DTEXTURE9 *pTex, TextureClass *pBumpSource);	///<copies data into bump-map format.
+	RenderResult initBumpMap(LPDIRECT3DTEXTURE9 *pTex, TextureClass *pBumpSource);	///<copies data into bump-map format.
 	void renderMirror(CameraClass *cam, Real level);	///< Draw reflected scene into texture
 	void drawReflection(Int triangleCount, Int vertexCount);	///< Lay the reflection over the water just drawn
 	void drawSea(RenderInfoClass & rinfo);	///< Draw the surface of the water
@@ -267,8 +268,8 @@ protected:
 	void cleanupJbaWaterShader(void);
 
 	//Methods used for GeForce3 specific water
-	HRESULT WaterRenderObjClass::generateIndexBuffer(int sizeX, int sizeY);	///<Generate static index buufer
-	HRESULT WaterRenderObjClass::generateVertexBuffer( Int sizeX, Int sizeY, Int vertexSize, Bool doFill);///<Generate static vertex buffer
+	RenderResult generateIndexBuffer(int sizeX, int sizeY);	///<Generate static index buufer
+	RenderResult generateVertexBuffer( Int sizeX, Int sizeY, Int vertexSize, Bool doFill);///<Generate static vertex buffer
 
 	// snapshot methods for save/load
 	virtual void crc( Xfer *xfer );
