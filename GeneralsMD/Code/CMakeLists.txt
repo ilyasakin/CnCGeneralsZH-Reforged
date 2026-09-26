@@ -1248,6 +1248,16 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(sdl_program_cache_selfcheck PRIVATE posixd3d9 ffshader ffvertex SDL3::SDL3-static)
   add_test(NAME sdl_program_cache_selfcheck COMMAND sdl_program_cache_selfcheck)
   set_tests_properties(sdl_program_cache_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
+
+  # A3c's pipelines and samplers: the D3D9 state translations, with every engine vertex format's stride
+  # against D3DX's own size; then pipelines and samplers on this machine's GPU (77 without one).
+  add_executable(sdl_pipeline_state_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_pipeline_state.cpp)
+  set_target_properties(sdl_pipeline_state_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(sdl_pipeline_state_selfcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render ${WW}/WWLib ${WW}/WWDebug ${WW}/WWMath)
+  target_link_libraries(sdl_pipeline_state_selfcheck PRIVATE posixd3d9 d3dx9runtime ffshader ffvertex SDL3::SDL3-static)
+  add_test(NAME sdl_pipeline_state_selfcheck COMMAND sdl_pipeline_state_selfcheck)
+  set_tests_properties(sdl_pipeline_state_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(sdl_gpu_frame_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
   # A2's half of the device (-18): the resources, the pixel codec, the image operations, the device's
