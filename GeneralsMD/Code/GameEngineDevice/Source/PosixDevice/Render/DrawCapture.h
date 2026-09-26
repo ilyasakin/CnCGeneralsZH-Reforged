@@ -37,6 +37,13 @@
 **                            uint32_t indices (0 for a non-indexed draw), rebased to the first vertex stored
 **   <dir>/<name>.tex        a DrawCaptureTexture, then each level's rows, packed, as the texture holds them;
 **                            one file per texture content, shared by every capture that samples it
+**   <dir>/draw_<n>.prog     version 2 only: "ZHPG", u32 1; the vertex section - u32 present, and if
+**                            present char[64] registered name, u32 token count and the tokens as the device
+**                            received them; then u32 element count and the bound declaration's elements,
+**                            8 bytes each (u16 stream, u16 offset, u8 type, method, usage, usage index); the
+**                            pixel section - u32 present, and if present its name, count and tokens; then
+**                            f32 c0-c95 of the vertex shader constants and c0-c7 of the pixel ones, 4 each.
+**                            Written from the description sent to a contributor (who reads no code of this).
 */
 
 #pragma once
@@ -48,7 +55,11 @@
 
 #include <stdint.h>
 
-enum { DRAW_CAPTURE_VERSION = 1, DRAW_CAPTURE_STAGES = 8, DRAW_CAPTURE_NAME = 48, DRAW_CAPTURE_SIGNATURE = 512 };
+/// DRAW_CAPTURE_VERSION: a fixed-function draw.  DRAW_CAPTURE_VERSION_PROGRAMMABLE: a draw with an engine
+/// shader bound (A3e), whose draw_<n>.prog holds the programs - for a contributor's vs_1_1/ps_1_1 interpreter.
+enum { DRAW_CAPTURE_VERSION = 1, DRAW_CAPTURE_VERSION_PROGRAMMABLE = 2, DRAW_CAPTURE_STAGES = 8, DRAW_CAPTURE_NAME = 48,
+	DRAW_CAPTURE_SIGNATURE = 512, DRAW_CAPTURE_PROGRAM_NAME = 64, DRAW_CAPTURE_VS_CONSTANTS = 96,
+	DRAW_CAPTURE_PS_CONSTANTS = 8 };
 
 struct DrawCaptureHeader
 {
