@@ -3,7 +3,7 @@
 - **Milestone:** M5
 - **Depends on:** C2
 - **Blocks:** E2
-- **Status:** in progress: lower half (the Miles API on miniaudio) in review, -a9; upper half open
+- **Status:** lower half merged (-a9); upper half on its branch (-47): MilesAudioManager off Windows
 - **Size:** `MilesAudioManager.cpp` is 3,637 lines; the XAudio2 implementation under it is
   `Libraries/Source/WWVegas/Miles6/xaudio2/miles_xaudio2.cpp`
 
@@ -230,3 +230,63 @@ compiles that line.
   containers have no sound device.
 - **Listening.** Nobody has compared the port's output with Windows by ear. That is what
   `miles_listen` is for, and deviation 1 is where a difference would show.
+
+## Upper half: Windows' MilesAudioManager off Windows (-47, 2026-09-26)
+
+**The finding the "do not modify" rule asked for.** The AIL_ surface is complete: -a9's 65 functions
+and MSS.h's constants give no AIL errors. A compile census of `MilesAudioManager.cpp` on POSIX (the
+missing Windows headers stubbed in scratch, so it ran past the first fatal include) found 26 errors in
+six non-AIL families. The PM chose option A: each site under `#if defined(_WIN32)`, the Windows text
+unchanged, and a POSIX branch in engine types and std primitives. No SDK name is defined anywhere.
+
+- **DirectSound.** `<dsound.h>` and the speaker-config block. This is dead on Windows too:
+  `AIL_get_DirectSound_info` answers NULL in both backends, so `useDolby` stays FALSE.
+- **`InterlockedCompareExchange` on `PlayingAudio::m_status`, five sites.**
+  - A helper works on the enum's own four bytes, seq_cst like every Interlocked* call, with a
+    static_assert on the size.
+  - Each site casts to `(volatile long *)`, which is 8 bytes under LP64. **Mutated to that 8-byte CAS,
+    the test process takes SIGBUS on arm64** (the CAS is misaligned at offset 4), on the first stopped
+    sound.
+- **AudioFileCache's mutex and `ScopedMutex.h`.** A `std::timed_mutex` with Windows' own semantics,
+  kept, not chosen: a wait that runs out after 500 ms goes ahead without the lock and logs it, and
+  only a lock that was taken is released. It is not named, so, unlike Windows', it is not shared
+  between processes.
+- **`-wav` capture** (the fork's code). `__int64` becomes `Int64`, and `CreateDirectoryA` becomes
+  `TheLocalFileSystem->createDirectory`.
+- **Include case.** `Lib/Basetype.h` and `Common/File.h` become `Lib/BaseType.h` and `Common/file.h`.
+- **Found on the way, in the lower half:** `AIL_ex_start_capture` opened the manager's
+  `"<user data>Videos\\<name>.wav"` with plain `fopen`. Off Windows that made one file with a
+  backslash in its name. It opens with `zh_fopen` now.
+
+**Build.** `milesaudiomanager` is gameenginedevice's audio half off Windows, beside A1's `w3ddevice`
+(whose glob is W3DDevice/ only). sdldevice links it. `SdlGameEngine::createAudioManager` returns
+`NEW MilesAudioManager`, Win32GameEngine's line.
+
+**-headless.** Windows makes the same manager, and `openDevice` returns at `!m_audioOn`, which
+parseHeadless clears. The mirror holds by construction, with nothing headless-specific added.
+
+**`test_milesaudiomanager`** (ctest):
+- **Setup.**
+  - miniaudio's null backend.
+  - The install's archives through a read-only symlink farm, as the working directory (rule 9: nothing
+    starts the engine).
+  - The real audio INIs, and the mix tap into WAVs in the build tree.
+  - `tick()` is `MilesAudioManager::update` minus `AudioManager::update`'s camera arithmetic, with a
+    fixed listener.
+  - Events are uninterruptable (skipping the player-list filter) and have no low-pass filter (skipping
+    the on-screen test).
+- **Checks, 8 tests and 41 checks:**
+  - Headless opens no device: the capture probe refuses, while the real run's succeeds.
+  - A 1.33 s voice is still "playing" past its end until the main thread's sweep runs, which is
+    26bc0c45's contract.
+  - A streamed file of 1.42 s, by the test's own RIFF reading, is heard for 1.38 s.
+  - A 3D sound pans fully right at +x and fully left at -x.
+  - An MP3 music track plays at level 0.096, and is 0.0000 after the stop.
+  - Sound switched off is silent.
+  - ScopedMutex waits 510 ms for a held mutex and releases nothing it did not take.
+- **Red four ways:** a status never swapped fails four tests; the 8-byte CAS takes SIGBUS; ScopedMutex
+  freeing what it did not take fails; a 50 ms wait fails.
+
+**Not measured.** How it sounds: a person with `miles_listen`, and at M5 the game. Also not
+exercised: the camera's microphone placement, player-filtered and low-pass events in play, and real
+devices.

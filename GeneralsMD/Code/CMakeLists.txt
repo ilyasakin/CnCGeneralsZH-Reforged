@@ -1412,8 +1412,8 @@ endif()  # ZH_PLATFORM_WINDOWS - GameEngineDevice, the backends and generals.exe
 # factory only a renderer can answer, and says so (SdlGameEngine.h).
 if(ZH_PLATFORM_POSIX)
   # Windows' audio manager, unchanged but for its guarded non-AIL remainder, over the Miles surface on
-  # miniaudio (C4's upper half).  Its own target until A1 builds gameenginedevice off Windows, whose
-  # source glob already holds this file; then this target goes, so it is never compiled twice.
+  # miniaudio (C4's upper half): gameenginedevice's audio half, as A1's w3ddevice is its renderer half.
+  # w3ddevice's glob is W3DDevice/ only, so this file is compiled here and nowhere else off Windows.
   add_library(milesaudiomanager STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/MilesAudioDevice/MilesAudioManager.cpp)
   target_include_directories(milesaudiomanager PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include

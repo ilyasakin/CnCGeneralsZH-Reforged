@@ -197,7 +197,7 @@ you start. That commit is the lock.
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | done: path resolver, POSIX local and BIG file systems, file operations, user-data dir, replay stream, PosixGameEngine (abstract until T1); `test_bigfilesystem` byte-identical over 25,293 files | -a9 |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | claimed | -18 |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | C3a in progress (SDL3, decision 3); C3b with A1 | -47 |
-| C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | in progress: lower half (the Miles API on miniaudio) in review; upper half open | -a9 |
+| C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | lower half merged (-a9); upper half, MilesAudioManager over miniaudio, on its branch (-47) | -a9, -47 |
 | C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | claimed | -18 |
 | D1 | [Finish the DX8Wrapper funnel](tasks/D1-dx8wrapper-funnel.md) | M3 | — | in progress: recon and PR1 merged; PRs 2-8 need Windows (was -8d) | |
 | D2 | [Abstract the backend interface](tasks/D2-backend-interface.md) | M3 | D1 | not started | |
