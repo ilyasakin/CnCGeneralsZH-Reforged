@@ -2253,7 +2253,9 @@ Bool ParticleSystem::updateEmission( Int localPlayerIndex, Bool *keepSystem )
 					// emit a burst of particles
 					Int count = REAL_TO_INT(m_burstCount.getValue());
 
-					count *= m_countCoeff;
+					// Windows' conversion: a huge count scaled past the int range is INT_MIN there, no burst,
+					// where ARM64 saturated to INT_MAX and emitted until the loop ran out
+					count = floatToIntAsMsvc(count * m_countCoeff);
 
 					for( Int i=0; i<count; i++ )
 					{
