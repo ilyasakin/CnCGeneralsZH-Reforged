@@ -274,8 +274,9 @@ typedef char TCHAR;
 #ifndef MAX_PATH
 #define MAX_PATH _MAX_PATH
 #endif
-// _splitpath's component limits, from the same <stdlib.h>, with its values for the same reason: two
-// filename buffers in WW3D2's meshmdlio.cpp are sized by them.
+// _splitpath's component limits, from the same <stdlib.h>: MSVC's values, 256 each, on purpose and
+// for the same reason as _MAX_PATH above - a buffer sized by them is the same size on every platform.
+// Two filename buffers in WW3D2's meshmdlio.cpp are.
 #ifndef _MAX_FNAME
 #define _MAX_FNAME 256
 #endif
