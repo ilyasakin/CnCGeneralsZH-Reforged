@@ -84,9 +84,10 @@ static const Known KNOWN[] = {
 	// passes.  Put to a contributor: N30's hull on the vertex program path, or a defect.
 	{ "engine:engine:trees | 1:2,1,3,0,4,1,2,3,0,1:A1,7,F0 | pipeline 7b358c91cde37ffd", "C5" },
 	{ "engine:engine:trees | 1:2,35,3,0,4,1,2,3,0,1:A1,7,F0 | pipeline 7b358c91cde37ffd", "C5" },
-	// C1: small, minified models.  Within one draw a triangle's level of detail depends on its neighbour
-	// (a contributor's measurement: drawn a triangle per call, they pass), which fits derivatives formed across
-	// primitives in a 2x2 quad; D3D9-era hardware formed them per primitive.  Mine to trace.
+	// C1: small, minified models - a known Mac-against-Windows difference, not a defect.  Metal on Apple
+	// silicon forms a 2x2 quad across an edge that an index buffer shares, so a pixel beside it takes its
+	// neighbour's derivatives and level of detail; D3D9-era hardware formed quads per primitive.  The same
+	// triangles unindexed, or a call per triangle, pass (FFREF_SPLIT; posix_gpu_draw_selfcheck repeats it).
 	{ "274:101:0,0,0,0:L3:L3:L3:T0,0:V:F0,0 | 1:4,1,2,0,4,1,2,0,0,1:A0,0,F0 | pipeline 153437af07b1e83e", "C1" },
 	{ "274:101:0,0,0,0:L3:L3:L3:T0,0:V:F0,0 | 1:4,1,2,0,4,1,2,0,0,1:A1,7,F0 | pipeline 1cf93c62fb232e81", "C1" },
 	{ "594:101:0,0,0,0:L3:L3:L3:T0,0:V:F0,0 | 1:4,1,2,0,4,1,2,0,0,1:A0,0,F0 | pipeline cad7347369d97b18", "C1" },
@@ -657,6 +658,55 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	std::vector<uint8_t> bgra;
 	SdlGpuFrame *gpu = device->Get_Gpu();
 	const bool read = gpu->Read_Back(gpu->Back_Buffer(), width, height, bgra);
+	if (read && indices != NULL && header.Primitive == D3DPT_TRIANGLELIST && getenv("FFREF_SPLIT") != NULL) {
+		// C1's question, on the device alone: the same triangles as one call per triangle, into the same
+		// clear, against the one call above.  The reference draws the same either way (a contributor's measurement),
+		// so a difference here is the device's or the GPU's.
+		D3DVIEWPORT9 all = { 0, 0, (unsigned)width, (unsigned)height, 0.0f, 1.0f };
+		device->SetViewport(&all);
+		IDirect3DSurface9 *bound_depth = NULL;
+		device->GetDepthStencilSurface(&bound_depth);
+		device->SetDepthStencilSurface(depth);
+		device->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, CLEAR, 1.0f, 0);
+		device->SetDepthStencilSurface(bound_depth);
+		if (bound_depth != NULL) bound_depth->Release();
+		device->SetViewport(&header.Viewport);
+		const bool unshared = strcmp(getenv("FFREF_SPLIT"), "unshared") == 0;
+		std::vector<uint8_t> expanded;
+		if (unshared) {
+			// One call still, but every triangle with vertices of its own (no index buffer, nothing shared).
+			for (unsigned i = 0; i < header.IndexCount; ++i) {
+				expanded.insert(expanded.end(), vertices + (size_t)indices[i] * header.Stride,
+					vertices + (size_t)(indices[i] + 1) * header.Stride);
+			}
+			device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, header.PrimitiveCount, &expanded[0], header.Stride);
+			device->SetStreamSource(0, vertex_buffer, 0, header.Stride);
+			device->SetIndices(index_buffer);
+		}
+		for (unsigned t = 0; !unshared && t < header.PrimitiveCount; ++t) {
+			device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, header.VertexCount, t * 3, 1);
+		}
+		std::vector<uint8_t> split;
+		if (gpu->Read_Back(gpu->Back_Buffer(), width, height, split)) {
+			int differ = 0, worst = 0;
+			for (size_t p = 0; p < split.size(); p += 4) {
+				int d = 0;
+				for (int c = 0; c < 3; ++c) d = std::max(d, abs((int)split[p + c] - (int)bgra[p + c]));
+				differ += d != 0;
+				worst = std::max(worst, d);
+			}
+			printf("  split %s: the device's one call and %s differ at %d pixels, worst %d/255\n",
+				file.c_str(), unshared ? "one unindexed call" : "one call per triangle", differ, worst);
+			if (const char *dump = getenv("FFREF_SPLIT_DUMP")) {
+				// Both pictures, raw BGRA, for looking at where they differ.
+				const std::string stem = std::string(dump) + "/" + file.substr(0, file.size() - 4);
+				FILE *out = fopen((stem + (unshared ? ".unshared.bgra" : ".split.bgra")).c_str(), "wb");
+				if (out != NULL) { fwrite(&split[0], 1, split.size(), out); fclose(out); }
+				out = fopen((stem + ".one.bgra").c_str(), "wb");
+				if (out != NULL) { fwrite(&bgra[0], 1, bgra.size(), out); fclose(out); }
+			}
+		}
+	}
 
 	device->SetStreamSource(0, NULL, 0, 0);
 	device->SetIndices(NULL);
@@ -714,6 +764,31 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	anisotropic_as_linear += substituted ? 1 : 0;
 	if (report.pixelsWritten == 0) {
 		++drew_nothing;
+	}
+	if (!comparison.passed() && getenv("FFREF_OUTSIDE") != NULL) {
+		// Every pixel outside the envelope widened by the base tolerance, as FFRef::compare judges it, with
+		// the reference's nominal, its envelope and the zones (FFREF_OUTSIDE=1, for a ruling on a finding).
+		const double base = 2.0 / 255.0;
+		int listed = 0;
+		for (int y = 0; y < height && listed < 64; ++y) {
+			for (int x = 0; x < width && listed < 64; ++x) {
+				const size_t i = (size_t)y * width + x;
+				const uint8_t *g = &rgba[i * 4];
+				const double gpu[4] = { g[0] / 255.0, g[1] / 255.0, g[2] / 255.0, g[3] / 255.0 };
+				const FFRef::Color &lo = target.lo[i], &hi = target.hi[i], &n = target.color[i];
+				const double los[4] = { lo.r, lo.g, lo.b, lo.a }, his[4] = { hi.r, hi.g, hi.b, hi.a };
+				bool outside = false;
+				for (int c = 0; c < (target.hasAlpha ? 4 : 3); ++c) {
+					outside = outside || gpu[c] < los[c] - base || gpu[c] > his[c] + base;
+				}
+				if (!outside) continue;
+				++listed;
+				printf("  outside (%d, %d): gpu %u %u %u %u; nominal %.1f %.1f %.1f %.1f; lo %.1f %.1f %.1f %.1f;"
+					" hi %.1f %.1f %.1f %.1f; zones 0x%x\n", x, y, g[0], g[1], g[2], g[3], n.r * 255, n.g * 255, n.b * 255,
+					n.a * 255, lo.r * 255, lo.g * 255, lo.b * 255, lo.a * 255, hi.r * 255, hi.g * 255, hi.b * 255, hi.a * 255,
+					target.zones[i]);
+			}
+		}
 	}
 	const char *known = known_finding(header.Signature);
 	if (known != NULL) {
