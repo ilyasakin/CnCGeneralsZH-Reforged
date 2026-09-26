@@ -79,6 +79,11 @@ struct Known
 	const char *Finding;
 };
 static const Known KNOWN[] = {
+	// C5: the trees' shadow pass (Trees.vso with a texture-factor, alpha-tested pixel stage): 6 to 8 pixels
+	// of 90,000 up to 4/255 past the envelope, all in the alpha-test and texel zones; the lit tree pass
+	// passes.  Put to a contributor: N30's hull on the vertex program path, or a defect.
+	{ "engine:engine:trees | 1:2,1,3,0,4,1,2,3,0,1:A1,7,F0 | pipeline 7b358c91cde37ffd", "C5" },
+	{ "engine:engine:trees | 1:2,35,3,0,4,1,2,3,0,1:A1,7,F0 | pipeline 7b358c91cde37ffd", "C5" },
 	// C1: small, minified models.  Within one draw a triangle's level of detail depends on its neighbour
 	// (a contributor's measurement: drawn a triangle per call, they pass), which fits derivatives formed across
 	// primitives in a 2x2 quad; D3D9-era hardware formed them per primitive.  Mine to trace.
@@ -321,6 +326,7 @@ struct ProgramFile
 	std::string VertexName, PixelName;
 	std::vector<uint32_t> VertexTokens, PixelTokens;
 	uint32_t Elements;
+	std::vector<FFRef::DeclarationElement> Declaration;	///< the bound declaration, when it was current
 	float VertexConstants[DRAW_CAPTURE_VS_CONSTANTS][4];
 	float PixelConstants[DRAW_CAPTURE_PS_CONSTANTS][4];
 };
@@ -361,7 +367,20 @@ static bool read_programs(const std::string &path, ProgramFile &out)
 	ok = In::u32(b, at, ok) == 1;
 	In::program(b, at, ok, out.VertexPresent, out.VertexName, out.VertexTokens);
 	out.Elements = In::u32(b, at, ok);
-	at += (size_t)out.Elements * 8;
+	if (!ok || at + (size_t)out.Elements * 8 > b.size()) {
+		return false;
+	}
+	for (uint32_t i = 0; i < out.Elements; ++i) {
+		FFRef::DeclarationElement element;
+		memcpy(&element.stream, &b[at], 2);
+		memcpy(&element.offset, &b[at + 2], 2);
+		element.type = b[at + 4];
+		element.method = b[at + 5];
+		element.usage = b[at + 6];
+		element.usageIndex = b[at + 7];
+		out.Declaration.push_back(element);
+		at += 8;
+	}
 	In::program(b, at, ok, out.PixelPresent, out.PixelName, out.PixelTokens);
 	if (!ok || at + sizeof(out.VertexConstants) + sizeof(out.PixelConstants) != b.size()) {
 		return false;
@@ -403,17 +422,29 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	// through a contributor's interpreter (ffprogram.h), assembling the water's text itself where the tokens are the
 	// stub's.  A vertex program waits on the reference reading a declaration.
 	ProgramFile programs;
-	FFRef::Program reference_program;
+	FFRef::Program reference_program, reference_vertex_program;
 	const bool programmable = memcmp(header.Magic, "ZHDC", 4) == 0 && header.Version == DRAW_CAPTURE_VERSION_PROGRAMMABLE;
+	if (!programmable && (memcmp(header.Magic, "ZHDC", 4) != 0 || header.Version != DRAW_CAPTURE_VERSION)) {
+		not_replayed_because(file, "not a capture of this version");
+		return;
+	}
 	if (programmable) {
 		if (!read_programs(directory + "/" + file.substr(0, file.size() - 4) + ".prog", programs)) {
 			not_replayed_because(file, "a programmable draw whose programs file is missing or malformed");
 			return;
 		}
-		if (programs.VertexPresent) {
-			not_replayed_because(file, "a vertex program (the reference's declaration reading is to come)");
+		if (programs.VertexPresent && !FFRef::decodeProgram(&programs.VertexTokens[0], programs.VertexTokens.size(),
+				reference_vertex_program)) {
+			not_replayed_because(file, "the reference refused " + programs.VertexName + ": "
+				+ (reference_vertex_program.refusals.empty() ? std::string("?") : reference_vertex_program.refusals[0]));
 			return;
 		}
+		if (programs.VertexPresent && programs.Declaration.empty()) {
+			not_replayed_because(file, "a vertex program with no declaration current");
+			return;
+		}
+	}
+	if (programmable && programs.PixelPresent) {
 		std::vector<uint32_t> tokens = programs.PixelTokens;
 		std::string text;
 		if (stub_text(tokens, text)) {
@@ -430,10 +461,6 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 				+ (reference_program.refusals.empty() ? std::string("?") : reference_program.refusals[0]));
 			return;
 		}
-	}
-	else if (memcmp(header.Magic, "ZHDC", 4) != 0 || header.Version != DRAW_CAPTURE_VERSION) {
-		not_replayed_because(file, "not a capture of this version");
-		return;
 	}
 	const size_t vertex_bytes = (size_t)header.VertexCount * header.Stride;
 	if (sizeof(header) + vertex_bytes + (size_t)header.IndexCount * 4 != bytes.size()) {
@@ -545,14 +572,25 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	state.viewport.maxZ = header.Viewport.MaxZ;
 	device->SetFVF(header.FVF);
 	IDirect3DPixelShader9 *pixel_shader = NULL;
+	IDirect3DVertexShader9 *vertex_shader = NULL;
 	if (programmable) {
-		device->CreatePixelShader(&programs.PixelTokens[0], &pixel_shader);
-		PosixDevice_Name_Shader(pixel_shader, programs.PixelName.c_str());
-		device->SetPixelShader(pixel_shader);
+		if (programs.PixelPresent) {
+			device->CreatePixelShader(&programs.PixelTokens[0], &pixel_shader);
+			PosixDevice_Name_Shader(pixel_shader, programs.PixelName.c_str());
+			device->SetPixelShader(pixel_shader);
+			state.pixelShaderBound = true;
+			state.pixelProgram = &reference_program;
+		}
+		if (programs.VertexPresent) {
+			device->CreateVertexShader(&programs.VertexTokens[0], &vertex_shader);
+			PosixDevice_Name_Shader(vertex_shader, programs.VertexName.c_str());
+			device->SetVertexShader(vertex_shader);
+			state.vertexShaderBound = true;
+			state.vertexProgram = &reference_vertex_program;
+			state.programInputsGiven = true;
+		}
 		device->SetVertexShaderConstantF(0, &programs.VertexConstants[0][0], DRAW_CAPTURE_VS_CONSTANTS);
 		device->SetPixelShaderConstantF(0, &programs.PixelConstants[0][0], DRAW_CAPTURE_PS_CONSTANTS);
-		state.pixelShaderBound = true;
-		state.pixelProgram = &reference_program;
 		for (int r = 0; r < DRAW_CAPTURE_VS_CONSTANTS; ++r)
 			for (int k = 0; k < 4; ++k) state.vertexConstants[r][k] = programs.VertexConstants[r][k];
 		for (int r = 0; r < DRAW_CAPTURE_PS_CONSTANTS; ++r)
@@ -601,8 +639,19 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	// The same draw on the reference.
 	std::vector<FFRef::Vertex> reference_vertices;
 	read_vertices(vertices, header, state, offsets, reference_vertices);
+	std::string input_error;
+	if (state.programInputsGiven) {
+		// The vertex program's v0-v15, from each vertex's own bytes through the captured declaration.
+		for (size_t i = 0; i < reference_vertices.size() && input_error.empty(); ++i) {
+			unsigned present = 0;
+			if (FFRef::declarationInputs(vertices + i * header.Stride, &programs.Declaration[0],
+					(int)programs.Declaration.size(), reference_vertices[i].programInput, present, input_error)) {
+				state.programInputPresent = present;
+			}
+		}
+	}
 	FFRef::Report report;
-	const bool drawn = FFRef::draw(state, (int)header.Primitive, &reference_vertices[0], (int)reference_vertices.size(),
+	const bool drawn = input_error.empty() && FFRef::draw(state, (int)header.Primitive, &reference_vertices[0], (int)reference_vertices.size(),
 		indices, indices != NULL ? (int)header.IndexCount : (int)header.VertexCount, target, &report, mutations);
 
 	std::vector<uint8_t> bgra;
@@ -623,10 +672,15 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 		device->SetPixelShader(NULL);
 		pixel_shader->Release();
 	}
+	if (vertex_shader != NULL) {
+		device->SetVertexShader(NULL);
+		vertex_shader->Release();
+	}
 
 	const std::string label = file + " (" + std::string(header.Signature).substr(0, 60) + ")";
 	if (!drawn) {
-		not_replayed_because(file, "the reference refused: " + (report.refusals.empty() ? std::string("?") : report.refusals[0]));
+		not_replayed_because(file, !input_error.empty() ? "the reference could not read the declaration: " + input_error
+			: "the reference refused: " + (report.refusals.empty() ? std::string("?") : report.refusals[0]));
 		return;
 	}
 	if (!read) {
