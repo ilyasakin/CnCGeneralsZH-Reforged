@@ -110,6 +110,7 @@ void SdlGpuFrame::Clear_Rect(int x, int y, int width, int height, bool colour, b
 	Command command;
 	memset(&command, 0, sizeof(command));
 	command.IsRect = true;
+	command.Target = Target_Index();
 	command.Rect[0] = x;
 	command.Rect[1] = y;
 	command.Rect[2] = width;
@@ -189,6 +190,7 @@ void SdlGpuFrame::Record_Draw(const SdlRecordedDraw & draw)
 	memset(&command, 0, sizeof(command));
 	command.IsDraw = true;
 	command.Draw = (uint32_t)Draws.size();
+	command.Target = Target_Index();
 	Draws.push_back(draw);
 	Commands.push_back(command);
 }
@@ -207,6 +209,7 @@ bool SdlGpuFrame::Batch_Is_Full() const
 void SdlGpuFrame::End_Batch()
 {
 	Commands.clear();
+	Targets.clear();
 	Draws.clear();
 	StreamBytes.clear();
 	UploadBytes.clear();
@@ -304,15 +307,109 @@ bool SdlGpuFrame::Record_Batch(SDL_GPUCommandBuffer * commands)
 	return Record_Passes(commands, StreamBuffer);
 }
 
-// The records in order.  A pass is opened by the first draw after a clear (the clear its load
-// operation), and a clear after draws ends the pass; clears that no draw follows get a pass of their
-// own.  Every pass has the back buffer and the depth-stencil: a pipeline's depth format is always the
-// frame's, and a draw with no depth surface bound has its depth state off instead.
+// A pass over the target with these load operations.
+bool SdlGpuFrame::Begin_Pass(SDL_GPUCommandBuffer * commands, const SdlTarget & target, bool clear_colour, bool clear_depth,
+	bool clear_stencil, uint32_t argb, float z, uint32_t stencil_value, SDL_GPURenderPass ** pass)
+{
+	SDL_GPUColorTargetInfo colour;
+	SDL_zero(colour);
+	colour.texture = target.Colour;
+	colour.clear_color.a = (float)((argb >> 24) & 0xFF) / 255.0f;
+	colour.clear_color.r = (float)((argb >> 16) & 0xFF) / 255.0f;
+	colour.clear_color.g = (float)((argb >> 8) & 0xFF) / 255.0f;
+	colour.clear_color.b = (float)(argb & 0xFF) / 255.0f;
+	colour.load_op = clear_colour ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+	colour.store_op = SDL_GPU_STOREOP_STORE;
+	SDL_GPUDepthStencilTargetInfo depth;
+	SDL_zero(depth);
+	depth.texture = target.Depth;
+	depth.clear_depth = z;
+	depth.clear_stencil = (Uint8)stencil_value;
+	depth.load_op = clear_depth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+	depth.store_op = SDL_GPU_STOREOP_STORE;
+	depth.stencil_load_op = clear_stencil ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+	depth.stencil_store_op = SDL_GPU_STOREOP_STORE;
+	*pass = SDL_BeginGPURenderPass(commands, &colour, 1, &depth);
+	return *pass != NULL;
+}
+
+SdlTarget SdlGpuFrame::Back_Buffer_Target() const
+{
+	SdlTarget target = { BackBuffer, DepthStencil, BackWidth, BackHeight };
+	return target;
+}
+
+void SdlGpuFrame::Set_Target(const SdlTarget & target)
+{
+	CurrentTarget = target;
+	TargetSet = true;
+}
+
+uint32_t SdlGpuFrame::Target_Index()
+{
+	const SdlTarget target = TargetSet ? CurrentTarget : Back_Buffer_Target();
+	for (size_t i = Targets.size(); i-- > 0; ) {
+		if (Targets[i].Colour == target.Colour && Targets[i].Depth == target.Depth) {
+			return (uint32_t)i;
+		}
+	}
+	Targets.push_back(target);
+	return (uint32_t)(Targets.size() - 1);
+}
+
+SDL_GPUTexture * SdlGpuFrame::Depth_For(unsigned int width, unsigned int height)
+{
+	if (width == BackWidth && height == BackHeight) {
+		return DepthStencil;
+	}
+	for (size_t i = 0; i < ScratchDepths.size(); ++i) {
+		if (ScratchDepths[i].Width == width && ScratchDepths[i].Height == height) {
+			return ScratchDepths[i].Texture;
+		}
+	}
+	SDL_GPUTextureCreateInfo info;
+	SDL_zero(info);
+	info.type = SDL_GPU_TEXTURETYPE_2D;
+	info.format = (SDL_GPUTextureFormat)DepthFormat;
+	info.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+	info.width = width;
+	info.height = height;
+	info.layer_count_or_depth = 1;
+	info.num_levels = 1;
+	info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+	ScratchDepth scratch = { SDL_CreateGPUTexture(GpuDevice, &info), width, height };
+	if (scratch.Texture != NULL) {
+		ScratchDepths.push_back(scratch);
+	}
+	return scratch.Texture;
+}
+
+void SdlGpuFrame::Record_Blit(SDL_GPUTexture * source, const int32_t source_rect[4], SDL_GPUTexture * destination,
+	const int32_t destination_rect[4], bool linear)
+{
+	Command command;
+	memset(&command, 0, sizeof(command));
+	command.IsBlit = true;
+	command.BlitSource = source;
+	command.BlitDestination = destination;
+	memcpy(command.Rect, source_rect, sizeof(command.Rect));
+	memcpy(command.BlitRect, destination_rect, sizeof(command.BlitRect));
+	command.BlitLinear = linear;
+	Commands.push_back(command);
+}
+
+// The records in order.  A pass covers one target: it is opened by the first draw or clear draw on its
+// target, with a waiting whole-target clear of that target as its load operation, and it ends at a
+// blit, a whole-target clear, a change of target, or the end.  A clear that no draw on its target
+// follows gets a pass of its own.  Every pass has a depth-stencil: a pipeline's depth format is always
+// the frame's, and a draw with no depth surface bound has its depth state off instead.
 bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer * stream)
 {
 	SDL_GPURenderPass * pass = NULL;
-	bool clear_colour = false, clear_depth = false, clear_stencil = false;
-	uint32_t argb = 0, stencil_value = 0;
+	uint32_t pass_target = 0;
+	// A whole-target clear waits to be the load operation of the next pass over its own target.
+	bool pending = false, clear_colour = false, clear_depth = false, clear_stencil = false;
+	uint32_t pending_target = 0, argb = 0, stencil_value = 0;
 	float z = 1.0f;
 
 	// What the pass has bound, to bind only a change.  Pushed uniforms outlive a pass (SDL3 keeps them for
@@ -322,53 +419,61 @@ bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer *
 
 	for (size_t i = 0; i <= Commands.size(); ++i) {
 		const bool end = i == Commands.size();
-		if (end || (!Commands[i].IsDraw && !Commands[i].IsRect)) {
-			if (pass != NULL) {
-				SDL_EndGPURenderPass(pass);
-				pass = NULL;
-			}
-			if (end) {
-				if (!(clear_colour || clear_depth || clear_stencil)) {
-					break;
-				}
-			}
-			else {
-				const Command & clear = Commands[i];
-				if (clear.Colour) { clear_colour = true; argb = clear.Argb; }
-				if (clear.Depth) { clear_depth = true; z = clear.Z; }
-				if (clear.Stencil) { clear_stencil = true; stencil_value = clear.StencilValue; }
-				continue;
-			}
+		const Command * command = end ? NULL : &Commands[i];
+		const bool whole_clear = !end && !command->IsDraw && !command->IsRect && !command->IsBlit;
+
+		// A pass ends at a blit, at a whole-target clear, at a change of target, and at the end.
+		if (pass != NULL && (end || command->IsBlit || whole_clear || command->Target != pass_target)) {
+			SDL_EndGPURenderPass(pass);
+			pass = NULL;
 		}
-		if (pass == NULL) {
-			SDL_GPUColorTargetInfo colour;
-			SDL_zero(colour);
-			colour.texture = BackBuffer;
-			colour.clear_color.a = (float)((argb >> 24) & 0xFF) / 255.0f;
-			colour.clear_color.r = (float)((argb >> 16) & 0xFF) / 255.0f;
-			colour.clear_color.g = (float)((argb >> 8) & 0xFF) / 255.0f;
-			colour.clear_color.b = (float)(argb & 0xFF) / 255.0f;
-			colour.load_op = clear_colour ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
-			colour.store_op = SDL_GPU_STOREOP_STORE;
-			SDL_GPUDepthStencilTargetInfo depth;
-			SDL_zero(depth);
-			depth.texture = DepthStencil;
-			depth.clear_depth = z;
-			depth.clear_stencil = (Uint8)stencil_value;
-			depth.load_op = clear_depth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
-			depth.store_op = SDL_GPU_STOREOP_STORE;
-			depth.stencil_load_op = clear_stencil ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
-			depth.stencil_store_op = SDL_GPU_STOREOP_STORE;
-			pass = SDL_BeginGPURenderPass(commands, &colour, 1, &depth);
-			if (pass == NULL) {
+		// A waiting clear whose target is not the next thing drawn into gets a pass of its own.
+		if (pending && (end || command->IsBlit || command->Target != pending_target)) {
+			if (!Begin_Pass(commands, Targets[pending_target], clear_colour, clear_depth, clear_stencil, argb, z,
+				stencil_value, &pass)) {
 				return false;
 			}
-			clear_colour = clear_depth = clear_stencil = false;
-			last = NULL;
-			if (i == Commands.size()) {
-				SDL_EndGPURenderPass(pass);
-				break;
+			SDL_EndGPURenderPass(pass);
+			pass = NULL;
+			pending = clear_colour = clear_depth = clear_stencil = false;
+		}
+		if (end) {
+			break;
+		}
+		if (command->IsBlit) {
+			SDL_GPUBlitInfo blit;
+			SDL_zero(blit);
+			blit.source.texture = command->BlitSource;
+			blit.source.x = (Uint32)command->Rect[0];
+			blit.source.y = (Uint32)command->Rect[1];
+			blit.source.w = (Uint32)command->Rect[2];
+			blit.source.h = (Uint32)command->Rect[3];
+			blit.destination.texture = command->BlitDestination;
+			blit.destination.x = (Uint32)command->BlitRect[0];
+			blit.destination.y = (Uint32)command->BlitRect[1];
+			blit.destination.w = (Uint32)command->BlitRect[2];
+			blit.destination.h = (Uint32)command->BlitRect[3];
+			blit.load_op = SDL_GPU_LOADOP_LOAD;
+			blit.filter = command->BlitLinear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST;
+			SDL_BlitGPUTexture(commands, &blit);
+			continue;
+		}
+		if (whole_clear) {
+			if (command->Colour) { clear_colour = true; argb = command->Argb; }
+			if (command->Depth) { clear_depth = true; z = command->Z; }
+			if (command->Stencil) { clear_stencil = true; stencil_value = command->StencilValue; }
+			pending = true;
+			pending_target = command->Target;
+			continue;
+		}
+		if (pass == NULL) {
+			if (!Begin_Pass(commands, Targets[command->Target], pending && clear_colour, pending && clear_depth,
+				pending && clear_stencil, argb, z, stencil_value, &pass)) {
+				return false;
 			}
+			pending = clear_colour = clear_depth = clear_stencil = false;
+			pass_target = command->Target;
+			last = NULL;
 		}
 
 		if (Commands[i].IsRect) {
@@ -378,7 +483,8 @@ bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer *
 				continue;
 			}
 			SDL_BindGPUGraphicsPipeline(pass, pipeline);
-			SDL_GPUViewport viewport = { 0.0f, 0.0f, (float)BackWidth, (float)BackHeight, 0.0f, 1.0f };
+			SDL_GPUViewport viewport = { 0.0f, 0.0f, (float)Targets[pass_target].Width, (float)Targets[pass_target].Height,
+				0.0f, 1.0f };
 			SDL_SetGPUViewport(pass, &viewport);
 			SDL_Rect scissor = { clear.Rect[0], clear.Rect[1], clear.Rect[2], clear.Rect[3] };
 			SDL_SetGPUScissor(pass, &scissor);
