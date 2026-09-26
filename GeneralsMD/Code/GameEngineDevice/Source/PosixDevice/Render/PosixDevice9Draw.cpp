@@ -23,12 +23,18 @@
 // shadow map) are not A3's.  And D3D9's documented initial states, which the draw is the first to read.
 
 #include "PosixDevice9.h"
+#include "PosixResources9.h"
 #include "SdlConstants.h"
+#include "SdlGpuFrame.h"
+#include "SdlPipelineCache.h"
+#include "SdlProgramCache.h"
+#include "SdlResourceMirror.h"
 
 #include "ffshader.h"
 #include "ffvertex.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 //-------------------------------------------------------------------------------------------------
@@ -379,4 +385,350 @@ void PosixDevice9::Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants
 	colour_of(RenderStates[D3DRS_FOGCOLOR], pixel.FogColour);
 	// A whole level, as D3D9 compares it: the program rounds the pixel's alpha to a level first.
 	pixel.AlphaReference[0] = (float)(RenderStates[D3DRS_ALPHAREF] & 0xFF);
+}
+
+//-------------------------------------------------------------------------------------------------
+// The draws (A3c): recorded on the GPU with a window, nothing without one.
+//-------------------------------------------------------------------------------------------------
+
+// The vertices a primitive count reads; for an indexed draw, the indices.
+static unsigned vertices_of(D3DPRIMITIVETYPE type, unsigned count)
+{
+	switch (type) {
+		case D3DPT_POINTLIST:		return count;
+		case D3DPT_LINELIST:		return count * 2;
+		case D3DPT_LINESTRIP:		return count + 1;
+		case D3DPT_TRIANGLELIST:	return count * 3;
+		case D3DPT_TRIANGLESTRIP:	return count + 2;
+		case D3DPT_TRIANGLEFAN:		return count + 2;
+		default:					return 0;
+	}
+}
+
+// A fan as a list: triangle k is (0, k + 1, k + 2) of the fan's vertices, D3D9's winding.
+template <class Index>
+static void expand_fan(const Index *fan, unsigned first, unsigned count, Index *list)
+{
+	for (unsigned k = 0; k < count; ++k) {
+		list[k * 3] = fan != NULL ? fan[0] : (Index)first;
+		list[k * 3 + 1] = fan != NULL ? fan[k + 1] : (Index)(first + k + 1);
+		list[k * 3 + 2] = fan != NULL ? fan[k + 2] : (Index)(first + k + 2);
+	}
+}
+
+static bool is_dynamic(IDirect3DVertexBuffer9 *buffer)
+{
+	D3DVERTEXBUFFER_DESC desc;
+	return buffer->GetDesc(&desc) == D3D_OK && (desc.Usage & D3DUSAGE_DYNAMIC) != 0;
+}
+
+static bool is_dynamic(IDirect3DIndexBuffer9 *buffer)
+{
+	D3DINDEXBUFFER_DESC desc;
+	return buffer->GetDesc(&desc) == D3D_OK && (desc.Usage & D3DUSAGE_DYNAMIC) != 0;
+}
+
+void PosixDevice9::Refuse_Draw(const std::string &reason)
+{
+	unsigned int &count = DrawRefusals[reason];
+	if (count++ == 0) {
+		fprintf(stderr, "PosixDevice9: a draw refused: %s\n", reason.c_str());
+	}
+}
+
+RenderResult PosixDevice9::DrawPrimitive(D3DPRIMITIVETYPE type, unsigned int start_vertex, unsigned int primitive_count)
+{
+	DrawCall call;
+	memset(&call, 0, sizeof(call));
+	call.Type = type;
+	call.PrimitiveCount = primitive_count;
+	call.StartVertex = start_vertex;
+	return Gpu_Draw(call);
+}
+
+RenderResult PosixDevice9::DrawIndexedPrimitive(D3DPRIMITIVETYPE type, int base_vertex, unsigned int min_vertex,
+	unsigned int vertex_count, unsigned int start_index, unsigned int primitive_count)
+{
+	DrawCall call;
+	memset(&call, 0, sizeof(call));
+	call.Type = type;
+	call.PrimitiveCount = primitive_count;
+	call.Indexed = true;
+	call.BaseVertex = base_vertex;
+	call.MinVertex = min_vertex;
+	call.VertexCount = vertex_count;
+	call.StartIndex = start_index;
+	return Gpu_Draw(call);
+}
+
+RenderResult PosixDevice9::DrawPrimitiveUP(D3DPRIMITIVETYPE type, unsigned int primitive_count, const void *vertices,
+	unsigned int stride)
+{
+	if (vertices == NULL) {
+		return D3DERR_INVALIDCALL;
+	}
+	DrawCall call;
+	memset(&call, 0, sizeof(call));
+	call.Type = type;
+	call.PrimitiveCount = primitive_count;
+	call.UserVertices = vertices;
+	call.UserStride = stride;
+	const RenderResult result = Gpu_Draw(call);
+	// D3D9: "After calling DrawPrimitiveUP, the stream 0 settings ... are set to NULL."
+	Posix_Bind(Streams[0], (IDirect3DVertexBuffer9 *)NULL);
+	StreamOffsets[0] = 0;
+	StreamStrides[0] = 0;
+	return result;
+}
+
+RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
+{
+	const unsigned int reads = vertices_of(call.Type, call.PrimitiveCount);
+	if (reads == 0 && call.PrimitiveCount != 0) {
+		return D3DERR_INVALIDCALL;
+	}
+	if (Gpu == NULL || call.PrimitiveCount == 0) {
+		return D3D_OK;		// -headless: drawn into a window nobody sees
+	}
+
+	// What A3c does not draw yet.
+	if (VertexShader != NULL || PixelShader != NULL) {
+		Refuse_Draw("a programmable draw (A3e)");
+		return D3D_OK;
+	}
+	if (FVF == 0) {
+		Refuse_Draw("a vertex declaration and no FVF (A3e)");
+		return D3D_OK;
+	}
+	if (RenderTargets[0] != BackBuffer || RenderTargets[1] != NULL || RenderTargets[2] != NULL || RenderTargets[3] != NULL) {
+		Refuse_Draw("a render target other than the back buffer (A3d)");
+		return D3D_OK;
+	}
+	if (DepthStencil != NULL && DepthStencil != DepthSurface) {
+		Refuse_Draw("a depth surface other than the implicit one (A3d)");
+		return D3D_OK;
+	}
+	if (RenderStates[D3DRS_CLIPPLANEENABLE] != 0) {
+		Refuse_Draw("user clip planes");
+		return D3D_OK;
+	}
+
+	Mirrors->Collect_Dead();
+	if (Gpu->Batch_Is_Full()) {
+		Gpu->Flush();
+	}
+
+	// The programs and the pipeline.
+	std::string refusal;
+	SdlVertexLayout layout;
+	if (!Sdl_Vertex_Layout(FVF, layout, refusal)) {
+		Refuse_Draw("the vertex format: " + refusal);
+		return D3D_OK;
+	}
+	CombinerDescription combiner;
+	VertexPipelineDescription vertex;
+	Build_Combiner_Description(combiner);
+	if (!Build_Vertex_Description(vertex)) {
+		Refuse_Draw("more lights enabled than the generator carries");
+		return D3D_OK;
+	}
+	const SdlProgram &vertex_program = Programs->Vertex_Program(vertex);
+	const SdlProgram &pixel_program = Programs->Pixel_Program(combiner);
+	if (vertex_program.Shader == NULL || pixel_program.Shader == NULL) {
+		Refuse_Draw(vertex_program.Shader == NULL ? "a vertex program refused" : "a pixel program refused");
+		return D3D_OK;
+	}
+	if (pixel_program.SamplerSlots > SdlRecordedDraw::MAXIMUM_SAMPLERS || vertex_program.SamplerSlots != 0) {
+		Refuse_Draw("more sampler slots than a draw binds");
+		return D3D_OK;
+	}
+	// Every pass has the frame's depth-stencil, so every pipeline has its format; a draw with no depth
+	// surface bound has D3D9's answer instead, depth and stencil off.
+	const RenderUInt32 *states = RenderStates;
+	RenderUInt32 without_depth[RENDER_STATE_COUNT];
+	if (DepthStencil == NULL) {
+		memcpy(without_depth, RenderStates, sizeof(without_depth));
+		without_depth[D3DRS_ZENABLE] = D3DZB_FALSE;
+		without_depth[D3DRS_ZWRITEENABLE] = 0;
+		without_depth[D3DRS_STENCILENABLE] = 0;
+		states = without_depth;
+	}
+	SdlPipelineKey key;
+	if (!Sdl_Pipeline_Key(states, call.Type, vertex_program.Shader, pixel_program.Shader, FVF,
+		SdlGpuFrame::Target_Format(), Gpu->Depth_Format(), key, refusal)) {
+		Refuse_Draw("the pipeline: " + refusal);
+		return D3D_OK;
+	}
+	SdlRecordedDraw draw;
+	memset(&draw, 0, sizeof(draw));
+	draw.Pipeline = Pipelines->Pipeline(key);
+	if (draw.Pipeline == NULL) {
+		Refuse_Draw("the GPU refused a pipeline");
+		return D3D_OK;
+	}
+
+	// The vertex and index sources.
+	const bool user = call.UserVertices != NULL;
+	const unsigned int stride = user ? call.UserStride : StreamStrides[0];
+	PosixVertexBuffer9 *vertex_buffer = user ? NULL : static_cast<PosixVertexBuffer9 *>(Streams[0]);
+	PosixIndexBuffer9 *index_buffer = call.Indexed ? static_cast<PosixIndexBuffer9 *>(Indices) : NULL;
+	if ((!user && vertex_buffer == NULL) || (call.Indexed && index_buffer == NULL)) {
+		return D3DERR_INVALIDCALL;
+	}
+	if (stride != layout.Stride) {
+		Refuse_Draw("a stream stride that is not the FVF's");
+		return D3D_OK;
+	}
+	const bool fan = call.Type == D3DPT_TRIANGLEFAN;
+	const bool stage_vertices = user || is_dynamic(vertex_buffer);
+	const bool stage_indices = call.Indexed && (fan || is_dynamic(index_buffer));
+	const unsigned int index_size = (call.Indexed && index_buffer->format() == D3DFMT_INDEX32) ? 4 : 2;
+
+	// The GPU copies.  Bringing one up to date can flush the batch, which leaves the ones already asked
+	// for marked as used by the batch before: so ask again until a round flushes nothing.
+	for (int round = 0; round < 3; ++round) {
+		const uint64_t batch = Gpu->Batch();
+		draw.SamplerCount = pixel_program.SamplerSlots;
+		for (unsigned int slot = 0; slot < pixel_program.SamplerSlots; ++slot) {
+			const int texture_stage = pixel_program.SlotTexture[slot];
+			const int sampler_stage = pixel_program.SlotSampler[slot];
+			if (texture_stage < 0 || texture_stage >= SAMPLER_COUNT || sampler_stage < 0 || sampler_stage >= SAMPLER_COUNT) {
+				Refuse_Draw("a program slot past the device's stages");
+				return D3D_OK;
+			}
+			IDirect3DBaseTexture9 *texture = Textures[texture_stage];
+			draw.Textures[slot] = texture != NULL ? Mirrors->Texture(texture, refusal) : Mirrors->White();
+			if (draw.Textures[slot] == NULL) {
+				Refuse_Draw("the texture: " + refusal);
+				return D3D_OK;
+			}
+			draw.Samplers[slot] = Samplers->Sampler(SamplerStates[sampler_stage]);
+			if (draw.Samplers[slot] == NULL) {
+				Refuse_Draw("the sampler: " + Samplers->Refusal());
+				return D3D_OK;
+			}
+		}
+		if (!stage_vertices) {
+			draw.VertexBuffer = Mirrors->Buffer(vertex_buffer, vertex_buffer->storage(), refusal);
+		}
+		if (call.Indexed && !stage_indices) {
+			draw.IndexBuffer = Mirrors->Buffer(index_buffer, index_buffer->storage(), refusal);
+		}
+		if ((!stage_vertices && draw.VertexBuffer == NULL) || (call.Indexed && !stage_indices && draw.IndexBuffer == NULL)) {
+			Refuse_Draw("the buffer: " + refusal);
+			return D3D_OK;
+		}
+		if (Gpu->Batch() == batch) {
+			break;
+		}
+	}
+
+	// The vertices: a static buffer's copy is bound where the stream points, and a dynamic buffer's or
+	// the caller's bytes are staged, from the first vertex the draw can read.
+	if (stage_vertices) {
+		unsigned int first = 0;
+		unsigned int count = reads;
+		if (!user) {
+			if (call.Indexed && call.BaseVertex < 0) {
+				Refuse_Draw("a negative base vertex into a dynamic buffer");
+				return D3D_OK;
+			}
+			first = call.Indexed ? (unsigned int)call.BaseVertex : call.StartVertex;
+			count = call.Indexed ? call.MinVertex + call.VertexCount : reads;
+		}
+		const size_t start = user ? 0 : (size_t)StreamOffsets[0] + (size_t)first * stride;
+		const size_t size = (size_t)count * stride;
+		if (!user && start + size > vertex_buffer->storage().length()) {
+			return D3DERR_INVALIDCALL;
+		}
+		const uint8_t *source = user ? (const uint8_t *)call.UserVertices : vertex_buffer->storage().bytes() + start;
+		memcpy(Gpu->Stage((uint32_t)size, draw.VertexOffset), source, size);
+		draw.First = 0;
+		draw.BaseVertex = 0;
+	}
+	else {
+		draw.VertexOffset = StreamOffsets[0];
+		draw.First = call.StartVertex;
+		draw.BaseVertex = call.BaseVertex;
+	}
+
+	// The indices.
+	if (call.Indexed) {
+		const size_t start = (size_t)call.StartIndex * index_size;
+		if (start + (size_t)reads * index_size > index_buffer->storage().length()) {
+			return D3DERR_INVALIDCALL;
+		}
+		const uint8_t *source = index_buffer->storage().bytes() + start;
+		draw.IndexSize = index_size;
+		if (fan) {
+			draw.Count = call.PrimitiveCount * 3;
+			uint8_t *list = Gpu->Stage(draw.Count * index_size, draw.IndexOffset);
+			if (index_size == 4) {
+				expand_fan((const uint32_t *)source, 0, call.PrimitiveCount, (uint32_t *)list);
+			}
+			else {
+				expand_fan((const uint16_t *)source, 0, call.PrimitiveCount, (uint16_t *)list);
+			}
+			draw.First = 0;
+		}
+		else if (stage_indices) {
+			draw.Count = reads;
+			memcpy(Gpu->Stage(reads * index_size, draw.IndexOffset), source, (size_t)reads * index_size);
+			draw.First = 0;
+		}
+		else {
+			draw.Count = reads;
+			draw.IndexOffset = 0;
+			draw.First = call.StartIndex;
+		}
+	}
+	else if (fan) {
+		// Staged vertices start at the fan's first; a static buffer's copy is indexed from its start.
+		const unsigned int first = stage_vertices ? 0 : call.StartVertex;
+		draw.Count = call.PrimitiveCount * 3;
+		if (first + reads > 0xFFFF) {
+			draw.IndexSize = 4;
+			expand_fan((const uint32_t *)NULL, first, call.PrimitiveCount, (uint32_t *)Gpu->Stage(draw.Count * 4, draw.IndexOffset));
+		}
+		else {
+			draw.IndexSize = 2;
+			expand_fan((const uint16_t *)NULL, first, call.PrimitiveCount, (uint16_t *)Gpu->Stage(draw.Count * 2, draw.IndexOffset));
+		}
+		draw.First = 0;
+	}
+	else {
+		draw.Count = reads;
+	}
+
+	// The constants, pushed only when they change.
+	SdlVertexConstants vertex_constants;
+	SdlPixelConstants pixel_constants;
+	Build_Constants(vertex_constants, pixel_constants);
+	if (vertex_program.UniformBuffers != 0) {
+		draw.VertexConstants = Gpu->Constants(0, &vertex_constants, sizeof(vertex_constants));
+		draw.VertexConstantsSize = sizeof(vertex_constants);
+	}
+	if (pixel_program.UniformBuffers != 0) {
+		draw.PixelConstants = Gpu->Constants(1, &pixel_constants, sizeof(pixel_constants));
+		draw.PixelConstantsSize = sizeof(pixel_constants);
+	}
+
+	// D3D9's pixel centres are at integer coordinates, SDL3 GPU's (Metal's, Vulkan's) at half-integers:
+	// the viewport moves half a pixel right and down, as dx11backend's Set_Viewport does.  The scissor
+	// keeps the draw inside the viewport D3D9 would have clipped it to.
+	draw.Viewport[0] = (float)Viewport.X + 0.5f;
+	draw.Viewport[1] = (float)Viewport.Y + 0.5f;
+	draw.Viewport[2] = (float)Viewport.Width;
+	draw.Viewport[3] = (float)Viewport.Height;
+	draw.Viewport[4] = Viewport.MinZ;
+	draw.Viewport[5] = Viewport.MaxZ;
+	draw.Scissor[0] = (int32_t)Viewport.X;
+	draw.Scissor[1] = (int32_t)Viewport.Y;
+	draw.Scissor[2] = (int32_t)Viewport.Width;
+	draw.Scissor[3] = (int32_t)Viewport.Height;
+	draw.StencilReference = RenderStates[D3DRS_STENCILREF] & 0xFF;
+	draw.BlendFactor = RenderStates[D3DRS_BLENDFACTOR];
+	Gpu->Record_Draw(draw);
+	++DrawsRecorded;
+	return D3D_OK;
 }

@@ -22,9 +22,11 @@
 ** buffer to the window through D3D9's gamma ramp.  Only a device with a window has one: -headless makes
 ** no SDL_GPUDevice at all (tasks/A-posix-d3d9-device.md, "A3 design").
 **
-** A3a clears and presents; draws land in A3c.  A clear is recorded, not issued, and becomes the load
-** operation of the next pass over the back buffer, as the design's recorded frame does for everything.
-** Only a clear of the whole target is taken here; a clear of part of it is a clear draw, which is A3c's.
+** Nothing is issued as the engine asks for it.  Clears and draws are recorded into a batch, with a copy
+** of every byte a draw reads that can still change (the staging stream) and the uploads of the GPU
+** copies it needs; Flush runs the batch as one copy pass and then render passes that replay the records
+** in order, a clear being the load operation of the pass after it (A3c; tasks/A-posix-d3d9-device.md,
+** "The frame").  Only a clear of the whole target is taken here; a clear of part of it is a clear draw.
 **
 ** Main thread only, as every SDL GPU call is.
 */
@@ -40,12 +42,39 @@
 #include <string>
 #include <vector>
 
+struct SDL_GPUBuffer;
 struct SDL_GPUDevice;
 struct SDL_GPUGraphicsPipeline;
 struct SDL_GPUSampler;
 struct SDL_GPUShader;
 struct SDL_GPUTexture;
 struct SDL_Window;
+
+/// One draw as the flush replays it, everything by value.  The device's resolve fills it.
+struct SdlRecordedDraw
+{
+	enum { MAXIMUM_SAMPLERS = 8 };
+	SDL_GPUGraphicsPipeline * Pipeline;
+	SDL_GPUBuffer * VertexBuffer;		///< a GPU copy, or null for the batch's staging stream
+	uint32_t VertexOffset;				///< bytes into it
+	SDL_GPUBuffer * IndexBuffer;		///< as VertexBuffer, when IndexSize is not 0
+	uint32_t IndexOffset;
+	uint32_t IndexSize;					///< 0 (not indexed), 2 or 4
+	uint32_t Count;						///< vertices, or indices
+	uint32_t First;						///< the first vertex, or the first index
+	int32_t BaseVertex;
+	uint32_t VertexConstants;			///< offsets into the batch's constant bytes (Constants)
+	uint32_t VertexConstantsSize;
+	uint32_t PixelConstants;
+	uint32_t PixelConstantsSize;
+	uint32_t SamplerCount;
+	SDL_GPUTexture * Textures[MAXIMUM_SAMPLERS];
+	SDL_GPUSampler * Samplers[MAXIMUM_SAMPLERS];
+	float Viewport[6];					///< x, y, width, height, min depth, max depth: as the GPU takes it
+	int32_t Scissor[4];					///< x, y, width, height
+	uint32_t StencilReference;
+	uint32_t BlendFactor;				///< D3DCOLOR
+};
 
 class SdlGpuFrame
 {
@@ -56,7 +85,7 @@ public:
 	static SdlGpuFrame * Create(RenderWindow window, unsigned int width, unsigned int height, std::string & error);
 	~SdlGpuFrame();
 
-	/// A new back buffer and depth-stencil of this size (Reset).  Anything recorded is dropped.
+	/// A new back buffer and depth-stencil of this size (Reset), after running what is recorded.
 	bool Resize(unsigned int width, unsigned int height);
 
 	/// D3DCLEAR_TARGET, _ZBUFFER and _STENCIL over the whole back buffer, recorded for the next pass.  A
@@ -65,6 +94,30 @@ public:
 
 	/// Runs what is recorded into the back buffer.  False when the GPU refused the work.
 	bool Flush();
+
+	// ---- The batch (A3c).  Offsets are into this batch only: a flush starts the next one empty.
+
+	/// Room for `size` bytes in the staging stream, which the flush uploads into one GPU buffer that the
+	/// records bind as vertices and as indices; 16-byte aligned.  The pointer is good until the next call.
+	uint8_t * Stage(uint32_t size, uint32_t & offset);
+	/// Room for bytes going to a GPU copy, and the uploads that take them there in the copy pass.  A
+	/// buffer or level-0 upload cycles its target, so draws already submitted keep what they read.
+	uint8_t * Upload_Space(uint32_t size, uint32_t & offset);
+	void Queue_Buffer_Upload(SDL_GPUBuffer * buffer, uint32_t upload_offset, uint32_t size);
+	void Queue_Texture_Upload(SDL_GPUTexture * texture, unsigned int level, unsigned int width, unsigned int height,
+		uint32_t upload_offset);
+	/// A constant block's bytes, for stage 0 (vertex) or 1 (pixel); the same bytes as that stage's block
+	/// before share its offset, so the flush pushes only a change.
+	uint32_t Constants(unsigned int stage, const void * bytes, uint32_t size);
+	void Record_Draw(const SdlRecordedDraw & draw);
+	/// A GPU object nothing will record again, released once the batch that may use it has gone.
+	void Release_After_Batch(SDL_GPUTexture * texture, SDL_GPUBuffer * buffer);
+	/// Counts flushes: what a GPU copy compares to know whether this batch has used it.
+	uint64_t Batch() const { return BatchNumber; }
+	/// Whether the batch has grown enough that the next draw should flush first.
+	bool Batch_Is_Full() const;
+	/// The depth-stencil's SDL_GPUTextureFormat.  Every pass has it attached.
+	unsigned int Depth_Format() const { return DepthFormat; }
 
 	/// Flush, then the back buffer to the window through the gamma ramp (null: none, a straight blit).
 	bool Present(const uint16_t (*ramp)[256]);
@@ -90,7 +143,9 @@ private:
 	SdlGpuFrame();
 	bool Create_Targets(unsigned int width, unsigned int height);
 	void Release_Targets();
-	bool Record_Clear_Pass(struct SDL_GPUCommandBuffer * commands);
+	bool Record_Batch(struct SDL_GPUCommandBuffer * commands);
+	bool Record_Passes(struct SDL_GPUCommandBuffer * commands, SDL_GPUBuffer * stream);
+	void End_Batch();
 	bool Present_Into(struct SDL_GPUCommandBuffer * commands, SDL_GPUTexture * target, unsigned int width,
 		unsigned int height, unsigned int format, const uint16_t (*ramp)[256]);
 	SDL_GPUGraphicsPipeline * Gamma_Pipeline(unsigned int format);
@@ -104,13 +159,37 @@ private:
 	unsigned int BackWidth;
 	unsigned int BackHeight;
 
-	// The clear waiting for the next pass.
-	bool ClearColour;
-	bool ClearDepth;
-	bool ClearStencil;
-	uint32_t ClearArgb;
-	float ClearZ;
-	uint32_t ClearStencilValue;
+	// The batch.  A command is a clear or a draw, in the order the engine asked for them.
+	struct Command
+	{
+		bool IsDraw;
+		uint32_t Draw;					///< into Draws
+		bool Colour, Depth, Stencil;	///< a clear's
+		uint32_t Argb;
+		float Z;
+		uint32_t StencilValue;
+	};
+	struct Upload
+	{
+		SDL_GPUBuffer * Buffer;			///< or
+		SDL_GPUTexture * Texture;
+		unsigned int Level, Width, Height;
+		uint32_t Offset, Size;
+	};
+	std::vector<Command> Commands;
+	std::vector<SdlRecordedDraw> Draws;
+	std::vector<uint8_t> StreamBytes;
+	std::vector<uint8_t> UploadBytes;
+	std::vector<uint8_t> ConstantBytes;
+	uint32_t LastConstants[2], LastConstantsSize[2];
+	std::vector<Upload> Uploads;
+	std::vector<SDL_GPUTexture *> DeadTextures;
+	std::vector<SDL_GPUBuffer *> DeadBuffers;
+	uint64_t BatchNumber;
+	SDL_GPUBuffer * StreamBuffer;		///< the staging stream on the GPU, grown as needed
+	uint32_t StreamBufferSize;
+	struct SDL_GPUTransferBuffer * Transfer;
+	uint32_t TransferSize;
 
 	// The gamma pass, made the first time a ramp is not the identity.
 	SDL_GPUShader * GammaVertex;

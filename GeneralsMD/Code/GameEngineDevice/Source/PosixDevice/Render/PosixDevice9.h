@@ -30,7 +30,8 @@
 ** No window is a real case, not an error: -headless starts no video, so the device is made with a null
 ** RenderWindow and must work as Windows' -headless device on its hidden window does - resources and
 ** state for real, and draws that are never seen.  So with no window a draw succeeds and does nothing;
-** with a window, a draw fails loudly until A3 puts it on SDL3 GPU.
+** with a window, a fixed-function draw is recorded on SDL3 GPU (A3c), and what A3c cannot draw yet is
+** refused: counted by reason, logged once, and D3D_OK, as dx11backend does.
 **
 ** Reference counting is COM's: every object is born with one reference, Release deletes at zero, a Get
 ** method AddRefs what it hands out, and binding an object (SetTexture, SetStreamSource, ...) holds a
@@ -47,8 +48,14 @@
 #include "Platform/D3D9Posix.h"
 
 #include <atomic>
+#include <map>
+#include <string>
 
 class SdlGpuFrame;
+class SdlPipelineCache;
+class SdlProgramCache;
+class SdlResourceMirrors;
+class SdlSamplerCache;
 struct CombinerDescription;
 struct VertexPipelineDescription;
 struct SdlVertexConstants;
@@ -161,9 +168,14 @@ public:
 	RenderWindow Get_Window() const { return Window; }
 
 	/// With a window, the SDL3 GPU frame the device draws and presents through (A3); without one, none.
-	/// CreateDevice calls it; a window whose GPU device cannot be made fails the device, loudly.
-	RenderResult Create_Gpu_Frame();
+	/// CreateDevice calls it; a window whose GPU device cannot be made fails the device, loudly.  A test
+	/// asks for an offscreen frame on a device made without a window: it draws, and Present only flushes.
+	RenderResult Create_Gpu_Frame(bool offscreen = false);
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
+	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
+	/// Draws recorded on the GPU, and the draws refused, by reason.
+	unsigned int Draws_Recorded() const { return DrawsRecorded; }
+	const std::map<std::string, unsigned int> & Draw_Refusals() const { return DrawRefusals; }
 
 	/// Clear with a window, where the back buffer's pixels are the GPU's (the A3 design's render-target
 	/// seam): a contributor's Clear calls this when Get_Gpu() is not null.  A3a takes a clear of the whole back
@@ -284,11 +296,37 @@ protected:
 	void Release_Surfaces();
 	/// D3D9's documented initial render, texture-stage and sampler states (PosixDevice9Draw.cpp).
 	void Set_Default_States();
-	/// A draw's answer before A3: nothing to show with no window, so success; with one, a loud failure.
+	/// A draw's answer where there is no draw yet: nothing to show with no window, so success; with one,
+	/// a loud failure.  ProcessVertices.
 	RenderResult Draw_Unavailable(const char *what);
+
+	/// One Draw* call, as the recording reads it (PosixDevice9Draw.cpp).
+	struct DrawCall
+	{
+		D3DPRIMITIVETYPE Type;
+		unsigned int PrimitiveCount;
+		bool Indexed;
+		unsigned int StartVertex;		///< DrawPrimitive's
+		int BaseVertex;					///< DrawIndexedPrimitive's
+		unsigned int MinVertex;
+		unsigned int VertexCount;
+		unsigned int StartIndex;
+		const void *UserVertices;		///< DrawPrimitiveUP's
+		unsigned int UserStride;
+	};
+	/// Records a fixed-function draw on the GPU: the state resolved, the GPU copies brought up to date, and
+	/// what can still change staged.  Headless, nothing.
+	RenderResult Gpu_Draw(const DrawCall &call);
+	void Refuse_Draw(const std::string &reason);
 
 	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
 	SdlGpuFrame *Gpu;					///< the SDL3 GPU frame, with a window only
+	SdlProgramCache *Programs;			///< the draw's caches and GPU copies, with the frame
+	SdlPipelineCache *Pipelines;
+	SdlSamplerCache *Samplers;
+	SdlResourceMirrors *Mirrors;
+	unsigned int DrawsRecorded;
+	std::map<std::string, unsigned int> DrawRefusals;
 	RenderWindow Window;				///< null under -headless
 	D3DPRESENT_PARAMETERS Parameters;
 
