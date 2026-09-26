@@ -131,6 +131,7 @@ public:
 	Mission *gotoNextMission( void );				///< Set the next mission as the current Mission, and returns a point to it
 	void setCampaignAndMission( AsciiString campaign, AsciiString mission );		///< Sets the campaing and Mission we're on
 	void setCampaign( AsciiString campaign );																		///< sets the campaign and set's it's first mission
+	Bool setCampaignAndMissionForMap( AsciiString mapName );	///< the campaign and mission that play this map; FALSE if none does
 	AsciiString getCurrentMap( void );			///< Get the map located in m_currentMission;
 	enum { INVALID_MISSION_NUMBER = -1 };
 	Int getCurrentMissionNumber( void );		///< get mission number for the currently loaded level if we are in a campaign

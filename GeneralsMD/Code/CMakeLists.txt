@@ -1707,6 +1707,14 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # -mission, headless: a campaign mission, a challenge, a plain map and a missing one each start (or
+  # quit) instead of sitting at the main menu.  Skipped without game data: see the script.
+  add_test(NAME mission_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_mission_check.sh $<TARGET_FILE:generals>)
+  set_tests_properties(mission_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1500)
+  if(ZH_GAME_DATA)
+    set_tests_properties(mission_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # L1's POSIX harness on itself: two headless copies on this machine play one seeded LAN match over
   # 127.0.0.1 and a second local address, agree to frame 1800, and each replay plays back to it; a
   # second copy on another seed is reported FAILED.  One machine, one compiler: see the script.  Skipped

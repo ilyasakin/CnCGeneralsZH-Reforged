@@ -1122,6 +1122,42 @@ Int parseSeed(char *args[], int num)
 	return 2;
 }
 
+/** -mission <map> [easy|normal|hard]: start the map as the shell would - as the campaign or challenge
+	* mission that plays it, at that difficulty, or as a plain single player map (-file) if no campaign has
+	* it.  A dev aid, for runs that have to reach the single player game without the menus; -file, the plain
+	* start, is parsed only in _DEBUG and _INTERNAL builds.  <map> is a path to the .map, or a bare map name
+	* such as GC_ChemGeneral, which is Maps\GC_ChemGeneral\GC_ChemGeneral.map. */
+Int parseMission(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1)
+	{
+		AsciiString map = args[1];
+		if (map.find('\\') == NULL && map.find('/') == NULL && !map.endsWithNoCase(".map"))
+			map.format("Maps\\%s\\%s.map", args[1], args[1]);
+		TheWritableGlobalData->m_initialFile = map;
+		ConvertShortMapPathToLongMapPath(TheWritableGlobalData->m_initialFile);
+		TheWritableGlobalData->m_initialFileIsMission = TRUE;
+		if (num > 2)
+		{
+			AsciiString difficulty = args[2];
+			Int level = -1;
+			if (difficulty.compareNoCase("easy") == 0)
+				level = DIFFICULTY_EASY;
+			else if (difficulty.compareNoCase("normal") == 0)
+				level = DIFFICULTY_NORMAL;
+			else if (difficulty.compareNoCase("hard") == 0)
+				level = DIFFICULTY_HARD;
+			if (level >= 0)
+			{
+				TheWritableGlobalData->m_initialFileDifficulty = level;
+				return 3;
+			}
+		}
+		return 2;
+	}
+	return 1;
+}
+
 Int parseAutoSkirmish(char *args[], int num)
 {
 	if (TheWritableGlobalData && num > 1)
@@ -2432,6 +2468,7 @@ static CommandLineParam params[] =
 	{ "-noFPSLimit", parseNoFPSLimit },
 	{ "-fps", parseFPSLimit },
 	{ "-autoskirmish", parseAutoSkirmish },
+	{ "-mission", parseMission },
 	{ "-aidiff", parseAIDifficulty },
 	{ "-aidiff2", parseAIDifficulty2 },
 	{ "-notactics", parseNoTactics },
