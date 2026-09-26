@@ -595,17 +595,16 @@ static bool formatDelegated( WideCharFormatSink &sink, const FormatSpec &spec, W
 
 #endif // !_WIN32
 
-Int WideCharFormatV( WideChar *out, size_t outCount, const WideChar *format, va_list args )
+#ifndef _WIN32
+
+/* WideCharFormatV's body off Windows, unchanged but for being its own function: it takes the argument
+	 list by reference so that formatDelegated can take it on, and a va_list PARAMETER cannot be bound
+	 to va_list& everywhere.  Where va_list is an array type (x86-64 System V: Linux and Intel Macs), a
+	 parameter declared va_list is a pointer to its first element, which a va_list& will not accept, and
+	 the x86_64 build did not compile.  WideCharFormatV hands this a va_copy of its argument instead,
+	 which is a va_list object on every ABI. */
+static Int formatWideV( WideChar *out, size_t outCount, const WideChar *format, va_list &args )
 {
-	if (out == NULL || outCount == 0 || format == NULL)
-		return -1;
-
-#ifdef _WIN32
-
-	// Byte for byte the call this replaces.
-	return (Int)::_vsnwprintf( AS_CRTW( out ), outCount, AS_CRT( format ), args );
-
-#else
 
 	/* Off Windows this is a formatter, not a forwarder.
 
@@ -750,6 +749,32 @@ Int WideCharFormatV( WideChar *out, size_t outCount, const WideChar *format, va_
 		}
 	}
 	return sink.finish();
+}
+
+/** Owns a va_copy for the length of a call, so every return path ends it. */
+struct VaListCopy
+{
+	va_list ap;
+	explicit VaListCopy( va_list src ) { va_copy( ap, src ); }
+	~VaListCopy() { va_end( ap ); }
+};
+
+#endif // !_WIN32
+
+Int WideCharFormatV( WideChar *out, size_t outCount, const WideChar *format, va_list args )
+{
+	if (out == NULL || outCount == 0 || format == NULL)
+		return -1;
+
+#ifdef _WIN32
+
+	// Byte for byte the call this replaces.
+	return (Int)::_vsnwprintf( AS_CRTW( out ), outCount, AS_CRT( format ), args );
+
+#else
+
+	VaListCopy copy( args );
+	return formatWideV( out, outCount, format, copy.ap );
 
 #endif
 }
