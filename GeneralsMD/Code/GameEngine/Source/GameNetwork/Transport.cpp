@@ -31,17 +31,6 @@
 #include "GameNetwork/Transport.h"
 #include "GameNetwork/NetworkInterface.h"
 
-/* The last socket call's error, for the logs: winsock's on Windows, errno elsewhere.  GetWSAErrorString
-	 (udp.cpp) names either. */
-static inline int lastSocketError( void )
-{
-#if defined(_WIN32)
-	return WSAGetLastError();
-#else
-	return errno;
-#endif
-}
-
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
