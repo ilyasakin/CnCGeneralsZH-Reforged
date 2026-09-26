@@ -81,7 +81,7 @@ public:
 /* ********* MapObject class, the render half ****************************/
 // MapObject's data and the list the map file loads into it are gameengine's (Common/MapObject.cpp):
 // the simulation reads them.  The three members that hold a RenderObjClass reference stay here, next
-// to the W3D code that makes those objects; off Windows Common/MapObjectRenderPosix.cpp stands in.
+// to the W3D code that makes those objects.
 
 void MapObject::setRenderObj(RenderObjClass *pObj)
 {

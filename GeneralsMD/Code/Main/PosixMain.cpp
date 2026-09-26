@@ -44,6 +44,7 @@
 #include "PreRTS.h"
 
 #include "Lib/BaseType.h"
+#include "Platform/RenderTypes.h"
 #include "Common/CrashHandler.h"
 #include "Common/CriticalSection.h"
 #include "Common/Debug.h"
@@ -76,6 +77,12 @@ const Char *g_strFile = "data\\Generals.str";
 const Char *g_csfFile = "data\\%s\\Generals.csf";
 static char s_noAppPrefix[] = "";
 char *gAppPrefix = s_noAppPrefix; /// So WB can have a different debug log file name.
+
+// WinMain.cpp's other two, which W3DDevice names: the window the device draws into, which SdlGameEngine
+// sets when it makes one (the SDL_Window; null under -headless, where there is none), and whether it is
+// borderless, which W3DDisplay keeps up to date across a change of window mode.
+RenderWindow ApplicationHWnd = NULL;
+Bool ApplicationIsBorderless = FALSE;
 
 static CriticalSection critSec2, critSec3, critSec4, critSec5;
 

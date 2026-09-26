@@ -16,9 +16,10 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// PosixDevice's stand-ins for the renderer's hooks (PosixRenderHooks.cpp), and above all its
-// testMinimumRequirements, which is where decision 2 (B19, option (c)) lives: a CPU cpudetect cannot
-// time is treated as fast when GameLOD chooses the default detail preset.
+// The renderer's hooks gameengine calls, as the game links them off Windows: W3DDevice's own, now that
+// w3ddevice builds there (A1), where until C2's wiring PosixDevice had stand-ins.  Above all
+// W3DShaderManager's testMinimumRequirements, which is where decision 2 (B19, option (c)) lives: a CPU
+// cpudetect cannot time is treated as fast when GameLOD chooses the default detail preset.
 //
 // What it checks:
 //   1. testMinimumRequirements on this machine: an unknown CPU type (XX, so a first launch still runs
@@ -30,8 +31,8 @@
 //      400 - so a later launch, which takes this speed, no longer turns the shell map off where the
 //      first launch, which took a benchmark profile's, left it on.  Without ZH_DATA_DIR that half says
 //      "skip" and the test still runs the first half.
-//   3. The small hooks: doSkyBoxSet and oversizeTheTerrain run with nothing to act on, and the two
-//      DX8Wrapper globals start where dx8wrapper.cpp starts them.
+//   3. The small hooks: doSkyBoxSet and oversizeTheTerrain run with nothing to act on (no GlobalData,
+//      no terrain render object), and the two DX8Wrapper globals start where dx8wrapper.cpp starts them.
 //
 // WHAT THIS DOES NOT PROVE: that GameLODManager, run for real on a first and a later launch, picks the
 // same preset and the same shell map setting.  That needs the engine (INI, OptionPreferences, the user
@@ -41,6 +42,7 @@
 #include "Common/GameLOD.h"
 #include "Common/GlobalData.h"
 #include "cpudetect.h"
+#include "Platform/RenderTypes.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,7 +56,14 @@ extern void oversizeTheTerrain(Int amount);
 extern int DX8Wrapper_PreserveFPU;
 extern bool DX8Wrapper_IsWindowed;
 
-GlobalData *TheWritableGlobalData = NULL;	// doSkyBoxSet leaves a missing GlobalData alone
+// The exe's names: Main/PosixMain.cpp's, which the test cannot link (it holds main()).  The window is
+// null, as under -headless.
+const Char *g_strFile = "data\\Generals.str";
+const Char *g_csfFile = "data\\%s\\Generals.csf";
+static char s_noAppPrefix[] = "";
+char *gAppPrefix = s_noAppPrefix;
+RenderWindow ApplicationHWnd = NULL;
+Bool ApplicationIsBorderless = FALSE;
 
 static int failures = 0;
 #define CHECK( COND, ... ) \
@@ -111,7 +120,7 @@ int main( void )
 	printf( "cpudetect: %s, %d MHz measured; reported: cpu %d, %d MHz, %d bytes, chip %d, bench %g/%g/%g\n",
 		CPUDetectClass::Get_Processor_Manufacturer_Name(), (int)measured, (int)cpu, (int)mhz, (int)ram, (int)chip,
 		(double)intIndex, (double)floatIndex, (double)memIndex );
-	CHECK( chip == DC_UNKNOWN, "chip %d, want DC_UNKNOWN: there is no device to ask", (int)chip );
+	CHECK( chip == DC_UNKNOWN, "chip %d, want DC_UNKNOWN: no device has been made to ask", (int)chip );
 	CHECK( cpu == XX, "cpu type %d, want XX: CPUID is x86 under MSVC only, and XX is what sends a first launch to the benchmark", (int)cpu );
 	if (measured == CPUDETECT_UNMEASURED_PROCESSOR_MHZ)
 		CHECK( mhz > 0, "an unmeasured CPU reported %d MHz: decision 2 says treat it as fast", (int)mhz );
@@ -174,9 +183,9 @@ int main( void )
 
 	if (failures != 0)
 	{
-		printf( "posix_render_hooks: %d failure(s)\n", failures );
+		printf( "render_hooks: %d failure(s)\n", failures );
 		return 1;
 	}
-	printf( "posix_render_hooks: an unmeasured CPU is reported fast enough for every shipped preset\n" );
+	printf( "render_hooks: an unmeasured CPU is reported fast enough for every shipped preset\n" );
 	return 0;
 }
