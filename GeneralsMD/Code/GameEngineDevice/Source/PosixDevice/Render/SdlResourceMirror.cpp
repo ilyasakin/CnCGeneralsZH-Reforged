@@ -213,6 +213,12 @@ void SdlResourceMirrors::Collect_Dead()
 	Dead.clear();
 }
 
+bool SdlResourceMirrors::Has_Copy(const void * owner) const
+{
+	std::lock_guard<std::mutex> guard(Lock);
+	return Copies.find(owner) != Copies.end();
+}
+
 size_t SdlResourceMirrors::Live_Copies() const
 {
 	std::lock_guard<std::mutex> guard(Lock);

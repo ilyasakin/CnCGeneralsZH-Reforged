@@ -21,6 +21,8 @@
 // PosixD3D9Caps.cpp).  See PosixDevice9.h for who owns what and how a device without a window behaves.
 
 #include "PosixDevice9.h"
+#include "PosixImageOps.h"
+#include "PosixResources9.h"
 #include "SdlGpuFrame.h"
 #include "SdlPipelineCache.h"
 #include "SdlProgramCache.h"
@@ -242,14 +244,63 @@ bool PosixDevice9::Gpu_Owns(IDirect3DSurface9 *surface) const
 	return surface->GetDesc(&desc) == D3D_OK && (desc.Usage & (D3DUSAGE_RENDERTARGET | D3DUSAGE_DEPTHSTENCIL)) != 0;
 }
 
-RenderResult PosixDevice9::Gpu_Download(IDirect3DSurface9 *)
+RenderResult PosixDevice9::Gpu_Download(IDirect3DSurface9 *surface)
 {
-	return D3DERR_INVALIDCALL;
+	if (!Gpu_Owns(surface) || surface == DepthSurface) {
+		return D3DERR_INVALIDCALL;
+	}
+	D3DSURFACE_DESC desc;
+	surface->GetDesc(&desc);
+	if ((desc.Usage & D3DUSAGE_DEPTHSTENCIL) != 0) {
+		return D3DERR_INVALIDCALL;		// nothing in the engine reads depth back
+	}
+	// Nothing has drawn into a render target that has no GPU copy yet: its CPU image is the current one.
+	if (surface != BackBuffer) {
+		IDirect3DTexture9 *container = NULL;
+		const void *owner = surface;
+		if (surface->GetContainer(IID_IDirect3DTexture9, (void **)&container) == D3D_OK && container != NULL) {
+			owner = container;
+			container->Release();
+		}
+		if (!Mirrors->Has_Copy(owner)) {
+			return D3D_OK;
+		}
+	}
+	std::string refusal;
+	SDL_GPUTexture *texture = Gpu_Texture_Of(surface, refusal);
+	std::vector<uint8_t> bgra;
+	if (texture == NULL || !Gpu->Read_Back(texture, desc.Width, desc.Height, bgra)) {
+		return D3DERR_DRIVERINTERNALERROR;
+	}
+	PosixImage &image = static_cast<PosixSurface9 *>(surface)->image();
+	return posixWriteFromBgra(image, &bgra[0], desc.Width, desc.Height) ? D3D_OK : D3DERR_INVALIDCALL;
 }
 
-RenderResult PosixDevice9::Gpu_Download_Front(IDirect3DSurface9 *)
+RenderResult PosixDevice9::Gpu_Download_Front(IDirect3DSurface9 *dest)
 {
-	return D3DERR_INVALIDCALL;
+	if (Gpu == NULL || dest == NULL) {
+		return D3DERR_INVALIDCALL;
+	}
+	std::vector<uint8_t> presented;
+	const unsigned int width = Gpu->Width(), height = Gpu->Height();
+	if (!Gpu->Read_Back(Gpu->Front_Copy(), width, height, presented)) {
+		return D3DERR_DRIVERINTERNALERROR;
+	}
+	// Windowed, D3D9's front buffer is the display's size and the window is a part of it.  The presented
+	// picture goes at the top left, and the rest is black.
+	D3DSURFACE_DESC desc;
+	dest->GetDesc(&desc);
+	std::vector<uint8_t> bgra((size_t)desc.Width * desc.Height * 4, 0);
+	for (size_t i = 3; i < bgra.size(); i += 4) {
+		bgra[i] = 0xFF;
+	}
+	const unsigned int rows = height < desc.Height ? height : desc.Height;
+	const unsigned int columns = width < desc.Width ? width : desc.Width;
+	for (unsigned int y = 0; y < rows; ++y) {
+		memcpy(&bgra[(size_t)y * desc.Width * 4], &presented[(size_t)y * width * 4], (size_t)columns * 4);
+	}
+	PosixImage &image = static_cast<PosixSurface9 *>(dest)->image();
+	return posixWriteFromBgra(image, &bgra[0], desc.Width, desc.Height) ? D3D_OK : D3DERR_INVALIDCALL;
 }
 
 RenderResult PosixDevice9::Gpu_StretchRect(IDirect3DSurface9 *source, const RenderRect *source_rect, IDirect3DSurface9 *dest,
