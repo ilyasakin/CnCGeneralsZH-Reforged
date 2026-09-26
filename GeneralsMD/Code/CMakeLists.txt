@@ -1238,6 +1238,16 @@ if(ZH_PLATFORM_POSIX)
     ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
   target_link_libraries(posix_draw_resolve_selfcheck PRIVATE posixd3d9 ffshader ffvertex)
   add_test(NAME posix_draw_resolve_selfcheck COMMAND posix_draw_resolve_selfcheck)
+
+  # A3c's program cache: generated programs compiled for this machine's GPU, every combiner operation
+  # the generator implements and every light type.  Exits 77 (skipped) with no GPU.
+  add_executable(sdl_program_cache_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_program_cache.cpp)
+  set_target_properties(sdl_program_cache_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(sdl_program_cache_selfcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(sdl_program_cache_selfcheck PRIVATE posixd3d9 ffshader ffvertex SDL3::SDL3-static)
+  add_test(NAME sdl_program_cache_selfcheck COMMAND sdl_program_cache_selfcheck)
+  set_tests_properties(sdl_program_cache_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(sdl_gpu_frame_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
   # A2's half of the device (a contributor): the resources, the pixel codec, the image operations, the device's
