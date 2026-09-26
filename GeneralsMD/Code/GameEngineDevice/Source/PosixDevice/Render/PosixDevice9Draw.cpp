@@ -30,6 +30,7 @@
 #include "SdlProgramCache.h"
 #include "SdlResourceMirror.h"
 
+#include "engineshader.h"
 #include "ffshader.h"
 #include "ffvertex.h"
 
@@ -640,6 +641,18 @@ bool PosixDevice9::Resolve_Target(SdlTarget &target, std::string &refusal)
 	return true;
 }
 
+bool PosixDevice9::Engine_Program_Of(const void *shader, const char *stage, int &program)
+{
+	const std::string name = Engine_Name_Of(shader);
+	program = EngineShader_From_File(name.c_str());
+	if (program == ENGINE_SHADER_NONE) {
+		Refuse_Draw(std::string("a ") + stage + " shader with no transcription: "
+			+ (name.empty() ? std::string("one never registered") : name));
+		return false;
+	}
+	return true;
+}
+
 RenderResult PosixDevice9::DrawPrimitive(D3DPRIMITIVETYPE type, unsigned int start_vertex, unsigned int primitive_count)
 {
 	DrawCall call;
@@ -695,13 +708,26 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		return D3D_OK;		// -headless: drawn into a window nobody sees
 	}
 
-	// What A3c does not draw yet.
-	if (VertexShader != NULL || PixelShader != NULL) {
-		Refuse_Draw("a programmable draw (A3e)");
+	// The engine's own programs (A3e).  The device never runs D3D bytecode: a bound shader is drawn from
+	// D3's transcription of the program it was registered as (Platform/EngineShaderName.h), the other half
+	// from the generators, as the Direct3D 11 backend draws them.  A shader that cannot be named is refused
+	// by its name, never drawn as something close.
+	int vertex_engine = ENGINE_SHADER_NONE;
+	int pixel_engine = ENGINE_SHADER_NONE;
+	if (VertexShader != NULL && !Engine_Program_Of(VertexShader, "vertex", vertex_engine)) {
 		return D3D_OK;
 	}
+	if (PixelShader != NULL && !Engine_Program_Of(PixelShader, "pixel", pixel_engine)) {
+		return D3D_OK;
+	}
+	if (vertex_engine != ENGINE_SHADER_NONE && pixel_engine != ENGINE_SHADER_NONE) {
+		Refuse_Draw("an engine vertex program with an engine pixel program (a pair the game does not make)");
+		return D3D_OK;
+	}
+	// The stream's layout is the FVF's with a transcribed program too: D3's Trees reads the tree buffer's
+	// FVF slots, as the Direct3D 11 backend lays it out, and its D3D8 declaration only made the shader.
 	if (FVF == 0) {
-		Refuse_Draw("a vertex declaration and no FVF (A3e)");
+		Refuse_Draw("a vertex declaration and no FVF");
 		return D3D_OK;
 	}
 	if (RenderStates[D3DRS_CLIPPLANEENABLE] != 0) {
@@ -732,12 +758,14 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	CombinerDescription combiner;
 	VertexPipelineDescription vertex;
 	Build_Combiner_Description(combiner);
-	if (!Build_Vertex_Description(vertex, &refusal)) {
+	if (vertex_engine == ENGINE_SHADER_NONE && !Build_Vertex_Description(vertex, &refusal)) {
 		Refuse_Draw(refusal);
 		return D3D_OK;
 	}
-	const SdlProgram &vertex_program = Programs->Vertex_Program(vertex);
-	const SdlProgram &pixel_program = Programs->Pixel_Program(combiner);
+	const SdlProgram &vertex_program = vertex_engine != ENGINE_SHADER_NONE
+		? Programs->Engine_Vertex_Program(vertex_engine) : Programs->Vertex_Program(vertex);
+	const SdlProgram &pixel_program = pixel_engine != ENGINE_SHADER_NONE
+		? Programs->Engine_Pixel_Program(pixel_engine, combiner.PixelPipeline) : Programs->Pixel_Program(combiner);
 	if (vertex_program.Shader == NULL || pixel_program.Shader == NULL) {
 		Refuse_Draw(vertex_program.Shader == NULL ? "a vertex program refused" : "a pixel program refused");
 		return D3D_OK;
@@ -937,11 +965,24 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	SdlVertexConstants vertex_constants;
 	SdlPixelConstants pixel_constants;
 	Build_Constants(vertex_constants, pixel_constants);
-	if (vertex_program.UniformBuffers != 0) {
+	if (vertex_program.UniformBuffers != 0 && vertex_engine != ENGINE_SHADER_NONE) {
+		// A transcribed vertex program reads the engine's own register bank, c0 to c95, as its b0.
+		const uint32_t size = ENGINE_SHADER_CONSTANTS * sizeof(VertexShaderConstants[0]);
+		draw.VertexConstants = Gpu->Constants(0, VertexShaderConstants, size);
+		draw.VertexConstantsSize = size;
+	}
+	else if (vertex_program.UniformBuffers != 0) {
 		draw.VertexConstants = Gpu->Constants(0, &vertex_constants, sizeof(vertex_constants));
 		draw.VertexConstantsSize = sizeof(vertex_constants);
 	}
-	if (pixel_program.UniformBuffers != 0) {
+	if (pixel_program.UniformBuffers != 0 && pixel_engine != ENGINE_SHADER_NONE) {
+		SdlEnginePixelConstants engine_constants;
+		memset(&engine_constants, 0, sizeof(engine_constants));
+		engine_constants.Combiner = pixel_constants;
+		draw.PixelConstants = Gpu->Constants(1, &engine_constants, sizeof(engine_constants));
+		draw.PixelConstantsSize = sizeof(engine_constants);
+	}
+	else if (pixel_program.UniformBuffers != 0) {
 		draw.PixelConstants = Gpu->Constants(1, &pixel_constants, sizeof(pixel_constants));
 		draw.PixelConstantsSize = sizeof(pixel_constants);
 	}
@@ -973,5 +1014,9 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	draw.BlendFactor = RenderStates[D3DRS_BLENDFACTOR];
 	Gpu->Record_Draw(draw);
 	++DrawsRecorded;
+	if (vertex_engine != ENGINE_SHADER_NONE || pixel_engine != ENGINE_SHADER_NONE) {
+		++EngineProgramDraws[EngineShader_Name((EngineShaderProgram)(vertex_engine != ENGINE_SHADER_NONE
+			? vertex_engine : pixel_engine))];
+	}
 	return D3D_OK;
 }

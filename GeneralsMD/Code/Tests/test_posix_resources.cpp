@@ -751,7 +751,7 @@ TEST(posix_device_creates_what_its_caps_offer_and_nothing_else)
 	adapter->Release();
 }
 
-TEST(posix_caps_name_no_vendor_and_no_shaders)
+TEST(posix_caps_name_no_vendor_and_shaders_1_1)
 {
 	PosixDirect3D9 *adapter = new PosixDirect3D9;
 	D3DADAPTER_IDENTIFIER9 identifier;
@@ -761,8 +761,11 @@ TEST(posix_caps_name_no_vendor_and_no_shaders)
 	CHECK_STR(identifier.Driver, "posixd3d9");
 	D3DCAPS9 caps;
 	CHECK_EQ(adapter->GetDeviceCaps(0, D3DDEVTYPE_HAL, &caps), D3D_OK);
-	CHECK_EQ(caps.VertexShaderVersion, 0u);
-	CHECK_EQ(caps.PixelShaderVersion, 0u);
+	// A3e: 1.1 and nothing higher, which is what the engine's generic chipset class asks for.
+	CHECK_EQ(caps.VertexShaderVersion, (RenderUInt32)D3DVS_VERSION(1, 1));
+	CHECK_EQ(caps.PixelShaderVersion, (RenderUInt32)D3DPS_VERSION(1, 1));
+	CHECK_EQ(caps.MaxVertexShaderConst, 96u);
+	CHECK(caps.PixelShader1xMaxValue == 1.0f);
 	CHECK_EQ(caps.MaxSimultaneousTextures, 8u);
 	CHECK_EQ(caps.MaxTextureWidth, 8192u);
 	CHECK((caps.DevCaps & D3DDEVCAPS_HWTRANSFORMANDLIGHT) != 0);

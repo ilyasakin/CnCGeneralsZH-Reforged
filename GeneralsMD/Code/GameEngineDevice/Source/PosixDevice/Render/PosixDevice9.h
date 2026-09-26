@@ -371,6 +371,9 @@ protected:
 	/// The name the engine registered a shader of this device's under (Platform/EngineShaderName.h), or
 	/// empty for one it never named (A3e).
 	static std::string Engine_Name_Of(const void *shader);
+	/// The engineshader program a bound shader is (EngineShaderProgram), from its registered name; false,
+	/// with the draw refused by that name, for one that has no transcription.
+	bool Engine_Program_Of(const void *shader, const char *stage, int &program);
 
 	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
 	SdlGpuFrame *Gpu;					///< the SDL3 GPU frame, with a window only
@@ -381,6 +384,7 @@ protected:
 	unsigned int DrawsRecorded;
 	unsigned int PresentCount;
 	std::map<std::string, unsigned int> DrawRefusals;
+	std::map<std::string, unsigned int> EngineProgramDraws;	///< draws recorded with a transcribed half, by its name (A3e)
 	RenderWindow Window;				///< null under -headless
 	D3DPRESENT_PARAMETERS Parameters;
 

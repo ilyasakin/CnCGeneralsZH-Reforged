@@ -3425,8 +3425,13 @@ Bool W3DShaderManager::testMinimumRequirements(ChipsetType *videoChipType, CpuTy
 		*videoChipType = getChipset();
 #if !defined(_WIN32)
 		// Decision 2 for the GPU: a device the chipset table cannot place counts as meeting every preset.
-		// Windows' D3D9 names its adapter, and keeps the original presumption (GameLOD: a TNT2).
-		if (*videoChipType == DC_UNKNOWN)
+		// Windows' D3D9 names its adapter, and keeps the original presumption (GameLOD: a TNT2).  Placing
+		// only by the caps is not placing: since A3e the POSIX device claims pixel shader 1.1, so getChipset
+		// answers DC_GENERIC_PIXEL_SHADER_1_1 rather than DC_UNKNOWN, and that is below the GF3 every shipped
+		// preset asks for - every Mac would fall to LOW again.  An override is reported as it is.
+		const Bool overridden = TheGlobalData != NULL && TheGlobalData->m_chipSetType != DC_UNKNOWN;
+		if (!overridden && (*videoChipType == DC_UNKNOWN || *videoChipType == DC_GENERIC_PIXEL_SHADER_1_1
+				|| *videoChipType == DC_GENERIC_PIXEL_SHADER_1_4 || *videoChipType == DC_GENERIC_PIXEL_SHADER_2_0))
 			*videoChipType = (ChipsetType)UNKNOWN_CHIPSET_REPORTED;
 #endif
 	}
