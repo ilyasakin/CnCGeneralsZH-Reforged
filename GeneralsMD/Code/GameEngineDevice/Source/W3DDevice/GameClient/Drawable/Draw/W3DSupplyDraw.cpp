@@ -33,6 +33,8 @@
 #include "Common/Xfer.h"
 #include "W3DDevice/GameClient/Module/W3DSupplyDraw.h"
 
+#include <limits.h>	// INT_MAX: MSVC and libc++ bring it in by other headers, libstdc++ does not
+
 //-------------------------------------------------------------------------------------------------
 W3DSupplyDrawModuleData::W3DSupplyDrawModuleData() 
 {
