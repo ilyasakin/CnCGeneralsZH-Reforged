@@ -22,9 +22,12 @@
 // through W3DParticleSys's orientation expression is table index 245, inside the table's 256.
 
 #include "Platform/MsvcFloatCasts.h"
+#include "Platform/StrdupAsWindows.h"
 
 #include <limits>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static int failures = 0;
 
@@ -85,6 +88,20 @@ int main()
 		}
 	}
 #endif
+
+	// strdup as the Windows build has it (Platform/StrdupAsWindows.h): a copy of any string, and NULL for
+	// NULL, the UCRT's _strdup; Darwin's and glibc's strdup read through a NULL.  A cloned particle emitter's
+	// NULL user string crashed the fog of war off Windows (defect #31).
+	if (strdupAsWindows(NULL) != NULL) {
+		++failures;
+		printf("FAIL: strdupAsWindows(NULL) is not NULL\n");
+	}
+	char *copy = strdupAsWindows("ParticleEmitter");
+	if (copy == NULL || strcmp(copy, "ParticleEmitter") != 0) {
+		++failures;
+		printf("FAIL: strdupAsWindows did not copy its string\n");
+	}
+	free(copy);
 
 	if (failures != 0) {
 		printf("test_msvc_float_casts: %d FAILED\n", failures);

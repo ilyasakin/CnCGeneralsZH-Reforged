@@ -49,6 +49,7 @@
 #include <string.h>
 #include "ffactory.h"
 #include "rawfile.h"
+#include "Platform/StrdupAsWindows.h"
 int   	 ArgvClass::Argc = 0;
 char 		*ArgvClass::Argv[MAX_ARGC];
 
@@ -214,7 +215,7 @@ int ArgvClass::Init(char *lpCmdLine, char *fileprefix)
 		// If it was not the file or the load failed...then add parameter.
 		if (!was_file) {
 			// Copy string over and continue.
-			Argv[Argc] = strdup(ptr);
+			Argv[Argc] = strdupAsWindows(ptr);
 			Argc++;
 		}
 
@@ -275,7 +276,7 @@ bool ArgvClass::Load_File(const char *fname)
 
 				// If there is anyting in the string. (NAK: old code used to fail for 1 char options)
 				if (strlen(string)) {
-					Argv[Argc] = strdup(string);
+					Argv[Argc] = strdupAsWindows(string);
 					Argc++;
 				}
 			}
@@ -406,13 +407,13 @@ void ArgvClass::Update_Value(const char *attrib, const char *value)
 		if (((CurrentPos+1) < Argc) && (Argv[CurrentPos+1][0] != '-'))  // update old value
 		{
 			free(Argv[CurrentPos+1]);
-			Argv[CurrentPos+1]=strdup(value);
+			Argv[CurrentPos+1]=strdupAsWindows(value);
 		}
 		else  // add new value
 		{
 			// shift vals down to make room
 			memmove(&(Argv[CurrentPos+2]),&(Argv[CurrentPos+1]),sizeof(char *) * (MAX_ARGC-CurrentPos-2));
-			Argv[CurrentPos+1]=strdup(value);
+			Argv[CurrentPos+1]=strdupAsWindows(value);
 			Argc++;
 		}
 	}
@@ -439,12 +440,12 @@ void ArgvClass::Add_Value(const char *attrib, const char *value)
 {
 	if (attrib)
 	{
-		Argv[Argc]=strdup(attrib);
+		Argv[Argc]=strdupAsWindows(attrib);
 		Argc++;
 
 		if (value)
 		{
-			Argv[Argc]=strdup(value);
+			Argv[Argc]=strdupAsWindows(value);
 			Argc++;
 		}
 	}

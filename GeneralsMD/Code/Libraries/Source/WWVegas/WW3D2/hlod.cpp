@@ -138,6 +138,7 @@
 #include "sphere.h"
 #include "boxrobj.h"
 #include <stdio.h>	// snprintf
+#include "Platform/StrdupAsWindows.h"
 
 
 /*
@@ -378,10 +379,10 @@ void HLodDefClass::Initialize(HLodClass &src_lod)
 	Free ();
 
 	// Copy the name and hierarcy name from the source object
-	Name = ::strdup (src_lod.Get_Name ());
+	Name = strdupAsWindows(src_lod.Get_Name ());
 	const HTreeClass *phtree = src_lod.Get_HTree ();
 	if (phtree != NULL) {
-		HierarchyTreeName = ::strdup (phtree->Get_Name ());
+		HierarchyTreeName = strdupAsWindows(phtree->Get_Name ());
 	}
 
 	// Determine the number of LODs in the src object
@@ -407,7 +408,7 @@ void HLodDefClass::Initialize(HLodClass &src_lod)
 				// Record information about this model (if possible)
 				RenderObjClass *prender_obj = src_lod.Peek_Lod_Model (index, model_index);
 				if (prender_obj != NULL) {
-					model_names[model_index] = ::strdup (prender_obj->Get_Name ());
+					model_names[model_index] = strdupAsWindows(prender_obj->Get_Name ());
 					bone_indicies[model_index] = src_lod.Get_Lod_Model_Bone (index, model_index);
 				} else {
 					model_names[model_index] = NULL;
@@ -659,8 +660,8 @@ bool HLodDefClass::read_header(ChunkLoadClass & cload)
 	cload.Close_Chunk();
 
 	// Copy the name into our internal variable
-	Name = ::strdup(header.Name);
-	HierarchyTreeName = ::strdup(header.HierarchyName);
+	Name = strdupAsWindows(header.Name);
+	HierarchyTreeName = strdupAsWindows(header.HierarchyName);
 	LodCount = header.LodCount;
 	Lod = W3DNEWARRAY SubObjectArrayClass[LodCount];
 	return true;
@@ -829,7 +830,7 @@ bool HLodDefClass::SubObjectArrayClass::Load_W3D(ChunkLoadClass & cload)
 
 		if (!cload.Close_Chunk()) return false;
 
-		ModelName[imodel] = strdup(subobjdef.Name);
+		ModelName[imodel] = strdupAsWindows(subobjdef.Name);
 		BoneIndex[imodel] = subobjdef.BoneIndex;
 	}
 	return true;

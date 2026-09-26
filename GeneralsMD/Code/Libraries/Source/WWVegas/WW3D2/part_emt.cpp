@@ -51,6 +51,7 @@
 #include "texture.h"
 #include "part_ldr.h"
 #include "Platform/MsvcFloatCasts.h"
+#include "Platform/StrdupAsWindows.h"
 
 
 // Global variable which is only used to communicate the worldspace emitter
@@ -131,15 +132,7 @@ ParticleEmitterClass::ParticleEmitterClass(float emit_rate, unsigned int burst_s
 }
 
 
-/* A copy of a name that may be NULL, as Windows copies one: the UCRT's _strdup (which strdup is there)
-	 returns NULL for NULL, where Darwin's and glibc's strdup read through it.  An emitter's UserString is
-	 NULL until a user string is set, so cloning one - which the fog of war does to everything it ghosts
-	 (W3DGhostObject::snapShot), within seconds of a match on Seaside Mutiny - crashed off Windows. */
-static char *strdupOrNull(const char *string)
-{
-	return string != NULL ? ::strdup(string) : NULL;
-}
-
+// A name or user string may be NULL: copied as Windows copies it (Platform/StrdupAsWindows.h, defect #31).
 ParticleEmitterClass::ParticleEmitterClass(const ParticleEmitterClass & src) :
 	RenderObjClass(src),
 	EmitRate(src.EmitRate),
@@ -160,8 +153,8 @@ ParticleEmitterClass::ParticleEmitterClass(const ParticleEmitterClass & src) :
 	ParticlesLeft(src.ParticlesLeft),
 	MaxParticles(src.MaxParticles),
 	IsComplete(false),
-	NameString(strdupOrNull (src.NameString)),
-	UserString(strdupOrNull (src.UserString)),
+	NameString(strdupAsWindows(src.NameString)),
+	UserString(strdupAsWindows(src.UserString)),
 	RemoveOnComplete(src.RemoveOnComplete),
 	IsInScene(false),
 	GroupID(0),
@@ -870,7 +863,7 @@ ParticleEmitterClass::Set_Name (const char *pname)
 	}
 
 	// Copy the provided name
-	NameString = ::strdup (pname);
+	NameString = strdupAsWindows(pname);
 	return ;
 }
 
