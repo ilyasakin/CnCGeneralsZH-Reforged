@@ -597,13 +597,13 @@ CrossOver run.
   - `GetFrontBufferData` after Present and a later clear;
   - four mutations caught.
 
-**The game on it.** The windowed skirmish (seed 1234, 600 frames) and the shell map (`-quickstart`, 60 s)
-both run with **no refusals at all**:
+**The game on it.** The windowed skirmish (seed 1234, 600 frames) and the main menu without the shell map
+(`-quickstart`, 60 s; see the correction under A3e-2) both run with **no refusals at all**:
 - the skirmish: 2,483 presents and 1,665,243 draws;
-- the shell map: 3,635 presents and 1,398,108 draws.
+- the main menu without the shell map (`-quickstart`): 3,635 presents and 1,398,108 draws.
 Without `-quickstart` the intro movie plays through V1's Bink path.
 
-![The Zero Hour shell map on Metal, present 900](../a3d-shell-map-metal.png)
+![The Zero Hour main menu on Metal, present 900 (-quickstart: whether it shows the 3D shell map is being re-checked)](../a3d-shell-map-metal.png)
 
 The diagnostic overlay is not drawn in the shell by design; see the in-game pictures for the renderer and frame.
 
@@ -695,7 +695,7 @@ is given.
 | Run | Draws recorded | Signatures captured | Compared | Drew something | Pass | Known |
 |---|---|---|---|---|---|---|
 | Skirmish, seed 1234, 600 frames | 1,977,780 | 49 (4 off screen) | 46 | 36 | 43 | 3 |
-| Shell map, `-quickstart`, 200 s | 32,631,851 | 67 (12 off screen) | 65 | 42 | 60 | 5 |
+| Main menu without the shell map (`-quickstart`), 200 s | 32,631,851 | 67 (12 off screen) | 65 | 42 | 60 | 5 |
 
 - **Stable across runs:** two skirmish captures run the same way gave the same 49 signatures.
 - **"Drew nothing"** means the reference wrote no pixel, and the GPU agreed. These draws are either
@@ -732,11 +732,176 @@ is given.
 
 **After -47's N28 and N29** (feature/mac-port at 54e5e88f), every capture compares:
 - **Skirmish:** 49 of 49, 11 drew nothing, 0 failed, 3 known (C1, C2).
-- **Shell map:** 67 of 67, 25 drew nothing, 0 failed, 5 known (C1, C2).
+- **Main menu without the shell map (`-quickstart`):** 67 of 67, 25 drew nothing, 0 failed, 5 known (C1, C2).
 
 **A3 is not done.** Both runs draw with no refusals. But "every key checked" still waits on C1 and C2, and
 on the draws that drew nothing. Those need a capture of the pixels, depth and stencil under the draw, which
 version 1 does not have.
+
+## A3e design: the engine's own shaders (approved 2026-09-26)
+
+**Where it stands.**
+- The POSIX caps say vertex and pixel shader version 0.0 (`PosixD3D9Caps.cpp`). So
+  `W3DShaderManager::getChipset()` is `DC_UNKNOWN`, and the engine never loads a shader. Terrain, water,
+  roads, trees and the monochrome filter all take their fixed-function fallbacks. That is why A3's runs
+  have no refusals.
+- Raising the caps alone would get nothing drawn, for three reasons:
+  - **No bytecode off Windows.** The shipped `.vso` and `.pso` programs go through
+    `d3d8shadertranslate`, which disassembles and reassembles them with D3DX. The water assembles
+    `ps.1.1` text with `D3DXAssembleShader`. Off Windows, all three D3DX shader functions fail
+    (`d3dx9posix.cpp`, A1).
+  - **No registration.** `Direct3D11_Register_Engine_Shader` is a no-op off Windows
+    (`dx11runtime_posix.cpp`).
+  - **No draw.** The device refuses every draw with a shader or a vertex declaration bound.
+
+**The approach is the D3D11 backend's: recognise, don't execute.** The Windows D3D11 backend never runs
+D3D9 bytecode. It maps the bound shader, by the name it was registered under, to D3's hand-written HLSL
+transcription (`engineshader.cpp`, which already has an SDL3_GPU target). The POSIX device does the same
+(RENDERER-ROUTE-RECON.md: "recognise what it is handed").
+
+**A3e-1: shaders made and registered off Windows.** Windows keeps compiling what it compiles today.
+- **`d3d8shadertranslate`, off Windows only:**
+  - It decodes the D3D8 declaration into D3D9 elements, as it does now (that part is native).
+  - It skips the D3DX disassemble and reassemble, and creates the shader from the shipped D3D8 tokens.
+  - The device keeps the tokens and never executes them.
+- **The POSIX `D3DXAssembleShader` (mine, A1):**
+  - For `ps.1.x` or `vs.1.x` text it returns a token stream: the version token, the source in a comment
+    token, and END.
+  - It is not an assembler, and it says so. It gives the water's `CreatePixelShader` something to hand
+    over, and the water's registration names it.
+  - Anything else still fails.
+- **Registration off Windows:** `Direct3D11_Register_Engine_Shader` tags the device's shader object with
+  its `EngineShaderProgram` (`EngineShader_From_File`).
+  - It goes through a small `Platform/` declaration that posixd3d9 implements, the way
+    `posixResourceDestroyed` crosses the same layer.
+  - A shader with no tag is foreign, and its draws are refused by name.
+- **Caps:** vertex and pixel shader 1.1, and nothing higher. That is `DC_GENERIC_PIXEL_SHADER_1_1` with the
+  8 stages already advertised. The engine asks for no more.
+
+**A3e-2: drawing them.**
+- **The programs:**
+  - A bound, tagged program takes the half it names: `EngineShader_Vertex_Program` or
+    `EngineShader_Pixel_Program`, with the SDL3_GPU target, compiled and cached by `SdlProgramCache`
+    under the engine program's name.
+  - The other half is generated, as D3 found the game pairs them. Trees' vertex program meets only
+    ffshader's pixel programs, and the engine's pixel programs meet only ffvertex's vertex programs.
+  - A pair the game never makes is refused, not guessed.
+- **Constants:** the 96 vertex-shader constant registers (`ENGINE_SHADER_CONSTANTS`) feed the engine
+  program's `b0` block, as the D3D11 backend mirrors them. Pixel-shader constants are not read, in either
+  backend.
+- **Vertex declarations** (Trees): `CreateVertexDeclaration` and `SetVertexDeclaration` give the vertex
+  layout from the elements, and the pipeline key takes the layout in place of the FVF.
+- **Left out:**
+  - The terrain's bumped programs. They need the normal atlas and the sun, which reach the D3D11 backend
+    through calls the POSIX runtime answers as "no D3D11".
+  - The environment water (texbem) and `wave.*`, which have no transcription on Windows either.
+  - Each is refused by name, not drawn wrongly.
+- **One branch:** raising the caps moves the game onto its shader paths. So the caps land with the draw,
+  on one branch, and the shell map and the skirmish must still show zero refusals except those named
+  above.
+
+**A3e-3: checking them.**
+- FFReference can't check a programmable draw, and comparing the transcription against itself proves
+  nothing. The independent oracle would be a CPU interpreter of `vs_1_1` and `ps_1_1`, written from the
+  D3D8/D3D9 shader reference pages, that runs the *shipped* tokens. The water's text would need the
+  interpreter to read the assembly text.
+- The capture layer's version 2 would then capture programmable draws: the program's name, its original
+  tokens or text, and the constant bank. The replay compares Metal's picture from the transcription with
+  the interpreter's picture from the original.
+- **Independence:** as with FFReference, whoever writes the interpreter reads neither `engineshader.cpp`
+  nor the generators. I propose -47. That is the PM's call.
+- Until it exists, A3e-2 is checked by what the game shows (terrain, water, trees and roads on the shell
+  map and in the skirmish, with the HUD overlay in the picture). That is looks, and it's recorded as such.
+
+**Whose files:**
+- **Mine:** `d3d8shadertranslate`'s POSIX branch, `d3dx9posix.cpp`'s assembler, `dx11runtime_posix.cpp`
+  (A1), and the device.
+- **Shared with Windows D3D11:** `engineshader.cpp`, the transcriptions. A change there is a generator fix
+  under the usual process, with -18 as second reader.
+- **-18's:** the caps file, which is a one-line change for each version.
+
+**The PM's approval (2026-09-26) came with these conditions:**
+- **The interpreter** is -47's, written from the vs_1_1 and ps_1_1 reference pages only. -47 reads neither
+  engineshader.cpp, the generators, nor the capture harness.
+- **The stub assembler** is acceptable if its header comment says what it is, a program the device can't
+  name refuses loudly by name, and a unit test round-trips the source.
+- **The caps** land with the draw, and the commit lists every engine path that changes behaviour.
+- **The ps_1_x range:** `PixelShader1xMaxValue` is 1.0, the documented minimum for ps 1.0 to 1.3, and the
+  registers are signed, [-1, 1]. Only `_sat` and the final write clamp to [0, 1]. The transcriptions, which
+  saturate every step to [0, 1], are to be changed step by step, each change with its reference page cited.
+  That is a change to the shared transcriptions, so it follows the generator-fix process.
+
+## A3e-1 and A3e-2: the engine's shaders drawn (2026-09-26)
+
+**A3e-1** (e083c81c) makes and names the shaders off Windows, as designed above.
+- The stub assembler's round trip is in `d3dx9posix_selfcheck`.
+- `d3d8shadertranslate.cpp` and `d3dx9runtime.h` read the same to MSVC (windows_view_diff).
+
+**A3e-2** draws them.
+- **Which program:** a bound shader's registered name picks D3's transcription (`EngineShader_*_Program`,
+  SDL3_GPU target), cached under that name, with the pixel program's alpha test and fog, as dx11backend
+  keys it. The other half comes from the generators.
+- **Constants:**
+  - A transcribed vertex program reads c0 to c95 as its b0.
+  - A transcribed pixel program's b0 is dx11backend's whole `PixelConstantBlock`. The device fills the
+    texture factor, fog colour and alpha reference, and leaves the normal-map, sun, shadow and sky fields
+    zero. Zero shadow parameters read as a pixel the sun reaches, and those fields serve only the bumped
+    terrain, which A3e leaves out.
+- **The vertex layout** is the stream's FVF, even with Trees' declaration bound. D3's Trees reads the tree
+  buffer's FVF slots, as dx11backend lays it out (dx8wrapper's cached FVF is the one the device holds).
+  The D3D8 declaration only made the shader.
+- **Refused by name:**
+  - a shader with no transcription, or one never registered;
+  - an engine vertex program with an engine pixel program.
+- **The teardown summary** counts the draws made with each transcribed program.
+- **Capture version 1 skips programmable draws.** Version 2 is for -47's interpreter.
+- **Caps:** vertex and pixel shader 1.1, `MaxVertexShaderConst` 96 and `PixelShader1xMaxValue` 1.0.
+  -18's caps test is renamed `posix_caps_name_no_vendor_and_shaders_1_1`, and -18 second-reads the change.
+
+**What rising caps change off Windows.** `getChipset()` answers `DC_GENERIC_PIXEL_SHADER_1_1` where it
+answered `DC_UNKNOWN`:
+- **Terrain:** `TerrainShaderPixelShader` (terrain, terrainnoise and terrainnoise2) in place of the
+  fixed-function multi-pass terrain. Roads use `roadnoise2`, the flat terrain `fterrain*`.
+- **Trees:** `Trees.vso`.
+- **Water:** its river, trapezoid and reflection `ps.1.1` programs, through the stub assembler. The old
+  bump-mapped water type is `#if 0` in Zero Hour, so that doesn't change.
+- **Screen filters:** `monochrome.pso`, the black-and-white filter's DOT3 variant, and the back-buffer-sized
+  render-target texture W3DShaderManager makes at start, which the render-to-texture filters use.
+- **No change:**
+  - `getGPUPerformanceIndex` has no caller.
+  - The driver-version check at W3DShaderManager.cpp:368 is commented out.
+- **GameLOD's presets would have changed, and are held.** `testMinimumRequirements`' POSIX branch mapped
+  only DC_UNKNOWN to the top of the table (decision 2). A generic chipset placed only by its caps is below
+  the GeForce 3 every shipped preset asks for, so every Mac would have fallen back to LOW. The branch now
+  treats a generic class like an unknown one, unless the chipset is overridden. On Windows it reads the same.
+
+**Measured** (hidden window, 800x600, the seeded skirmish, 600 frames): 2,420,609 draws and no refusals.
+
+| Program | Draws |
+|---|---|
+| terrainnoise2 | 116,473 |
+| trapezoid water | 202,045 |
+| water reflection | 202,045 |
+| trees | 7,130 |
+
+- The screenshot shows terrain, trees and the HUD ("Metal arm64 frame 575"). It looks right, and nothing
+  more is claimed for it until -47's interpreter exists.
+- **`-quickstart` turns the 3D shell map off.** It calls `parseNoShellMap` (CommandLine.cpp). Today's
+  `-quickstart` runs drew about 95 draws a present, and a probe in both terrain `Render` functions never
+  fired.
+  - A3d's "shell map" record and picture, and this record's capture of the "shell map", came from
+    `-quickstart` runs as well.
+  - A3d's run drew about 385 a present, so what it drew isn't settled.
+  - Until a run without `-quickstart` is checked, those records say "the main menu without the shell map
+    (`-quickstart`)", as the PM decided.
+  - **The contradiction the re-check has to settle:** the capture set with that label holds 3D draws
+    (lit models, and alpha-tested foliage with cloud-shadow coordinates), at about 1,150 draws a present.
+    It was made before the day's merge of feature/mac-port. Today's `-quickstart` runs draw about 95 a
+    present and no terrain. So either something then drew a 3D scene behind the menu, or something since
+    the merge changed what `-quickstart` shows.
+- **The user closes game windows.** Several windowed runs today ended early, and the likeliest cause is the
+  user closing them. Evidence runs now use a hidden window (the item raised with the PM).
+||||||| f76ffaf3
 
 ## A3e: the independent shader oracle (-47, 2026-09-26)
 

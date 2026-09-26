@@ -30,8 +30,11 @@
 //     leaves the output alone;
 //   - transpose, scaling, translation and rotation about z through D3DXVec3Transform, on points
 //     whose images are known (the matrices are the SDK's documented ones, D3D's row-vector form);
-//   - that binding succeeds, a texture call on a null device is D3DERR_INVALIDCALL and a shader
-//     assembly is D3DERR_NOTAVAILABLE, and error names come back.
+//   - that binding succeeds, a texture call on a null device is D3DERR_INVALIDCALL, and error names
+//     come back;
+//   - the stub "assembler" (A3e): a version token from the text's first word, the text back out of
+//     its comment token byte for byte (the water's river program, an odd length, a leading comment),
+//     the end token where the length says, and text naming no version refused.
 //
 // WHAT THIS DOES NOT PROVE:
 //   - That the rounding matches d3dx9_43.dll's.  Tolerances here are 1e-5 relative; the DLL was
@@ -42,6 +45,7 @@
 
 #include "d3dx9runtime.h"
 #include "d3dx9math.h"
+#include "d3dx9posix.h"
 #include "dx8fvf.h"
 
 #include <math.h>
@@ -201,6 +205,46 @@ static void check_builders()
 	CHECK(as_d3d->_23 == a._23);
 }
 
+/// One stub assembly: the version it names, and the text back exactly.
+static void check_stub(const char * text, size_t length, RenderUInt32 version)
+{
+	ID3DXBuffer * shader = NULL;
+	CHECK(D3DXAssembleShader(text, (unsigned int)length, NULL, NULL, 0, &shader, NULL) == D3D_OK && shader != NULL);
+	if (shader == NULL) {
+		return;
+	}
+	const RenderUInt32 * tokens = (const RenderUInt32 *)shader->GetBufferPointer();
+	const size_t words = shader->GetBufferSize() / 4;
+	CHECK(tokens[0] == version);
+	CHECK((tokens[1] & 0xFFFF) == 0xFFFE && ((tokens[1] >> 16) & 0x7FFF) + 3 == words);
+	CHECK(tokens[words - 1] == 0x0000FFFF);
+	std::string back;
+	CHECK(D3DX9Posix_Stub_Shader_Source(tokens, back));
+	CHECK(back.size() == length && memcmp(back.data(), text, length) == 0);
+	shader->Release();
+}
+
+static void check_stub_assembler()
+{
+	CHECK(Bind_D3DX9_Runtime());
+	// The water's river program, as W3DWater.cpp passes it (its length is not a multiple of four).
+	static const char RIVER[] = "ps.1.1\n \t\t\ttex t0 \n\t\t\ttex t1\t\n\t\t\tmul r0.rgb, v0, t0 ; blend \n"
+		"\t\t\t+mul r0.a, r0, t3\n\t\t\tadd r0.rgb, r0, r1 \n";
+	CHECK((sizeof(RIVER) - 1) % 4 != 0);
+	check_stub(RIVER, sizeof(RIVER) - 1, 0xFFFF0101);
+	static const char COMMENTED[] = "  // a comment first\n; and another\nvs_1_1\nmov oPos, v0\n";
+	check_stub(COMMENTED, sizeof(COMMENTED) - 1, 0xFFFE0101);
+	check_stub("ps.1.4", 6, 0xFFFF0104);
+	// Text naming no version, and a stream that is not a stub, are refused.
+	ID3DXBuffer * shader = (ID3DXBuffer *)1;
+	CHECK(D3DXAssembleShader("tex t0\n", 7, NULL, NULL, 0, &shader, NULL) == D3DERR_NOTAVAILABLE && shader == NULL);
+	CHECK(D3DXAssembleShader("ps.9.9\n", 7, NULL, NULL, 0, &shader, NULL) == D3DERR_NOTAVAILABLE && shader == NULL);
+	const RenderUInt32 real[] = { 0xFFFF0101, 0x00000042, 0x800F0000, 0x0000FFFF };
+	std::string back;
+	CHECK(!D3DX9Posix_Stub_Shader_Source(real, back));
+	Unbind_D3DX9_Runtime();
+}
+
 static void check_runtime()
 {
 	CHECK(Bind_D3DX9_Runtime());
@@ -208,9 +252,6 @@ static void check_runtime()
 	IDirect3DTexture9 * texture = (IDirect3DTexture9 *)1;
 	CHECK(D3DXCreateTexture(NULL, 64, 64, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture) == D3DERR_INVALIDCALL);
 	CHECK(texture == NULL);
-	ID3DXBuffer * shader = (ID3DXBuffer *)1;
-	CHECK(D3DXAssembleShader("ps.1.1\n", 7, NULL, NULL, 0, &shader, NULL) == D3DERR_NOTAVAILABLE);
-	CHECK(shader == NULL);
 	CHECK(strcmp(Get_D3D_Error_String(D3DERR_INVALIDCALL), "D3DERR_INVALIDCALL") == 0);
 	CHECK(strcmp(Get_D3D_Error_String(RENDER_FAIL), "E_FAIL") == 0);
 	CHECK(strcmp(Get_D3D_Error_String((RenderResult)0x8876ffffu), "0x8876ffff") == 0);
@@ -225,10 +266,11 @@ int main()
 	check_inverse();
 	check_builders();
 	check_runtime();
+	check_stub_assembler();
 	if (failures != 0) {
 		printf("d3dx9posix_selfcheck: %d FAILED\n", failures);
 		return 1;
 	}
-	printf("d3dx9posix_selfcheck: FVF sizes (12 engine vertex structures), product, inverse, builders and binding all hold\n");
+	printf("d3dx9posix_selfcheck: FVF sizes (12 engine vertex structures), product, inverse, builders, binding and the stub assembler all hold\n");
 	return 0;
 }

@@ -368,6 +368,18 @@ protected:
 	void Capture_Draw(const DrawCall &call, const std::string &signature, unsigned int stride, unsigned int reads,
 		unsigned int sampled_stages, unsigned int target_width, unsigned int target_height);
 	static void Capture_Report();
+	/// Capture version 2's draw_<n>.prog for the draw being captured (DrawCapture.h); the bytes written.
+	uint64_t Write_Programs(const std::string &path);
+	/// The name the engine registered a shader of this device's under (Platform/EngineShaderName.h), or
+	/// empty for one it never named (A3e).
+	static std::string Engine_Name_Of(const void *shader);
+	/// A shader of this device's tokens, as it was made with them; false for one it did not make.
+	static bool Shader_Tokens_Of(const void *shader, std::vector<RenderUInt32> &tokens);
+	/// A declaration of this device's elements, without the end element.
+	static void Declaration_Elements_Of(IDirect3DVertexDeclaration9 *declaration, std::vector<D3DVERTEXELEMENT9> &elements);
+	/// The engineshader program a bound shader is (EngineShaderProgram), from its registered name; false,
+	/// with the draw refused by that name, for one that has no transcription.
+	bool Engine_Program_Of(const void *shader, const char *stage, int &program);
 
 	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
 	SdlGpuFrame *Gpu;					///< the SDL3 GPU frame, with a window only
@@ -378,6 +390,7 @@ protected:
 	unsigned int DrawsRecorded;
 	unsigned int PresentCount;
 	std::map<std::string, unsigned int> DrawRefusals;
+	std::map<std::string, unsigned int> EngineProgramDraws;	///< draws recorded with a transcribed half, by its name (A3e)
 	RenderWindow Window;				///< null under -headless
 	D3DPRESENT_PARAMETERS Parameters;
 
@@ -405,6 +418,9 @@ protected:
 	unsigned int StreamStrides[STREAM_COUNT];
 	IDirect3DIndexBuffer9 *Indices;
 	IDirect3DVertexDeclaration9 *Declaration;
+	/// D3D9's one current vertex format is whichever of SetFVF and SetVertexDeclaration came last.  The draw
+	/// always lays out by the FVF (A3e); capture version 2 records the declaration only while it is current.
+	bool DeclarationIsCurrent;
 	RenderUInt32 FVF;
 	IDirect3DVertexShader9 *VertexShader;
 	IDirect3DPixelShader9 *PixelShader;
