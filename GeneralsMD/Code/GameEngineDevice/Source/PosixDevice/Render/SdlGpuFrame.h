@@ -91,6 +91,10 @@ public:
 	/// D3DCLEAR_TARGET, _ZBUFFER and _STENCIL over the whole back buffer, recorded for the next pass.  A
 	/// later clear of the same thing replaces an earlier one, as the second would overwrite the first.
 	void Clear_Back_Buffer(bool colour, bool depth, bool stencil, uint32_t argb, float z, uint32_t stencil_value);
+	/// The same over a rectangle of it, in pixels: recorded in order as a clear draw, a triangle over the
+	/// target scissored to the rectangle, that writes the value whatever the depth and stencil hold.
+	void Clear_Rect(int x, int y, int width, int height, bool colour, bool depth, bool stencil, uint32_t argb, float z,
+		uint32_t stencil_value);
 
 	/// Runs what is recorded into the back buffer.  False when the GPU refused the work.
 	bool Flush();
@@ -145,6 +149,7 @@ private:
 	void Release_Targets();
 	bool Record_Batch(struct SDL_GPUCommandBuffer * commands);
 	bool Record_Passes(struct SDL_GPUCommandBuffer * commands, SDL_GPUBuffer * stream);
+	SDL_GPUGraphicsPipeline * Clear_Pipeline(unsigned int which);
 	void End_Batch();
 	bool Present_Into(struct SDL_GPUCommandBuffer * commands, SDL_GPUTexture * target, unsigned int width,
 		unsigned int height, unsigned int format, const uint16_t (*ramp)[256]);
@@ -164,6 +169,8 @@ private:
 	{
 		bool IsDraw;
 		uint32_t Draw;					///< into Draws
+		bool IsRect;					///< a clear draw over Rect, not a load operation
+		int32_t Rect[4];				///< x, y, width, height
 		bool Colour, Depth, Stencil;	///< a clear's
 		uint32_t Argb;
 		float Z;
@@ -186,6 +193,9 @@ private:
 	std::vector<SDL_GPUTexture *> DeadTextures;
 	std::vector<SDL_GPUBuffer *> DeadBuffers;
 	uint64_t BatchNumber;
+	SDL_GPUShader * ClearVertex;			///< the clear draw's programs, and its pipelines by what it clears
+	SDL_GPUShader * ClearPixel;
+	SDL_GPUGraphicsPipeline * ClearPipelines[8];
 	SDL_GPUBuffer * StreamBuffer;		///< the staging stream on the GPU, grown as needed
 	uint32_t StreamBufferSize;
 	struct SDL_GPUTransferBuffer * Transfer;
