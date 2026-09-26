@@ -40,7 +40,9 @@
 #   --extended        the wider backstop, not in ctest: seeds 2 to 5, each at 2 and at 4 players (eight
 #                     matches), at --maxframes (default 12000).  --seeds and --players are ignored
 #   --keep            leave the temporary folder and the logs, and say where
-# Exit status: the number of seeds that failed (0 when all agree).  77 when there is no game data.
+# Exit status: the number of matches that failed (0 when all agree).  77 when there is no game data.
+# 99 when the install changed during the run: every file of it is hashed before the farm is built and
+# again at the end, and any difference is reported and fails the run whatever the matches said.
 
 set -u
 
@@ -90,7 +92,29 @@ ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="rc$$_"		# every log this run writes starts with it
 
+# The install, hashed before anything else happens (RULE 9: a farm entry is a link into it, so a write
+# through one would change it).  Checked again on the way out, however the run ends.
+install_hashes() { ( cd "$INSTALL" && find . -type f ! -name '._*' -print0 | sort -z | xargs -0 shasum -a 256 ); }
+INSTALL_VERIFIED=0
+verify_install() {
+	[ "$INSTALL_VERIFIED" -eq 1 ] && return 0
+	INSTALL_VERIFIED=1
+	install_hashes > "$WORK/install-after.sha"
+	if ! cmp -s "$WORK/install-before.sha" "$WORK/install-after.sha"; then
+		echo "INSTALL CHANGED during this run (rule 9) - the files that differ:" >&2
+		diff "$WORK/install-before.sha" "$WORK/install-after.sha" >&2
+		return 1
+	fi
+	return 0
+}
+
 cleanup() {
+	if ! verify_install; then
+		KEEP=1
+		trap - EXIT
+		echo "kept for inspection: $WORK" >&2
+		exit 99
+	fi
 	if [ "$KEEP" -eq 1 ]; then
 		echo "kept: $WORK, and the logs $EXEDIR/${TAG}*"
 		return
@@ -99,6 +123,13 @@ cleanup() {
 	rm -f -- "$EXEDIR/${TAG}"*DebugLogFile*.txt
 }
 trap cleanup EXIT
+
+install_hashes > "$WORK/install-before.sha"
+# The check's own armed control, which never touches the install: it spoils the saved snapshot, so the
+# comparison at the end must find a difference.  Used by Tests/run_replay_check.sh.
+if [ -n "${REPLAY_CHECK_CONTROL_INSTALL:-}" ]; then
+	echo "0000000000000000000000000000000000000000000000000000000000000000  ./replay-check-control" >> "$WORK/install-before.sha"
+fi
 
 # ---- the farm ------------------------------------------------------------------------------------
 mkdir -p "$ROOT" "$USERDATA"
@@ -221,5 +252,9 @@ if [ "$failures" -eq 0 ]; then
 	echo "$nseeds of $nseeds matches: each replay played back to the same world, and each seed played the same twice (this machine only)."
 else
 	echo "$failures of $nseeds matches did not agree with themselves on this machine."
+fi
+if ! verify_install; then
+	KEEP=1
+	exit 99
 fi
 exit "$failures"
