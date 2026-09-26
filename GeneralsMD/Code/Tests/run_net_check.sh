@@ -5,10 +5,15 @@
 #      or block-all on each make the harness skip (77) before any copy or the probe listens.
 #   1. Two headless copies on this machine play seed 3 on Golden Oasis with two AIs to frame 1800 over
 #      127.0.0.1 and a second local address: neither logs a CRC mismatch, both stop on one CRC, the AI
-#      built something, and each copy's replay plays back to that CRC.
+#      built something, and each copy's replay plays back to that CRC, aligned "recorded from frame 0" and
+#      never out of sync.
 #   2. The armed control: the same with the second copy on the next seed.  The harness must report the
 #      match FAILED with the game's own CRC mismatch, and exit 1 - so a pass in 1 is a comparison that
 #      can fail.
+#   3. The playback check, live to the end and aligned to both kinds of recording: copy 0's replay has
+#      its CRCs at frame 1500 changed by one bit and must be reported out of sync at exactly frame 1500,
+#      while copy 1's has its frame 0 CRC records removed (shaped like a retail or pre-d9eccdda replay)
+#      and must align as "legacy: frame 0 missing" and play back clean.
 #
 # WHAT THIS PROVES: two processes of this build keep one world over the real network code on ONE
 # machine.  Nothing about a Windows peer, a real network, or the LAN lobby: see the harness's header.
@@ -60,5 +65,13 @@ status=$?
 printf '%s\n' "$out"
 check '[ $status -eq 1 ]' "the control (the second copy on another seed) fails the harness (exit $status)"
 check 'printf "%s" "$out" | grep -q "logged [1-9][0-9]* CRC mismatches"' "through the game's own CRC mismatch"
+
+out="$(bash "$HARNESS" --generals "$GENERALS" --frames 1800 --corrupt-at 1500 --legacy-replay 2>&1)"
+status=$?
+printf '%s\n' "$out"
+check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "^FAILED: copy 0.s replay: out of sync on frame 1500: [^;]*;$"' \
+	"a recorded CRC corrupted at frame 1500 is reported at frame 1500, and nothing else fails (exit $status)"
+check 'printf "%s" "$out" | grep -q "copy 1.s replay played back: .*its CRCs: legacy: frame 0 missing$"' \
+	"a replay without its frame 0 CRC aligns as legacy and plays back clean"
 
 exit $failed
