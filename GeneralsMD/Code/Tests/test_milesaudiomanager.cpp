@@ -467,7 +467,10 @@ TEST(music_plays_and_a_stop_brings_silence)
 	AIL_ex_stop_capture();
 	const Heard h = readCapture( capturePath( "music" ) );
 	CHECK( h.ok );
-	const size_t playing = h.rate * 1, stopped = h.rate * 3 / 2 + h.rate / 2;		// 0.5-1.0 s in; the last 0.2 s
+	/* Windows onto the capture by position, not by the nominal times above: a tick is 10 ms of sleep
+		 plus its own work, so the capture runs longer than the sum (2.2 s asked, 3 s seen under load).
+		 0.5-1.0 s in is before the stop however slow the ticks; the last 0.3 s is after it. */
+	const size_t playing = h.rate * 1, stopped = h.left.size() > h.rate * 3 / 10 ? h.left.size() - h.rate * 3 / 10 : 0;
 	const double during = rms( h.left, h.rate / 2, playing ) + rms( h.right, h.rate / 2, playing );
 	const double after = rms( h.left, stopped, h.left.size() ) + rms( h.right, stopped, h.right.size() );
 	printf( "  music: %s, %s: level %.4f playing, %.4f after the stop\n", pick.name.str(), pick.file.str(), during, after );
