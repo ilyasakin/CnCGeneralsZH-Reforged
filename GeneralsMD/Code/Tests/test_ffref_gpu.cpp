@@ -615,7 +615,7 @@ static void scenarios_lighting(Harness &h)
 		{ "light spot", D3DLIGHT_SPOT, false, true, 0.0f, NULL },
 		{ "light specular, no local viewer", D3DLIGHT_DIRECTIONAL, true, false, 0.0f, NULL },
 		{ "light point, spot specular, no local viewer", D3DLIGHT_SPOT, true, false, 0.0f, NULL },
-		{ "light point with its own ambient", D3DLIGHT_POINT, false, true, 0.1f, "F1: per-light ambient" },
+		{ "light point with its own ambient", D3DLIGHT_POINT, false, true, 0.1f, NULL },
 		{ "light specular, local viewer", D3DLIGHT_DIRECTIONAL, true, true, 0.0f, "F2+F6: LOCALVIEWER, and no specular add" } };
 	for (size_t i = 0; i < sizeof(LIGHTS) / sizeof(LIGHTS[0]); ++i) {
 		h.begin(0xFF000000);

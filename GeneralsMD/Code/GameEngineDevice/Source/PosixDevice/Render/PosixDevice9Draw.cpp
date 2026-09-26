@@ -418,6 +418,7 @@ void PosixDevice9::Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants
 		fields[5][1] = cosf(light.Phi * 0.5f);
 		fields[5][2] = light.Falloff;
 		fields[5][3] = 0.0f;
+		colour_value(light.Ambient, fields[6]);
 		++slot;
 	}
 

@@ -807,7 +807,7 @@ void DX11BackendClass::Set_Material(const float ambient[4], const float diffuse[
 
 void DX11BackendClass::Set_Light(unsigned index, DWORD type, const float position[4],
 	const float direction[4], const float diffuse[4], const float specular[4],
-	const float attenuation[4], const float spot[4])
+	const float attenuation[4], const float spot[4], const float ambient[4])
 {
 	if (index >= MAXIMUM_VERTEX_LIGHTS) {
 		return;
@@ -822,6 +822,7 @@ void DX11BackendClass::Set_Light(unsigned index, DWORD type, const float positio
 	memcpy(light.Specular, specular, sizeof(light.Specular));
 	memcpy(light.Attenuation, attenuation, sizeof(light.Attenuation));
 	memcpy(light.Spot, spot, sizeof(light.Spot));
+	memcpy(light.Ambient, ambient, sizeof(light.Ambient));
 }
 
 void DX11BackendClass::Disable_Light(unsigned index)
@@ -1523,6 +1524,7 @@ void DX11BackendClass::Upload_Constants()
 		memcpy(vertex_block.LightFields[slot][3], Lights[index].Specular, sizeof(float) * 4);
 		memcpy(vertex_block.LightFields[slot][4], Lights[index].Attenuation, sizeof(float) * 4);
 		memcpy(vertex_block.LightFields[slot][5], Lights[index].Spot, sizeof(float) * 4);
+		memcpy(vertex_block.LightFields[slot][6], Lights[index].Ambient, sizeof(float) * 4);
 		++slot;
 	}
 

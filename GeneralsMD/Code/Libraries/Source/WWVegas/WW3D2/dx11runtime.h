@@ -91,13 +91,13 @@ void Direct3D11_Mirror_Sampler_State(unsigned sampler, unsigned state, unsigned 
 
 // The rest of what the fixed-function vertex pipeline reads.  The matrix is sixteen floats in the
 // order D3D9 stores them, which is by rows; the material is five colours and a power; a light is
-// the six four-float fields ffvertex declares, and a null one disables that index.
+// the seven four-float fields ffvertex declares, and a null one disables that index.
 void Direct3D11_Mirror_Transform(unsigned transform, const float matrix[16]);
 void Direct3D11_Mirror_Material(const float ambient[4], const float diffuse[4],
 	const float specular[4], const float emissive[4], float power);
 void Direct3D11_Mirror_Light(unsigned index, unsigned type, const float position[4],
 	const float direction[4], const float diffuse[4], const float specular[4],
-	const float attenuation[4], const float spot[4]);
+	const float attenuation[4], const float spot[4], const float ambient[4]);
 void Direct3D11_Mirror_Light_Disabled(unsigned index);
 
 // The Direct3D 11 copy of a vertex or index buffer the engine is about to create, or null on an
