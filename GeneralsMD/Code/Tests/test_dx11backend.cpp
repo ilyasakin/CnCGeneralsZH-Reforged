@@ -279,7 +279,7 @@ TEST(dx11backend_a_light_is_carried_into_camera_space)
 	const float direction[4] = { 0.0f, -1.0f, 0.0f, 0.0f };
 	const float attenuation[4] = { 1.0f, 0.0f, 0.0f, 100000.0f };
 	backend.Set_Light(0, D3DLIGHT_DIRECTIONAL, black, direction, light_diffuse, black,
-		attenuation, black);
+		attenuation, black, black);
 
 	ID3D11Buffer * vertices = NULL;
 	CHECK(DX11Resource_Create_Vertex_Buffer(d3d, sizeof(QUAD_VERTICES), D3DPOOL_MANAGED, 0,
