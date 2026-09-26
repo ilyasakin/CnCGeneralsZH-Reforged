@@ -119,6 +119,12 @@ of Metal.
 → A1 A2 A3 B1 B2 B3 B4 B5 B6 E1
 
 **M2 — headless Mac game.** `MacGameEngine` boots, mounts `.big` files, runs a skirmish under
+*First slice REACHED 2026-09-26 (C2, `feature/mac-port-C2-w3d`):* `generals -headless` on macOS arm64,
+rooted at a read-only symlink farm of the install (rule 9), mounted every archive, generated a random
+map, played a two-slot skirmish to 600 frames at 9.5x real time, wrote a replay and exited 0. A second
+run with the same seed gave the same HEADLESS CRC (0x78BEA937). Still open for M2: E1's harness,
+which checks record/playback, and any comparison with a Windows-recorded replay, which needs a Windows
+build (E4).
 `-headless`, and its replay checksum matches the Windows build's on the same seed. Playable by a
 machine, not by a person.
 → C1 C2 C5
@@ -436,6 +442,18 @@ draw. The W3D classes then see a device, exactly as under Windows' `-headless`, 
 Windows mode nobody records replays in; and a hidden SDL window with a GPU device, which contradicts
 "headless needs no display" and waits on D4. Consequence: M2's gate is A1 (W3DDevice links) plus A2
 (CPU-backed resources), with no A3.
+
+**9. The fork's own data is an overlay the game mounts, never something written into the player's
+install (taken 2026-09-26).** On Windows the build copies `Code/Data`'s masters (the fork's INIs,
+`Patch.str`, scripts, textures, windows, the splash) into `Run/`, the game folder, and the game reads
+them from there. The first macOS headless run stopped at the fork's own `FXListReforged.ini` for want
+of that step. Off Windows the player's install is a folder the game must never write to (rule 9's
+reasoning, applied to shipping). Decided: the fork's data ships beside the executable (inside the app
+bundle on macOS, in the package on Linux), and the local file system searches it BEFORE the install
+root. This reproduces Windows' result (the fork's files win over the retail ones) without touching
+the install. Until packaging (M5) implements that search order, E1's harness assembles a symlink farm
+with the overlay copied over it, as C2's first run did. Owner of the implementation: packaging (E2/M5)
+with C1's file system.
 
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
