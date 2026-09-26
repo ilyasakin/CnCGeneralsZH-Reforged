@@ -75,6 +75,7 @@
 #ifdef _UNIX
 #include "osdep.h"
 #endif
+#include "Platform/StrdupAsWindows.h"
 
 #define FILE_HEADER_NAME	"Texture File Cache Header"
 
@@ -706,7 +707,7 @@ bool TextureFileCache::Open_Texture_Handle(const char *fname)
 		Close_Texture_Handle();
 	}
 	if (!CurrentTexture) {
-		CurrentTexture = strdup(fname);
+		CurrentTexture = strdupAsWindows(fname);
 	}			  
 			
 	#if 0					 

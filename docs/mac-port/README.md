@@ -1281,6 +1281,29 @@ reads the set's register as before. The comment on `stage_register` records both
 - **Not done:** the receiver still accepts `.wak`, a file the sender never sends. Refusing it would close
   the path, but it changes the network rules; that's recorded as an open question, not changed.
 
+**31. Port: a cloned particle emitter strdup()s a NULL user string, and the fog of war crashes the Mac and
+Linux - fixed.**
+
+- **Where:** `part_emt.cpp`'s copy constructor did `UserString(::strdup(src.UserString))`. The main
+  constructor sets `UserString(NULL)` (`:107`), and it stays NULL until a user string is set.
+- **Windows:** strdup is the UCRT's `_strdup`, which returns NULL for a NULL argument. This is -18's reading
+  of the UCRT, not measured here. So a Windows clone copies the NULL.
+- **Darwin and glibc:** strdup reads through the pointer and faults.
+- **Where it bites:** the fog of war clones every render object it ghosts. The stack from the game's crash
+  log is:
+  `PartitionData::getShroudedStatus` → `W3DGhostObject::snapShot` → `W3DRenderObjectSnapshot` →
+  `ParticleEmitterClass::Clone` → the copy constructor → `strdup` → `strlen`.
+  A stock map, Seaside Mutiny, crashed within seconds of a match. Found by -18's road-buffer probe over the
+  stock maps.
+- **Armed repro, headless on a rule-9 farm:** `-map "Maps\Seaside Mutiny\Seaside Mutiny.map"
+  -autoskirmish 2 -seed 1` gives SIGSEGV on the build without the fix, and runs to its frame limit with it.
+  A windowed game was not reproduced, but any emitter going under the fog takes the same path.
+- **Fixed:** a NULL copies as NULL.
+- **Swept:** every non-literal strdup in the engine's own code (40 sites) now goes through
+  `strdupAsWindows` (`Libraries/Include/Platform/StrdupAsWindows.h`, the one spelling). On Windows that is
+  `_strdup` itself, so nothing changes there. The per-site classification is in
+  `docs/mac-port/tasks/strdup-sweep.md`.
+
 **Latent, not numbered: a missing coordinate set under a texture transform.**
 - **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
   D3D9 documents (0,0) ("the system defaults to the u and v coordinates (0,0)"). FFReference's N28 pads

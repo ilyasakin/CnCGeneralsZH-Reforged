@@ -117,6 +117,7 @@
 #include "widestring.h"   // Get_Wide_String only; see INI.H
 #endif
 #include "nstrdup.h"
+#include "Platform/StrdupAsWindows.h"
 
 #if defined(__WATCOMC__)
 // Disable the "temporary object used to initialize a non-constant reference" warning.
@@ -500,7 +501,7 @@ int INIClass::Load(Straw & ffile)
 			char * ptr = strchr(buffer, ']');
 			if (ptr != NULL) *ptr = '\0';
 			strtrim(buffer);
-			INISection * secptr = W3DNEW INISection(strdup(buffer));
+			INISection * secptr = W3DNEW INISection(strdupAsWindows(buffer));
 			if (secptr == NULL) {
 				Clear();
 				return(false);
@@ -551,7 +552,7 @@ int INIClass::Load(Straw & ffile)
 				}
 
 
-				INIEntry * entryptr = W3DNEW INIEntry(strdup(buffer), strdup(divider));
+				INIEntry * entryptr = W3DNEW INIEntry(strdupAsWindows(buffer), strdupAsWindows(divider));
 				if (entryptr == NULL) {
 					delete secptr;
 					Clear();
@@ -1636,7 +1637,7 @@ bool INIClass::Put_String(char const * section, char const * entry, char const *
 	INISection * secptr = Find_Section(section);
 
 	if (secptr == NULL) {
-		secptr = W3DNEW INISection(strdup(section));
+		secptr = W3DNEW INISection(strdupAsWindows(section));
 		if (secptr == NULL) return(false);
 		SectionList->Add_Tail(secptr);
 		SectionIndex->Add_Index(secptr->Index_ID(), secptr);
@@ -1664,7 +1665,7 @@ bool INIClass::Put_String(char const * section, char const * entry, char const *
 	**	Create and add the new entry.
 	*/
 	if (string != NULL && strlen(string) > 0) {
-		entryptr = W3DNEW INIEntry(strdup(entry), strdup(string));
+		entryptr = W3DNEW INIEntry(strdupAsWindows(entry), strdupAsWindows(string));
 
 		// If this assert fires, then the string will be truncated on load, because
 		// there will not be enough room in the loading buffer!
@@ -1809,7 +1810,7 @@ char *INIClass::Get_Alloc_String(char const * section, char const * entry, char 
 	}
 
 	if (defvalue == NULL) return NULL;
-	return(strdup(defvalue));
+	return(strdupAsWindows(defvalue));
 }
 
 int INIClass::Get_List_Index(char const * section, char const * entry, int const defvalue, char *list[])
@@ -1841,7 +1842,7 @@ int INIClass::Get_Int_Bitfield(char const * section, char const * entry, int def
 	// get the bitfield value for each piece.
 	// int count	= 0; (gth) initailized but not referenced...
 	int retval	= 0;
-	char *str	= strdup(entryptr->Value);
+	char *str	= strdupAsWindows(entryptr->Value);
 
    int lp;
 	for (char *token = strtok(str, "|+"); token; token = strtok(NULL, "|+")) {
@@ -1876,7 +1877,7 @@ int *	INIClass::Get_Alloc_Int_Array(char const * section, char const * entry, in
 	// count all the tokens in the string.  Each token should represent an
 	// integer number.
 	int count = 0;
-	char *str = strdup(entryptr->Value);
+	char *str	= strdupAsWindows(entryptr->Value);
 	char *token;
 	for (token = strtok(str, " "); token; token = strtok(NULL, " ")) {
 		count++;
@@ -1887,7 +1888,7 @@ int *	INIClass::Get_Alloc_Int_Array(char const * section, char const * entry, in
 	// array to hold the tokens and parse out the actual values.
 	retval	= W3DNEWARRAY int[count+1];
 	count		= 0;
-	str		= strdup(entryptr->Value);
+	str		= strdupAsWindows(entryptr->Value);
 	for (token = strtok(str, " "); token; token = strtok(NULL, " ")) {
 		retval[count] = atoi(token);
 		count++;

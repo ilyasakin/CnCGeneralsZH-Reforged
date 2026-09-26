@@ -60,6 +60,7 @@
 #include "GameLogic/VictoryConditions.h"
 #include "GameClient/DisconnectMenu.h"
 #include "GameClient/InGameUI.h"
+#include "Platform/StrdupAsWindows.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -2062,7 +2063,7 @@ void ConnectionManager::parseUserList(const GameInfo *game)
 		return;
 	}
 
-	char * list = strdup(buf);
+	char * list = strdupAsWindows(buf);
 	char *listPtr = list;
 	if (!list)
 		return;
