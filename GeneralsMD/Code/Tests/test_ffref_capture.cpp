@@ -78,16 +78,13 @@ struct Known
 	const char *Finding;
 };
 static const Known KNOWN[] = {
-	// C1: small, minified models: the texels differ past the LOD freedom, and match with mipmapping off.
-	{ "274:101:0,0,0,0:L3:L3:L3:T0,0:V:F0,0 | 1:4,1,2,0,4,1,2,0,0,1:A1,7,F0 | pipeline 94988b3625682a23", "C1" },
+	// C1: small, minified models.  Within one draw a triangle's level of detail depends on its neighbour
+	// (-47's measurement: drawn a triangle per call, they pass), which fits derivatives formed across
+	// primitives in a 2x2 quad; D3D9-era hardware formed them per primitive.  Mine to trace.
 	{ "274:101:0,0,0,0:L3:L3:L3:T0,0:V:F0,0 | 1:4,1,2,0,4,1,2,0,0,1:A0,0,F0 | pipeline 153437af07b1e83e", "C1" },
 	{ "274:101:0,0,0,0:L3:L3:L3:T0,0:V:F0,0 | 1:4,1,2,0,4,1,2,0,0,1:A1,7,F0 | pipeline 1cf93c62fb232e81", "C1" },
 	{ "594:101:0,0,0,0:L3:L3:L3:T0,0:V:F0,0 | 1:4,1,2,0,4,1,2,0,0,1:A0,0,F0 | pipeline cad7347369d97b18", "C1" },
 	{ "594:101:0,0,0,0:L3:T0,0:V:F0,0 | 1:4,35,2,0,4,1,2,0,0,1:A0,0,F0 | pipeline a969c342bbda3198", "C1" },
-	// C2: alpha-tested foliage with the cloud shadow's camera-space texture coordinates: a few pixels a few
-	// levels past the envelope, and not the level of detail's (worse with mipmapping off).
-	{ "338:001:1,0,0,0:T0,0:T131072,2:F0,0 | 2:4,1,2,0,4,1,2,0,0,1:4,1,2,1,3,1,2,1,0,1:A1,7,F0 | pipeline 562de4611b89f9e3", "C2" },
-	{ "338:001:1,0,0,0:T0,0:T131072,2:F0,0 | 2:4,35,2,0,4,1,2,0,0,1:4,1,2,1,3,1,2,1,0,1:A1,7,F0 | pipeline 562de4611b89f9e3", "C2" },
 };
 
 static const char *known_finding(const char *signature)
