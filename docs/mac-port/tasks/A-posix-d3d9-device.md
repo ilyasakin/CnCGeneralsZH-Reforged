@@ -478,9 +478,15 @@ the back buffer:
 Six mutations were each caught: no half-pixel shift, cull swapped, no stale flush, fan off by one,
 X8 alpha left as stored, and a clear after draws ignored.
 
+**Partial clears** (later, same branch): `Gpu_Clear` cuts each rectangle to the viewport, as D3D9 does.
+One that covers the target is the load operation. Anything smaller is a clear draw: one triangle at the
+clear's depth, scissored to the rectangle, whose pipeline is keyed by what it clears. Depth and stencil
+always pass and are replaced, and what isn't cleared is masked. Checked with a viewport-cut clear, a list
+of rectangles, and a depth-only rectangle that a following depth-tested draw sees in its own colour.
+Two more mutations were each caught (no scissor; depth not written).
+
 **Not yet:**
 
-- the clear draw (a partial clear is still refused);
 - a run of the game with a window: shell map and skirmish, refusal counts;
 - the FFReference comparison (A3b's harness, next);
 - the on-disk program cache and warm-up list.

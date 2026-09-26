@@ -178,8 +178,9 @@ public:
 	const std::map<std::string, unsigned int> & Draw_Refusals() const { return DrawRefusals; }
 
 	/// Clear with a window, where the back buffer's pixels are the GPU's (the A3 design's render-target
-	/// seam): -18's Clear calls this when Get_Gpu() is not null.  A3a takes a clear of the whole back
-	/// buffer; a clear of part of it, or of another target, is refused until A3c's clear draw.
+	/// seam): -18's Clear calls this when Get_Gpu() is not null.  Each rectangle is cut to the viewport, as
+	/// D3D9's are; one covering the whole target is a load operation, a smaller one a clear draw.  A
+	/// colour clear of another render target is refused until A3d.
 	RenderResult Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, RenderUInt32 flags, D3DCOLOR color, float z,
 		RenderUInt32 stencil);
 

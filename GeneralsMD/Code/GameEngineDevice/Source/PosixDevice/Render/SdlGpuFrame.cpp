@@ -93,6 +93,8 @@ SdlGpuFrame::SdlGpuFrame() :
 	BackWidth(0),
 	BackHeight(0),
 	BatchNumber(1),
+	ClearVertex(NULL),
+	ClearPixel(NULL),
 	StreamBuffer(NULL),
 	StreamBufferSize(0),
 	Transfer(NULL),
@@ -105,6 +107,7 @@ SdlGpuFrame::SdlGpuFrame() :
 	PointSampler(NULL)
 {
 	LastConstants[0] = LastConstants[1] = LastConstantsSize[0] = LastConstantsSize[1] = 0;
+	memset(ClearPipelines, 0, sizeof(ClearPipelines));
 }
 
 SdlGpuFrame * SdlGpuFrame::Create(RenderWindow window, unsigned int width, unsigned int height, std::string & error)
@@ -147,6 +150,9 @@ SdlGpuFrame::~SdlGpuFrame()
 	Commands.clear();
 	End_Batch();
 	if (StreamBuffer != NULL) SDL_ReleaseGPUBuffer(GpuDevice, StreamBuffer);
+	for (int i = 0; i < 8; ++i) if (ClearPipelines[i] != NULL) SDL_ReleaseGPUGraphicsPipeline(GpuDevice, ClearPipelines[i]);
+	if (ClearVertex != NULL) SDL_ReleaseGPUShader(GpuDevice, ClearVertex);
+	if (ClearPixel != NULL) SDL_ReleaseGPUShader(GpuDevice, ClearPixel);
 	if (Transfer != NULL) SDL_ReleaseGPUTransferBuffer(GpuDevice, Transfer);
 	if (GammaPipeline != NULL) SDL_ReleaseGPUGraphicsPipeline(GpuDevice, GammaPipeline);
 	if (GammaVertex != NULL) SDL_ReleaseGPUShader(GpuDevice, GammaVertex);
