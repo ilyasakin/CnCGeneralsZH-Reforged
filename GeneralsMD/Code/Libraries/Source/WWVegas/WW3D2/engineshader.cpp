@@ -301,7 +301,10 @@ static void write_pixel_preamble(std::string & hlsl, bool bumped = false)
 **     mad r0.rgb, t1, t2, r0
 **     mul r0.rgb, r0, t3
 **
-** Every ps_1_1 instruction clamps its result to zero and one, which is the saturate on each line.
+** ps_1_1's registers hold [-1, 1] (PixelShader1xMaxValue 1, the documented minimum for ps 1.0 to 1.3),
+** and only a _sat modifier or the final write clamps to [0, 1].  Every value here is a product or sum
+** of texels and vertex colours in [0, 1], so none goes below zero, and the saturate on each line is the
+** clamp at one: the same result.  Measured against -47's ps_1_1 interpreter on captured draws (A3e-3).
 ** The alpha is the vertex alpha times the water texture's and the shroud never touches it: a
 ** shrouded stretch of water is dark, not transparent.
 */
@@ -391,9 +394,10 @@ static void write_monochrome(std::string & hlsl)
 		"    float4 current = lerp(texel0, tinted, float4(TextureFactor.aaa, 1.0));\n";
 }
 
-// Every ps_1_1 instruction clamps its result to zero and one, so each step saturates and not only
-// the last: a chain that overflows in the middle and comes back down is a different colour with the
-// clamps than without them.
+// ps_1_1's registers hold [-1, 1] and only _sat or the final write clamps to [0, 1] (see the trapezoid
+// water above).  A chain of products of values in [0, 1] never goes below zero, so the clamp that
+// matters is the one at the top, and it applies at every step, not only the last: a chain that
+// overflows in the middle and comes back down is a different colour with the clamps than without them.
 static void write_multiply_chain(std::string & hlsl, const EngineShaderEntry & entry,
 	bool bumped)
 {
