@@ -24,7 +24,7 @@
 #
 # Usage: replay-check.sh --generals <path> [--data <dir>] [--seeds "0 1"] [--players 2]
 #          [--aidiff brutal] [--maxframes 12000] [--cells <n>] [--extra "<args>"]
-#          [--control] [--keep]
+#          [--control] [--extended] [--keep]
 #   --data            a folder holding zerohour/ (with the base game in zerohour/ZH_Generals, as the
 #                     install has it); default $ZH_DATA_DIR
 #   --cells           playable cells a side of the generated map.  Default: none given, so the
@@ -37,6 +37,8 @@
 #   --control         the harness's own armed control: before the playback, the kept replay's game
 #                     seed (SD= in its header) has its last digit changed, so the playback plays a
 #                     different world from the same commands, and every seed must be reported DIVERGED
+#   --extended        the wider backstop, not in ctest: seeds 2 to 5, each at 2 and at 4 players (eight
+#                     matches), at --maxframes (default 12000).  --seeds and --players are ignored
 #   --keep            leave the temporary folder and the logs, and say where
 # Exit status: the number of seeds that failed (0 when all agree).  77 when there is no game data.
 
@@ -51,6 +53,7 @@ MAXFRAMES=12000
 CELLS=""
 EXTRA=""
 CONTROL=0
+EXTENDED=0
 KEEP=0
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -63,6 +66,7 @@ while [ $# -gt 0 ]; do
 		--cells) CELLS="$2"; shift 2;;
 		--extra) EXTRA="$2"; shift 2;;
 		--control) CONTROL=1; shift;;
+		--extended) EXTENDED=1; shift;;
 		--keep) KEEP=1; shift;;
 		*) echo "replay-check: unknown argument $1" >&2; exit 2;;
 	esac
@@ -140,7 +144,7 @@ run_game() {	# run_game <log prefix> <switches...>
 		-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" "$@" $EXTRA \
 		> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
 	RUN_STATUS=$?
-	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0
+	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0; RUN_STATS=""
 	[ -f "$log" ] || return
 	local line
 	line="$(grep -a 'HEADLESS CRC: 0x' "$log" | tail -1)"
@@ -148,35 +152,45 @@ run_game() {	# run_game <log prefix> <switches...>
 	RUN_FRAME="$(printf '%s' "$line" | sed -n 's/.*HEADLESS CRC: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\2/p')"
 	RUN_RESULT="$(grep -a 'HEADLESS RESULT: ' "$log" | tail -1 | sed 's/.*HEADLESS RESULT: //')"
 	RUN_BUILT="$(grep -a -c 'AI BUILT frame [1-9]' "$log")"
+	# each player's fight: units built, units lost, kills, peak units, buildings built, buildings lost
+	RUN_STATS="$(grep -a 'HEADLESS PLAYER' "$log" | sed -E 's/.*units ([0-9]+) built ([0-9]+) lost ([0-9]+) killed peak ([0-9]+) \| buildings ([0-9]+) built ([0-9]+) lost.*/units \1 lost \2 kills \3 peak \4 buildings \5 lost \6/' | paste -sd ';' - | sed 's/;/; /g')"
 }
 
 REPLAYS="$USERDATA/Replays"
+# The matches, as seed:players.
+MATCHES=""
+if [ "$EXTENDED" -eq 1 ]; then
+	for seed in 2 3 4 5; do MATCHES="$MATCHES $seed:2 $seed:4"; done
+else
+	for seed in $SEEDS; do MATCHES="$MATCHES $seed:$PLAYERS"; done
+fi
 failures=0
 nseeds=0
-for seed in $SEEDS; do
+for match in $MATCHES; do
+	seed="${match%%:*}"; players="${match##*:}"; name="det${seed}_${players}p"
 	nseeds=$((nseeds + 1))
-	printf 'seed %s: recording ... ' "$seed"
+	printf 'seed %s, %s players: recording ... ' "$seed" "$players"
 	rm -f -- "$REPLAYS/00000000.rep"
-	# -observer, so both sides are AI and the command stream is the AI's own decisions
-	run_game "det${seed}_live" -randommap "$seed" "$PLAYERS" $CELLS -autoskirmish "$PLAYERS" \
+	# -observer, so every side is AI and the command stream is the AI's own decisions
+	run_game "${name}_live" -randommap "$seed" "$players" $CELLS -autoskirmish "$players" \
 		-aidiff "$AIDIFF" -seed "$seed" -observer
-	LIVE_CRC="$RUN_CRC"; LIVE_FRAME="$RUN_FRAME"; LIVE_BUILT="$RUN_BUILT"
+	LIVE_CRC="$RUN_CRC"; LIVE_FRAME="$RUN_FRAME"; LIVE_BUILT="$RUN_BUILT"; LIVE_STATS="$RUN_STATS"
 	if [ -z "$LIVE_CRC" ]; then echo "no result from the live run (exit $RUN_STATUS)"; failures=$((failures + 1)); continue; fi
 	if [ ! -f "$REPLAYS/00000000.rep" ]; then echo "the live run wrote no replay"; failures=$((failures + 1)); continue; fi
 	# out of the way of the next recording, and under a name -replay can be given
-	mv -- "$REPLAYS/00000000.rep" "$REPLAYS/determinism${seed}.rep"
+	mv -- "$REPLAYS/00000000.rep" "$REPLAYS/determinism${seed}_${players}.rep"
 	if [ "$CONTROL" -eq 1 ]; then
 		# the same length, so nothing after it in the header moves
-		perl -0777 -pi -e 's/SD=(\d*)(\d);/"SD=".$1.(($2+1)%10).";"/e' "$REPLAYS/determinism${seed}.rep"
+		perl -0777 -pi -e 's/SD=(\d*)(\d);/"SD=".$1.(($2+1)%10).";"/e' "$REPLAYS/determinism${seed}_${players}.rep"
 	fi
 	printf 'frame %s, CRC %s, %s structures built after frame 0 (%s); playing back ... ' "$LIVE_FRAME" "$LIVE_CRC" "$LIVE_BUILT" "$RUN_RESULT"
 
-	run_game "det${seed}_back" -replay "determinism${seed}"
+	run_game "${name}_back" -replay "determinism${seed}_${players}"
 	BACK_CRC="$RUN_CRC"; BACK_FRAME="$RUN_FRAME"
 
 	printf 'again ... '
 	rm -f -- "$REPLAYS/00000000.rep"
-	run_game "det${seed}_again" -randommap "$seed" "$PLAYERS" $CELLS -autoskirmish "$PLAYERS" \
+	run_game "${name}_again" -randommap "$seed" "$players" $CELLS -autoskirmish "$players" \
 		-aidiff "$AIDIFF" -seed "$seed" -observer
 	AGAIN_CRC="$RUN_CRC"; AGAIN_FRAME="$RUN_FRAME"
 
@@ -194,7 +208,8 @@ for seed in $SEEDS; do
 	fi
 	if [ -z "$bad" ]; then
 		echo "the playback and the second run agree at frame $LIVE_FRAME"
-		echo "  seed $seed: HEADLESS CRC $LIVE_CRC at frame $LIVE_FRAME"
+		echo "  seed $seed, $players players: HEADLESS CRC $LIVE_CRC at frame $LIVE_FRAME"
+		echo "    the fight, per player: $LIVE_STATS"
 	else
 		echo "FAILED, live $LIVE_CRC at frame $LIVE_FRAME:$bad"
 		failures=$((failures + 1))
@@ -203,8 +218,8 @@ done
 
 echo
 if [ "$failures" -eq 0 ]; then
-	echo "$nseeds of $nseeds seeds: each replay played back to the same world, and each seed played the same twice (this machine only)."
+	echo "$nseeds of $nseeds matches: each replay played back to the same world, and each seed played the same twice (this machine only)."
 else
-	echo "$failures of $nseeds seeds did not agree with themselves on this machine."
+	echo "$failures of $nseeds matches did not agree with themselves on this machine."
 fi
 exit "$failures"
