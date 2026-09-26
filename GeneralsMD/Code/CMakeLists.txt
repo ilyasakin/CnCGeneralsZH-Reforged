@@ -1611,6 +1611,14 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # P1 step 1: the fork's overlay as a read root gives the game what Windows' one folder gives it - the
+  # EXE CRC, the INI CRC and the world state agree between the two layouts - with two armed controls.
+  add_test(NAME overlay_crc_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/overlay-crc-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(overlay_crc_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(overlay_crc_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
 endif()
 
 # ===========================================================================
