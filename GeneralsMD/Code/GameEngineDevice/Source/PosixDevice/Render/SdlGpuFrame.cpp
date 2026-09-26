@@ -89,6 +89,7 @@ SdlGpuFrame::SdlGpuFrame() :
 	Window(NULL),
 	BackBuffer(NULL),
 	DepthStencil(NULL),
+	FrontCopy(NULL),
 	DepthFormat(SDL_GPU_TEXTUREFORMAT_INVALID),
 	BackWidth(0),
 	BackHeight(0),
@@ -108,6 +109,8 @@ SdlGpuFrame::SdlGpuFrame() :
 {
 	LastConstants[0] = LastConstants[1] = LastConstantsSize[0] = LastConstantsSize[1] = 0;
 	memset(ClearPipelines, 0, sizeof(ClearPipelines));
+	memset(&CurrentTarget, 0, sizeof(CurrentTarget));
+	TargetSet = false;
 }
 
 SdlGpuFrame * SdlGpuFrame::Create(RenderWindow window, unsigned int width, unsigned int height, std::string & error)
@@ -150,6 +153,7 @@ SdlGpuFrame::~SdlGpuFrame()
 	Commands.clear();
 	End_Batch();
 	if (StreamBuffer != NULL) SDL_ReleaseGPUBuffer(GpuDevice, StreamBuffer);
+	for (size_t i = 0; i < ScratchDepths.size(); ++i) SDL_ReleaseGPUTexture(GpuDevice, ScratchDepths[i].Texture);
 	for (int i = 0; i < 8; ++i) if (ClearPipelines[i] != NULL) SDL_ReleaseGPUGraphicsPipeline(GpuDevice, ClearPipelines[i]);
 	if (ClearVertex != NULL) SDL_ReleaseGPUShader(GpuDevice, ClearVertex);
 	if (ClearPixel != NULL) SDL_ReleaseGPUShader(GpuDevice, ClearPixel);
@@ -176,26 +180,31 @@ bool SdlGpuFrame::Create_Targets(unsigned int width, unsigned int height)
 	info.num_levels = 1;
 	info.sample_count = SDL_GPU_SAMPLECOUNT_1;
 	BackBuffer = SDL_CreateGPUTexture(GpuDevice, &info);
+	FrontCopy = SDL_CreateGPUTexture(GpuDevice, &info);
 	info.format = (SDL_GPUTextureFormat)DepthFormat;
 	info.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
 	DepthStencil = SDL_CreateGPUTexture(GpuDevice, &info);
 	BackWidth = width;
 	BackHeight = height;
-	return BackBuffer != NULL && DepthStencil != NULL;
+	return BackBuffer != NULL && DepthStencil != NULL && FrontCopy != NULL;
 }
 
 void SdlGpuFrame::Release_Targets()
 {
 	if (BackBuffer != NULL) SDL_ReleaseGPUTexture(GpuDevice, BackBuffer);
 	if (DepthStencil != NULL) SDL_ReleaseGPUTexture(GpuDevice, DepthStencil);
+	if (FrontCopy != NULL) SDL_ReleaseGPUTexture(GpuDevice, FrontCopy);
 	BackBuffer = NULL;
 	DepthStencil = NULL;
+	FrontCopy = NULL;
 }
 
 bool SdlGpuFrame::Resize(unsigned int width, unsigned int height)
 {
-	// What is recorded runs first: the GPU copies count the uploads it carries as done.
+	// What is recorded runs first: the GPU copies count the uploads it carries as done.  The current
+	// target named the old back buffer; the device sets it again before its next draw.
 	Flush();
+	TargetSet = false;
 	Release_Targets();
 	return Create_Targets(width, height);
 }
@@ -213,6 +222,7 @@ void SdlGpuFrame::Clear_Back_Buffer(bool colour, bool depth, bool stencil, uint3
 	command.Argb = argb;
 	command.Z = z;
 	command.StencilValue = stencil_value;
+	command.Target = Target_Index();
 	Commands.push_back(command);
 }
 
@@ -387,13 +397,30 @@ bool SdlGpuFrame::Present_Into(SDL_GPUCommandBuffer * commands, SDL_GPUTexture *
 	return true;
 }
 
+// The back buffer into the front copy, after the batch and before the picture goes out.
+bool SdlGpuFrame::Copy_To_Front(SDL_GPUCommandBuffer * commands)
+{
+	SDL_GPUBlitInfo blit;
+	SDL_zero(blit);
+	blit.source.texture = BackBuffer;
+	blit.source.w = BackWidth;
+	blit.source.h = BackHeight;
+	blit.destination.texture = FrontCopy;
+	blit.destination.w = BackWidth;
+	blit.destination.h = BackHeight;
+	blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
+	blit.filter = SDL_GPU_FILTER_NEAREST;
+	SDL_BlitGPUTexture(commands, &blit);
+	return true;
+}
+
 bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 {
 	SDL_GPUCommandBuffer * commands = SDL_AcquireGPUCommandBuffer(GpuDevice);
 	if (commands == NULL) {
 		return false;
 	}
-	bool ok = Record_Batch(commands);
+	bool ok = Record_Batch(commands) && Copy_To_Front(commands);
 	if (Window != NULL) {
 		SDL_GPUTexture * swapchain = NULL;
 		Uint32 width = 0;
@@ -416,7 +443,7 @@ bool SdlGpuFrame::Present_To(SDL_GPUTexture * target, unsigned int width, unsign
 	if (commands == NULL) {
 		return false;
 	}
-	bool ok = Record_Batch(commands);
+	bool ok = Record_Batch(commands) && Copy_To_Front(commands);
 	ok = Present_Into(commands, target, width, height, BACK_BUFFER_FORMAT, ramp) && ok;
 	const bool submitted = SDL_SubmitGPUCommandBuffer(commands);
 	End_Batch();

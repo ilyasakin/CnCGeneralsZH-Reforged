@@ -255,11 +255,20 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 			refusal = "a texture format with no way up";
 			return NULL;
 		}
+		// A render-target texture (A3d) is drawn into on the GPU, which owns its pixels: it is the frame's
+		// target format whatever D3D9 format it was made in, and what the CPU image holds goes up only when
+		// something writes that image.
+		D3DSURFACE_DESC desc;
+		const bool render_target = texture->GetLevelDesc(0, &desc) == D3D_OK && (desc.Usage & D3DUSAGE_RENDERTARGET) != 0;
+		if (render_target) {
+			format = SdlGpuFrame::Target_Format();
+			native = base_level.format() == D3DFMT_A8R8G8B8;
+		}
 		SDL_GPUTextureCreateInfo info;
 		SDL_zero(info);
 		info.type = SDL_GPU_TEXTURETYPE_2D;
 		info.format = (SDL_GPUTextureFormat)format;
-		info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+		info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | (render_target ? SDL_GPU_TEXTUREUSAGE_COLOR_TARGET : 0);
 		info.width = base_level.width();
 		info.height = base_level.height();
 		info.layer_count_or_depth = 1;
@@ -274,6 +283,12 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 		if (copy.Texture == NULL) {
 			refusal = std::string("the GPU refused the texture: ") + SDL_GetError();
 			return NULL;
+		}
+		if (render_target) {
+			// Nothing to upload: a new render target's pixels are undefined in D3D9 too.
+			for (unsigned int level = 0; level < levels; ++level) {
+				copy.Versions.push_back(texture->level(level).version());
+			}
 		}
 		found = Copies.insert(std::make_pair((const void *)texture, copy)).first;
 	}
@@ -297,6 +312,45 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 		++TexturesUploaded;
 	}
 	copy.UsedBatch = Frame->Batch();
+	return copy.Texture;
+}
+
+SDL_GPUTexture * SdlResourceMirrors::Surface(IDirect3DSurface9 * surface, bool depth, std::string & refusal)
+{
+	D3DSURFACE_DESC desc;
+	if (surface->GetDesc(&desc) != D3D_OK) {
+		refusal = "a surface with no description";
+		return NULL;
+	}
+	std::lock_guard<std::mutex> guard(Lock);
+	std::unordered_map<const void *, Copy>::iterator found = Copies.find(surface);
+	if (found != Copies.end()) {
+		return found->second.Texture;
+	}
+	// A standalone render target or depth surface: the GPU's alone, never uploaded.  A CPU write into
+	// one reaches the GPU through -18's download-then-write rule and a StretchRect or a draw.
+	SDL_GPUTextureCreateInfo info;
+	SDL_zero(info);
+	info.type = SDL_GPU_TEXTURETYPE_2D;
+	info.format = (SDL_GPUTextureFormat)(depth ? Frame->Depth_Format() : SdlGpuFrame::Target_Format());
+	info.usage = depth ? SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET
+		: (SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER);
+	info.width = desc.Width;
+	info.height = desc.Height;
+	info.layer_count_or_depth = 1;
+	info.num_levels = 1;
+	info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+	Copy copy;
+	copy.Texture = SDL_CreateGPUTexture(Frame->Device(), &info);
+	copy.Buffer = NULL;
+	copy.Size = 0;
+	copy.Native = true;
+	copy.UsedBatch = 0;
+	if (copy.Texture == NULL) {
+		refusal = std::string("the GPU refused the surface: ") + SDL_GetError();
+		return NULL;
+	}
+	Copies.insert(std::make_pair((const void *)surface, copy));
 	return copy.Texture;
 }
 

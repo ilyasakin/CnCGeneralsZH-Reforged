@@ -79,6 +79,9 @@ public:
 	/// The copy of a 2D texture, current for a draw being recorded now.  Null, with the reason, for a
 	/// texture that is not 2D (A3c draws 2D textures only) or a format there is no way up for.
 	SDL_GPUTexture * Texture(IDirect3DBaseTexture9 * texture, std::string & refusal);
+	/// A standalone render-target (colour) or depth surface's GPU texture, made on first use (A3d).  Its
+	/// pixels are the GPU's: nothing is uploaded from its image.
+	SDL_GPUTexture * Surface(IDirect3DSurface9 * surface, bool depth, std::string & refusal);
 	/// The copy of a vertex or index buffer's bytes (`owner` is the buffer object: its address is the key).
 	SDL_GPUBuffer * Buffer(const void * owner, const PosixBufferStorage & storage, std::string & refusal);
 	/// 1x1 opaque white: what a slot with no texture bound samples.
