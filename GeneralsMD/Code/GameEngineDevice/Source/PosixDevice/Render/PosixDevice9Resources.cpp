@@ -415,6 +415,9 @@ RenderResult PosixDevice9::Clear( RenderUInt32 count, const D3DRECT *rects, Rend
 		return D3DERR_INVALIDCALL;
 	if ((flags & D3DCLEAR_TARGET) && RenderTargets[0] == NULL)
 		return D3DERR_INVALIDCALL;
+	// With a window, a render target's pixels are the GPU's (A3 design, the render-target seam).
+	if (Get_Gpu() != NULL)
+		return Gpu_Clear( count, rects, flags, color, z, stencil );
 
 	const PosixColor colour = posixColorFromD3DColor( color );
 	const unsigned int passes = (count == 0) ? 1 : count;
