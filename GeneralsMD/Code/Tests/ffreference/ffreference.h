@@ -130,6 +130,12 @@
  *       CURRENT's alpha passed through as the nominal and 0 and 1 as the envelope's variants.  Every
  *       later use of alpha - an operation, the alpha test, the blend - is linear or a threshold in it,
  *       so the two extremes bound what any value could give.  The pixels it moves carry ZONE_UNDEFINED.
+ *   N30 Where the alpha test is undecided (ZONE_ALPHA_TEST: some variant passes, some fails), the colour
+ *       that may be written is bounded by every variant's colour, passing or not.  The variants are
+ *       points in a continuous freedom, and colour and alpha move together between them, so the pass
+ *       boundary can fall between a failing and a passing variant with a colour on the way from one to
+ *       the other - beyond every passing variant's when the texture's colour falls as its alpha rises
+ *       (foliage over a bright ground).  Found on the game's own alpha-tested draws (a contributor's C2, 2026-09-26).
  */
 
 #ifndef FFREFERENCE_H
