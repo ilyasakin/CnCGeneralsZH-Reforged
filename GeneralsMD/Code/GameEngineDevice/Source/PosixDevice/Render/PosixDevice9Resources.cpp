@@ -69,6 +69,20 @@ RenderResult copyLevel( PosixImage &to, const PosixImage &from )
 	return D3D_OK;
 }
 
+/** Whether a region is all of its image. */
+bool coversAll( const PosixImage &image, const PosixRegion &region )
+{
+	return region.left == 0 && region.top == 0 && region.right == image.width() && region.bottom == image.height();
+}
+
+/* The A3d render-target seam (PosixDevice9.h): with a window, a render target's pixels are the GPU's, and
+	 its CPU image is stale until downloaded.  Before the CPU reads one, or writes only part of one (the
+	 version bump after the write uploads the whole image), it is brought up to date. */
+RenderResult currentOnCpu( PosixDevice9 &device, IDirect3DSurface9 *surface )
+{
+	return device.Gpu_Owns( surface ) ? device.Gpu_Download( surface ) : D3D_OK;
+}
+
 bool hasStencil( D3DFORMAT format )
 {
 	return format == D3DFMT_D24S8 || format == D3DFMT_D24X4S4 || format == D3DFMT_D15S1;
@@ -258,6 +272,13 @@ RenderResult PosixDevice9::UpdateSurface( IDirect3DSurface9 *source, const Rende
 	destRegion.bottom = destRegion.top + (sourceRegion.bottom - sourceRegion.top);
 	if (destRegion.right > to.width() || destRegion.bottom > to.height())
 		return D3DERR_INVALIDCALL;
+	// D3D9 reads UpdateSurface's source from SYSTEMMEM, so only the destination can be the GPU's.
+	if (!coversAll( to, destRegion ))
+	{
+		const RenderResult result = currentOnCpu( *this, dest );
+		if (result != D3D_OK)
+			return result;
+	}
 	return posixCopyImage( to, destRegion, from, sourceRegion, POSIX_FILTER_NONE );
 }
 
@@ -307,6 +328,9 @@ RenderResult PosixDevice9::GetRenderTargetData( IDirect3DSurface9 *render_target
 	PosixImage &from = imageOf( render_target ), &to = imageOf( dest );
 	if (from.format() != to.format() || from.width() != to.width() || from.height() != to.height())
 		return D3DERR_INVALIDCALL;		// D3D9: the same size and format, a straight read-back
+	const RenderResult result = currentOnCpu( *this, render_target );
+	if (result != D3D_OK)
+		return result;
 	PosixRegion whole;
 	posixRegionOf( from, NULL, &whole );
 	return posixCopyImage( to, whole, from, whole, POSIX_FILTER_NONE );
@@ -321,6 +345,9 @@ RenderResult PosixDevice9::GetFrontBufferData( unsigned int swap_chain, IDirect3
 	PosixImage &from = imageOf( BackBuffer ), &to = imageOf( dest );
 	if (to.format() != D3DFMT_A8R8G8B8 || to.width() < from.width() || to.height() < from.height())
 		return D3DERR_INVALIDCALL;
+	// With a window the back buffer may be half drawn or cleared by now: the frame keeps what Present showed.
+	if (Gpu_Owns( BackBuffer ))
+		return Gpu_Download_Front( dest );
 	PosixRegion whole;
 	posixRegionOf( from, NULL, &whole );
 	return posixCopyImage( to, whole, from, whole, POSIX_FILTER_NONE );
@@ -335,6 +362,16 @@ RenderResult PosixDevice9::StretchRect( IDirect3DSurface9 *source, const RenderR
 	PosixRegion sourceRegion, destRegion;
 	if (!posixRegionOf( from, source_rect, &sourceRegion ) || !posixRegionOf( to, dest_rect, &destRegion ))
 		return D3DERR_INVALIDCALL;
+	const bool gpuSource = Gpu_Owns( source ), gpuDest = Gpu_Owns( dest );
+	if (gpuSource && gpuDest)
+		return Gpu_StretchRect( source, source_rect, dest, dest_rect, filter );
+	RenderResult result = D3D_OK;
+	if (gpuSource)
+		result = Gpu_Download( source );
+	if (result == D3D_OK && gpuDest && !coversAll( to, destRegion ))
+		result = Gpu_Download( dest );
+	if (result != D3D_OK)
+		return result;
 	return posixCopyImage( to, destRegion, from, sourceRegion, filterOf( filter ) );
 }
 
