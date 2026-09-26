@@ -874,8 +874,8 @@ if(ZH_PLATFORM_POSIX)
   # that gameenginedevice, once it builds off Windows, links milesaudio on either and
   # MilesAudioManager.cpp compiles unchanged against it.  Today only the tests below link it here.
   add_library(milesaudio STATIC ${WW}/Miles6/miniaudio/miles_miniaudio.cpp)
-  target_include_directories(milesaudio PRIVATE ${WW}/Miles6/include)
-  target_link_libraries(milesaudio PRIVATE miniaudio PUBLIC Threads::Threads)
+  target_include_directories(milesaudio PRIVATE ${WW}/Miles6/include ${WW}/WWLib)
+  target_link_libraries(milesaudio PRIVATE miniaudio wwlib PUBLIC Threads::Threads)
 
   # What SDL3's GPU API can do on this machine: the evidence D2 and D5 need before the backend
   # interface is designed.  Needs a GPU and a display, so it is built but not registered with ctest.
@@ -1411,12 +1411,22 @@ endif()  # ZH_PLATFORM_WINDOWS - GameEngineDevice, the backends and generals.exe
 # WinMain's start-up sequence without the Windows.  Until T1 and D4 the engine stops at the first
 # factory only a renderer can answer, and says so (SdlGameEngine.h).
 if(ZH_PLATFORM_POSIX)
+  # Windows' audio manager, unchanged but for its guarded non-AIL remainder, over the Miles surface on
+  # miniaudio (C4's upper half).  Its own target until A1 builds gameenginedevice off Windows, whose
+  # source glob already holds this file; then this target goes, so it is never compiled twice.
+  add_library(milesaudiomanager STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/MilesAudioDevice/MilesAudioManager.cpp)
+  target_include_directories(milesaudiomanager PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
+    ${WW}/Miles6/include)
+  set_target_properties(milesaudiomanager PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(milesaudiomanager PUBLIC gameengine milesaudio)
+
   file(GLOB_RECURSE SDLDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/SdlDevice/*.cpp)
   add_library(sdldevice STATIC ${SDLDEVICE_SOURCES})
   target_include_directories(sdldevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
-  target_link_libraries(sdldevice PUBLIC posixdevice SDL3::SDL3-static)
+  target_link_libraries(sdldevice PUBLIC posixdevice SDL3::SDL3-static milesaudiomanager)
 
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
@@ -1429,6 +1439,23 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(test_sdl_platform PROPERTIES CXX_STANDARD 17)
   target_link_libraries(test_sdl_platform PRIVATE sdldevice test_harness)
   add_test(NAME test_sdl_platform COMMAND test_sdl_platform)
+
+  # C4's upper half: Windows' MilesAudioManager over the Miles surface on miniaudio's null backend, fed
+  # the install's own INIs and sounds through a read-only farm of its archives (rule 9), heard through
+  # the mix tap.  Needs ZH_GAME_DATA; Skipped (77) without it.
+  add_executable(test_milesaudiomanager ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_milesaudiomanager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gameengine_stubs.cpp)
+  target_include_directories(test_milesaudiomanager PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(test_milesaudiomanager PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+  set_target_properties(test_milesaudiomanager PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_milesaudiomanager PRIVATE sdldevice test_harness)
+  add_test(NAME test_milesaudiomanager COMMAND test_milesaudiomanager)
+  set_tests_properties(test_milesaudiomanager PROPERTIES SKIP_RETURN_CODE 77)
+  if(ZH_GAME_DATA)
+    set_tests_properties(test_milesaudiomanager PROPERTIES ENVIRONMENT "ZH_AUDIO_BACKEND=null;ZH_DATA_DIR=${ZH_GAME_DATA}")
+  else()
+    set_tests_properties(test_milesaudiomanager PROPERTIES ENVIRONMENT "ZH_AUDIO_BACKEND=null")
+  endif()
 
   # C3a: input on SDL3's offscreen driver - the scancode table against DIKeyCodes.h, keys into the
   # engine's key state, text into the IME manager, the mouse, and the install's .ANI cursors (read only,
