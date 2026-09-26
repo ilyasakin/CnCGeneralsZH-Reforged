@@ -2680,6 +2680,7 @@ Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
 Tests/test_lan_broadcast.cpp
+Tests/test_macos_app.sh
 Tests/test_main.cpp
 Tests/test_miles_miniaudio.cpp
 Tests/test_milesaudiomanager.cpp
@@ -3539,6 +3540,8 @@ Tools/linux-check.sh
 Tools/lobbyroom_layout.py
 Tools/lobbysettings_layout.py
 Tools/lod-first-run-check.sh
+Tools/macos-app-licenses.txt
+Tools/make-macos-app.sh
 Tools/mangler/Makefile
 Tools/mangler/crc.cpp
 Tools/mangler/crc.h
