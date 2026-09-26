@@ -34,6 +34,7 @@
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
 #include "Common/GameStateMap.h"
+#include "Common/LocalFileSystem.h"
 #include "Common/LatchRestore.h"
 #include "Common/MapObject.h"
 #include "Common/PlayerList.h"
@@ -606,7 +607,7 @@ SaveCode GameState::saveGame( AsciiString filename, UnicodeString desc,
 	}  // end if
 
 	// make absolutely sure the save directory exists
-	CreateDirectory( getSaveDirectory().str(), NULL );
+	TheLocalFileSystem->createDirectory( getSaveDirectory() );
 
 	// construct path to file
 	AsciiString filepath = getFilePathInSaveDirectory(filename);
@@ -1176,9 +1177,10 @@ static void addGameToAvailableList( AsciiString filename, void *userData )
 	DEBUG_ASSERTCRASH( filename.isEmpty() == FALSE, ("addGameToAvailableList - Illegal filename\n") );
  
 	try {
-	// get header info from this listbox
+	// get header info from this listbox.  The path, not the leaf: iterateSaveFiles used to change
+	// into the save directory around this, and no longer does (C1).
 	SaveGameInfo saveGameInfo;
-	TheGameState->getSaveGameInfoFromFile( filename, &saveGameInfo );
+	TheGameState->getSaveGameInfoFromFile( TheGameState->getFilePathInSaveDirectory( filename ), &saveGameInfo );
 
 	// allocate new info 
 	AvailableGameInfo *newInfo = new AvailableGameInfo;
@@ -1346,66 +1348,20 @@ void GameState::iterateSaveFiles( IterateSaveFileCallback callback, void *userDa
 	if( callback == NULL )
 		return;
 
-	// save the current directory
-	char currentDirectory[ _MAX_PATH ];
-	GetCurrentDirectory( _MAX_PATH, currentDirectory );
+	// every file in the save directory, listed there rather than by changing into it (C1); the
+	// callbacks get the leaf, as before, and build the path with getFilePathInSaveDirectory
+	std::vector< AsciiString > files;
+	TheLocalFileSystem->getFilesInDirectory( getSaveDirectory(), AsciiString( "*" ), files );
 
-	// switch into the save directory
-	SetCurrentDirectory( getSaveDirectory().str() );
-
-	// iterate all items in the directory
-	WIN32_FIND_DATA item;  // search item
-	HANDLE hFile = INVALID_HANDLE_VALUE;  // handle for search resources
-	Bool done = FALSE;
-	Bool first = TRUE;
-	while( done == FALSE )
+	for( size_t i = 0; i < files.size(); ++i )
 	{
 
-		// if our first time through we need to start the search
-		if( first )
-		{
+		// see if there is a ".sav" at end of this filename
+		const Char *c = strrchr( files[ i ].str(), '.' );
+		if( c && strcasecmp( c, ".sav" ) == 0 )
+			callback( files[ i ], userData );
 
-			// start search
-			hFile = FindFirstFile( "*", &item );
-			if( hFile == INVALID_HANDLE_VALUE )
-				return;
-
-			// we are no longer on our first item
-			first = FALSE;
-
-		}  // end if, first
-
-		// see if this is a file, and therefore a possible save file
-		if( !(item.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) )
-		{
-
-			// see if there is a ".sav" at end of this filename
-			Char *c = strrchr( item.cFileName, '.' );
-			if( c && strcasecmp( c, ".sav" ) == 0 )
-			{
-
-				// construction asciistring filename
-				AsciiString filename;
-				filename.set( item.cFileName );
-
-				// call the callback
-				callback( filename, userData );
-
-			}  // end if, a save file
-
-		}  // end if
-
-		// on to the next file
-		if( FindNextFile( hFile, &item ) == 0 )
-			done = TRUE;
-
-	}  // end while
-
-	// close search resources
-	FindClose( hFile );
-
-	// restore the current directory
-	SetCurrentDirectory( currentDirectory );
+	}  // end for
 
 }  // end iterateSaveFiles
 

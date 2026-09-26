@@ -26,6 +26,7 @@
 #include "Lib/Clock.h"
 #include <set>
 
+#include "Common/LocalFileSystem.h"
 #include "Common/GameState.h"
 #include "Common/RandomValue.h"
 #include "Common/IgnorePreferences.h"
@@ -621,11 +622,11 @@ void SetUpGameSpy( const char *motdBuffer, const char *configBuffer )
 	TearDownGameSpy();
 
 	AsciiString dir = TheGlobalData->getPath_UserData();
-	CreateDirectory(dir.str(), NULL);
+	TheLocalFileSystem->createDirectory(dir);
 	dir.format("%sGeneralsOnline", TheGlobalData->getPath_UserData().str());
-	CreateDirectory(dir.str(), NULL);
+	TheLocalFileSystem->createDirectory(dir);
 	dir.format("%sGeneralsOnline\\Ladders", TheGlobalData->getPath_UserData().str());
-	CreateDirectory(dir.str(), NULL);
+	TheLocalFileSystem->createDirectory(dir);
 
 	TheGameSpyBuddyMessageQueue = GameSpyBuddyMessageQueueInterface::createNewMessageQueue();
 	TheGameSpyBuddyMessageQueue->startThread();

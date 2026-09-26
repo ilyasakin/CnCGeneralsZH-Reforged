@@ -35,6 +35,7 @@
 
 #define DEFINE_IMAGE_STATUS_NAMES
 #include "Lib/BaseType.h"
+#include "Common/LocalFileSystem.h"
 #include "Common/Debug.h"
 #include "Common/INI.h"
 #include "Common/GlobalData.h"
@@ -264,14 +265,16 @@ void ImageCollection::load( Int textureSize )
 	char buffer[ _MAX_PATH ];
 	INI ini;
 	// first load in the user created mapped image files if we have them.
-	WIN32_FIND_DATA findData;
 	AsciiString userDataPath;	
 	if(TheGlobalData)
 	{
-		userDataPath.format("%sINI\\MappedImages\\*.ini",TheGlobalData->getPath_UserData().str());
-		if(FindFirstFile(userDataPath.str(), &findData) !=INVALID_HANDLE_VALUE)
+		// "is there a *.ini?" - asked of the file system, which also closes what it opens (C1; the
+		// FindFirstFile this was left its handle open, defect 11)
+		std::vector<AsciiString> userImageFiles;
+		userDataPath.format("%sINI\\MappedImages",TheGlobalData->getPath_UserData().str());
+		TheLocalFileSystem->getFilesInDirectory(userDataPath, AsciiString("*.ini"), userImageFiles);
+		if(!userImageFiles.empty())
 		{
-			userDataPath.format("%sINI\\MappedImages",TheGlobalData->getPath_UserData().str());
 			ini.loadDirectory(userDataPath, TRUE, INI_LOAD_OVERWRITE, NULL );
 		}
 	}
