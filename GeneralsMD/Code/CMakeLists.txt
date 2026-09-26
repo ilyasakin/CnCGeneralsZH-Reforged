@@ -988,14 +988,28 @@ endif()
 #  - dinput8: GameEngine uses the 107 DIK_ key-code constants from <dinput.h> and no DirectInput
 #    function.  It is load-bearing on Windows all the same: Win32DIKeyboard.cpp and Win32DIMouse.cpp
 #    in gameenginedevice call DirectInput8Create and get dinput8 only through this PUBLIC line.
+#
+# And seven more that exist only on Windows, whose off-Windows parts gameengine gets elsewhere (B6).
+# Off Windows none is a target, so each reached the linker as -l<name> and a POSIX link failed on it:
+#  - ww3d2: gameengine's references are DX8Wrapper_PreserveFPU and DX8Wrapper_IsWindowed, which
+#    PosixDevice defines, and d3dx9math.h's maths, which d3dxportable.h makes header-only (B17).
+#  - wwdownload: its registry API and FormatURLFromRegistry, gameengine's own off Windows (B6).
+#  - eabrowserdispatch, profile, wininet, imagehlp, imm32: Windows-only code, left out of the POSIX
+#    build by B5 (WebBrowserPosix, StackDumpPosix, IMEManagerPosix, ChromaKeyboard's WinINet half).
+# A link of gameengine with PosixDevice and the libraries below leaves no symbol any of them defines.
 if(ZH_PLATFORM_WINDOWS)
   set(ZH_GAMEENGINE_DEBUGLIB debuglib)
   set(ZH_GAMEENGINE_DINPUT8 dinput8)
+  set(ZH_GAMEENGINE_WW3D2 ww3d2)
+  set(ZH_GAMEENGINE_WWDOWNLOAD wwdownload)
+  set(ZH_GAMEENGINE_EABROWSERDISPATCH eabrowserdispatch)
+  set(ZH_GAMEENGINE_PROFILE profile)
+  set(ZH_GAMEENGINE_WIN32_SDK_LIBS wininet imagehlp imm32)
 endif()
 target_link_libraries(gameengine PUBLIC
-  ww3d2 wwlib wwmath wwsaveload wwdebug wwutil compression ${ZH_GAMEENGINE_DEBUGLIB} wwdownload
-  benchmark eabrowserdispatch profile gamespy litehtml
-  ${ZH_GAMEENGINE_DINPUT8} wininet imagehlp imm32)
+  ${ZH_GAMEENGINE_WW3D2} wwlib wwmath wwsaveload wwdebug wwutil compression ${ZH_GAMEENGINE_DEBUGLIB} ${ZH_GAMEENGINE_WWDOWNLOAD}
+  benchmark ${ZH_GAMEENGINE_EABROWSERDISPATCH} ${ZH_GAMEENGINE_PROFILE} gamespy litehtml
+  ${ZH_GAMEENGINE_DINPUT8} ${ZH_GAMEENGINE_WIN32_SDK_LIBS})
 
 # B1's gate: the bytes a UnicodeString puts into the replay and network CRC, before and after
 # WideChar becomes char16_t.  Built from the REAL Xfer, XferCRC, UnicodeString, AsciiString and
