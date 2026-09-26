@@ -35,6 +35,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "mixfile.h"
+#include "zhio.h"
 #include "wwdebug.h"
 #include "ffactory.h"
 #include "wwfile.h"
@@ -395,8 +396,8 @@ MixFileFactoryClass::Flush_Changes (void)
 	::DeleteFile (MixFilename);
 	::MoveFile (full_path, MixFilename);
 #else
-	::remove (MixFilename);
-	::rename (full_path, MixFilename);
+	zh_remove (MixFilename);
+	zh_rename (full_path, MixFilename);
 #endif
 
 	//
@@ -428,7 +429,7 @@ MixFileFactoryClass::Get_Temp_Filename (const char *path, StringClass &full_path
 		if (GetFileAttributes (full_path) == 0xFFFFFFFF) {
 #else
 		struct stat st;
-		if (stat (full_path, &st) != 0) {	// INVALID_FILE_ATTRIBUTES: nothing by that name
+		if (zh_stat (full_path, &st) != 0) {	// INVALID_FILE_ATTRIBUTES: nothing by that name
 #endif
 			retval = true;
 			break;

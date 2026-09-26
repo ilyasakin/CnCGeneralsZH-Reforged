@@ -25,6 +25,7 @@
 //
 //-----------------------------------------------------------------------------
 #include "miscutil.h" // I WANNA BE FIRST!
+#include "zhio.h"
 
 #include <time.h>
 
@@ -134,7 +135,7 @@ bool cMiscUtil::File_Is_Read_Only(LPCSTR filename)
 	// The nearest thing to FILE_ATTRIBUTE_READONLY is the owner's write bit.  Like the Windows
 	// branch, a file that is not there is not read only.
 	struct stat info;
-	return ((::stat(filename, &info) == 0) && !(info.st_mode & S_IWUSR));
+	return ((zh_stat(filename, &info) == 0) && !(info.st_mode & S_IWUSR));
 #endif
 }
 
