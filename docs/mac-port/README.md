@@ -1012,6 +1012,22 @@ hunting a crash or corruption that only one platform shows, look here first.**
   `test_wwlib`'s `strtrim_in_place` came back corrupted on Linux arm64 only. Fixed with `memmove`.
   **The mechanism generalises:** any `strcpy`/`memcpy`/`sprintf` whose source and destination can
   overlap works until a library copies in a different order.
+- **`AsciiString` and `UnicodeString` copied a string over itself (E1's architecture axis, fixed).**
+  - `nextToken` sets the source to the rest of itself, and the in-place path of
+    `ensureUniqueBufferOfSize` did `strcpy(peek, tail)` (`wcscpy` in the wide twin, and a forward loop
+    off Windows) over overlapping ranges. A string concatenated onto itself did the same with
+    `strcat`/`wcscat`, and the wide loop would run past the buffer.
+  - MSVC's and ARM64 macOS's `strcpy` copy forwards and got it right. macOS x86_64's, under Rosetta,
+    did not: the archive directory lost a random subset of `Art\Terrain` (different on every pass), and
+    the x86_64 game stopped at `Data\INI\Default\Weather.ini`. ASan named it: `strcpy-param-overlap`
+    in `AsciiString::ensureUniqueBufferOfSize`.
+  - Fixed with `memmove` in both classes' in-place paths. Windows gets the same bytes wherever its copy
+    was already right. `strings_set_from_their_own_text_copy_it_whole` pins it; on ARM64 it could not
+    have failed, and the x86_64 `test_bigfilesystem` is the measured control.
+- **`Win32BIGFileSystem::openArchiveFile` read `buffer[-1]` (fixed).** It walked back to the last
+  separator with the index test last in the `&&` chain, so a name with no separator read one byte
+  before the buffer. The loop stops at -1 whatever that byte holds, so the outcome never changed. The
+  index test now comes first. Found by ASan.
 - **A `va_list` passed by `const` reference.** `StringClass::Format_Args` takes `const va_list &`.
   Where `va_list` is a pointer (MSVC, both arm64 ABIs) the `const` binds to the reference. Under
   x86-64 System V it is an array, the `const` binds to the elements, and it cannot be handed to

@@ -88,10 +88,16 @@ void UnicodeString::ensureUniqueBufferOfSize(int numCharsNeeded, Bool preserveDa
 			m_data->m_numCharsAllocated >= numCharsNeeded)
 	{
 		// no buffer manhandling is needed (it's already large enough, and unique to us)
+		// memmove, as AsciiString's: nextToken sets the string to the rest of itself, and a string can
+		// be concatenated onto itself; an overlapping wcscpy or wcscat is undefined, and the loop off
+		// Windows ran past the end of a self-concatenation.
 		if (strToCopy)
-			WideCharCpy(m_data->peek(), strToCopy);
+			memmove(m_data->peek(), strToCopy, (WideCharLen(strToCopy) + 1) * sizeof(WideChar));
 		if (strToCat)
-			WideCharCat(m_data->peek(), strToCat);
+		{
+			WideChar *end = m_data->peek() + WideCharLen(m_data->peek());
+			memmove(end, strToCat, (WideCharLen(strToCat) + 1) * sizeof(WideChar));
+		}
 		return;
 	}
 
