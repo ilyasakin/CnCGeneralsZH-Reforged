@@ -1200,7 +1200,7 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
   # A3: with a window the device draws through SDL3 GPU, and compiles its own small programs (the gamma
   # pass) the way the generated ones are compiled.
-  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile)
+  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile ffshader ffvertex)
 
   # A3a's frame: a clear read back, and the gamma pass through a picture that shows any flip.  Needs a GPU
   # but no window; exits 77 (skipped, and ctest says so) where SDL has no GPU device to give.
@@ -1210,6 +1210,44 @@ if(ZH_PLATFORM_POSIX)
     ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
   target_link_libraries(sdl_gpu_frame_selfcheck PRIVATE posixd3d9 SDL3::SDL3-static)
   add_test(NAME sdl_gpu_frame_selfcheck COMMAND sdl_gpu_frame_selfcheck)
+
+  # A3c's resolve: the device's state into the generators' descriptions and the constants their
+  # programs read, on a headless device.  No GPU.
+  add_executable(posix_draw_resolve_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_draw_resolve.cpp)
+  set_target_properties(posix_draw_resolve_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(posix_draw_resolve_selfcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(posix_draw_resolve_selfcheck PRIVATE posixd3d9 ffshader ffvertex)
+  add_test(NAME posix_draw_resolve_selfcheck COMMAND posix_draw_resolve_selfcheck)
+
+  # A3c's program cache: generated programs compiled for this machine's GPU, every combiner operation
+  # the generator implements and every light type.  Exits 77 (skipped) with no GPU.
+  add_executable(sdl_program_cache_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_program_cache.cpp)
+  set_target_properties(sdl_program_cache_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(sdl_program_cache_selfcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(sdl_program_cache_selfcheck PRIVATE posixd3d9 ffshader ffvertex SDL3::SDL3-static)
+  add_test(NAME sdl_program_cache_selfcheck COMMAND sdl_program_cache_selfcheck)
+  set_tests_properties(sdl_program_cache_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
+
+  # A3c's pipelines and samplers: the D3D9 state translations, with every engine vertex format's stride
+  # against D3DX's own size; then pipelines and samplers on this machine's GPU (77 without one).
+  add_executable(sdl_pipeline_state_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_pipeline_state.cpp)
+  set_target_properties(sdl_pipeline_state_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(sdl_pipeline_state_selfcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render ${WW}/WWLib ${WW}/WWDebug ${WW}/WWMath)
+  target_link_libraries(sdl_pipeline_state_selfcheck PRIVATE posixd3d9 d3dx9runtime ffshader ffvertex SDL3::SDL3-static)
+  add_test(NAME sdl_pipeline_state_selfcheck COMMAND sdl_pipeline_state_selfcheck)
+  set_tests_properties(sdl_pipeline_state_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
+
+  # A3c's draws: through the device's D3D9 calls onto this machine's GPU, read back from the back buffer
+  # (77 without a GPU).
+  add_executable(posix_gpu_draw_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_gpu_draw.cpp)
+  set_target_properties(posix_gpu_draw_selfcheck PROPERTIES CXX_STANDARD 17)
+  target_include_directories(posix_gpu_draw_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(posix_gpu_draw_selfcheck PRIVATE posixd3d9 SDL3::SDL3-static)
+  add_test(NAME posix_gpu_draw_selfcheck COMMAND posix_gpu_draw_selfcheck)
+  set_tests_properties(posix_gpu_draw_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(sdl_gpu_frame_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
   # A2's half of the device (-18): the resources, the pixel codec, the image operations, the device's

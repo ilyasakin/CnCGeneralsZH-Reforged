@@ -1,0 +1,332 @@
+/*
+**	Command & Conquer Generals Zero Hour(tm)
+**	Copyright 2025 Electronic Arts Inc.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+// GPU copies of A2's textures and buffers (decision 7, phase A3c).  See SdlResourceMirror.h.
+
+#include "SdlResourceMirror.h"
+#include "PosixPixelCodec.h"
+#include "PosixResources9.h"
+#include "SdlGpuFrame.h"
+
+#include <SDL3/SDL.h>
+
+#include <string.h>
+
+static SdlResourceMirrors * LiveMirrors = NULL;
+
+bool Sdl_Texture_Format(D3DFORMAT format, unsigned int width, unsigned int height, bool bc_ok,
+	unsigned int & sdl_format, bool & native)
+{
+	const bool whole_blocks = width % 4 == 0 && height % 4 == 0;
+	native = true;
+	switch (format) {
+		case D3DFMT_A8R8G8B8:
+			sdl_format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+			return true;
+		case D3DFMT_DXT1:
+			sdl_format = SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM;
+			break;
+		// DXT2 and DXT4 are the premultiplied forms.  The blocks are the same and D3D9 samples them as
+		// stored, so they go up as DXT3 and DXT5 do.
+		case D3DFMT_DXT2:
+		case D3DFMT_DXT3:
+			sdl_format = SDL_GPU_TEXTUREFORMAT_BC2_RGBA_UNORM;
+			break;
+		case D3DFMT_DXT4:
+		case D3DFMT_DXT5:
+			sdl_format = SDL_GPU_TEXTUREFORMAT_BC3_RGBA_UNORM;
+			break;
+		default:
+			native = false;
+			break;
+	}
+	if (native && bc_ok && whole_blocks) {
+		return true;
+	}
+	native = false;
+	sdl_format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+	return posixCanDecode(format);
+}
+
+uint32_t Sdl_Level_Upload_Size(const PosixImage & image, bool native)
+{
+	return native ? (uint32_t)image.slicePitch() : (uint32_t)(image.width() * image.height() * 4);
+}
+
+static uint8_t unit_to_byte(float value)
+{
+	if (!(value > 0.0f)) return 0;
+	if (value >= 1.0f) return 255;
+	return (uint8_t)(value * 255.0f + 0.5f);
+}
+
+bool Sdl_Convert_Level(const PosixImage & image, bool native, uint8_t * out)
+{
+	const uint8_t * bytes = image.bytes();
+	if (bytes == NULL) {
+		return false;
+	}
+	if (native) {
+		memcpy(out, bytes, image.slicePitch());
+		return true;
+	}
+	const unsigned int width = image.width();
+	const unsigned int height = image.height();
+	if (image.format() == D3DFMT_X8R8G8B8) {
+		// The bytes are B, G, R and an unused X, which D3D9 samples as alpha 1.
+		for (unsigned int y = 0; y < height; ++y) {
+			const uint8_t * row = bytes + (size_t)y * image.rowPitch();
+			uint8_t * target = out + (size_t)y * width * 4;
+			memcpy(target, row, (size_t)width * 4);
+			for (unsigned int x = 0; x < width; ++x) {
+				target[x * 4 + 3] = 255;
+			}
+		}
+		return true;
+	}
+	const PosixFormatLayout & layout = image.layout();
+	PosixColor block[16];
+	if (layout.blockWidth * layout.blockHeight > 16) {
+		return false;
+	}
+	for (unsigned int block_y = 0; block_y < image.rowCount(); ++block_y) {
+		const uint8_t * row = bytes + (size_t)block_y * image.rowPitch();
+		for (unsigned int block_x = 0; block_x * layout.blockWidth < width; ++block_x) {
+			if (!posixDecodeBlock(image.format(), row + (size_t)block_x * layout.bytesPerBlock, block)) {
+				return false;
+			}
+			for (unsigned int j = 0; j < layout.blockHeight; ++j) {
+				const unsigned int y = block_y * layout.blockHeight + j;
+				for (unsigned int i = 0; i < layout.blockWidth; ++i) {
+					const unsigned int x = block_x * layout.blockWidth + i;
+					if (x >= width || y >= height) {
+						continue;
+					}
+					const PosixColor & colour = block[j * layout.blockWidth + i];
+					uint8_t * pixel = out + ((size_t)y * width + x) * 4;
+					pixel[0] = unit_to_byte(colour.b);
+					pixel[1] = unit_to_byte(colour.g);
+					pixel[2] = unit_to_byte(colour.r);
+					pixel[3] = unit_to_byte(colour.a);
+				}
+			}
+		}
+	}
+	return true;
+}
+
+SdlResourceMirrors::SdlResourceMirrors(SdlGpuFrame * frame) :
+	Frame(frame),
+	WhiteTexture(NULL),
+	BcSupported(-1),
+	StaleFlushes(0),
+	TexturesUploaded(0),
+	BuffersUploaded(0)
+{
+	LiveMirrors = this;
+	posixResourceDestroyed = &SdlResourceMirrors::Destroyed;
+}
+
+SdlResourceMirrors::~SdlResourceMirrors()
+{
+	posixResourceDestroyed = NULL;
+	LiveMirrors = NULL;
+	std::lock_guard<std::mutex> guard(Lock);
+	for (std::unordered_map<const void *, Copy>::iterator it = Copies.begin(); it != Copies.end(); ++it) {
+		Dead.push_back(it->second);
+	}
+	Copies.clear();
+	for (size_t i = 0; i < Dead.size(); ++i) {
+		Frame->Release_After_Batch(Dead[i].Texture, Dead[i].Buffer);
+	}
+	Dead.clear();
+	Frame->Release_After_Batch(WhiteTexture, NULL);
+}
+
+void SdlResourceMirrors::Destroyed(const void * resource)
+{
+	SdlResourceMirrors * mirrors = LiveMirrors;
+	if (mirrors == NULL) {
+		return;
+	}
+	std::lock_guard<std::mutex> guard(mirrors->Lock);
+	std::unordered_map<const void *, Copy>::iterator it = mirrors->Copies.find(resource);
+	if (it != mirrors->Copies.end()) {
+		mirrors->Dead.push_back(it->second);
+		mirrors->Copies.erase(it);
+	}
+}
+
+void SdlResourceMirrors::Collect_Dead()
+{
+	std::lock_guard<std::mutex> guard(Lock);
+	for (size_t i = 0; i < Dead.size(); ++i) {
+		Frame->Release_After_Batch(Dead[i].Texture, Dead[i].Buffer);
+	}
+	Dead.clear();
+}
+
+size_t SdlResourceMirrors::Live_Copies() const
+{
+	std::lock_guard<std::mutex> guard(Lock);
+	return Copies.size();
+}
+
+void SdlResourceMirrors::Prepare_Update(Copy & copy)
+{
+	if (copy.UsedBatch == Frame->Batch()) {
+		++StaleFlushes;
+		Frame->Flush();
+	}
+}
+
+SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::string & refusal)
+{
+	if (base->GetType() != D3DRTYPE_TEXTURE) {
+		refusal = "a cube or volume texture (A3c draws 2D textures)";
+		return NULL;
+	}
+	PosixTexture9 * texture = static_cast<PosixTexture9 *>(base);
+	const unsigned int levels = texture->levelCount();
+	std::lock_guard<std::mutex> guard(Lock);
+	std::unordered_map<const void *, Copy>::iterator found = Copies.find(texture);
+	if (found == Copies.end()) {
+		if (BcSupported < 0) {
+			SDL_GPUDevice * device = Frame->Device();
+			BcSupported = SDL_GPUTextureSupportsFormat(device, SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM, SDL_GPU_TEXTURETYPE_2D,
+					SDL_GPU_TEXTUREUSAGE_SAMPLER)
+				&& SDL_GPUTextureSupportsFormat(device, SDL_GPU_TEXTUREFORMAT_BC2_RGBA_UNORM, SDL_GPU_TEXTURETYPE_2D,
+					SDL_GPU_TEXTUREUSAGE_SAMPLER)
+				&& SDL_GPUTextureSupportsFormat(device, SDL_GPU_TEXTUREFORMAT_BC3_RGBA_UNORM, SDL_GPU_TEXTURETYPE_2D,
+					SDL_GPU_TEXTUREUSAGE_SAMPLER) ? 1 : 0;
+		}
+		const PosixImage & base_level = texture->level(0);
+		unsigned int format = 0;
+		bool native = false;
+		if (levels == 0 || !Sdl_Texture_Format(base_level.format(), base_level.width(), base_level.height(),
+			BcSupported == 1, format, native)) {
+			refusal = "a texture format with no way up";
+			return NULL;
+		}
+		SDL_GPUTextureCreateInfo info;
+		SDL_zero(info);
+		info.type = SDL_GPU_TEXTURETYPE_2D;
+		info.format = (SDL_GPUTextureFormat)format;
+		info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+		info.width = base_level.width();
+		info.height = base_level.height();
+		info.layer_count_or_depth = 1;
+		info.num_levels = levels;
+		info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+		Copy copy;
+		copy.Texture = SDL_CreateGPUTexture(Frame->Device(), &info);
+		copy.Buffer = NULL;
+		copy.Size = 0;
+		copy.Native = native;
+		copy.UsedBatch = 0;
+		if (copy.Texture == NULL) {
+			refusal = std::string("the GPU refused the texture: ") + SDL_GetError();
+			return NULL;
+		}
+		found = Copies.insert(std::make_pair((const void *)texture, copy)).first;
+	}
+	Copy & copy = found->second;
+	bool stale = copy.Versions.size() != levels;
+	for (unsigned int level = 0; !stale && level < levels; ++level) {
+		stale = copy.Versions[level] != texture->level(level).version();
+	}
+	if (stale) {
+		Prepare_Update(copy);
+		copy.Versions.resize(levels);
+		for (unsigned int level = 0; level < levels; ++level) {
+			const PosixImage & image = texture->level(level);
+			uint32_t offset = 0;
+			uint8_t * space = Frame->Upload_Space(Sdl_Level_Upload_Size(image, copy.Native), offset);
+			Sdl_Convert_Level(image, copy.Native, space);
+			Frame->Queue_Texture_Upload(copy.Texture, level, image.width(), image.height(), offset);
+			copy.Versions[level] = image.version();
+		}
+		++TexturesUploaded;
+	}
+	copy.UsedBatch = Frame->Batch();
+	return copy.Texture;
+}
+
+SDL_GPUBuffer * SdlResourceMirrors::Buffer(const void * owner, const PosixBufferStorage & storage, std::string & refusal)
+{
+	const uint32_t size = (storage.length() + 3u) & ~3u;
+	if (size == 0) {
+		refusal = "an empty buffer";
+		return NULL;
+	}
+	std::lock_guard<std::mutex> guard(Lock);
+	std::unordered_map<const void *, Copy>::iterator found = Copies.find(owner);
+	if (found == Copies.end()) {
+		SDL_GPUBufferCreateInfo info;
+		SDL_zero(info);
+		info.usage = SDL_GPU_BUFFERUSAGE_VERTEX | SDL_GPU_BUFFERUSAGE_INDEX;
+		info.size = size;
+		Copy copy;
+		copy.Texture = NULL;
+		copy.Buffer = SDL_CreateGPUBuffer(Frame->Device(), &info);
+		copy.Size = size;
+		copy.Native = true;
+		copy.UsedBatch = 0;
+		if (copy.Buffer == NULL) {
+			refusal = std::string("the GPU refused the buffer: ") + SDL_GetError();
+			return NULL;
+		}
+		found = Copies.insert(std::make_pair(owner, copy)).first;
+	}
+	Copy & copy = found->second;
+	if (copy.Versions.size() != 1 || copy.Versions[0] != storage.version()) {
+		Prepare_Update(copy);
+		uint32_t offset = 0;
+		uint8_t * space = Frame->Upload_Space(size, offset);
+		memcpy(space, storage.bytes(), storage.length());
+		memset(space + storage.length(), 0, size - storage.length());
+		Frame->Queue_Buffer_Upload(copy.Buffer, offset, size);
+		copy.Versions.assign(1, storage.version());
+		++BuffersUploaded;
+	}
+	copy.UsedBatch = Frame->Batch();
+	return copy.Buffer;
+}
+
+SDL_GPUTexture * SdlResourceMirrors::White()
+{
+	if (WhiteTexture == NULL) {
+		SDL_GPUTextureCreateInfo info;
+		SDL_zero(info);
+		info.type = SDL_GPU_TEXTURETYPE_2D;
+		info.format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+		info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+		info.width = 1;
+		info.height = 1;
+		info.layer_count_or_depth = 1;
+		info.num_levels = 1;
+		info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+		WhiteTexture = SDL_CreateGPUTexture(Frame->Device(), &info);
+		if (WhiteTexture != NULL) {
+			uint32_t offset = 0;
+			memset(Frame->Upload_Space(4, offset), 0xFF, 4);
+			Frame->Queue_Texture_Upload(WhiteTexture, 0, 1, 1, offset);
+		}
+	}
+	return WhiteTexture;
+}

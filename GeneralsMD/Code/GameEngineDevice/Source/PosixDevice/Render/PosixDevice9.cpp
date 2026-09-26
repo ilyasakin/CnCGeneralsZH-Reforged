@@ -22,6 +22,9 @@
 
 #include "PosixDevice9.h"
 #include "SdlGpuFrame.h"
+#include "SdlPipelineCache.h"
+#include "SdlProgramCache.h"
+#include "SdlResourceMirror.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -73,6 +76,11 @@ public:
 PosixDevice9::PosixDevice9(PosixDirect3D9 *adapter, RenderWindow window, const D3DPRESENT_PARAMETERS &parameters) :
 	Adapter(adapter),
 	Gpu(NULL),
+	Programs(NULL),
+	Pipelines(NULL),
+	Samplers(NULL),
+	Mirrors(NULL),
+	DrawsRecorded(0),
 	Window(window),
 	Parameters(parameters),
 	BackBuffer(NULL),
@@ -88,13 +96,10 @@ PosixDevice9::PosixDevice9(PosixDirect3D9 *adapter, RenderWindow window, const D
 	Adapter->AddRef();
 
 	memset(RenderTargets, 0, sizeof(RenderTargets));
-	// State starts zeroed.  D3D9's documented defaults (CULLMODE CCW, ZENABLE with an auto depth
-	// surface, the stage-0 MODULATE ops, ...) are A3's to set, with the draw that reads them; the engine
-	// sets every state it relies on explicitly (DX8Wrapper::Invalidate_Cached_Render_States) before it
-	// draws.
 	memset(RenderStates, 0, sizeof(RenderStates));
 	memset(TextureStageStates, 0, sizeof(TextureStageStates));
 	memset(SamplerStates, 0, sizeof(SamplerStates));
+	Set_Default_States();
 	// Every transform starts as the identity, as D3D9's do.
 	memset(Transforms, 0, sizeof(Transforms));
 	for (int index = 0; index < TRANSFORM_COUNT; ++index) {
@@ -135,13 +140,18 @@ PosixDevice9::~PosixDevice9()
 	Posix_Bind(Declaration, (IDirect3DVertexDeclaration9 *)NULL);
 	Posix_Bind(VertexShader, (IDirect3DVertexShader9 *)NULL);
 	Posix_Bind(PixelShader, (IDirect3DPixelShader9 *)NULL);
+	// The GPU objects before the device that made them; the pipelines before their shaders.
+	delete Pipelines;
+	delete Samplers;
+	delete Programs;
+	delete Mirrors;
 	delete Gpu;
 	Adapter->Release();
 }
 
-RenderResult PosixDevice9::Create_Gpu_Frame()
+RenderResult PosixDevice9::Create_Gpu_Frame(bool offscreen)
 {
-	if (Window == NULL) {
+	if (Gpu != NULL || (Window == NULL && !offscreen)) {
 		return D3D_OK;		// -headless: no GPU device at all
 	}
 	std::string error;
@@ -150,6 +160,10 @@ RenderResult PosixDevice9::Create_Gpu_Frame()
 		fprintf(stderr, "PosixDevice9: a window, and no SDL3 GPU device for it: %s\n", error.c_str());
 		return D3DERR_NOTAVAILABLE;
 	}
+	Programs = new SdlProgramCache(Gpu->Device());
+	Pipelines = new SdlPipelineCache(Gpu->Device());
+	Samplers = new SdlSamplerCache(Gpu->Device());
+	Mirrors = new SdlResourceMirrors(Gpu);
 	return D3D_OK;
 }
 
@@ -478,25 +492,6 @@ RenderResult PosixDevice9::Draw_Unavailable(const char *what)
 		fprintf(stderr, "PosixDevice9::%s: there is no draw into a window until the SDL3 GPU draw (A3); refused\n", what);
 	}
 	return D3DERR_INVALIDCALL;
-}
-
-RenderResult PosixDevice9::DrawPrimitive(D3DPRIMITIVETYPE, unsigned int, unsigned int)
-{
-	return Draw_Unavailable("DrawPrimitive");
-}
-
-RenderResult PosixDevice9::DrawIndexedPrimitive(D3DPRIMITIVETYPE, int, unsigned int, unsigned int, unsigned int,
-	unsigned int)
-{
-	return Draw_Unavailable("DrawIndexedPrimitive");
-}
-
-RenderResult PosixDevice9::DrawPrimitiveUP(D3DPRIMITIVETYPE, unsigned int, const void *vertices, unsigned int)
-{
-	if (vertices == NULL) {
-		return D3DERR_INVALIDCALL;
-	}
-	return Draw_Unavailable("DrawPrimitiveUP");
 }
 
 RenderResult PosixDevice9::ProcessVertices(unsigned int, unsigned int, unsigned int, IDirect3DVertexBuffer9 *,
