@@ -182,21 +182,25 @@ RenderResult PosixDevice9::Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, R
 	if (Gpu == NULL) {
 		return D3DERR_INVALIDCALL;
 	}
-	if ((flags & D3DCLEAR_TARGET) != 0 && RenderTargets[0] != BackBuffer) {
+	// The current target (A3d): the back buffer or a render target's GPU texture.
+	std::string refusal;
+	SdlTarget target;
+	if (!Resolve_Target(target, refusal)) {
 		static bool said = false;
 		if (!said) {
 			said = true;
-			fprintf(stderr, "PosixDevice9::Clear: a render target other than the back buffer waits for A3d; refused\n");
+			fprintf(stderr, "PosixDevice9::Clear: %s; refused\n", refusal.c_str());
 		}
 		return D3DERR_INVALIDCALL;
 	}
+	Gpu->Set_Target(target);
 	const bool colour = (flags & D3DCLEAR_TARGET) != 0;
 	const bool depth = (flags & D3DCLEAR_ZBUFFER) != 0;
 	const bool stencil_too = (flags & D3DCLEAR_STENCIL) != 0;
 	// D3D9 clears each rectangle cut to the viewport, or the viewport itself when there are none.  What
 	// covers the whole target is the next pass's load operation; anything less is a clear draw.
-	const int target_width = (int)Parameters.BackBufferWidth;
-	const int target_height = (int)Parameters.BackBufferHeight;
+	const int target_width = (int)target.Width;
+	const int target_height = (int)target.Height;
 	const RenderUInt32 passes = (count == 0 || rects == NULL) ? 1 : count;
 	for (RenderUInt32 index = 0; index < passes; ++index) {
 		int left = (int)Viewport.X, top = (int)Viewport.Y;
@@ -224,11 +228,18 @@ RenderResult PosixDevice9::Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, R
 	return D3D_OK;
 }
 
-// ---- The render-target seam (A3d).  Stubs so -18's side links while mine lands: nothing is GPU-owned yet.
+// ---- The render-target seam (A3d).  See PosixDevice9.h.
 
-bool PosixDevice9::Gpu_Owns(IDirect3DSurface9 *) const
+bool PosixDevice9::Gpu_Owns(IDirect3DSurface9 *surface) const
 {
-	return false;
+	if (Gpu == NULL || surface == NULL) {
+		return false;
+	}
+	if (surface == BackBuffer || surface == DepthSurface) {
+		return true;
+	}
+	D3DSURFACE_DESC desc;
+	return surface->GetDesc(&desc) == D3D_OK && (desc.Usage & (D3DUSAGE_RENDERTARGET | D3DUSAGE_DEPTHSTENCIL)) != 0;
 }
 
 RenderResult PosixDevice9::Gpu_Download(IDirect3DSurface9 *)
@@ -241,10 +252,41 @@ RenderResult PosixDevice9::Gpu_Download_Front(IDirect3DSurface9 *)
 	return D3DERR_INVALIDCALL;
 }
 
-RenderResult PosixDevice9::Gpu_StretchRect(IDirect3DSurface9 *, const RenderRect *, IDirect3DSurface9 *, const RenderRect *,
-	D3DTEXTUREFILTERTYPE)
+RenderResult PosixDevice9::Gpu_StretchRect(IDirect3DSurface9 *source, const RenderRect *source_rect, IDirect3DSurface9 *dest,
+	const RenderRect *dest_rect, D3DTEXTUREFILTERTYPE filter)
 {
-	return D3DERR_INVALIDCALL;
+	if (!Gpu_Owns(source) || !Gpu_Owns(dest)) {
+		return D3DERR_INVALIDCALL;
+	}
+	D3DSURFACE_DESC source_desc, dest_desc;
+	source->GetDesc(&source_desc);
+	dest->GetDesc(&dest_desc);
+	if ((source_desc.Usage & D3DUSAGE_DEPTHSTENCIL) != 0 || (dest_desc.Usage & D3DUSAGE_DEPTHSTENCIL) != 0
+		|| source == DepthSurface || dest == DepthSurface) {
+		return D3DERR_INVALIDCALL;		// no depth copies: nothing in the engine makes one
+	}
+	std::string refusal;
+	SDL_GPUTexture *from = Gpu_Texture_Of(source, refusal);
+	SDL_GPUTexture *to = from != NULL ? Gpu_Texture_Of(dest, refusal) : NULL;
+	if (to == NULL) {
+		fprintf(stderr, "PosixDevice9::StretchRect: %s\n", refusal.c_str());
+		return D3DERR_INVALIDCALL;
+	}
+	int32_t from_rect[4] = { 0, 0, (int32_t)source_desc.Width, (int32_t)source_desc.Height };
+	int32_t to_rect[4] = { 0, 0, (int32_t)dest_desc.Width, (int32_t)dest_desc.Height };
+	if (source_rect != NULL) {
+		from_rect[0] = source_rect->left; from_rect[1] = source_rect->top;
+		from_rect[2] = source_rect->right - source_rect->left; from_rect[3] = source_rect->bottom - source_rect->top;
+	}
+	if (dest_rect != NULL) {
+		to_rect[0] = dest_rect->left; to_rect[1] = dest_rect->top;
+		to_rect[2] = dest_rect->right - dest_rect->left; to_rect[3] = dest_rect->bottom - dest_rect->top;
+	}
+	if (from_rect[2] <= 0 || from_rect[3] <= 0 || to_rect[2] <= 0 || to_rect[3] <= 0) {
+		return D3DERR_INVALIDCALL;
+	}
+	Gpu->Record_Blit(from, from_rect, to, to_rect, filter == D3DTEXF_LINEAR);
+	return D3D_OK;
 }
 
 void PosixDevice9::Release_Surfaces()

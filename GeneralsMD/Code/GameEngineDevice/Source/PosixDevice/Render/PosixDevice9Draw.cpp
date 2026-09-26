@@ -569,6 +569,77 @@ void PosixDevice9::Trace_Draw_If_Asked(const DrawCall &call, const std::string &
 	}
 }
 
+SDL_GPUTexture *PosixDevice9::Gpu_Texture_Of(IDirect3DSurface9 *surface, std::string &refusal)
+{
+	if (surface == BackBuffer) {
+		return Gpu->Back_Buffer();
+	}
+	// A level of a render-target texture draws into that texture's GPU copy, which its draws then sample.
+	IDirect3DTexture9 *texture = NULL;
+	if (surface->GetContainer(IID_IDirect3DTexture9, (void **)&texture) == D3D_OK && texture != NULL) {
+		IDirect3DSurface9 *level0 = NULL;
+		texture->GetSurfaceLevel(0, &level0);
+		const bool first_level = level0 == surface;
+		if (level0 != NULL) {
+			level0->Release();
+		}
+		SDL_GPUTexture *result = NULL;
+		if (first_level) {
+			result = Mirrors->Texture(texture, refusal);
+		}
+		else {
+			refusal = "a texture level other than the first as a render target";
+		}
+		texture->Release();
+		return result;
+	}
+	return Mirrors->Surface(surface, false, refusal);
+}
+
+bool PosixDevice9::Resolve_Target(SdlTarget &target, std::string &refusal)
+{
+	if (RenderTargets[1] != NULL || RenderTargets[2] != NULL || RenderTargets[3] != NULL) {
+		refusal = "more than one render target";
+		return false;
+	}
+	IDirect3DSurface9 *colour = RenderTargets[0];
+	if (colour == NULL) {
+		refusal = "no render target";
+		return false;
+	}
+	if (colour == BackBuffer) {
+		target = Gpu->Back_Buffer_Target();
+	}
+	else {
+		D3DSURFACE_DESC desc;
+		colour->GetDesc(&desc);
+		target.Colour = Gpu_Texture_Of(colour, refusal);
+		target.Width = desc.Width;
+		target.Height = desc.Height;
+		if (target.Colour == NULL) {
+			return false;
+		}
+		target.Depth = NULL;
+	}
+	// The depth-stencil: the implicit one where it fits, a size-matched scratch one where it does not
+	// (D3D9 lets a smaller target borrow the bigger surface; SDL3 GPU wants one size a pass), and a
+	// created depth surface's own.  With none bound, the draw's depth state is off and any one serves.
+	if (DepthStencil != NULL && DepthStencil != DepthSurface) {
+		D3DSURFACE_DESC desc;
+		DepthStencil->GetDesc(&desc);
+		if (desc.Width == target.Width && desc.Height == target.Height) {
+			target.Depth = Mirrors->Surface(DepthStencil, true, refusal);
+			return target.Depth != NULL;
+		}
+	}
+	target.Depth = Gpu->Depth_For(target.Width, target.Height);
+	if (target.Depth == NULL) {
+		refusal = "no depth-stencil of the target's size";
+		return false;
+	}
+	return true;
+}
+
 RenderResult PosixDevice9::DrawPrimitive(D3DPRIMITIVETYPE type, unsigned int start_vertex, unsigned int primitive_count)
 {
 	DrawCall call;
@@ -633,14 +704,6 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		Refuse_Draw("a vertex declaration and no FVF (A3e)");
 		return D3D_OK;
 	}
-	if (RenderTargets[0] != BackBuffer || RenderTargets[1] != NULL || RenderTargets[2] != NULL || RenderTargets[3] != NULL) {
-		Refuse_Draw("a render target other than the back buffer (A3d)");
-		return D3D_OK;
-	}
-	if (DepthStencil != NULL && DepthStencil != DepthSurface) {
-		Refuse_Draw("a depth surface other than the implicit one (A3d)");
-		return D3D_OK;
-	}
 	if (RenderStates[D3DRS_CLIPPLANEENABLE] != 0) {
 		Refuse_Draw("user clip planes");
 		return D3D_OK;
@@ -649,6 +712,14 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	Mirrors->Collect_Dead();
 	if (Gpu->Batch_Is_Full()) {
 		Gpu->Flush();
+	}
+
+	// Where it draws (A3d): the back buffer, or a render target's GPU texture.
+	std::string target_refusal;
+	SdlTarget target;
+	if (!Resolve_Target(target, target_refusal)) {
+		Refuse_Draw("the render target: " + target_refusal);
+		return D3D_OK;
 	}
 
 	// The programs and the pipeline.
@@ -731,6 +802,11 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 			}
 			IDirect3DBaseTexture9 *texture = Textures[texture_stage];
 			draw.Textures[slot] = texture != NULL ? Mirrors->Texture(texture, refusal) : Mirrors->White();
+			if (draw.Textures[slot] != NULL && draw.Textures[slot] == target.Colour) {
+				// Undefined in D3D9, and an error on SDL3 GPU: the pass would read what it writes.
+				Refuse_Draw("sampling the render target it draws into");
+				return D3D_OK;
+			}
 			if (draw.Textures[slot] == NULL) {
 				Refuse_Draw("the texture: " + refusal);
 				return D3D_OK;
@@ -858,10 +934,20 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	draw.Viewport[3] = (float)Viewport.Height;
 	draw.Viewport[4] = Viewport.MinZ;
 	draw.Viewport[5] = Viewport.MaxZ;
+	// The scissor is the viewport cut to the target: SDL3 GPU validates it against the attachment, and
+	// D3D9 draws nothing outside the target either.
+	const int32_t right = (int32_t)(Viewport.X + Viewport.Width) < (int32_t)target.Width
+		? (int32_t)(Viewport.X + Viewport.Width) : (int32_t)target.Width;
+	const int32_t bottom = (int32_t)(Viewport.Y + Viewport.Height) < (int32_t)target.Height
+		? (int32_t)(Viewport.Y + Viewport.Height) : (int32_t)target.Height;
 	draw.Scissor[0] = (int32_t)Viewport.X;
 	draw.Scissor[1] = (int32_t)Viewport.Y;
-	draw.Scissor[2] = (int32_t)Viewport.Width;
-	draw.Scissor[3] = (int32_t)Viewport.Height;
+	draw.Scissor[2] = right > draw.Scissor[0] ? right - draw.Scissor[0] : 0;
+	draw.Scissor[3] = bottom > draw.Scissor[1] ? bottom - draw.Scissor[1] : 0;
+	if (draw.Scissor[2] == 0 || draw.Scissor[3] == 0) {
+		return D3D_OK;		// the viewport is off the target: nothing to draw
+	}
+	Gpu->Set_Target(target);
 	draw.StencilReference = RenderStates[D3DRS_STENCILREF] & 0xFF;
 	draw.BlendFactor = RenderStates[D3DRS_BLENDFACTOR];
 	Gpu->Record_Draw(draw);

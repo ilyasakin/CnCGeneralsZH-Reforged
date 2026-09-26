@@ -351,6 +351,12 @@ protected:
 	/// what can still change staged.  Headless, nothing.
 	RenderResult Gpu_Draw(const DrawCall &call);
 	void Refuse_Draw(const std::string &reason);
+	/// The current render target and depth-stencil as the frame's target (A3d).  False, with the reason,
+	/// for what cannot be drawn into.
+	bool Resolve_Target(struct SdlTarget &target, std::string &refusal);
+	/// A render-target surface's GPU texture: the back buffer's, a render-target texture's first level,
+	/// or a standalone render target's.
+	struct SDL_GPUTexture *Gpu_Texture_Of(IDirect3DSurface9 *surface, std::string &refusal);
 	/// ZH_GPU_TRACE's draws: their state and first vertices, a development aid until A3d's capture.
 	void Trace_Draw_If_Asked(const DrawCall &call, const std::string &programs, class PosixVertexBuffer9 *vertex_buffer,
 		unsigned int stride);

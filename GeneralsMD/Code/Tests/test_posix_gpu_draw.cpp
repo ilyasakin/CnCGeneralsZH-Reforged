@@ -388,6 +388,75 @@ static void check_clears_and_depth(PosixDevice9 *device)
 	CHECK_PIXEL(24, 16, BLUE);
 }
 
+// A3d: a render-target texture drawn into on the GPU and then sampled, a StretchRect out of it, and a
+// draw that would sample the target it draws into refused.
+static void check_render_targets(PosixDevice9 *device)
+{
+	IDirect3DTexture9 *target_texture = NULL;
+	CHECK(device->CreateTexture(16, 16, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &target_texture, NULL) == D3D_OK);
+	IDirect3DSurface9 *target = NULL, *back = NULL;
+	CHECK(target_texture->GetSurfaceLevel(0, &target) == D3D_OK);
+	CHECK(device->GetRenderTarget(0, &back) == D3D_OK);
+	CHECK(device->Gpu_Owns(target) && device->Gpu_Owns(back));
+
+	// Into the target: red all over, then green on its left half.  The implicit depth surface is bigger
+	// than the target, so the pass takes a matching scratch one.  The back buffer's own clear, with no
+	// draw after it there, must still happen, on the back buffer and not on the target.
+	begin(device, BLUE);
+	device->Clear(0, NULL, D3DCLEAR_TARGET, YELLOW, 1.0f, 0);
+	CHECK(device->SetRenderTarget(0, target) == D3D_OK);
+	device->Clear(0, NULL, D3DCLEAR_TARGET, RED, 1.0f, 0);
+	ScreenVertex v[6];
+	quad(v, 0, 0, 8, 16, 0.5f, GREEN);
+	device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 2, v, sizeof(ScreenVertex));
+
+	// Back to the back buffer: its yellow clear happened, and only there.
+	CHECK(device->SetRenderTarget(0, back) == D3D_OK);
+	read_back(device);
+	CHECK_PIXEL(16, 16, YELLOW);
+
+	// And the target drawn over all of it, point sampled.
+	device->Clear(0, NULL, D3DCLEAR_TARGET, BLUE, 1.0f, 0);
+	device->SetTexture(0, target_texture);
+	device->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+	device->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+	quad(v, -0.5f, -0.5f, 31.5f, 31.5f, 0.5f, WHITE);
+	device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 2, v, sizeof(ScreenVertex));
+	read_back(device);
+	CHECK_PIXEL(4, 16, GREEN);
+	CHECK_PIXEL(27, 16, RED);
+
+	// A draw into the target that samples it is refused, and leaves the target as it was.
+	const unsigned int recorded = device->Draws_Recorded();
+	CHECK(device->SetRenderTarget(0, target) == D3D_OK);
+	device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 2, v, sizeof(ScreenVertex));
+	CHECK(device->Draws_Recorded() == recorded);
+	CHECK(device->Draw_Refusals().count("sampling the render target it draws into") == 1);
+
+	// The target's right half into the back buffer's top-left quarter, on the GPU.  Through the seam's
+	// Gpu_StretchRect until -18's StretchRect calls it (then through StretchRect itself).
+	CHECK(device->SetRenderTarget(0, back) == D3D_OK);
+	device->SetTexture(0, NULL);
+	device->Clear(0, NULL, D3DCLEAR_TARGET, BLUE, 1.0f, 0);
+	const RenderRect from = { 8, 0, 16, 16 };
+	const RenderRect to = { 0, 0, 16, 16 };
+	CHECK(device->Gpu_StretchRect(target, &from, back, &to, D3DTEXF_POINT) == D3D_OK);
+	read_back(device);
+	CHECK_PIXEL(8, 8, RED);
+	CHECK_PIXEL(24, 24, BLUE);
+
+	// The target cleared on its own: nothing else moves.
+	CHECK(device->SetRenderTarget(0, target) == D3D_OK);
+	device->Clear(0, NULL, D3DCLEAR_TARGET, YELLOW, 1.0f, 0);
+	CHECK(device->SetRenderTarget(0, back) == D3D_OK);
+	read_back(device);
+	CHECK_PIXEL(24, 24, BLUE);
+
+	target->Release();
+	back->Release();
+	target_texture->Release();
+}
+
 static void check_refusal(PosixDevice9 *device)
 {
 	IDirect3DCubeTexture9 *cube = NULL;
@@ -445,6 +514,7 @@ int main()
 	check_textures(device);
 	check_fans_and_buffers(device);
 	check_clears_and_depth(device);
+	check_render_targets(device);
 	check_refusal(device);
 
 	printf("posix_gpu_draw_selfcheck: %s: %u draws recorded, %u textures and %u buffers uploaded, %u stale flushes\n",
