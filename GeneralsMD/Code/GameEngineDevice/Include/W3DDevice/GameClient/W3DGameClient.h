@@ -48,7 +48,9 @@
 #include "W3DDevice/GameClient/W3DGameWindowManager.h"
 #include "W3DDevice/GameClient/W3DGameFont.h"
 #include "W3DDevice/GameClient/W3DDisplayStringManager.h"
+#if defined(_WIN32)
 #include "VideoDevice/Bink/BinkVideoPlayer.h"
+#endif
 #if defined(_WIN32)
 // The keyboard and mouse are Win32Device's here.  Off Windows they are the platform layer's (C3), and
 // W3DGameClient leaves GameClient's two input factories to its subclass there; see below.
@@ -120,7 +122,9 @@ protected:
   /// Manager for display strings
 	virtual DisplayStringManager *createDisplayStringManager( void ) { return NEW W3DDisplayStringManager; }
 
+#if defined(_WIN32)	// Bink on FFmpeg; off Windows the video player, like the keyboard and mouse, is the platform's
 	virtual VideoPlayerInterface *createVideoPlayer( void ) { return NEW BinkVideoPlayer; }
+#endif
 	/// factory for creating the TerrainVisual
 	virtual TerrainVisual *createTerrainVisual( void ) { return NEW W3DTerrainVisual; }
 
