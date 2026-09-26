@@ -48,6 +48,7 @@
 #include "Lib/WideCharFns.h"
 
 #include "GameClient/GameText.h"
+#include "GameClient/ApplicationWindowTitle.h"
 #include "Common/Language.h"
 #include "Common/Registry.h"
 #include "GameClient/LanguageFilter.h"
@@ -300,9 +301,13 @@ GameTextManager::~GameTextManager()
 extern const Char *g_strFile;
 extern const Char *g_csfFile;
 
-/* Names the game's window.  On Windows that is ApplicationHWnd, set here as it always was.  The window
-	 is C2's everywhere else (SDL_SetWindowTitle), and until C2 creates one there is nothing to name, so
-	 off Windows this does nothing. */
+#if !defined(_WIN32)
+ApplicationWindowTitleHook TheApplicationWindowTitleHook = NULL;
+#endif
+
+/* Names the game's window.  On Windows that is ApplicationHWnd, set here as it always was.  Elsewhere
+	 the window is the platform layer's (C2's SdlGameEngine), which names it through the hook it sets;
+	 with no window, as in a headless run, there is nothing to name. */
 static void setApplicationWindowTitle( const UnicodeString &ourName, const AsciiString &ourNameA )
 {
 #if defined(_WIN32)
@@ -314,7 +319,12 @@ static void setApplicationWindowTitle( const UnicodeString &ourName, const Ascii
 		::SetWindowTextW(ApplicationHWnd, reinterpret_cast<LPCWSTR>(ourName.str()));
 	}
 #else
-	(void)ourName;
+	if (TheApplicationWindowTitleHook != NULL)
+	{
+		char title[ 512 ];
+		WideCharToUtf8( ourName.str(), title, sizeof( title ) );
+		TheApplicationWindowTitleHook( title );
+	}
 	(void)ourNameA;
 #endif
 }
