@@ -46,6 +46,7 @@
 #include "Common/RandomValue.h"
 #include "Common/GameCommon.h"
 #include "GameLogic/Damage.h"
+#include "GameNetwork/RankPointValue.h"
 #include "GameClient/ChromaKeyboard.h"
 #include "GameClient/MetaEvent.h"
 #include "GameClient/ClickTolerance.h"
@@ -14062,6 +14063,70 @@ TEST(the_spectator_page_has_its_pieces_and_no_option_clicks)
 #include "test_camera_behavior.inc"
 #include "test_observer_camera.inc"
 #include "test_production_input.inc"
+// The rank walk.  RankPoints is ten Int thresholds followed by five Real multipliers, and the menus walked
+// it with `while (points >= m_ranks[i + 1]) ++i`, unbounded.  This models that walk over the struct's own
+// fifteen words, with the shipped thresholds and multipliers and Windows' float-to-int conversion for the
+// points, and says where it stops or that it walks off the struct.  rankForPoints is the bounded walk.
+namespace {
+
+Int oldRankWalk(const Int (&words)[15], Int points)
+{
+	Int i = 0;
+	for (;;) {
+		if (i + 1 >= 15)
+			return -1;					// the next read is past the struct
+		if (points >= words[i + 1])
+			++i;
+		else
+			return i;
+	}
+}
+
+} // namespace
+
+TEST(rank_walk_stops_at_the_table_end_and_the_old_one_did_not)
+{
+	static_assert(sizeof(RankPoints) == 15 * sizeof(Int), "ten thresholds and five multipliers, no padding");
+	static_assert(offsetof(RankPoints, m_winMultiplier) == 10 * sizeof(Int), "the multipliers follow the table");
+	static const Int shippedRanks[MAX_RANKS] = { 0, 5, 10, 20, 50, 100, 200, 500, 1000, 2000 };
+	static const Real shippedMultipliers[5] = { 3.0f, 0.0f, 1.0f, 5.0f, -1.0f };	// win, lost, hour, solo, discon
+	Int words[15];
+	memcpy(words, shippedRanks, sizeof(shippedRanks));
+	memcpy(words + MAX_RANKS, shippedMultipliers, sizeof(shippedMultipliers));
+	CHECK_EQ(words[10], 1077936128);			// 3.0f read as an Int: 0x40400000
+
+	// the old walk, as Windows ran it
+	const Int points[] = { 1999, 2000, 1077936127, 1077936129, 2147483520, 2147483647 };
+	const Int oldStops[] = { 8, 9, 9, 12, -1, -1 };
+	for (Int k = 0; k < (Int)(sizeof(points) / sizeof(points[0])); ++k) {
+		const Int stop = oldRankWalk(words, points[k]);
+		printf("  old walk: %d points -> %s %d\n", points[k], stop < 0 ? "off the struct after index" : "stops at index",
+			stop < 0 ? 14 : stop);
+		CHECK_EQ(stop, oldStops[k]);
+	}
+
+	// a stats record reaches those points on Windows without any overflow: 400,000,000 wins at 3 each, and
+	// 715,000,000, are both inside the int range of Windows' conversion
+	CHECK_EQ(floatToIntAsMsvc(0 + 400000000 * shippedMultipliers[0]), 1200000000);
+	CHECK(floatToIntAsMsvc(0 + 715000000 * shippedMultipliers[0]) > 2144999900);
+	CHECK_EQ(words[13], 1084227584);			// 5.0f: anything above it passes every multiplier
+	CHECK_EQ(oldRankWalk(words, floatToIntAsMsvc(0 + 400000000 * shippedMultipliers[0])), -1);
+	CHECK_EQ(oldRankWalk(words, floatToIntAsMsvc(0 + 715000000 * shippedMultipliers[0])), -1);
+
+	// the bounded walk: every legitimate rank as before, and never past Commander in Chief
+	CHECK_EQ(rankForPoints(shippedRanks, 0), (Int)RANK_PRIVATE);
+	CHECK_EQ(rankForPoints(shippedRanks, 4), (Int)RANK_PRIVATE);
+	CHECK_EQ(rankForPoints(shippedRanks, 5), (Int)RANK_CORPORAL);
+	CHECK_EQ(rankForPoints(shippedRanks, 1999), (Int)RANK_GENERAL);
+	CHECK_EQ(rankForPoints(shippedRanks, 2000), (Int)RANK_COMMANDER_IN_CHIEF);
+	CHECK_EQ(rankForPoints(shippedRanks, 1077936129), (Int)RANK_COMMANDER_IN_CHIEF);
+	CHECK_EQ(rankForPoints(shippedRanks, 2147483647), (Int)RANK_COMMANDER_IN_CHIEF);
+	for (Int p = 0; p <= 2100; ++p) {
+		const Int old = oldRankWalk(words, p);
+		CHECK_EQ(rankForPoints(shippedRanks, p), old);			// identical wherever the old walk was sane
+	}
+}
+
 // The dynamic LOD level follows this machine's frame rate, so nothing the simulation reads may come from
 // it: SlowDeathScale (how long a death takes) and DebrisSkipMask (whether a debris object is created) are
 // parsed from GameLOD.ini and deliberately not applied (GameLOD.cpp, applyDynamicLODLevel).  A peer on a
