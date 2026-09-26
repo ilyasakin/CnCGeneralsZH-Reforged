@@ -9072,41 +9072,63 @@ TEST(the_serial_check_is_waived_only_between_two_addresses_on_this_machine)
 }
 
 /* A replay is checked by comparing the CRCs it carries against the ones playback recomputes, one
-	 for one, out of a queue.  A game played over a network never gets its frame 0 CRC into the file
-	 - the logic makes it after that frame's commands have already gone out, so it is never sent,
-	 never executed and never recorded - and playback, having no network to lose it to, makes one
-	 anyway.  Unless playback throws that one away every comparison after it is a frame out, and a
-	 replay that is perfectly in sync reports a desync on its first interval frame. */
-TEST(replay_crc_queue_drops_the_frame_the_network_never_recorded)
+	 for one, out of a queue.  A network game's replay may or may not carry frame 0's CRC: until
+	 d9eccdda the network deleted it while still in pregame (every retail replay starts at frame 1),
+	 and since then it is sent and recorded.  Playback makes one either way, so for a network replay the
+	 queue decides at the first comparison: keep the head if it is the recorded CRC, drop it if the next
+	 one is, and otherwise compare as it stands so a real first-frame desync is still reported.  Either
+	 blind rule reports a desync on every replay of the other kind (Recorder.h). */
+TEST(replay_crc_queue_aligns_to_either_kind_of_network_recording)
 {
-	// only a game that was played over a network is missing that first CRC
-	CHECK( replayIsMissingFirstCRC( GAME_LAN ) );
-	CHECK( replayIsMissingFirstCRC( GAME_INTERNET ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_SKIRMISH ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_SINGLE_PLAYER ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_REPLAY ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_SHELL ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_NONE ) );
+	// only a game that was played over a network can lack that first CRC
+	CHECK( replayMayLackFirstCRC( GAME_LAN ) );
+	CHECK( replayMayLackFirstCRC( GAME_INTERNET ) );
+	CHECK( !replayMayLackFirstCRC( GAME_SKIRMISH ) );
+	CHECK( !replayMayLackFirstCRC( GAME_SINGLE_PLAYER ) );
+	CHECK( !replayMayLackFirstCRC( GAME_REPLAY ) );
+	CHECK( !replayMayLackFirstCRC( GAME_SHELL ) );
+	CHECK( !replayMayLackFirstCRC( GAME_NONE ) );
 
-	// left alone the queue hands back what it was given, in order
+	// computed by playback: frames 0, 1, 2, 3
+	const UnsignedInt computed[ 4 ] = { 0x11111111, 0x22222222, 0x33333333, 0x44444444 };
+
+	// a solo replay is compared one for one from frame 0, and never aligned
 	CRCInfo solo;
-	solo.addCRC( 0x11111111 );
-	solo.addCRC( 0x22222222 );
-	solo.addCRC( 0x33333333 );
-	CHECK_EQ( 0x11111111, solo.readCRC() );
+	for (Int i = 0; i < 4; ++i)
+		solo.addCRC( computed[i] );
+	CHECK_EQ( 0x11111111, solo.readCRCFor( 0x22222222 ) );		// a mismatch it must report
+	CHECK_EQ( (Int)CRCInfo::ALIGN_NONE, (Int)solo.getAlignment() );
 	CHECK_EQ( 0x22222222, solo.readCRC() );
-	CHECK_EQ( 0x33333333, solo.readCRC() );
-	CHECK_EQ( 0, solo.readCRC() );		// an empty queue reads as 0
 
-	// armed, it swallows exactly one - the frame the recording is missing - and no more
-	CRCInfo net;
-	net.skipFirstCRC();
-	net.addCRC( 0x11111111 );
-	net.addCRC( 0x22222222 );
-	net.addCRC( 0x33333333 );
-	CHECK_EQ( 0x22222222, net.readCRC() );
-	CHECK_EQ( 0x33333333, net.readCRC() );
-	CHECK_EQ( 0, net.readCRC() );
+	// a network replay recorded from frame 0 (since d9eccdda): nothing is dropped
+	CRCInfo fromZero;
+	fromZero.allowMissingFirstCRC();
+	for (Int i = 0; i < 4; ++i)
+		fromZero.addCRC( computed[i] );
+	CHECK_EQ( 0x11111111, fromZero.readCRCFor( 0x11111111 ) );
+	CHECK_EQ( (Int)CRCInfo::ALIGN_FROM_FRAME_0, (Int)fromZero.getAlignment() );
+	CHECK_EQ( 0x22222222, fromZero.readCRCFor( 0x22222222 ) );
+	CHECK_EQ( 0x33333333, fromZero.readCRCFor( 0x33333333 ) );
+
+	// a legacy network replay (retail, or before d9eccdda): frame 0's is dropped, once
+	CRCInfo legacy;
+	legacy.allowMissingFirstCRC();
+	for (Int i = 0; i < 4; ++i)
+		legacy.addCRC( computed[i] );
+	CHECK_EQ( 0x22222222, legacy.readCRCFor( 0x22222222 ) );
+	CHECK_EQ( (Int)CRCInfo::ALIGN_FRAME_0_MISSING, (Int)legacy.getAlignment() );
+	CHECK_EQ( 0x33333333, legacy.readCRCFor( 0x33333333 ) );
+	CHECK_EQ( 0x44444444, legacy.readCRCFor( 0x44444444 ) );		// and no more than one
+	CHECK_EQ( 0, legacy.readCRC() );
+
+	// a real desync on the very first CRC is neither kind: compared as it stands, so it is reported
+	CRCInfo desync;
+	desync.allowMissingFirstCRC();
+	for (Int i = 0; i < 4; ++i)
+		desync.addCRC( computed[i] );
+	CHECK_EQ( 0x11111111, desync.readCRCFor( 0x99999999 ) );
+	CHECK_EQ( (Int)CRCInfo::ALIGN_UNDECIDED, (Int)desync.getAlignment() );
+	CHECK_EQ( 0x22222222, desync.readCRCFor( 0x22222222 ) );		// decided once: nothing shifts later
 }
 
 

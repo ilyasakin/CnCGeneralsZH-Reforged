@@ -5,7 +5,7 @@
   determinism gate and the architecture axis, done)
 - **Blocks:** nothing in M5 but its own "it is a game"
 - **Status:** recon done (-47, 2026-09-26). The PM's order: 1, 3 (F1, defect #29), 2 (F2), 4, 5; 6
-  deferred until E2 needs it. Steps 1 and 3 done (below).
+  deferred until E2 needs it. Steps 1, 3 and 2 done (below).
 
 ## Why
 
@@ -254,6 +254,46 @@ Measured before the code, on macOS:
 `test_lan_broadcast` (3 tests, 31 checks, 4 s) runs that layout through the real classes. It has a
 control and three armed mutations (1, 7 and 2 checks fail). `windows_view_diff`: the six changed files
 are identical as MSVC sees them; the new test is POSIX-only.
+
+## Step 2 result: F2, the replay CRC check aligned to both kinds of recording (-47, 2026-09-26)
+
+**Cause.** The recording is right; the check was stale.
+- A transfer command such as MSG_LOGIC_CRC is sent only while the network is in-game
+  (`Network.cpp:482`). The network leaves pregame only in `noteLogicFrameAdvance`, when the logic
+  reaches frame 1.
+- EA called that from `processCommand`, after frame 0's CRC had been met and deleted. So no network
+  replay had frame 0's CRC, and 9126172a (Aug 28) made playback skip one.
+- d9eccdda (Sep 22) calls it first in `Network::update`. Since then frame 0's CRC is sent and recorded
+  in every network game, lobby or `-netgame`, on every platform. The blind skip then put every
+  comparison one frame out.
+- The first mismatch silences the check (`sawCRCMismatch`), so every LAN replay played back since then
+  had no CRC check from frame 31 on.
+- Measured with a trace build: over 294 comparisons, recorded equals computed with nothing skipped,
+  and equals what the live copy generated from frame 0.
+
+**Fix** (playback only; nothing in the simulation, on the wire or in the file format changes):
+- `CRCInfo::readCRCFor` decides at a network replay's first comparison. If the head of the computed
+  queue is the recorded CRC, it keeps it: "Replay CRCs: recorded from frame 0". If the next one is, it
+  drops the head: "legacy: frame 0 missing", which fits retail replays and those from before
+  d9eccdda. If neither is, it compares as it stands, so a desync on the very first CRC is still
+  reported.
+- The log names the alignment.
+- The out-of-sync line's swapped labels are fixed.
+- `WINDOWS-DEBT.md` has the row.
+- EA's order was not restored (the PM rejected it): that would change the network and lose a CRC from
+  new recordings.
+
+**Checks**
+- `test_gameengine`'s replay test covers a solo replay, a network one recorded from frame 0, a legacy
+  one, and a desync on the first CRC. Armed: never dropping fails 5 checks; always dropping
+  (9126172a's rule) fails 4.
+- `net_check` now requires every playback to align "recorded from frame 0" and never report out of
+  sync. Always dropping fails it at frame 31 on both replays, the original symptom.
+- New third check, the check live to the end and both alignments in the real game:
+  - copy 0's replay has its CRCs at frame 1500 changed by one bit, and is reported "out of sync on
+    frame 1500" and nowhere earlier;
+  - copy 1's replay has frame 0's CRC records removed, which makes it the shape of a legacy recording.
+    It aligns "legacy: frame 0 missing" and plays back clean.
 
 ## Do not
 
