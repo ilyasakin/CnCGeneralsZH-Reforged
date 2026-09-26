@@ -135,11 +135,12 @@ bool assemblePixelProgram( const std::string &text, std::vector<uint32_t> &token
 // ---- a vertex declaration --------------------------------------------------------------------------
 /*
  * One D3DVERTEXELEMENT9, as capture v2 records the declaration bound at a draw.  Types and usages by the
- * values the D3DDECLTYPE and D3DDECLUSAGE pages give.  Each element's usage names the vN it feeds by the
- * D3D8 register convention the port's device converts the engine's D3D8 declarations with (-a9, capture
- * v2): POSITION0 v0, BLENDWEIGHT0 v1, BLENDINDICES0 v2, NORMAL0 v3, PSIZE0 v4, COLOR0 v5, COLOR1 v6,
- * TEXCOORD0-7 v7-v14, POSITION1 v15.  That table is the device's, taken as given: the capture holds the
- * D3D9 elements, not the engine's D3D8 declaration tokens.
+ * values the D3DDECLTYPE and D3DDECLUSAGE pages give.  Each element's usage names the vN it feeds by
+ * "Map between D3D9 and D3D8 declarations" and the D3DVSDE_ numbers (D3D8 below): POSITION0 v0,
+ * BLENDWEIGHT0 v1, BLENDINDICES0 v2, NORMAL0 v3, PSIZE0 v4, COLOR0 v5, COLOR1 v6, TEXCOORD0-7 v7-v14,
+ * POSITION1 v15 (NORMAL1 is v16, past vs_1_1's inputs).  The port's device converts the engine's D3D8
+ * declarations with the same table (-a9, capture v2); capture v3 also holds the engine's own tokens,
+ * which decodeD3D8Declaration reads without it.
  */
 struct DeclarationElement
 {
@@ -156,6 +157,58 @@ namespace Declaration {
 /// method or usage outside what the game declares.
 bool declarationInputs( const uint8_t *vertex, const DeclarationElement *elements, int count,
 	double inputs[16][4], unsigned &present, std::string &error );
+
+// ---- the engine's own D3D8 declaration -------------------------------------------------------------
+/*
+ * The DWORD tokens the engine hands D3D8's CreateVertexShader (capture v3 records them).  No reference
+ * page describes them: the D3D8 documentation is not on learn.microsoft.com.  The fields are as
+ * Microsoft's d3d8types.h defines them and says in its comments, written here as own constants and
+ * checked against MinGW-w64's d3d8types.h (Tools/ffprogram-values-check.sh):
+ *   bits 31..29  the token type: NOP 0, STREAM 1, STREAMDATA 2, TESSELLATOR 3, CONSTMEM 4, EXT 5, END 7
+ *                ("end-of-array (requires all DWORD bits to be 1)").
+ *   STREAM       "Set current stream": the number in bits 3..0; bit 28 set is D3DVSD_STREAM_TESS.
+ *   STREAMDATA   bit 28 clear, D3DVSD_REG: "bind single vertex register to vertex element from vertex
+ *                stream", the register "[0..15]" in bits 4..0 and the D3DVSDT_ type in bits 19..16.
+ *                Bit 28 set, D3DVSD_SKIP: "Skip _DWORDCount DWORDs in vertex", the count in bits 19..16.
+ * The register a binding names IS the vN: no usage stands between.  Named choices (D-items):
+ *   D1  A stream's bindings and skips lie one after another from byte 0, each as wide as its type says
+ *       (FLOATn 4n bytes; D3DCOLOR "4D packed unsigned bytes", UBYTE4 "4D unsigned byte" and SHORT2
+ *       "2D signed short" 4; SHORT4 8).  The header says so only through SKIP's "DWORDs in vertex".
+ *   D2  NOP tokens are passed over.  TESSELLATOR, CONSTMEM, EXT, STREAM_TESS, a register over 15
+ *       (D3DVSDE_NORMAL2 is 16, past the "[0..15]" range), a register bound twice, data before any
+ *       STREAM, and a missing END are refused by name.
+ * The D3DVSDT_ values are D3DDECLTYPE's ("Map between D3D9 and D3D8 declarations": same-named types),
+ * so a binding's type is a Declaration::Type.
+ */
+struct RegisterBinding
+{
+	uint16_t stream, offset;
+	uint8_t reg, type;
+};
+namespace D3D8 {
+	enum : uint32_t {
+		TOKEN_TYPE_SHIFT = 29, TOKEN_NOP = 0, TOKEN_STREAM = 1, TOKEN_STREAMDATA = 2, TOKEN_TESSELLATOR = 3,
+		TOKEN_CONSTMEM = 4, TOKEN_EXT = 5, TOKEN_END = 7, DECLARATION_END = 0xFFFFFFFFu,
+		STREAM_NUMBER_MASK = 0xF, STREAM_TESS_BIT = 1u << 28,
+		DATA_LOAD_SKIP_BIT = 1u << 28, DATA_TYPE_SHIFT = 16, DATA_TYPE_MASK = 0xFu << 16,
+		SKIP_COUNT_SHIFT = 16, SKIP_COUNT_MASK = 0xFu << 16, VERTEX_REG_MASK = 0x1F,
+	};
+	/// D3DVSDE_: the register each D3D9 usage became ("Map between D3D9 and D3D8 declarations")
+	enum : uint8_t { POSITION = 0, BLENDWEIGHT = 1, BLENDINDICES = 2, NORMAL = 3, PSIZE = 4, DIFFUSE = 5, SPECULAR = 6,
+		TEXCOORD0 = 7, TEXCOORD7 = 14, POSITION2 = 15, NORMAL2 = 16 };
+}
+/// The bindings, in register order.  FALSE with `error` for a token D2 refuses.
+bool decodeD3D8Declaration( const uint32_t *tokens, size_t count, std::vector<RegisterBinding> &out, std::string &error );
+/// The device's D3D9 elements read back to registers through the mapping page (usage and index to
+/// D3DVSDE_), in register order.  FALSE with `error` for a usage the page does not map to v0-v15, or
+/// two elements on one register.
+bool bindingsFromElements( const DeclarationElement *elements, int count, std::vector<RegisterBinding> &out, std::string &error );
+/// v0-v15 of one stream-0 vertex, as declarationInputs; a binding on another stream is refused.
+bool registerInputs( const uint8_t *vertex, const RegisterBinding *bindings, int count,
+	double inputs[16][4], unsigned &present, std::string &error );
+/// "" when the two readings bind the same registers to the same stream, offset and type; else each
+/// difference, one per line.
+std::string compareBindings( const std::vector<RegisterBinding> &a, const std::vector<RegisterBinding> &b );
 
 // ---- running a vertex program ---------------------------------------------------------------------
 /*

@@ -218,6 +218,7 @@ you start. That commit is the lock.
 | E1 | [Determinism gate](tasks/E1-determinism-gate.md) — **degraded, see note** | M1 | B6 | in progress: POSIX harness (`replay-check.sh`), the Mac baseline over a real fight, defect #20 fixed; parity needs a Windows run | -18 |
 | N1 | [Cross-platform build fingerprint for the compatibility CRC](tasks/N1-build-fingerprint.md) (decision 5) | M5 | — | done: `m_exeCRC` takes a CRC-32 over the tracked sources on every platform; LF/CRLF and one-byte checks in ctest | -47 |
 | P1 | [Packaging the macOS app](tasks/P1-macos-packaging.md) | M5 | C1 C2 V1 (E1) | in progress: steps 1-4 merged (overlay root; read-only roots and logs; one staged overlay, W=P path by path, E1 on `-overlay`; root selection); step 5, the `.app`, held for disk | -47 |
+| L1 | [LAN play on POSIX](tasks/L1-lan-play.md) | M5 | B1 B4 B5 N1 E1 E3 | in progress: recon merged; step 1 done (`net_check`: two headless copies on one Mac agree over the real network code, and a second seed is caught); next F1 (defect #29), F2, the Rosetta pair, the width asserts | -47 |
 | E2 | [CI matrix](tasks/E2-ci-matrix.md) | M5 | E1 | not started | |
 
 Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, `blocked: <why>`.
@@ -711,6 +712,20 @@ and would probably break the Windows build — `UINT32` is an SDK *typedef* and 
 it a *macro*, so a TU reaching `windef.h` preprocesses to `typedef unsigned int unsigned int`. It
 also buys nothing there, because the header's guard is `#ifndef UINT32` and a typedef does not
 satisfy it. Guarded to non-Windows at merge.
+
+### Rule: match Windows' answer, never its undefined behaviour
+
+Added 2026-09-26 from -18's trace of 131 client float-to-int sites. For an out-of-range float → int
+conversion, `floatToIntAsMsvc` gives Windows' answer, and that's the default wherever the result
+only feeds values. But in six root causes, MSVC's INT_MIN is what indexed out of bounds, and arm64's
+saturation was the safe answer.
+- **Where Windows' result leads to an out-of-bounds access, a hang or a huge allocation, GUARD
+  instead** (a clamp, a range check, a NaN-safe comparison). Don't reproduce the access.
+- **The guard changes Windows' output only where Windows read or wrote out of bounds.** Say so in the
+  `WINDOWS-DEBT.md` row.
+- **Numbering:** such an access in the shipping Windows game gets a defect number only when SHIPPED
+  data, or REMOTE data (another player's record, a transferred map), can reach it. Otherwise it goes
+  in the latent list below, unnumbered.
 
 ### Defects found in the shipping Windows game
 

@@ -592,7 +592,50 @@ bool assemblePixelProgram( const std::string &text, std::vector<uint32_t> &token
 }
 
 // ---- a vertex declaration --------------------------------------------------------------------------
-bool declarationInputs( const uint8_t *vertex, const DeclarationElement *elements, int count,
+namespace {
+
+bool byRegister( const RegisterBinding &a, const RegisterBinding &b )
+{
+	return a.reg < b.reg;
+}
+
+}	// namespace
+
+bool bindingsFromElements( const DeclarationElement *elements, int count, std::vector<RegisterBinding> &out, std::string &error )
+{
+	out.clear();
+	unsigned bound = 0;
+	for (int i = 0; i < count; ++i)
+	{
+		const DeclarationElement &e = elements[i];
+		int reg = -1;
+		switch (e.usage)
+		{
+			case Declaration::POSITION: reg = e.usageIndex == 0 ? D3D8::POSITION : (e.usageIndex == 1 ? D3D8::POSITION2 : -1); break;
+			case Declaration::BLENDWEIGHT: reg = e.usageIndex == 0 ? D3D8::BLENDWEIGHT : -1; break;
+			case Declaration::BLENDINDICES: reg = e.usageIndex == 0 ? D3D8::BLENDINDICES : -1; break;
+			case Declaration::NORMAL: reg = e.usageIndex == 0 ? D3D8::NORMAL : -1; break;		// NORMAL1 is v16
+			case Declaration::PSIZE: reg = e.usageIndex == 0 ? D3D8::PSIZE : -1; break;
+			case Declaration::COLOR: reg = e.usageIndex <= 1 ? D3D8::DIFFUSE + e.usageIndex : -1; break;
+			case Declaration::TEXCOORD: reg = e.usageIndex <= 7 ? D3D8::TEXCOORD0 + e.usageIndex : -1; break;
+		}
+		if (reg < 0 || e.method != 0 || (bound & (1u << reg)) != 0)
+		{
+			char what[ 96 ];
+			snprintf( what, sizeof( what ), "element %d: usage %u.%u, method %u %s", i, (unsigned)e.usage,
+				(unsigned)e.usageIndex, (unsigned)e.method, reg < 0 || e.method != 0 ? "outside the D3D8 registers" : "on a register bound twice" );
+			error = what;
+			return false;
+		}
+		bound |= 1u << reg;
+		const RegisterBinding b = { e.stream, e.offset, (uint8_t)reg, e.type };
+		out.push_back( b );
+	}
+	std::stable_sort( out.begin(), out.end(), byRegister );
+	return true;
+}
+
+bool registerInputs( const uint8_t *vertex, const RegisterBinding *bindings, int count,
 	double inputs[16][4], unsigned &present, std::string &error )
 {
 	present = 0;
@@ -603,33 +646,22 @@ bool declarationInputs( const uint8_t *vertex, const DeclarationElement *element
 	}
 	for (int i = 0; i < count; ++i)
 	{
-		const DeclarationElement &e = elements[i];
-		int reg = -1;
-		switch (e.usage)
-		{
-			case Declaration::POSITION: reg = e.usageIndex == 0 ? 0 : (e.usageIndex == 1 ? 15 : -1); break;
-			case Declaration::BLENDWEIGHT: reg = e.usageIndex == 0 ? 1 : -1; break;
-			case Declaration::BLENDINDICES: reg = e.usageIndex == 0 ? 2 : -1; break;
-			case Declaration::NORMAL: reg = e.usageIndex == 0 ? 3 : -1; break;
-			case Declaration::PSIZE: reg = e.usageIndex == 0 ? 4 : -1; break;
-			case Declaration::COLOR: reg = e.usageIndex <= 1 ? 5 + e.usageIndex : -1; break;
-			case Declaration::TEXCOORD: reg = e.usageIndex <= 7 ? 7 + e.usageIndex : -1; break;
-		}
+		const RegisterBinding &b = bindings[i];
 		char what[ 96 ];
-		if (reg < 0 || e.stream != 0 || e.method != 0)
+		if (b.reg > 15 || b.stream != 0)
 		{
-			snprintf( what, sizeof( what ), "element %d: usage %u.%u, stream %u, method %u outside the D3D8 registers",
-				i, (unsigned)e.usage, (unsigned)e.usageIndex, (unsigned)e.stream, (unsigned)e.method );
+			snprintf( what, sizeof( what ), "binding %d: v%u, stream %u: not a stream-0 vs_1_1 input", i, (unsigned)b.reg,
+				(unsigned)b.stream );
 			error = what;
 			return false;
 		}
-		const uint8_t *p = vertex + e.offset;
-		double *v = inputs[reg];
-		switch (e.type)
+		const uint8_t *p = vertex + b.offset;
+		double *v = inputs[b.reg];
+		switch (b.type)
 		{
 			case Declaration::FLOAT1: case Declaration::FLOAT2: case Declaration::FLOAT3: case Declaration::FLOAT4:
 				// "One/Two/Three/Four-component float expanded to (float, 0, 0, 1)" ... "(float, float, float, float)"
-				for (int c = 0; c <= e.type - Declaration::FLOAT1; ++c)
+				for (int c = 0; c <= b.type - Declaration::FLOAT1; ++c)
 				{
 					float f;
 					memcpy( &f, p + 4 * c, 4 );
@@ -646,7 +678,7 @@ bool declarationInputs( const uint8_t *vertex, const DeclarationElement *element
 					v[c] = p[c];
 				break;
 			case Declaration::SHORT2: case Declaration::SHORT4:		// "signed short expanded to (value, value, 0, 1)"
-				for (int c = 0; c < (e.type == Declaration::SHORT2 ? 2 : 4); ++c)
+				for (int c = 0; c < (b.type == Declaration::SHORT2 ? 2 : 4); ++c)
 				{
 					int16_t h;
 					memcpy( &h, p + 2 * c, 2 );
@@ -654,13 +686,118 @@ bool declarationInputs( const uint8_t *vertex, const DeclarationElement *element
 				}
 				break;
 			default:
-				snprintf( what, sizeof( what ), "element %d: type %u, not one the game declares", i, (unsigned)e.type );
+				snprintf( what, sizeof( what ), "binding %d: type %u, not one the game declares", i, (unsigned)b.type );
 				error = what;
 				return false;
 		}
-		present |= 1u << reg;
+		present |= 1u << b.reg;
 	}
 	return true;
+}
+
+bool declarationInputs( const uint8_t *vertex, const DeclarationElement *elements, int count,
+	double inputs[16][4], unsigned &present, std::string &error )
+{
+	std::vector<RegisterBinding> bindings;
+	if (!bindingsFromElements( elements, count, bindings, error ))
+		return false;
+	return registerInputs( vertex, bindings.empty() ? NULL : &bindings[0], (int)bindings.size(), inputs, present, error );
+}
+
+bool decodeD3D8Declaration( const uint32_t *tokens, size_t count, std::vector<RegisterBinding> &out, std::string &error )
+{
+	using namespace D3D8;
+	out.clear();
+	int stream = -1;
+	unsigned offset[ 16 ] = { 0 };		// D1: per stream, the next byte
+	unsigned bound = 0;
+	char what[ 96 ];
+	for (size_t i = 0; i < count; ++i)
+	{
+		const uint32_t t = tokens[i];
+		if (t == DECLARATION_END)
+		{
+			std::stable_sort( out.begin(), out.end(), byRegister );
+			return true;
+		}
+		switch (t >> TOKEN_TYPE_SHIFT)
+		{
+			case TOKEN_NOP:
+				continue;		// D2
+			case TOKEN_STREAM:
+				if (t & STREAM_TESS_BIT)
+				{
+					error = "D3DVSD_STREAM_TESS: the tessellator's stream";
+					return false;
+				}
+				stream = (int)(t & STREAM_NUMBER_MASK);
+				continue;
+			case TOKEN_STREAMDATA:
+			{
+				if (stream < 0)
+				{
+					error = "stream data before any D3DVSD_STREAM";
+					return false;
+				}
+				if (t & DATA_LOAD_SKIP_BIT)
+				{
+					offset[stream] += 4 * ((t & SKIP_COUNT_MASK) >> SKIP_COUNT_SHIFT);		// "Skip _DWORDCount DWORDs"
+					continue;
+				}
+				const unsigned reg = t & VERTEX_REG_MASK, type = (t & DATA_TYPE_MASK) >> DATA_TYPE_SHIFT;
+				static const unsigned width[ 8 ] = { 4, 8, 12, 16, 4, 4, 4, 8 };		// D1, by D3DVSDT_ order
+				if (reg > 15 || type > Declaration::SHORT4 || (bound & (1u << reg)) != 0)
+				{
+					snprintf( what, sizeof( what ), "token %u (0x%08X): v%u, type %u: %s", (unsigned)i, t, reg, type,
+						reg > 15 ? "past v15" : (type > Declaration::SHORT4 ? "no D3DVSDT_ type" : "a register bound twice") );
+					error = what;
+					return false;
+				}
+				bound |= 1u << reg;
+				const RegisterBinding b = { (uint16_t)stream, (uint16_t)offset[stream], (uint8_t)reg, (uint8_t)type };
+				out.push_back( b );
+				offset[stream] += width[type];
+				continue;
+			}
+			default:
+			{
+				static const char *const names[ 8 ] = { "", "", "", "D3DVSD_TOKEN_TESSELLATOR", "D3DVSD_TOKEN_CONSTMEM",
+					"D3DVSD_TOKEN_EXT", "token type 6", "D3DVSD_TOKEN_END without every bit set" };
+				snprintf( what, sizeof( what ), "token %u (0x%08X): %s", (unsigned)i, t, names[t >> TOKEN_TYPE_SHIFT] );
+				error = what;
+				return false;
+			}
+		}
+	}
+	error = "no D3DVSD_END";
+	return false;
+}
+
+std::string compareBindings( const std::vector<RegisterBinding> &a, const std::vector<RegisterBinding> &b )
+{
+	std::string differences;
+	char line[ 128 ];
+	for (unsigned reg = 0; reg < 32; ++reg)
+	{
+		const RegisterBinding *x = NULL, *y = NULL;
+		for (size_t i = 0; i < a.size(); ++i)
+			if (a[i].reg == reg)
+				x = &a[i];
+		for (size_t i = 0; i < b.size(); ++i)
+			if (b[i].reg == reg)
+				y = &b[i];
+		if (x == NULL && y == NULL)
+			continue;
+		if (x != NULL && y != NULL && x->stream == y->stream && x->offset == y->offset && x->type == y->type)
+			continue;
+		if (x == NULL || y == NULL)
+			snprintf( line, sizeof( line ), "v%u: only the %s binds it\n", reg, x != NULL ? "first" : "second" );
+		else
+			snprintf( line, sizeof( line ), "v%u: stream %u offset %u type %u against stream %u offset %u type %u\n", reg,
+				(unsigned)x->stream, (unsigned)x->offset, (unsigned)x->type, (unsigned)y->stream, (unsigned)y->offset, (unsigned)y->type );
+		differences += line;
+	}
+	return differences;
 }
 
 // ---- the vertex program ---------------------------------------------------------------------------

@@ -2613,6 +2613,7 @@ Tests/d3dx_golden.h
 Tests/d3dx_oracle/d3dx_oracle.cpp
 Tests/d3dx_oracle/run_d3dx_oracle.sh
 Tests/d3dx_sweep.h
+Tests/ffreference/ffdecl_captures.cpp
 Tests/ffreference/ffprogram.cpp
 Tests/ffreference/ffprogram.h
 Tests/ffreference/ffreference.cpp
@@ -2625,6 +2626,7 @@ Tests/miles_listen.cpp
 Tests/miles_smoke.cpp
 Tests/replay_wide_oracle.cpp
 Tests/run_generals_smoke.sh
+Tests/run_net_check.sh
 Tests/run_replay_check.sh
 Tests/sdl_gpu_probe.cpp
 Tests/shader_cases.h
@@ -3645,6 +3647,7 @@ Tools/matchbot/wnet/tcp.cpp
 Tools/matchbot/wnet/tcp.h
 Tools/matchbot/wnet/udp.cpp
 Tools/matchbot/wnet/udp.h
+Tools/net-check.sh
 Tools/net_check.py
 Tools/optionsmenu_layout.py
 Tools/overlay-crc-check.sh

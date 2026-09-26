@@ -1,0 +1,237 @@
+# L1 — LAN play on POSIX
+
+- **Milestone:** M5 ("LAN over UDP is in scope")
+- **Depends on:** B1 B4 B5 (the wire formats, done), N1 (the compatibility CRC, done), E1 E3 (the
+  determinism gate and the architecture axis, done)
+- **Blocks:** nothing in M5 but its own "it is a game"
+- **Status:** recon done (-47, 2026-09-26). The PM's order: 1, 3 (F1, defect #29), 2 (F2), 4, 5; 6
+  deferred until E2 needs it. Step 1 done (below).
+
+## Why
+
+M5 lists LAN. Nobody had asked whether the network layer runs off Windows, whether two peers can
+meet on one Mac without a person, or what a pass would prove. This file answers those three
+questions by reading the code and measuring, before anything is built.
+
+## 1. The network layer on POSIX today
+
+**It compiles, links and plays.** `generals` on macOS links all of `GameNetwork/`. Three commits on
+2026-09-26 (032b1b82, 8a8bd52a, 57988d42) finished the UNIX half that Westwood's `udp.cpp` already
+had. Each was measured with the real objects and has an armed control.
+
+| Windows call or assumption | What it does | On the Mac today |
+|:--|:--|:--|
+| `WSAStartup` / `WSACleanup` | winsock start-up (Transport, IPEnumeration) | under `_WIN32`; POSIX needs none |
+| `socket`, `bind`, `sendto`, `recvfrom`, `select`, `setsockopt(SO_RCVBUF/SO_SNDBUF)` | the UDP socket (`udp.cpp`) | the same BSD calls; lengths are `socklen_t` |
+| `ioctlsocket(FIONBIO)` | non-blocking socket | `fcntl(O_NONBLOCK)`, Westwood's own UNIX branch |
+| `WSAGetLastError`, `WSAEWOULDBLOCK` | error codes | `errno` through `lastSocketError()`. An empty read is "nothing yet" (EWOULDBLOCK/EAGAIN), not an error, and a failed bind now reads as failed |
+| `closesocket` | close | `close` |
+| `setsockopt(SO_BROADCAST, BOOL)` | allow broadcasts | the same option with an `int` |
+| `gethostname` + `gethostbyname` | the machine's LAN addresses (IPEnumeration) | `getifaddrs`: every IPv4 address on an interface that is up, ascending, loopback only when there is nothing else. `GetAdaptersInfo` is not used anywhere |
+| `S_un.S_addr` | the address union | `s_addr`, winsock's own macro for the same member |
+| broadcast reception on a socket bound to one address | the lobby's game announcements | **does not happen on macOS: finding F1 below** |
+| winsock in `FirewallHelper.cpp` | Internet NAT probing (GameSpy mangler servers) | out of scope: GameSpy is dead, and LAN never calls it |
+
+**Ports.** The lobby uses UDP 8086 (`LANAPI.cpp:51`) and the game uses 8088
+(`NETWORK_BASE_PORT_NUMBER`). Every address uses one port; neither sets SO_REUSEADDR.
+
+**Wire format.** This was settled before L1:
+- B4 and B5 put `sizeof` and `offsetof` asserts on every packed wire struct: `TransportMessageHeader`
+  6, `TransportMessage`, `LANMessage` 471, and the mangler structs.
+- `NetworkDefs.h` asserts little-endian byte order off MSVC. arm64, x86_64 and Windows x64 are all
+  little-endian.
+- `GameMessage::Type` is pinned to `Int`, so clang's `unsigned` enum became MSVC's type.
+- `WideChar` is `char16_t` and asserted to be 2 bytes.
+- `NetPacket` sends message arguments as `sizeof(Bool)`, `sizeof(Real)`, `sizeof(Coord3D)`,
+  `sizeof(ICoord2D)` and `sizeof(IRegion2D)` bytes. These match by ABI (`bool` is 1 byte and `float`
+  4 on all three), but they are not asserted. That is build step 5.
+
+**The compatibility CRC.** N1 took the executable's bytes out of `m_exeCRC`. A Mac and a Windows
+build of the same source now agree at the lobby's version check.
+
+### F1: a POSIX lobby never hears another machine's broadcasts
+
+- `LanLobbyMenu` binds the lobby socket to one address through `SetLocalIP`: the Options choice, or
+  the first address IPEnumeration finds.
+- Game announcements go to 255.255.255.255:8086.
+- Windows delivers a broadcast to a socket bound to a unicast address; `lan-play.ps1` depends on it.
+  BSD sockets do not.
+
+Measured on this Mac, sending from 192.168.1.103 to port 18086:
+
+| listener bound to | to 255.255.255.255 | to 192.168.1.255 |
+|:--|:--|:--|
+| 192.168.1.103 (what the lobby does) | nothing | nothing |
+| INADDR_ANY | received | received |
+| 192.168.1.255 | — | received |
+
+So a Mac in a LAN lobby would never list a Windows or Mac host's game. A game reached some other
+way, such as direct connect or a directed reply, would still work.
+
+Linux has the same socket semantics. That is by its documentation; Docker is held, so it isn't
+measured here.
+
+The fix is POSIX-only and small: a second lobby socket on INADDR_ANY:8086 for broadcasts
+(SO_REUSEADDR plus SO_REUSEPORT, so that two copies on one host both hear them), beside the
+unicast one. It is build step 3. Windows is unchanged.
+
+## 2. Two peers on one Mac, with no window and no person
+
+### Addresses: measured
+
+| Idea | Result on macOS |
+|:--|:--|
+| Both on 127.0.0.1:8088 | the second bind fails, EADDRINUSE. And `GameInfo::getLocalSlotNum` picks the local slot by IP alone, so two copies on one address would both claim slot 0 |
+| 127.0.0.1 and 127.0.0.2, as `lan-play.ps1` does | EADDRNOTAVAIL: macOS configures only 127.0.0.1 on lo0. An alias needs `sudo ifconfig lo0 alias 127.0.0.2`, and a person. Linux routes all of 127/8, which is untested here |
+| SO_REUSEPORT on one address:port | BSD delivers each unicast datagram to one of the sockets, not to a chosen peer. That's no use for two players |
+| **127.0.0.1 and one of the machine's own non-loopback addresses** | **works, with no root and no code change.** 127.0.0.1 ↔ 192.168.1.103 (en0) and 127.0.0.1 ↔ 10.211.55.2 (bridge104) delivered both ways on one port. en0 ↔ bridge104 did not. So which pairs work depends on the machine, and the pair should include 127.0.0.1 |
+
+Two costs of the working route:
+- It needs the machine to have an address that is up. A harness should skip with 77 when it
+  doesn't.
+- With the macOS application firewall on, an unsigned binary listening on a non-loopback address
+  gets an "accept incoming connections" dialog. The firewall is off on this machine, so nothing
+  appeared. A harness should check `socketfilterfw --getglobalstate` and skip rather than put up a
+  dialog.
+
+A code route that needs no second address is `-netgame ip:port` per slot, with the local slot taken
+from `-netslot` instead of by IP. It is a dev-path change only, and it's the robust one for CI (E2).
+It is build step 6, if E2 needs it.
+
+### Driving it: nothing new is needed
+
+- `-netgame <ip,ip…>`, `-netslot <n>`, `-netai <n>`, `-seed`, `-map`, `-teams` start a LAN match with
+  no lobby: `LANAPI::StartAutomatedGame`, 458e7fc5.
+- `-headless`, `-maxframes`, `-multiInstance`, `-logPrefix`, `ZH_USER_DATA_DIR`, `-root`/`-overlay`
+  isolate each copy, as `replay-check.sh` does.
+- `net_check.py` is its Windows ancestor: 127.0.0.x addresses, `-control` key presses, and `--prove`.
+- `-lanlobby` with `-lanip`/`-lanname` opens the lobby, but it still needs clicks, or `-control`, to
+  host and join. The lobby is not needed for the acceptance, and F1 is tested at the socket level.
+
+### The measurement, 2026-09-26
+
+Setup:
+- The arm64 `build-mac/generals` of feature/mac-port 3db1807b, a Rule-9 farm and a staged overlay.
+- Install guard: "ok: the install is as it was (1070 entries)".
+- `ZH_HIDDEN_WINDOW=1 … -headless`: no window.
+- Two copies at once, each with its own `ZH_USER_DATA_DIR`:
+  `-netgame 127.0.0.1,192.168.1.103 -netslot 0|1 -netai 2 -map "Maps\Golden Oasis\Golden Oasis.map" -seed 3 -maxframes 3000`.
+
+| | peer 0 (127.0.0.1) | peer 1 (192.168.1.103) |
+|:--|:--|:--|
+| slots | local 0, remote at C0A80167:8088 | local 1, remote at 7F000001:8088 |
+| "CRC Mismatch" lines | 0 | 0 |
+| HEADLESS CRC at frame 3000 | **0x341D0C61** | **0x341D0C61** |
+| AI structures after frame 0 | 12 | 12 |
+| replay | 189,127 bytes | 189,127 bytes |
+| its replay played back alone | 0x341D0C61 at frame 3000 | 0x341D0C61 at frame 3000 |
+
+The live match took 105 s, and both copies exited with 0.
+
+### F2: a -netgame replay reports an out-of-sync it does not have
+
+- Both playbacks log "Replay has gone out of sync on frame 31: recorded EA9BF312, played back
+  AE684603".
+- Yet each reaches the live world's CRC 2,969 frames later.
+- The two peers recorded the same CRC, so they agree with each other. It is the playback check that
+  disagrees at its first comparison.
+- It is the shape 9126172a fixed for lobby-started network games: the frame-0 CRC is never
+  recorded, and playback skips one entry for GAME_LAN.
+
+Not yet known:
+- whether the `-netgame` path records one entry more or fewer than the lobby path does;
+- whether a lobby-started game shows it too;
+- whether Windows does.
+
+Build step 2 finds out. Until then, the check reads "no desync" from the live peers' CRC exchange
+and the final world CRCs, not from the playback's in-sync line.
+
+## 3. Acceptance, and whether it is feasible
+
+**Feasible, and half of it is already measured:**
+- Two headless Mac peers, one seeded LAN match to N frames, no "CRC Mismatch", the same final CRC:
+  done above at N = 3000, arm64 against arm64.
+- Each peer's replay played back to the same CRC as the other's: done above, apart from F2's
+  message.
+- **One peer x86_64 under Rosetta.** E1's architecture axis has already built the whole game for
+  x86_64 (`CMAKE_OSX_ARCHITECTURES=x86_64`, FFmpeg cross-configured). Its replays cross-played with
+  arm64 at 12,000 frames. For LAN, that build and the arm64 one play live against each other. It
+  needs one extra build directory, about 2.1 GB (build-mac's size), with 8.7 GB free. It is to be
+  deleted after the run.
+
+**What the acceptance cannot see:**
+- **A Windows peer.** MSVC's code generation, LLP64's 32-bit `long` and the MSVC CRT are all
+  outside this Mac. Rosetta gives x86-64 semantics under clang, not Windows. The defect class E1
+  found in `1UL << (dt - 1)` agreed across arm64 and x86_64 and differed only on Windows. Only a
+  Windows peer, or a Windows-recorded replay, closes it.
+- **Real multi-host LAN.** On one host, traffic between two local addresses never leaves the kernel,
+  so there is no real latency, loss, reordering, MTU or switch. `-latAvg`, `-latNoise` and
+  `-packetloss` simulate the first three. Lobby discovery between machines is F1, and a one-host run
+  can't show it: the -netgame path skips the lobby.
+- **NAT.** LAN has none, and Internet play (GameSpy) is out of scope.
+- **The application firewall's dialog**, on a Mac where the firewall is on.
+- **More than two humans.** `net_check.py` notes that four copies stall at frame 61 in the
+  disconnect keepalive, on Windows; that isn't chased here.
+- **The lobby's GUI flow, map transfer and chat.** None is exercised by `-netgame`.
+
+## Build steps
+
+1. **`Tools/net-check.sh`, a POSIX twin of `net_check.py` and a ctest.**
+   - It uses replay-check's farm, overlay, install guard and user folders.
+   - The peers are 127.0.0.1 plus the first non-loopback address that is up. It skips with 77
+     without data, without such an address, or with the application firewall on.
+   - It runs a seeded `-netgame` match with `-netai` AIs to N frames and checks that neither peer has
+     "CRC Mismatch", that the final CRCs are equal, and that the AI built something (an idle match
+     proves nothing).
+   - Each peer's replay is played back to the same CRC.
+   - Armed control: peer 1 gets a different `-seed`, so the start positions differ, and the check
+     must report a mismatch.
+   - `--arch x86_64 <generals>` runs one peer under Rosetta.
+2. **F2:** find why a `-netgame` replay's first CRC comparison is off. Then fix it where it's
+   wrong, or record why it's right.
+3. **F1:** hear broadcasts on POSIX. Add a second lobby socket on INADDR_ANY:8086 with
+   SO_REUSEADDR and SO_REUSEPORT, POSIX only. Test it at the socket level: a broadcast reaches both
+   of two copies' lobby sockets, and a directed message reaches only its own. Include an armed
+   control, and a `windows_view_diff` showing Windows unchanged.
+4. **The cross-architecture proof:** step 1 with one peer x86_64, in one temporary build directory,
+   deleted afterwards.
+5. Assert the argument widths `NetPacket` sends (`Bool` 1, `Real` 4, `Coord3D` 12, `ICoord2D` 8,
+   `IRegion2D` 16, `ObjectID` and `DrawableID` 4) beside the B4 asserts, so an MSVC difference fails
+   the build.
+6. Only if E2's runners have no second address: `-netgame ip:port` and the local slot from
+   `-netslot`.
+
+## Step 1 result: `Tools/net-check.sh` and ctest `net_check` (-47, 2026-09-26)
+
+The harness is as step 1 describes, with the PM's constraints.
+- **The second address** is found by a probe, never written in: the first up, non-loopback IPv4
+  address (`ifconfig`, else `ip`) that delivers a datagram to and from 127.0.0.1. With none, it
+  skips (77). Both game ports must be free on both addresses, or it skips and names them.
+- **The firewall gate** comes first, before the probe listens. On macOS it reads socketfilterfw's
+  global state, stealth mode and block-all, and skips (77) unless all three are off. Its own control
+  uses fakes reporting each of the three on; each must skip before any copy starts.
+  - It cannot see third-party filters (Little Snitch, LuLu), pf rules, or a firewall switched on
+    after the check. The script's header says so.
+- **A mismatch ends the match at once.** After "CRC Mismatch" a copy waits on its disconnect screen
+  for good, so the harness stops both copies when either log shows one. Without that, the control
+  ran into the time limit in every phase, about 15 minutes; with it, the control takes 30 s.
+- **The replays** are played back only after a match that kept one world. F2's message is printed
+  but does not fail the run until step 2 settles it.
+
+ctest `net_check` (TIMEOUT 900, in the `zh_install` lock with the other farm tests), `-V`, 138 s:
+
+| check | result |
+|:--|:--|
+| 0. the firewall gate's control: fakes reporting on, stealth and block-all | each skips (77) before any copy starts |
+| 1. seed 3, two AIs, Golden Oasis, 1800 frames, 127.0.0.1 and 192.168.1.103 | both 0x3453DF90 at frame 1800, 0 mismatches, 5 AI structures; both replays play back to 0x3453DF90 |
+| 2. the control: the second copy on seed 4 | FAILED through the game's own "CRC Mismatch", stopped after 6 s of match; exit 1 |
+
+## Do not
+
+- Do not set SO_REUSEADDR on the unicast game or lobby socket to make two copies share an address.
+  BSD then hands each datagram to one of them, and a two-player test can pass while talking to
+  itself.
+- Do not call an arm64-against-x86_64 pass cross-platform. It is cross-architecture under one
+  compiler (E1's wording).
+- Do not run the engine on the install. Rule 9: every run uses a farm, and the install is hashed
+  before and after.
