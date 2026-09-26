@@ -450,6 +450,32 @@ inline bool findDesktopDirectory( char *out, size_t outSize )
 }
 #endif
 
+/** Where the value starts if this preferences line sets `key` - "key = value", the key in any case,
+	* blanks around either - and NULL if it does not.  The value runs to the line's end; the caller cuts
+	* the line ending and trailing blanks.  findEarlyOptionValueIn reads with it, and Registry.ini's
+	* writer (registry.cpp) finds the line it replaces with it, so the two agree on which line is a key's. */
+inline const char *earlyOptionLineValue( const char *line, const char *key )
+{
+	const size_t keyLen = ::strlen( key );
+	const char *at = line;
+	while (*at == ' ' || *at == '\t')
+		++at;
+
+	if (::strncasecmp( at, key, keyLen ) != 0)
+		return NULL;
+
+	const char *after = at + keyLen;
+	while (*after == ' ' || *after == '\t')
+		++after;
+	if (*after != '=')
+		return NULL;	// a longer key that merely starts the same way
+
+	++after;
+	while (*after == ' ' || *after == '\t')
+		++after;
+	return after;
+}
+
 /** The value stored under this key in an already-open preferences file.
 	*
 	* Split out from findEarlyOptionValue so the parsing can be tested against a file the test wrote
@@ -460,27 +486,13 @@ inline bool findEarlyOptionValueIn( FILE *fp, const char *key, char *out, size_t
 		return false;
 	out[0] = 0;
 
-	const size_t keyLen = ::strlen( key );
 	bool found = false;
 	char line[1024];
 	while (::fgets( line, sizeof( line ), fp ) != NULL)
 	{
-		const char *at = line;
-		while (*at == ' ' || *at == '\t')
-			++at;
-
-		if (::strncasecmp( at, key, keyLen ) != 0)
+		const char *after = earlyOptionLineValue( line, key );
+		if (after == NULL)
 			continue;
-
-		const char *after = at + keyLen;
-		while (*after == ' ' || *after == '\t')
-			++after;
-		if (*after != '=')
-			continue;	// a longer key that merely starts the same way
-
-		++after;
-		while (*after == ' ' || *after == '\t')
-			++after;
 
 		size_t i = 0;
 		while (*after != 0 && *after != '\r' && *after != '\n' && i + 1 < outSize)
