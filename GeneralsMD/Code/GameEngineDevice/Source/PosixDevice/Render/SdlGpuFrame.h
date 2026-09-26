@@ -159,6 +159,9 @@ public:
 
 	SDL_GPUDevice * Device() const { return GpuDevice; }
 	SDL_GPUTexture * Back_Buffer() const { return BackBuffer; }
+	/// What the last Present showed: the back buffer is copied here at each Present, so the front buffer
+	/// (GetFrontBufferData) is the presented picture whenever it is asked for (A3d).
+	SDL_GPUTexture * Front_Copy() const { return FrontCopy; }
 	unsigned int Width() const { return BackWidth; }
 	unsigned int Height() const { return BackHeight; }
 	/// The back buffer's format, and so what a Present_To target has to be.
@@ -183,6 +186,8 @@ private:
 	SDL_Window * Window;				///< C2's, claimed; null for an offscreen frame
 	SDL_GPUTexture * BackBuffer;
 	SDL_GPUTexture * DepthStencil;
+	SDL_GPUTexture * FrontCopy;			///< the last presented picture
+	bool Copy_To_Front(struct SDL_GPUCommandBuffer * commands);
 	unsigned int DepthFormat;			///< an SDL_GPUTextureFormat: D24S8 where there is one, else D32S8
 	unsigned int BackWidth;
 	unsigned int BackHeight;
