@@ -16,6 +16,8 @@
 
 #include "test_harness.h"
 
+#include <limits>
+
 #include "Common/AsciiString.h"
 #include "Common/CommandLine.h"
 #include "Common/UnicodeString.h"
@@ -14063,6 +14065,36 @@ TEST(the_spectator_page_has_its_pieces_and_no_option_clicks)
 #include "test_camera_behavior.inc"
 #include "test_observer_camera.inc"
 #include "test_production_input.inc"
+// The two cursor indexes a float decides.  Mouse.ini's FPS or GameData.ini's scroll speed of inf or NaN
+// made them INT_MIN on Windows and indexed a table with that; a negative FPS made a negative frame on
+// every platform.  Anything outside the table is its first entry now, and every in-range index is the one
+// the old expression gave.
+TEST(cursor_frames_and_directions_stay_in_their_tables)
+{
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	const float inf = std::numeric_limits<float>::infinity();
+	CHECK_EQ(mouseCursorFrame(2.7f, 5), 2);
+	CHECK_EQ(mouseCursorFrame(4.99f, 5), 4);
+	CHECK_EQ(mouseCursorFrame(5.0f, 5), 0);
+	CHECK_EQ(mouseCursorFrame(-3.2f, 5), 0);
+	CHECK_EQ(mouseCursorFrame(nan, 5), 0);
+	CHECK_EQ(mouseCursorFrame(inf, 5), 0);
+
+	CHECK_EQ(mouseCursorDirection(nan, 8), 0);
+	CHECK_EQ(mouseCursorDirection(inf, 8), 0);
+	CHECK_EQ(mouseCursorDirection(-1.0f, 8), 0);
+	const double pi = 3.14159265358979323846;
+	for (Int directions = 1; directions <= MAX_2D_CURSOR_DIRECTIONS; ++directions) {
+		for (Int k = 0; k < 2000; ++k) {
+			const Real theta = (Real)(k * 2.0 * pi / 2000.0);
+			Int old = (Int)(theta / (2.0f * pi / (Real)directions) + 0.5f);
+			if (old >= directions)
+				old = 0;
+			CHECK_EQ(mouseCursorDirection(theta, directions), old);
+		}
+	}
+}
+
 // The rank walk.  RankPoints is ten Int thresholds followed by five Real multipliers, and the menus walked
 // it with `while (points >= m_ranks[i + 1]) ++i`, unbounded.  This models that walk over the struct's own
 // fifteen words, with the shipped thresholds and multipliers and Windows' float-to-int conversion for the
