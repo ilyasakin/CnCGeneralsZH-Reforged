@@ -90,6 +90,9 @@ class OutputStream;
 class DataChunkInput;
 struct DataChunkInfo;
 class AlphaEdgeTextureClass;
+class TerrainTextureClass;		// the friends below name these, which declares them for lookup only on MSVC
+class AlphaTerrainTextureClass;
+class W3DCustomEdging;
 
 #define NUM_ALPHA_TILES 12
 

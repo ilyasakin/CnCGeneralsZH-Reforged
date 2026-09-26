@@ -49,7 +49,7 @@
 class W3DDynamicLight;
 class LightClass;
 class Drawable;
-enum CustomScenePassModes;
+#include "W3DDevice/GameClient/W3DCustomScene.h"	// CustomScenePassModes, which ISO C++ cannot forward-declare
 class MaterialPassClass;
 class W3DShroudMaterialPassClass;
 class W3DMaskMaterialPassClass;

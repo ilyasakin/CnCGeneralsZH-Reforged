@@ -36,8 +36,12 @@ static void drawFramerateBar(void);
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include <stdlib.h>
 #include "Lib/Clock.h"
+#if defined(_WIN32)
 #include <windows.h>
+#endif
+#if defined(_WIN32)
 #include <io.h>
+#endif
 #include <time.h>
 #include "stringex.h"
 
