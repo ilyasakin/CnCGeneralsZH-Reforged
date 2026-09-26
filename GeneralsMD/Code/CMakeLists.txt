@@ -47,6 +47,29 @@ else()
   set(ZH_NOT_YET_PORTABLE "")
 endif()
 
+# GCC (6 and later) assumes a member function's `this` is never null and deletes the checks written on
+# it.  EA's code depends on them: MemoryPoolObject::deleteInstance() begins `if (this)`, and a null
+# pointer's deleteInstance() is called all over the engine (the first one in ScriptEngine::init, where
+# the native Linux build segfaulted, W1).  GCC's own release notes name this switch as the way to keep
+# such code working.  MSVC never made the assumption; clang only warns about it (-Wundefined-bool-
+# conversion) and keeps the check today.  POSIX with GCC only, so nothing changes where it works.
+if(ZH_PLATFORM_POSIX AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  add_compile_options(-fno-delete-null-pointer-checks)
+endif()
+
+# Linux links with LLD when it is there.  The engine's static libraries reference each other in cycles
+# (gameengine, ww3d2, wwsaveload, w3ddevice ...), which GNU ld resolves only in link order, so generals
+# failed to link with hundreds of undefined references; Apple's linker, and LLD, resolve archives in
+# any order.  Without LLD, GNU ld is left as it was and the cycles still need resolving (W1 records it).
+if(ZH_PLATFORM_LINUX)
+  find_program(ZH_LLD NAMES ld.lld)
+  if(ZH_LLD)
+    add_link_options(-fuse-ld=lld)
+  else()
+    message(WARNING "No ld.lld: GNU ld cannot resolve the engine's circular static libraries in link order")
+  endif()
+endif()
+
 # compile_commands.json: every source's exact compile command, which Tools/syntax_sweep.py and
 # clangd read.  Ninja can produce it on demand; a Makefiles tree has nothing else that carries each
 # target's own -D flags.  POSIX only because only the POSIX tooling reads it - include_case_check

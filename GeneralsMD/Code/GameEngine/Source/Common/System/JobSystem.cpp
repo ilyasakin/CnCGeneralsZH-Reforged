@@ -29,6 +29,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <system_error>	// std::system_error, caught below: libc++ brings it in with <thread>, libstdc++ does not
 #include <thread>
 
 /*
