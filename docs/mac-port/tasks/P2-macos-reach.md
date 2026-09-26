@@ -2,8 +2,9 @@
 
 - **Milestone:** M5
 - **Depends on:** P1 (the bundle)
-- **Status:** deployment target done (-47, 2026-09-26); universal2 recon reported, build awaiting the
-  PM's choice
+- **Status:** deployment target done and merged (-47, 2026-09-26). Universal2: option A chosen by the
+  PM. Its path exists in `macos_app` and is tested with stand-ins; a real universal bundle is E2's,
+  at release time.
 
 ## Why
 
@@ -68,6 +69,38 @@ builds release bundles on a machine with the disk for it.
   stripped.
 - Either way, `make-macos-app.sh`'s minimum-macOS check reads both slices (`otool -l` prints each), and
   `replay-check.sh --app` could be run once under Rosetta with `arch -x86_64`.
+
+## 2b. Universal2, option A: the path (built at release time)
+
+The PM chose A: an x86_64 build directory beside the arm64 one, with its `generals` lipo'd in. Not built
+now; the path is in place.
+- **How.** Configure a second build directory with `-DCMAKE_OSX_ARCHITECTURES=x86_64` (E1's recipe;
+  `ninja generals` only) and pass its executable as `-DZH_X86_64_GENERALS=<that build>/generals` to the
+  arm64 build. `ninja macos_app` then:
+  - checks the file is an x86_64 executable, and that `--generals` has no x86_64 slice of its own;
+  - checks its minimum macOS, and that of every object in its own link line's libraries, since its
+    folder holds a `build.ninja`;
+  - `lipo -create`s the two, runs `dsymutil` on the universal result, strips, and signs.
+- **Throughout,** the minimum-macOS check reads every slice (`otool -arch all -l`).
+- **Tested with stand-ins** (`macos_app_check`, 4 checks; tiny `cc -arch x86_64` executables, no second
+  build):
+  - a slice for 13.0 makes a universal executable (`arm64 x86_64`) that verifies, both slices stamped
+    13.0;
+  - a slice for macOS 26 is refused before a bundle exists;
+  - an arm64 file passed as the x86_64 slice is refused.
+- **Cost at release time,** from the recon above: +1.3 GB for the x86_64 directory, one more `generals`
+  build, an executable of about 50 MB and a dSYM of about 420 MB.
+- **What the stand-ins cannot show:** the real x86_64 game inside the bundle. E1 and L1 showed the
+  architecture itself, on a separate executable.
+
+## The kept bundle, rebuilt at 13.0 (2026-09-26)
+
+`build-mac/Zero Hour Reforged.app`, the one the user's by-hand check uses, was rebuilt from c71f2ec9 at
+the same path:
+- `LSMinimumSystemVersion` 13.0, and the executable's minos 13.0;
+- the dSYM beside it; the seal verifies `--deep --strict`;
+- 13 MB of disk (the art clones again);
+- `replay_check_app` on it: 0x0177BEF6 at frame 1200, and the seal still verifies after the run.
 
 ## What this cannot see
 
