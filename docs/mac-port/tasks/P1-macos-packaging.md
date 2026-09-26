@@ -3,7 +3,7 @@
 - **Milestone:** M5
 - **Depends on:** C1 (file systems), C2 (entry point), V1 (FFmpeg's licence); E1 for the convergence step
 - **Blocks:** anything a player runs; E2's notarisation question
-- **Status:** design (-47, 2026-09-26); no code and no bundle builds until the PM says (disk)
+- **Status:** design approved (2026-09-26); step 1 done on its branch; step 5 (the `.app`) held until the PM says (disk)
 - **Owner:** -47
 
 ## Why
@@ -16,9 +16,11 @@ to it, and resolves every file exactly as Windows' `Run/` does.
 
 ## What Windows does (the behaviour to reproduce)
 
-Read from this tree (the Windows packaging scripts `package.bat` and `launcher/build-payload.js` are
-referenced in comments but are not in this repository, so the shipped set is taken from the
-post-build list in `CMakeLists.txt` and from `vendor.sh`'s art step):
+Read from this tree. **The shipped set is inferred and must be confirmed:** the Windows packaging
+scripts `package.bat` and `launcher/build-payload.js` are referenced in comments but are not in this
+repository, so the list below is taken from the post-build list in `CMakeLists.txt` and from
+`vendor.sh`'s art step. It is an open item to check against upstream's release tooling before the
+first macOS release, and the bundle target's comment says the same.
 
 - **One folder.** `Run/` is the game folder: the player's Steam or CD Zero Hour files, plus what
   `generals`' post-build copies over them from `Code/Data`: `Data/INI/*` (the fork's INIs, in the
@@ -74,9 +76,11 @@ every relative path the engine builds still means what it meant.
 **Where the overlay is.** Found once at start-up, first match wins:
 1. `-overlay <dir>`, repeatable, in the order given (development and the harnesses);
 2. `<exe>/../Resources/Overlay` when the executable is inside an app bundle (macOS);
-3. `<exe>/../share/zero-hour-reforged/overlay`, then `<exe>/overlay` (Linux packages; the
-   constraint, not built now).
-A build with no overlay found runs as today, install only.
+3. `<exe>/../share/zero-hour-reforged/overlay` (Linux packages; the constraint, not built now).
+A build with no overlay found runs as today, install only. (Step 1 dropped a bare `<exe>/overlay`
+from the design: once `zh_overlay` stages `<build>/overlay`, every development run from the build
+folder would have picked it up silently, and E1 would have changed what it runs without anyone
+asking.)
 
 **Read-only roots.** Every root is read-only. `deleteFile`, `createDirectory`, and an open with
 `WRITE`/`CREATE` on a *relative* path are refused, logged once per path, and answer as a missing
@@ -229,3 +233,49 @@ file moves.
 - Windows' actual `package.bat` contents, which are not in this repository. The shipped overlay list
   is inferred from the CMake comments, and whoever holds that script should confirm it.
 - Linux packaging, beyond the discovery rule's third entry.
+
+## Step 1: the overlay as a read root (-47, 2026-09-26)
+
+**Where it went.** The design put the roots in `PosixLocalFileSystem`. They went one level lower, into
+WWLib's `posixpath` (`PosixPath_Resolve` and `PosixPath_List_Like_Win32`), because every relative
+open off Windows goes through there, not only the engine's file system: the `zh_*` calls, the Bink
+movies, the fonts, the splash. On Windows all of those see `Run/`'s copied files, so all of them now
+see the overlay. The local file system needed no change.
+- **Reads** (`POSIX_PATH_EXISTING`) of a relative path try each overlay, then the working directory.
+- **Writes** resolve in the working directory only: every CREATE intent, and a new
+  `POSIX_PATH_EXISTING_IN_ROOT` for whatever changes an existing file. The `zh_*` forwarders map
+  `unlink`, `remove`, `rename`'s source, and opens for writing (`r+`, `O_WRONLY`, `O_RDWR`,
+  `O_TRUNC`, `O_APPEND`) to it. A write can therefore never land in, or delete from, an overlay.
+- **Listings** merge the roots by name (case-insensitively across roots; within one root every entry
+  stays, as a case-sensitive volume can hold two), then byte order.
+- `-overlay <dir>` (repeatable) or the bundle's `Resources/Overlay` is chosen in `PosixMain` before
+  the `chdir` to the root, and reported on stderr.
+
+**Checks.**
+- `test_posixpath` gains `overlay_reads_first_writes_never_lists_as_one_folder`, worked by hand:
+  - reads see the overlay's copy first (including an overlay spelled in another case);
+  - the listings are one folder's, with and without subdirectories, one entry per name;
+  - a create, an update, an unlink and a write-open all touch the install only, never the overlay;
+  - absolute paths are untouched;
+  - armed control: with no overlay set, nothing of it is seen.
+  The case-sensitive APFS run still passes (it caught a first version that folded names within one
+  root).
+- `overlay_crc_check` (`Tools/overlay-crc-check.sh`, ctest, needs `ZH_GAME_DATA`): the PM's
+  multiplayer check.
+  - Layout W is one folder: the install farm with the shipped overlay copied in and the fork's
+    `Reforged*.big` linked. Layout P is the install farm as the root, plus the same files as
+    `-overlay`.
+  - A 600-frame skirmish in each: the EXE CRC (decision 5's inputs off Windows: the version and the two
+    script files), the INI CRC and the world CRC agree: `0x0D56B480`, `0x1E635A82`, `0xE21F0AC9`
+    at frame 600.
+  - Armed controls: without `-overlay` the EXE CRC differs (`0xFE3E96F1`), and that run stops before
+    its INI CRC, as decision 9's first run did. With one value changed in the overlay
+    (`BalanceReforged.ini` BuildCost 1000 to 1001) the run goes through and only the INI CRC moves
+    (`0x86F44535`).
+- Full ctest: every test passes except `ffref_gpu_selfcheck`, which is -a9's harness asking for its
+  two F11 scenarios to come off its KNOWN list now that they pass: its designed signal, not a
+  regression here.
+
+**What it cannot see.** Windows' own `Run/` (W is the farm standing in for it, as E1's is); a write
+that bypasses `zh_*` and `posixpath` (raw `fopen` of a relative path), which step 2's audit looks for;
+Linux (the disk hold).
