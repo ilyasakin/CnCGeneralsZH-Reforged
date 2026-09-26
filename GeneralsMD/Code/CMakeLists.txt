@@ -1468,6 +1468,14 @@ endif()
 if(ZH_GAME_DATA)
   set_tests_properties(test_terrain_golden PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
 endif()
+# T1c (defect 17): the water grid's step, moved to the top of each logic frame, against the original
+# code's output under EA's one-pass-per-frame loop (Tests/water_grid_oracle.cpp), under catch-up too.
+add_lib_test(test_water_grid gameengine)
+target_sources(test_water_grid PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
+set_target_properties(test_water_grid PROPERTIES CXX_STANDARD 17)
+if(ZH_PLATFORM_POSIX)
+  target_link_libraries(test_water_grid PRIVATE posixdevice)
+endif()
 # Off Windows the device layer's hooks (render stand-ins, the CD manager) are PosixDevice's, where on
 # Windows the test's own stubs stand in for gameenginedevice, which it does not link (B6).
 if(ZH_PLATFORM_POSIX)

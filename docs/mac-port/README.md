@@ -193,7 +193,7 @@ you start. That commit is the lock.
 | B12 | [SSE2 in WWMath and Float_To_Long](tasks/B12-simd-float-to-long.md) | M1 | A1 | done: `Float_To_Long` goes through `Lib/DetRound.h`, no SSE2 header left in WWMath (was -21) | |
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | done: merged (was -21) | |
 | E4 | [Windows under CrossOver](tasks/E4-windows-under-crossover.md) | M1 | — | blocked: no game executable for stage 1 (release channel unpublished); stage 2 needs the user to accept Microsoft's licence | -a9 |
-| T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | claimed | -47 |
+| T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | done: T1a merged, T1c (defect 17) on its branch; T1b and T1d dropped by decision 8 | -47 |
 | C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | done: path resolver, POSIX local and BIG file systems, file operations, user-data dir, replay stream, PosixGameEngine (abstract until T1); `test_bigfilesystem` byte-identical over 25,293 files | -a9 |
 | C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | claimed | -18 |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
@@ -853,7 +853,7 @@ missing folder: it listed the current directory's six files, `Map Scratch.map` a
 C1 (c): both list the save folder by its path, and a missing folder lists nothing.
 
 **17. Fork-introduced: the logic catch-up lets the water grid, which the simulation reads, fall
-behind by the number of catch-up frames.** Not fixed yet (T1c). A code-path argument, not yet shown
+behind by the number of catch-up frames.** Fixed by T1c (below). A code-path argument, not yet shown
 to desync in a match. `TerrainLogic::isUnderwater` (`TerrainLogic.cpp:2218, 2276`) reads
 `TheTerrainVisual->getWaterGridHeight` whenever the map has enabled the water grid, and its
 callers are simulation: pathfinding (`AIPathfind.cpp:5918`), `Locomotor`, `PartitionManager`,
@@ -875,6 +875,13 @@ Hour's 116 maps has it, so no shipped multiplayer or skirmish map runs the grid*
 player is a custom map with a `WaveGuide1`, and replays of those three campaign missions played back
 at a different speed. Fix direction: step the grid once per LOGIC frame, which restores EA's count on
 Windows. That is a rule 3 change needing a replay check. Found by T1's recon (-47), read-only.
+**Fixed by T1c:** the step (W3DWater.cpp's text, frame gate and all) is `WaterGridMotion` in gameengine,
+and `GameLogic::update` calls it at its top through `TerrainVisual::updateWaterGrid`, where EA's client
+pass stood, once per logic frame. `test_water_grid` holds it, under EA's loop and three catch-up
+schedules, to the original code's own output under EA's loop (an oracle, identical under Wine, arm64
+and x86_64); the original under the same catch-up schedules is the armed control and differs. **On
+Windows this changes grid heights on water-grid maps whenever the catch-up runs, back to EA's count.**
+Headless runs (one logic frame a pass) step as before. `WINDOWS-DEBT.md` has the row.
 
 ### Latent undefined behaviour that MSVC happens to tolerate
 
