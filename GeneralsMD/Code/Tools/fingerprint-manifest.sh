@@ -9,6 +9,11 @@
 # Left out, because a vendoring or build run rewrites their bytes and two checkouts of one commit would
 # then disagree: Libraries/Source/FFmpeg/dist/ (Windows' FFmpeg, rebuilt by Tools/ffmpeg-build.sh).
 # The manifest itself is left out too (it would hash its own list).
+#
+# Refused while the index has unmerged entries (a merge or rebase stopped on a conflict): `git ls-files`
+# lists an unmerged path once per stage, so a manifest written then names it up to three times, and a
+# check run then compares against a list that is not a commit's.  The list is deduplicated anyway, and
+# --check names any line the committed manifest holds more than once.
 
 set -euo pipefail
 
@@ -20,14 +25,26 @@ if ! command -v git >/dev/null 2>&1 || ! git -C "$CODE" rev-parse --git-dir >/de
 	exit 77
 fi
 
+if [ -n "$(git -C "$CODE" ls-files -u . 2>/dev/null | head -1)" ]; then
+	echo "FAIL: the index has unmerged entries (a merge or rebase stopped on a conflict); resolve and add them, then run this again:"
+	git -C "$CODE" ls-files -u . | awk '{print $4}' | LC_ALL=C sort -u | head -10
+	exit 1
+fi
+
 list() {
 	git -C "$CODE" ls-files -z . | tr '\0' '\n' \
 		| grep -v '^Libraries/Source/FFmpeg/dist/' \
 		| grep -v '^BuildFingerprint\.manifest$' \
-		| LC_ALL=C sort
+		| LC_ALL=C sort -u
 }
 
 if [ "${1:-}" = "--check" ]; then
+	twice="$(LC_ALL=C sort "$MANIFEST" | uniq -d)"
+	if [ -n "$twice" ]; then
+		echo "FAIL: BuildFingerprint.manifest lists these more than once; run Tools/fingerprint-manifest.sh and commit it:"
+		printf '%s\n' "$twice" | head -10
+		exit 1
+	fi
 	if list | cmp -s - "$MANIFEST"; then
 		echo "ok: BuildFingerprint.manifest lists exactly the tracked files ($(wc -l < "$MANIFEST" | tr -d ' '))"
 		exit 0
