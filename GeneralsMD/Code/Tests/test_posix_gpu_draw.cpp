@@ -26,6 +26,8 @@
 //   - a fan (DrawPrimitiveUP and indexed), static and dynamic buffers, and a static buffer written
 //     again after a draw used it, which must flush so both draws show what D3D9 would have shown;
 //   - a clear between draws, and the depth test ordering two quads whatever order they are drawn in;
+//   - partial clears as clear draws: one cut to a smaller viewport, a list of rectangles, and a depth-only
+//     rectangle that a following depth-tested draw sees (and whose own state does not leak into it);
 //   - a texture's GPU copy goes when the texture does (posixResourceDestroyed);
 //   - a cube texture is refused, counted, and draws nothing.
 //
@@ -346,6 +348,44 @@ static void check_clears_and_depth(PosixDevice9 *device)
 		CHECK_PIXEL(5, 5, RED);
 	}
 	device->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
+
+	// A clear with a smaller viewport clears only the viewport.
+	begin(device, BLUE);
+	D3DVIEWPORT9 whole, part = { 8, 8, 16, 16, 0.0f, 1.0f };
+	device->GetViewport(&whole);
+	device->SetViewport(&part);
+	device->Clear(0, NULL, D3DCLEAR_TARGET, GREEN, 1.0f, 0);
+	device->SetViewport(&whole);
+	read_back(device);
+	CHECK_PIXEL(7, 7, BLUE);
+	CHECK_PIXEL(8, 8, GREEN);
+	CHECK_PIXEL(23, 23, GREEN);
+	CHECK_PIXEL(24, 24, BLUE);
+
+	// Rectangles, each cut to the viewport.
+	begin(device, BLUE);
+	const D3DRECT rects[2] = { { 0, 0, 8, 8 }, { 24, 24, 40, 40 } };
+	device->Clear(2, rects, D3DCLEAR_TARGET, RED, 1.0f, 0);
+	read_back(device);
+	CHECK_PIXEL(0, 0, RED);
+	CHECK_PIXEL(7, 7, RED);
+	CHECK_PIXEL(8, 8, BLUE);
+	CHECK_PIXEL(31, 31, RED);
+	CHECK_PIXEL(16, 16, BLUE);
+
+	// Depth only, over the left half: depth 0 everywhere, then 1 on the left, then a quad at 0.5 over
+	// everything shows on the left alone, and in its own colour.
+	begin(device, BLUE);
+	device->Clear(0, NULL, D3DCLEAR_ZBUFFER, 0, 0.0f, 0);
+	const D3DRECT left_half = { 0, 0, 16, 32 };
+	device->Clear(1, &left_half, D3DCLEAR_ZBUFFER, 0, 1.0f, 0);
+	device->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE);
+	quad(v, 0, 0, 32, 32, 0.5f, YELLOW);
+	device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 2, v, sizeof(ScreenVertex));
+	device->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
+	read_back(device);
+	CHECK_PIXEL(8, 16, YELLOW);
+	CHECK_PIXEL(24, 16, BLUE);
 }
 
 static void check_refusal(PosixDevice9 *device)

@@ -20,9 +20,11 @@
 // as one copy pass and then the render passes.  See SdlGpuFrame.h.
 
 #include "SdlGpuFrame.h"
+#include "sdl3shadercompile.h"
 
 #include <SDL3/SDL.h>
 
+#include <stdio.h>
 #include <string.h>
 
 // Past this much staged or uploaded data the next draw flushes first, so one batch never needs an
@@ -32,6 +34,20 @@ static const size_t BATCH_LIMIT = 64u * 1024u * 1024u;
 // Every staged and uploaded range starts on this: enough for any vertex or index offset and for a texel
 // block's copy on every backend.
 static const uint32_t STAGING_ALIGNMENT = 16;
+
+// The clear draw: one triangle over the whole target at the clear's depth, in the clear's colour, drawn
+// through a scissor of the rectangle.  The values are uniforms (sdl3target.h's spaces: vertex b in
+// space1, pixel b in space3).
+static const char CLEAR_VERTEX_HLSL[] =
+	"cbuffer ClearValues : register(b0, space1) { float4 Colour; float4 Depth; };\n"
+	"float4 main(uint id : SV_VertexID) : SV_Position\n"
+	"{\n"
+	"	float2 corner = float2(id == 1 ? 3.0 : -1.0, id == 2 ? 3.0 : -1.0);\n"
+	"	return float4(corner, Depth.x, 1.0);\n"
+	"}\n";
+static const char CLEAR_PIXEL_HLSL[] =
+	"cbuffer ClearColour : register(b0, space3) { float4 Colour; };\n"
+	"float4 main() : SV_Target0 { return Colour; }\n";
 
 static uint8_t * grow(std::vector<uint8_t> & bytes, uint32_t size, uint32_t & offset)
 {
@@ -83,6 +99,88 @@ uint32_t SdlGpuFrame::Constants(unsigned int stage, const void * bytes, uint32_t
 	LastConstants[stage] = offset;
 	LastConstantsSize[stage] = size;
 	return offset;
+}
+
+void SdlGpuFrame::Clear_Rect(int x, int y, int width, int height, bool colour, bool depth, bool stencil, uint32_t argb,
+	float z, uint32_t stencil_value)
+{
+	if ((!colour && !depth && !stencil) || width <= 0 || height <= 0) {
+		return;
+	}
+	Command command;
+	memset(&command, 0, sizeof(command));
+	command.IsRect = true;
+	command.Rect[0] = x;
+	command.Rect[1] = y;
+	command.Rect[2] = width;
+	command.Rect[3] = height;
+	command.Colour = colour;
+	command.Depth = depth;
+	command.Stencil = stencil;
+	command.Argb = argb;
+	command.Z = z;
+	command.StencilValue = stencil_value;
+	Commands.push_back(command);
+}
+
+// Bit 0 colour, bit 1 depth, bit 2 stencil: what the clear draw writes.  Depth and stencil always pass
+// and are replaced; what is not cleared is masked off.
+SDL_GPUGraphicsPipeline * SdlGpuFrame::Clear_Pipeline(unsigned int which)
+{
+	if (ClearPipelines[which] != NULL) {
+		return ClearPipelines[which];
+	}
+	std::string log;
+	if (ClearVertex == NULL) {
+		std::vector<unsigned char> spirv;
+		if (!SDL3_Compile_HLSL_To_SPIRV(CLEAR_VERTEX_HLSL, true, spirv, log)
+			|| (ClearVertex = SDL3_Create_Shader(GpuDevice, spirv, true, log)) == NULL) {
+			fprintf(stderr, "SdlGpuFrame: the clear draw's vertex program: %s\n", log.c_str());
+			return NULL;
+		}
+	}
+	if (ClearPixel == NULL) {
+		std::vector<unsigned char> spirv;
+		if (!SDL3_Compile_HLSL_To_SPIRV(CLEAR_PIXEL_HLSL, false, spirv, log)
+			|| (ClearPixel = SDL3_Create_Shader(GpuDevice, spirv, false, log)) == NULL) {
+			fprintf(stderr, "SdlGpuFrame: the clear draw's pixel program: %s\n", log.c_str());
+			return NULL;
+		}
+	}
+	SDL_GPUColorTargetDescription target;
+	SDL_zero(target);
+	target.format = (SDL_GPUTextureFormat)Target_Format();
+	target.blend_state.enable_color_write_mask = true;
+	target.blend_state.color_write_mask = (which & 1) ? 0xF : 0;
+	SDL_GPUGraphicsPipelineCreateInfo info;
+	SDL_zero(info);
+	info.vertex_shader = ClearVertex;
+	info.fragment_shader = ClearPixel;
+	info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+	info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+	info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+	info.depth_stencil_state.enable_depth_test = (which & 2) != 0;
+	info.depth_stencil_state.enable_depth_write = (which & 2) != 0;
+	info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_ALWAYS;
+	info.depth_stencil_state.enable_stencil_test = (which & 4) != 0;
+	SDL_GPUStencilOpState replace;
+	replace.fail_op = SDL_GPU_STENCILOP_REPLACE;
+	replace.pass_op = SDL_GPU_STENCILOP_REPLACE;
+	replace.depth_fail_op = SDL_GPU_STENCILOP_REPLACE;
+	replace.compare_op = SDL_GPU_COMPAREOP_ALWAYS;
+	info.depth_stencil_state.front_stencil_state = replace;
+	info.depth_stencil_state.back_stencil_state = replace;
+	info.depth_stencil_state.compare_mask = 0xFF;
+	info.depth_stencil_state.write_mask = 0xFF;
+	info.target_info.color_target_descriptions = &target;
+	info.target_info.num_color_targets = 1;
+	info.target_info.depth_stencil_format = (SDL_GPUTextureFormat)DepthFormat;
+	info.target_info.has_depth_stencil_target = true;
+	ClearPipelines[which] = SDL_CreateGPUGraphicsPipeline(GpuDevice, &info);
+	if (ClearPipelines[which] == NULL) {
+		fprintf(stderr, "SdlGpuFrame: the clear draw's pipeline: %s\n", SDL_GetError());
+	}
+	return ClearPipelines[which];
 }
 
 void SdlGpuFrame::Record_Draw(const SdlRecordedDraw & draw)
@@ -224,7 +322,7 @@ bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer *
 
 	for (size_t i = 0; i <= Commands.size(); ++i) {
 		const bool end = i == Commands.size();
-		if (end || !Commands[i].IsDraw) {
+		if (end || (!Commands[i].IsDraw && !Commands[i].IsRect)) {
 			if (pass != NULL) {
 				SDL_EndGPURenderPass(pass);
 				pass = NULL;
@@ -273,6 +371,30 @@ bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer *
 			}
 		}
 
+		if (Commands[i].IsRect) {
+			const Command & clear = Commands[i];
+			SDL_GPUGraphicsPipeline * pipeline = Clear_Pipeline((clear.Colour ? 1 : 0) | (clear.Depth ? 2 : 0) | (clear.Stencil ? 4 : 0));
+			if (pipeline == NULL) {
+				continue;
+			}
+			SDL_BindGPUGraphicsPipeline(pass, pipeline);
+			SDL_GPUViewport viewport = { 0.0f, 0.0f, (float)BackWidth, (float)BackHeight, 0.0f, 1.0f };
+			SDL_SetGPUViewport(pass, &viewport);
+			SDL_Rect scissor = { clear.Rect[0], clear.Rect[1], clear.Rect[2], clear.Rect[3] };
+			SDL_SetGPUScissor(pass, &scissor);
+			SDL_SetGPUStencilReference(pass, (Uint8)clear.StencilValue);
+			const float values[8] = {
+				(float)((clear.Argb >> 16) & 0xFF) / 255.0f, (float)((clear.Argb >> 8) & 0xFF) / 255.0f,
+				(float)(clear.Argb & 0xFF) / 255.0f, (float)((clear.Argb >> 24) & 0xFF) / 255.0f,
+				clear.Z, 0.0f, 0.0f, 0.0f };
+			SDL_PushGPUVertexUniformData(commands, 0, values, sizeof(values));
+			SDL_PushGPUFragmentUniformData(commands, 0, values, 16);
+			SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
+			// Everything the draws set is the clear's now: the next draw binds it all again.
+			last = NULL;
+			pushed_vertex = pushed_pixel = 0xFFFFFFFFu;
+			continue;
+		}
 		const SdlRecordedDraw & draw = Draws[Commands[i].Draw];
 		if (last == NULL || last->Pipeline != draw.Pipeline) {
 			SDL_BindGPUGraphicsPipeline(pass, draw.Pipeline);
