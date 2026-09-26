@@ -108,7 +108,10 @@ with no `<stddef.h>` and spells `__cdecl` 13 times; `compression` hits `__int64`
 `<emmintrin.h>` (SSE2 on arm64). So the real order is **A1 → B3 + B5 + B9 → the four libraries and
 the two self-checks**, and that last step is a follow-up rather than part of A1.
 
-**M1 — headless Mac build.** No renderer, no window, no sound. `gameengine` and the portable
+**M1 — headless Mac build. REACHED 2026-09-26** (`81abdf13`): all 606 `gameengine` sources compile
+under clang on arm64, and `test_gameengine` passes under ctest on macOS (443 tests, 521,945 checks),
+beside every portable library's suite. Not verified: Windows (never compiled by MSVC; see
+`WINDOWS-DEBT.md`) and Linux (the milestone-boundary `linux-check.sh` run is still owed). No renderer, no window, no sound. `gameengine` and the portable
 libraries compile under clang on arm64, and the test suites that do not need a device run green.
 This is where the toolchain, `WideChar`, the shims and the link-surface trimming all get proved, and
 it is the milestone that tells you whether determinism survives clang before anyone writes a line
@@ -191,8 +194,8 @@ you start. That commit is the lock.
 | E3 | [x86_64/arm64 differential harness](tasks/E3-arch-differential-harness.md) | M1 | A1 | done: merged (was -21) | |
 | E4 | [Windows under CrossOver](tasks/E4-windows-under-crossover.md) | M1 | — | blocked: no game executable for stage 1 (release channel unpublished); stage 2 needs the user to accept Microsoft's licence | -a9 |
 | T1 | [Simulation terrain out of W3DDevice](tasks/T1-simulation-terrain.md) | M2 | — | claimed | -47 |
-| C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | in progress: path-resolution design proposed, awaiting decisions D1-D7 (the `mixfile.cpp` piece is done) | -a9 |
-| C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | not started | |
+| C1 | [MacGameEngine and file systems](tasks/C1-mac-game-engine.md) | M2 | B6 | done: path resolver, POSIX local and BIG file systems, file operations, user-data dir, replay stream, PosixGameEngine (abstract until T1); `test_bigfilesystem` byte-identical over 25,293 files | -a9 |
+| C2 | [Entry point](tasks/C2-entry-point.md) | M2 | C1 | claimed | -18 |
 | C3 | [Input](tasks/C3-input.md) | M4 | C2 D4 | not started | |
 | C4 | [Audio](tasks/C4-audio.md) | M5 | C2 | in progress: lower half (the Miles API on miniaudio) in review; upper half open | -a9 |
 | C5 | [Crash reporting](tasks/C5-crash-reporting.md) | M2 | B6 | not started | |
@@ -352,6 +355,36 @@ Microsoft's fonts: Arial and Times New Roman are present on macOS, and on Linux 
 metric-compatible Liberation Sans and Serif (OFL). Metric compatibility matters because text width
 decides where the UI wraps lines. Text is display only and never reaches the simulation, so
 mismatched glyph metrics are a cosmetic risk, not a determinism one.
+
+**7. The renderer reaches POSIX through a D3D9-shaped device, and Windows keeps its own (taken
+2026-09-26, from `RENDERER-ROUTE-RECON.md`).** D1's funnel stalled because its call-site moves
+change Windows rendering and need a Windows A/B that nobody here can run. The recon measured why
+the old sequence (D1 → D2 → D4) cannot work without one. The engine does not just CALL Direct3D, it
+SPEAKS it: 477 D3D names and ~5,000 uses outside the wrapper, 3,778 of them fixed-function constants.
+`dx11backend` also MIRRORS a real D3D9 device rather than replacing one, so off Windows there is
+nothing for it to mirror. Decided: **route A.** On POSIX only, WW3D2 and W3DDevice compile against a
+D3D9-shaped device (~95 methods) whose resources are CPU-backed, and whose draws resolve at draw time
+into cached SDL3 GPU pipelines. That is `dx11backend`'s design on a new base, with D3's generators
+producing the shaders. Calls that escape the wrapper need no funnel, because they reach this device
+directly. Windows keeps D3D9 and the D3D11 mirror, untouched. Phases: **A0** (the only
+Windows-visible one) fixes three header lines and removes Win32 scalar types from WW3D2 and
+W3DDevice, B5's way; **A1** a POSIX-only header of the D3D9 names and interfaces, with loud-failing
+bodies, so both libraries compile and link; **A2** CPU-backed resources: every texture of the
+install loads and reads back; **A3** the draw, in frames. About 7-8k new POSIX-only lines.
+Rejected: finishing D1 on POSIX (it still needs A0-A2, and its site moves are the Windows A/B that
+stalled it), and a new renderer interface under WW3D2 (a rewrite of all 5,000 uses, visible on
+Windows throughout). D1 PRs 2-8 are deferred until a Windows machine exists. D2's "interface" is
+the D3D9-shaped device itself, and D4 is A3.
+- **Names.** This is a deliberate exception to "engine-own names" (FF_*, MSGBOX_*): on POSIX we
+  implement the D3D9 device the renderer already speaks, so its names ARE the interface. They go in
+  ONE POSIX-only header that `#error`s on Windows, written from the published values (never copied
+  from Wine's LGPL headers), static_asserted against mingw-w64's headers in a checker TU, as B5 did
+  for the DIK codes, and reviewed under the second-reader rule. It contains no Win32 scalar types:
+  A0 removes DWORD, HRESULT and HWND from the renderer first.
+- **Reference images.** There is no Windows frame to compare against. Correctness is checked per
+  draw on the CPU against the fixed-function formulas, as D3's generator tests do. A visual reference
+  can come later from the retail game under CrossOver, run on a COPY of the install (rule 9 applies
+  there too: the INIZH.big delete is EA's code).
 
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 

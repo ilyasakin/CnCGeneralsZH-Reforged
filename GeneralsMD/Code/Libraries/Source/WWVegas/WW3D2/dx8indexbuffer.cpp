@@ -345,7 +345,7 @@ DX8IndexBufferClass::DX8IndexBufferClass(unsigned short index_count_,UsageType u
 		usage_flags|=D3DUSAGE_SOFTWAREPROCESSING;
 	}
 
-	HRESULT ret=DX8Wrapper::_Get_D3D_Device()->CreateIndexBuffer(
+	RenderResult ret=DX8Wrapper::_Get_D3D_Device()->CreateIndexBuffer(
 		sizeof(WORD)*index_count,
 		usage_flags,
 		D3DFMT_INDEX16,
@@ -353,7 +353,7 @@ DX8IndexBufferClass::DX8IndexBufferClass(unsigned short index_count_,UsageType u
 		&index_buffer,
 		NULL);	// pSharedHandle, D3D9's extra parameter, reserved and always null
 
-	if (SUCCEEDED(ret)) {
+	if (Render_Succeeded(ret)) {
 		return;
 	}
 
@@ -378,7 +378,7 @@ DX8IndexBufferClass::DX8IndexBufferClass(unsigned short index_count_,UsageType u
 			&index_buffer,
 			NULL);	// pSharedHandle, D3D9's extra parameter, reserved and always null
 
-		if (SUCCEEDED(ret)) {
+		if (Render_Succeeded(ret)) {
 			WWDEBUG_SAY(("...Index buffer creation succesful\n"));
 			return;
 		}

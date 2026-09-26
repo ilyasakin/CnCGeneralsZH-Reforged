@@ -499,14 +499,14 @@ void DX8VertexBufferClass::Create_Vertex_Buffer(UsageType usage)
 		usage_flags|=D3DUSAGE_SOFTWAREPROCESSING;
 	}
 
-	HRESULT ret=DX8Wrapper::_Get_D3D_Device()->CreateVertexBuffer(
+	RenderResult ret=DX8Wrapper::_Get_D3D_Device()->CreateVertexBuffer(
 		FVF_Info().Get_FVF_Size()*VertexCount,
 		usage_flags,
 		FVF_Info().Get_FVF(),
 		(usage&USAGE_DYNAMIC) ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED,
 		&VertexBuffer,
 		NULL);	// pSharedHandle, D3D9's extra parameter, reserved and always null
-	if (SUCCEEDED(ret)) {
+	if (Render_Succeeded(ret)) {
 		return;
 	}
 
@@ -539,7 +539,7 @@ void DX8VertexBufferClass::Create_Vertex_Buffer(UsageType usage)
 			&VertexBuffer,
 			NULL);	// pSharedHandle, D3D9's extra parameter, reserved and always null
 
-		if (SUCCEEDED(ret)) {
+		if (Render_Succeeded(ret)) {
 			WWDEBUG_SAY(("...Vertex buffer creation succesful\n"));
 			return;
 		}

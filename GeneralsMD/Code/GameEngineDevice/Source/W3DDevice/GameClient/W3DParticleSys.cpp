@@ -251,7 +251,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		ParticleSystem *sys = (*it);
 		if (!sys || sys->isUsingDrawables())
 			continue;
-		if (*((DWORD *)sys->getParticleTypeName().str()) == 0x44554D53)
+		if (*((UnsignedInt *)sys->getParticleTypeName().str()) == 0x44554D53)
 			continue;
 
 		BillboardFill fill;
@@ -297,7 +297,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			continue;
 
 		//temporary hack that checks if texture name starts with "SMUD" - if so, we can assume it's a smudge type
-		if (/*sys->isUsingSmudge()*/ *((DWORD *)sys->getParticleTypeName().str()) == 0x44554D53)
+		if (/*sys->isUsingSmudge()*/ *((UnsignedInt *)sys->getParticleTypeName().str()) == 0x44554D53)
 		{
 			if (TheSmudgeManager && ((W3DSmudgeManager*)TheSmudgeManager)->getHardwareSupport() && TheGlobalData->m_useHeatEffects)
 			{

@@ -55,12 +55,19 @@ void start_empty()
 		initMemoryManager();
 		booted = true;
 	}
+	/* Without ZH_USER_DATA_DIR every write below would go to this user's real Registry.ini
+		 (findUserDataDirectory's own answer), which a test has no business touching - and this function
+		 deletes the file.  ctest sets the variable to a folder in the build tree; run by hand without it,
+		 stop before anything is written. */
 	const char *dir = getenv("ZH_USER_DATA_DIR");
-	if (dir != NULL && *dir) {
-		const std::string command = std::string("mkdir -p '") + dir + "'";
-		if (system(command.c_str()) != 0)
-			printf("  could not make %s\n", dir);
+	if (dir == NULL || *dir == 0) {
+		printf("FAIL: ZH_USER_DATA_DIR is not set; refusing to write the real Registry.ini (run through ctest)\n");
+		fflush(stdout);
+		exit(1);
 	}
+	const std::string command = std::string("mkdir -p '") + dir + "'";
+	if (system(command.c_str()) != 0)
+		printf("  could not make %s\n", dir);
 	remove(registry_path().c_str());
 }
 
@@ -133,18 +140,16 @@ TEST(wwdownload_registry_paths_below_the_game_key_are_part_of_the_key)
 	CHECK(!GetStringFromRegistry(std::string(""), std::string(""), value));
 }
 
-TEST(wwdownload_registry_cannot_clear_a_value_yet)
+TEST(wwdownload_registry_clears_a_value_with_an_empty_string)
 {
 	/* Windows stores an empty string, which the proxy box's readers take as "no proxy".  Registry.ini
-		 cannot hold an empty value (it reads as missing), and RegistryFile.h has no way to clear a key
-		 yet, so the write is refused and the old value stays.  This pins that until it can; when it
-		 can, this test changes to expect the value gone. */
+		 writes "Proxy =", which reads as missing, and those readers take missing as "no proxy" too. */
 	start_empty();
 	CHECK(SetStringInRegistry("", "Proxy", "proxy.example:8080"));
-	CHECK(!SetStringInRegistry("", "Proxy", ""));
+	CHECK(SetStringInRegistry("", "Proxy", ""));
 	std::string value;
-	CHECK(GetStringFromRegistry(std::string(""), std::string("Proxy"), value));
-	CHECK(value == "proxy.example:8080");
+	CHECK(!GetStringFromRegistry(std::string(""), std::string("Proxy"), value));
+	CHECK(read_registry().find("proxy.example") == std::string::npos);
 }
 
 TEST(format_url_from_registry_is_urlbuilders_on_an_empty_registry_and_follows_it)
