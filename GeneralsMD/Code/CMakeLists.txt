@@ -1381,6 +1381,11 @@ endif()  # ZH_PLATFORM_WINDOWS - Windows-only support library tests
 # Phase 3 checkpoint: boots the memory manager, name keys and file system, then
 # runs a real INI file through the parser.
 add_lib_test(test_gameengine PENDING_MACOS gameengine)
+# Off Windows the device layer's hooks (render stand-ins, the CD manager) are PosixDevice's, where on
+# Windows the test's own stubs stand in for gameenginedevice, which it does not link (B6).
+if(ZH_PLATFORM_POSIX)
+  target_link_libraries(test_gameengine PRIVATE posixdevice)
+endif()
 # GlobalData asks for the user data directory, which off Windows is made on first use: keep it in
 # the build tree rather than the real one under the user's home (C1 (e)).
 if(ZH_PLATFORM_POSIX)
