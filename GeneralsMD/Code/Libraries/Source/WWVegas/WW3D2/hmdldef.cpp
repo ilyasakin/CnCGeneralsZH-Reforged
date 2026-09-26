@@ -36,13 +36,13 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 
-#include "hmdldef.h"
+#include "hmdldef.H"
 #include "stringex.h"
 #include <assert.h>
 #include <string.h>
 #include "w3d_file.h"
 #include "chunkio.h"
-#include "snappts.h"
+#include "snapPts.h"
 
 
 /***********************************************************************************************

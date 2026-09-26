@@ -43,7 +43,7 @@
 //			  and alpha.
 //-----------------------------------------------------------------------------
 
-#include "W3DDevice/GameClient/heightmap.h"
+#include "W3DDevice/GameClient/HeightMap.h"
 #include "Lib/Clock.h"
 #include "W3DDevice/GameClient/W3DWaterTracks.h"
 #include "W3DDevice/GameClient/W3DShaderManager.h"
@@ -51,9 +51,9 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/Water.h"
 #include "GameLogic/TerrainLogic.h"
-#include "common/GlobalData.h"
-#include "common/UnicodeString.h"
-#include "Common/File.h"
+#include "Common/GlobalData.h"
+#include "Common/UnicodeString.h"
+#include "Common/file.h"
 #include "Common/FileSystem.h"
 #include "texture.h"
 #include "colmath.h"
@@ -61,7 +61,7 @@
 #include "rinfo.h"
 #include "camera.h"
 #include "assetmgr.h"
-#include "WW3D2/DX8Wrapper.h"
+#include "WW3D2/dx8wrapper.h"
 #include "Platform/RenderTypes.h"
 
 //#pragma optimize("", off)

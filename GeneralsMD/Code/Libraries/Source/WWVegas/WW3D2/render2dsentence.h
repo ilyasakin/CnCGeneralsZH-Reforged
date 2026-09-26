@@ -44,7 +44,7 @@
 #include "Lib/WideChar.h"	// WideChar, the engine's text type (B1); its own header, so WW3D2 needs no BaseType.h
 #include "render2d.h"
 #include "refcount.h"
-#include "vector.h"
+#include "Vector.H"
 #include "vector2i.h"
 #include "wwstring.h"
 #include "win.h"

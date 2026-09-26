@@ -34,7 +34,7 @@
 
 #define NO_DEBUG_CRC
 
-#include "Common/CRC.h"
+#include "Common/crc.h"
 #include "Common/CRCDebug.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
@@ -69,11 +69,11 @@
 #include "W3DDevice/GameClient/BaseHeightMap.h"
 #include "W3DDevice/GameClient/W3DTerrainTracks.h"
 #include "W3DDevice/GameClient/WorldHeightMap.h"
-#include "WW3D2/HAnim.h"
-#include "WW3D2/HLod.h"
-#include "WW3D2/RendObj.h"
-#include "WW3D2/Mesh.h"
-#include "WW3D2/MeshMdl.h"
+#include "WW3D2/hanim.h"
+#include "WW3D2/hlod.h"
+#include "WW3D2/rendobj.h"
+#include "WW3D2/mesh.h"
+#include "WW3D2/meshmdl.h"
 #include "Common/BitFlagsIO.h"
 
 #ifdef _INTERNAL
@@ -1950,7 +1950,7 @@ static Bool fillShadowInfoFromTemplate(const ThingTemplate *tmplate, Shadow::Sha
 	}
 
 	strcpy(shadowInfo->m_ShadowName, tmplate->getShadowTextureName().str());
-	DEBUG_ASSERTCRASH(shadowInfo->m_ShadowName[0] != ' ', ("this should be validated in ThingTemplate now"));
+	DEBUG_ASSERTCRASH(shadowInfo->m_ShadowName[0] != '\0', ("this should be validated in ThingTemplate now"));
 	shadowInfo->allowUpdates		= FALSE;		//shadow image will never update
 	shadowInfo->allowWorldAlign	= TRUE;	//shadow image will wrap around world objects
 	shadowInfo->m_type					= (ShadowType)tmplate->getShadowType();

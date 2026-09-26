@@ -55,7 +55,7 @@
 #include "always.h"
 #endif
 
-#include "vector.h"
+#include "Vector.H"
 #include "wwstring.h"
 #include "widestring.h"
 
