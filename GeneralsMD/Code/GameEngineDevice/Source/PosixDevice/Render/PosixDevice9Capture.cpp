@@ -136,6 +136,11 @@ void PosixDevice9::Capture_Draw(const DrawCall &call, const std::string &signatu
 	if (!state.Asked || state.Signatures.count(signature) != 0) {
 		return;
 	}
+	if (VertexShader != NULL || PixelShader != NULL) {
+		// Version 1 holds a fixed-function draw; a replay of this one would draw it without its program.
+		skip(state, signature, "a programmable draw (capture version 2)");
+		return;
+	}
 	if (state.Written >= state.Budget) {
 		skip(state, signature, "over ZH_GPU_CAPTURE_MB");
 		return;

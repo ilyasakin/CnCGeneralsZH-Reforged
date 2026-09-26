@@ -67,6 +67,11 @@ public:
 	/// comes back with a null Shader and its Refusal.
 	const SdlProgram &Vertex_Program(const VertexPipelineDescription &description);
 	const SdlProgram &Pixel_Program(const CombinerDescription &description);
+	/// One of the engine's own programs (A3e), from D3's transcription (engineshader.cpp), keyed as the
+	/// Direct3D 11 backend keys it: the name, and for a pixel program the alpha test and fog written into
+	/// it.  A refusal for a program with no transcription, or of the other stage.
+	const SdlProgram &Engine_Vertex_Program(int program);
+	const SdlProgram &Engine_Pixel_Program(int program, const struct PixelPipelineDescription &pipeline);
 
 	unsigned int Programs_Built() const { return Built; }
 	unsigned int Programs_Refused() const { return Refused; }

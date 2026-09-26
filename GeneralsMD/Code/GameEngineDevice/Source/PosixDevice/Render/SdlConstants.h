@@ -60,6 +60,27 @@ struct SdlPixelConstants
 	float AlphaReference[4];		///< .x is D3DRS_ALPHAREF as a whole level, 0 to 255
 };
 
+/// What an engine pixel program's b0 declares (A3e, engineshader.cpp's write_pixel_preamble): the Direct3D
+/// 11 backend's PixelConstantBlock, field for field.  The first three are SdlPixelConstants; the rest -
+/// the normal mapped lights, the terrain's sun, the shadow and the sky - serve the bumped terrain and
+/// the fork's Direct3D 11 additions, which A3e does not draw, and stay zero: zero shadow parameters
+/// read as a pixel the sun reaches.
+struct SdlEnginePixelConstants
+{
+	SdlPixelConstants Combiner;
+	float NormalLightDirection[4][4];
+	float NormalLightDiffuse[4][4];
+	float NormalMapParameters[4];
+	float TerrainSunDirection[4];
+	float ShadowFromClip[16];
+	float ShadowParameters[4];
+	float ShadowViewport[4];
+	float ShadowSoftness[4];
+	float Sky[4];
+	float SkyUp[4];
+};
+static_assert(sizeof(SdlEnginePixelConstants) == 22 * 16, "PixelConstantBlock's 22 float4s");
+
 static_assert(sizeof(SdlVertexConstants) % 16 == 0 && sizeof(SdlPixelConstants) % 16 == 0,
 	"whole float4s, as std140 lays them out");
 static_assert(sizeof(SdlVertexConstants) == (3 + MAXIMUM_VERTEX_STAGES) * 64 + 8 * 16 + MAXIMUM_VERTEX_LIGHTS * VERTEX_REGISTERS_PER_LIGHT * 16,

@@ -203,8 +203,15 @@ RenderResult PosixDirect3D9::GetDeviceCaps( unsigned int adapter, D3DDEVTYPE typ
 	caps->MaxVertexIndex = 0xffffff;
 	caps->MaxStreams = 16;
 	caps->MaxStreamStride = 255;
-	caps->VertexShaderVersion = 0;											// 0.0 until A3 runs the engine's shaders
-	caps->PixelShaderVersion = 0;
+	// 1.1 and no higher (A3e): the device draws the engine's shaders from D3's transcriptions by the name
+	// each is registered under, and 1.1 is what the engine asks for (DC_GENERIC_PIXEL_SHADER_1_1, with the
+	// 8 stages above).  96 constants is vs_1_1's bank, which the transcriptions read.
+	caps->VertexShaderVersion = D3DVS_VERSION(1, 1);
+	caps->PixelShaderVersion = D3DPS_VERSION(1, 1);
+	caps->MaxVertexShaderConst = 96;
+	// The documented minimum for ps 1.0 to 1.3 (the PM's decision, 2026-09-26): inside +-1 every conforming
+	// device agrees, so this claims only what all of them guarantee.  Registers hold [-1, 1].
+	caps->PixelShader1xMaxValue = 1.0f;
 	caps->NumSimultaneousRTs = 1;
 	caps->MasterAdapterOrdinal = 0;
 	caps->AdapterOrdinalInGroup = 0;
