@@ -44,6 +44,11 @@ void CombinerShaderCache_Read_Device(IDirect3DDevice9 * device, CombinerDescript
 	// key, and a key built out of uninitialised memory is a cache that never hits.
 	memset(&description, 0, sizeof(description));
 
+	// The specular add, which the bound program replaces on D3D9 and so has to do itself.
+	RenderUInt32 specular = 0;
+	device->GetRenderState(D3DRS_SPECULARENABLE, &specular);
+	description.SpecularAdd = specular != 0;
+
 	description.StageCount = 0;
 	for (unsigned stage = 0; stage < MAXIMUM_COMBINER_STAGES; ++stage) {
 		RenderUInt32 colour_operation = D3DTOP_DISABLE;

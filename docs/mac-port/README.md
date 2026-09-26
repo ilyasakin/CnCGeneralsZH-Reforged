@@ -1025,6 +1025,44 @@ line in each of the three targets. `ps_op_dotproduct3`, whose alpha operation is
 byte-identical, as is everything else. The harness's DOTPRODUCT3 scenario now matches. `WINDOWS-DEBT.md`
 has the row.
 
+**25. Fork-introduced: generated pixel programs never add the specular colour, so no lit highlight
+shows - under Direct3D 9 as well as Direct3D 11 - fixed.** With `D3DRS_SPECULARENABLE`, Direct3D 9's
+fixed-function pipeline adds the vertex's specular colour to the pixel after the texture stages
+(`D3DRENDERSTATETYPE`: "added to the base color after the texture cascade but before alpha blending").
+`ffshader`'s programs never did. The engine turns specular on:
+- `shader.cpp:1018`: a W3D shader's secondary gradient;
+- `W3DWater.cpp:2616`: water, with `D3DRS_LOCALVIEWER` TRUE beside it;
+- `wwshade/shdcubemap.cpp:251`.
+
+**Both Windows renderers lose those highlights today.** Direct3D 11 runs these programs. So does
+Direct3D 9: its generated combiner shaders are always on (`W3DDisplay.cpp:1072`) and are bound in place of
+the fixed-function stages (`dx8wrapper.cpp:2592-2605`). A bound pixel shader replaces D3D9's specular add
+rather than being followed by it. -47 read the pages independently:
+- "Writing HLSL Shaders in Direct3D 9": "A pixel shader completely replaces the pixel-blending
+  functionality specified by the multi-texture blender including operations previously defined by the
+  texture stage states". Also: "Other pixel operations (fog blending, stencil operations, and
+  render-target blending) occur after execution of the shader", which doesn't list the specular add.
+  Also: ps_1_x's r0 "is sent to the fog stage and render-target blender".
+- "Set device state on fixed-function, shader pipelines" lists `D3DRS_SPECULARENABLE` among the
+  fixed-function-only states.
+
+The same pages keep fog after the shader below ps_3_0, so the D3D9 profile still writes no fog. The one
+contradiction: the device-state page also lists the fog states as fixed-function only, against the three
+specific pages. Found by A3b's harness: defect #22 changed the program key and not one pixel.
+
+**Fixed:**
+- `CombinerDescription::SpecularAdd`, set from `D3DRS_SPECULARENABLE` by `ffshadercache` (the D3D9
+  path), `dx11backend` and the SDL3 device, adds `input.Specular.rgb` after the stages, before the fog
+  and the alpha test, as D3D9 orders them.
+- The normal-mapped program, D3D11's own per-pixel highlight, is left as it was.
+- Shader dump: every existing program is byte-identical. The new case `ps_extra_specular_add` is
+  `ps_op_modulate` plus exactly that line, in all three targets.
+- The harness's lit-specular scenario, with #22's local viewer, now matches FFReference.
+
+Still open: an **unlit** draw's vertex specular colour (meshes with a second colour array get
+`D3DFVF_SPECULAR`, `dx8renderer.cpp:715`). The vertex programs don't pass it through, so the add has
+nothing to add there yet. `WINDOWS-DEBT.md` has the row.
+
 ### Latent undefined behaviour that MSVC happens to tolerate
 
 Not defects a Windows player can hit today: MSVC does the intended thing. But a second compiler and

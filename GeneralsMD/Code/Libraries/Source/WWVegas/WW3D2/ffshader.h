@@ -95,6 +95,14 @@ struct CombinerDescription
 	// position comes from SV_Position and one matrix, which is what keeps this off the varyings the
 	// two generators have to agree on.  SHADOW-MAP-PLAN.md phase 2.
 	bool ShadowReceiving = false;
+
+	// D3DRS_SPECULARENABLE: after the stages the pixel gains the vertex's specular colour, RGB only
+	// (D3DRENDERSTATETYPE: "added to the base color after the texture cascade but before alpha
+	// blending").  Every profile writes it, D3D9's included: D3D9 does the add only for its
+	// fixed-function stages, and a bound pixel shader, which the D3D9 profile's program is, replaces
+	// it ("Writing HLSL Shaders in Direct3D 9").  A normal mapped program adds its own highlight
+	// instead.  Initialised here for a caller that fills the rest field by field.
+	bool SpecularAdd = false;
 };
 
 // The normal mapped pixel program reads this many directional lights from its constants.  Slots
