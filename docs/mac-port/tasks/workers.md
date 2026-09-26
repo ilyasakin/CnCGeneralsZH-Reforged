@@ -29,5 +29,43 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | the art archives (`Reforged*.big`, 1.65 GB) | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
 | the repository | `~/zhr-worker/repo` (a clone of `feature/mac-port`), from `~/zhr-worker/zhr.bundle` | `git bundle` here, `scp` there, `git clone` (-47). Nothing was pushed to any public remote | in the folder |
 | worktree for -47 | `~/zhr-worker/wt-47`, branch `agent-47` | `git worktree add` (-47) | in the folder |
+| build dir for -47 | `~/zhr-worker/build-47` (Release, `ZH_GAME_DATA=~/zhr-worker/data`) | `cmake`/`ninja` via `zheavy` (-47) | in the folder |
+| worktree for the PM | `~/zhr-worker/wt-pm`, detached at `feature/mac-port`, vendor and art cloned in; `build-pm` once the FFmpeg fix is merged | `git worktree add --detach` (-47) | in the folder |
+| incoming bundles | `~/zhr-worker/bundles/`, `~/zhr-worker/zhr.bundle`, `~/zhr-worker/w1.bundle` | `scp` (-47) | in the folder |
+| a Metal / window-server probe | `~/zhr-worker/tools/gpuprobe.m` and its binary | written and compiled by -47 (it opens no window) | in the folder |
+| a tree hasher | `~/zhr-worker/bin/hashtree.py` (path, size and BLAKE2 per file) | written by -47, for the data check | in the folder |
+| the README | `~/zhr-worker/README` | written by -47 | in the folder |
 
 Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wide.
+
+### finer: what was measured
+
+- **The data copy:** all 1,786 entries identical to this Mac's `/Volumes/External/Games/cnc`, by path,
+  size and BLAKE2 (`hashtree.py` on both machines).
+- **The first build found a defect in our CMake.** On finer, CMake chose
+  `/Library/Developer/CommandLineTools/usr/bin/cc` rather than the `/usr/bin` shim. Only the shim finds an
+  SDK by itself, so FFmpeg's configure failed to link ("library 'System' not found") and then to build
+  its host tools ("ctype.h not found"). The fix, on `feature/mac-port-workers`: the FFmpeg step runs
+  with `SDKROOT` set to CMake's sysroot, and the build script passes its flags as `--extra-ldflags` as
+  well.
+- **The build:** `build-47` from 9020fd14 builds green: 179 s first time (with the FFmpeg failure),
+  44 s after the fix.
+- **ctest on finer (macOS 26.5.2),** `-E` the four audio and video tests, 1,215 s: 83 tests, 0 failed,
+  11 skipped.
+  - Six SDL GPU selfchecks skip: no window server as zhr (below).
+  - `replay_check_app`: no bundle built there.
+  - `ffprogram_values_check`: no MinGW.
+  - `arch_differential`: its x86_64 side needs Rosetta or a cross toolchain there.
+  - The two D3DX oracles: opt-in, as everywhere.
+- **The first runs on an older macOS agree with this Mac's exactly:**
+  - `replay_check`: seed 0 at frame 1200 is 0x0177BEF6, and seed 1 at frame 12000 is 0x7C7DBA69 (E1's).
+  - `net_check`: 0x3453DF90 at frame 1800, with its controls.
+  - `test_lan_broadcast` and `macos_app_check` pass.
+- **Windows and Metal as zhr over ssh** (`tools/gpuprobe`):
+  - Metal works: the M3 Pro, a command buffer committed and completed.
+  - There is no window server: no display, no session, no GUI launchd domain. So an SDL window, even
+    hidden, cannot be made as zhr, and SDL's GPU device cannot either: its Metal backend needs a Cocoa
+    view (-a9).
+  - The PM chose -a9's `-offscreen` mode (option 3). A GUI login for zhr (option 1) is with the user;
+    running in finer's own session (option 2) was declined.
+
