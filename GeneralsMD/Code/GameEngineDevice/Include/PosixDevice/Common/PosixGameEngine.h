@@ -25,15 +25,9 @@
 //
 // Deliberately abstract.  The factories Windows answers with W3DDevice classes - game logic, game
 // client, module factory, thing factory, function lexicon, particle system manager, radar - and the
-// audio manager stay pure virtual here, for the subclass that has a renderer (C2's, over SDL3) to
-// give.  None of them can be answered honestly yet:
-//   - createGameLogic: W3DGameLogic's terrain logic takes the simulation's ground height from the
-//     renderer's height map, so the base GameLogic would play on different ground.  Task T1 moves
-//     that into gameengine; until it lands no subclass should return a GameLogic from here and
-//     claim a simulation result from it.
-//   - createModuleFactory: W3DModuleFactory registers 19 draw modules by name, in an order that fixes
-//     their NameKeys, and every object INI names one; a headless factory needs all 19, with parsers
-//     that accept each one's INI fields.
+// audio manager stay pure virtual here, for the subclass that has a renderer to give: C2's
+// SdlGameEngine answers them with the same W3D classes Win32GameEngine does (decision 8), W3DDevice
+// being built off Windows since decision 7's A1.
 // serviceWindowsOS is empty: the event pump is C2's, in the subclass.  CreateGameEngine is C2's too.
 
 #pragma once

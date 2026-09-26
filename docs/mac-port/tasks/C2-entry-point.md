@@ -145,3 +145,43 @@ point, with the same values as `WinMain.cpp`'s; `CreateGameEngine` returns C1's 
 
 - Do not create a window, a `NSApplication` or a run loop for M2. Headless means headless, and
   keeping it that way is what makes E1 a clean experiment.
+
+## The W3D factories, and the first real run, 2026-09-26
+
+**Wired** (A1's hand-over):
+- **Factories:** SdlGameEngine's are Win32GameEngine's, the same W3D classes (decision 8). The radar is
+  W3DRadar, and HeadlessRadar only under `-nodevice`.
+- **PosixW3DGameClient:** gives the video player. It is the engine's own `VideoPlayer`, which opens
+  nothing, until V1. It is not NULL, because GameClient calls the player unguarded.
+- **Window globals:** `ApplicationHWnd` and `ApplicationIsBorderless` are defined in PosixMain.cpp.
+  `ApplicationHWnd` is the SDL window, and NULL under `-headless`.
+- **The window follows the display** through `W3DWindowHooks.h`.
+- **Stand-ins removed:** `PosixRenderHooks.cpp` and `MapObjectRenderPosix.cpp` are gone. Decision 2 now
+  lives in `W3DShaderManager::testMinimumRequirements`, checked by `test_render_hooks`.
+
+**The first real `generals -headless`** ran on a symlink farm of the install (rule 9). The install
+listing is identical before and after every run. The command was
+`-headless -root <farm> -randommap 1234 2 small -autoskirmish 2 -seed 1234 -maxframes 600`, built with
+`RELEASE_DEBUG_LOGGING`. What happened:
+- **Mounted:** every archive, with the base game from `ZH_Generals`.
+- **Initialised:** INI CRC 0x1E635A82.
+- **Played:** it generated the random map, brought up W3DDisplay on the POSIX device with no window,
+  started a two-player skirmish (a Hard AI) and ran it to the frame limit: `HEADLESS RESULT: frame
+  limit reached on frame 600 (600 frames in 2.1s wall, 285 logic fps)`, `HEADLESS CRC: 0x78BEA937 at
+  frame 600`.
+- **Wrote a replay** (`Replays/00000000.rep`) and **exited 0**.
+- **Repeated:** a second run with the same seed gave the same CRC.
+
+**Found on the way:**
+- **The fork's own data.** The first run stopped at `Data\INI\FXListReforged.ini`. On Windows,
+  `generals`' post-build copies `Code/Data`'s masters over `Run/`, and there is no POSIX equivalent yet.
+  The farm lays the same directories over the install, unlinking each link before copying, so nothing is
+  written through into the install. A POSIX deployment step is still to be decided.
+- **Output in the exe's folder.** The debug log and the perf files land next to the executable, as on
+  Windows. The fixed-function probe's `ffprobe.txt` lands in the root (the farm). Runs in parallel would
+  share the exe's folder.
+- **A lowercased path.** The random map's path is lowercased, user-data prefix included
+  (`/private/tmp/.../-users-ilyasakin-...`). APFS's default is case-insensitive, so it works here. On a
+  case-sensitive volume (Linux) that path would not exist.
+- **C5 met its first real crash:** the missing INI gave a ReleaseCrashInfo.txt with the reason and the
+  named stack.
