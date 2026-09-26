@@ -174,6 +174,65 @@ a machine where Direct3D 11 failed to start.
 did not have before; the Windows `ww3d2` source set is unchanged. Not compiled with MSVC: WINDOWS-DEBT
 has the row.
 
+## A2: the device's resources, and every install texture through them (2026-09-26)
+
+**The checkpoint holds.** `test_install_textures` (ctest, needs the install) brings WW3D up as
+W3DDisplay::init does with no window, which is `-headless` off Windows: `WW3D::Init(NULL)`, then
+`Set_Render_Device`. Both return OK on the POSIX device, with an 800x600 implicit back buffer and the
+missing-texture stand-in. Then every `.tga` and `.dds` path in the install's archives, all 7,342 of
+them, goes through WW3D2's own loader (`TextureClass`, `TextureLoader`, `DDSFileClass`, `Targa`,
+`BitmapHandlerClass`) into the device. Each is read back and checked against the file on the CPU.
+- **Loaded:** 7,342, none of them the missing texture: 6,602 `.dds` and 740 `.tga`.
+- **How they were asked for:** 6,810 by bare name through `W3DFileSystem`, as the game asks. 532 by
+  path: Art\Terrain, the map previews, and the 27 Art\Textures files the localised folder shadows
+  (the game only ever reaches the localised copy).
+- **Compared:** 48,975 levels, 0 different.
+  - **A `.dds`:** the device keeps its format and size. Its level count is the file's, less any level
+    narrower than 4, as the loader decides. Every level's blocks equal the file's, byte for byte.
+  - **A `.tga`:** decoded by the test, not by `Targa`, top row first. It is point-sampled to the
+    power-of-two size as `BitmapHandlerClass` samples (36 are rescaled). Every mip level WW3D2's
+    generator defines is checked against the same 2x2 combine, computed by the test.
+  - **Level 0, read a second way** through `GetSurfaceLevel`: agrees for every texture.
+- **Hash:** the compared bytes hash to `9ee41084bc04dc1b`, the same on two runs. A Windows run of the
+  test should print the same value; that has not been done.
+- **Armed controls:** each fails the check as it should.
+  - One byte of a loaded level changed on the device, for a `.dds` and for a `.tga`.
+  - The expectation turned upside down.
+  - A name nothing holds (it loads as the missing texture).
+- **Rule 9:** the test mounts a read-only farm of links in `$TMPDIR` and removes it. A listing of the
+  install before and after is identical.
+
+**Found by the checkpoint, fixed (defect-class, Windows-visible):** `WWLib/TARGA.H`'s TGA 2.0 footer and
+extension structs held `long` fields. `long` is 32 bits on Windows and 64 on macOS and Linux, so the
+footer read 34 bytes where the file has 26, and `Targa::Open` failed on every TGA. All 740 then loaded
+as the missing texture. The fields are `int` now, which is what `long` was on Windows, and
+`static_assert`s pin the file sizes, 26 and 495. WINDOWS-DEBT has the row.
+
+**What the checkpoint cannot see:**
+- drawing (A3);
+- textures the game builds rather than loads (the terrain atlas, render targets);
+- cube and volume files (the install has none);
+- texture reduction and HSV shifts (both off on this path);
+- an X8R8G8B8 texel's X byte;
+- the 24 tail mip levels whose narrower side has reached 1. WW3D2's generator writes one texel or none
+  there, on Windows too, so they hold the device's initial memory.
+
+**What A2 built** (the commits have the detail):
+- **`PosixResources9`:** textures, cube and volume textures, surfaces and buffers, in D3D9's block
+  layouts, DXT kept compressed, with D3D9's lock rules.
+- **`PosixPixelCodec`:** the packed formats and DXT1-5.
+- **`PosixImageOps`:** copies, conversions and D3DX's filters.
+- **`PosixDevice9Resources`:** the Create* methods, the copies, `Clear` and the implicit surfaces.
+- **`PosixD3D9Caps`:** the profile agreed with -a9: no vendor, VS/PS 0.0, and TextureOpCaps equal to
+  the generator's ops.
+- **`d3dx9posix_texture.cpp`:** D3DX's texture helpers.
+- **`test_posix_resources`:** 26 tests, 790 checks.
+
+**The render-target seam with A3** (agreed, above in A3's design): when a window exists, A3 owns a render
+target's pixels. The per-surface `gpuOwned()` query, the `Sync_Gpu_Surface` call in the three read paths
+and a GPU write that does not bump `version()` are A2-side hooks. They are not in this merge, since A3a
+does not need them; -18 adds them before A3 draws into a render target.
+
 ## A3 design: the draw on SDL3 GPU (approved 2026-09-26)
 
 Not code yet. What A3 builds, in what order, and how a draw is proven right. It is `dx11backend`'s
