@@ -966,3 +966,48 @@ clamp at 1; the oracle's envelope holds both.
   is no Windows machine, and no citable per-vendor value was found. The documented floor is 1.0 for
   ps 1.0-1.3.
 - Our device's value: asked of -a9.
+
+## A3e-3: the engine's shaders against -47's interpreter (2026-09-26)
+
+**Capture version 2** (64df2991) writes a programmable draw's programs beside it, as `draw_<n>.prog`:
+- each stage's registered name and its tokens, as the device received them;
+- the vertex declaration, recorded only while it is D3D9's current vertex format;
+- the constant banks, c0 to c95 and c0 to c7.
+
+The format went to -47 as a written description, because -47 must not read this code.
+
+**The replay** (f8400156): for a draw with a pixel program,
+- the device draws the transcription registered under the captured name;
+- FFReference runs the captured tokens through -47's `decodeProgram`. The water's stub text goes through
+  -47's own `assemblePixelProgram` first.
+
+Draws with a vertex program (Trees) wait on the interpreter reading a declaration.
+
+**Its first result was a device defect of mine** (c47ec97e).
+- **The defect:** with a pixel shader bound, the device's vertex description stopped giving coordinates at
+  the first COLOROP DISABLE. But D3D9 gives every stage its coordinates, from its TEXCOORDINDEX.
+- **Its effect:** the transcribed terrain's cloud and noise stages, and the water's highlight and shroud
+  stages, sampled at (0, 0).
+- **How big:**
+  - before the fix, terrainnoise2 had 11,367 of 20,252 pixels outside the envelope, and the trapezoid water
+    all 665;
+  - after it, both pass, with 33 pixels and 1 pixel in a freedom and the rest exact.
+- By looks the terrain had seemed right. dx11backend gets this right (`every_stage`).
+- **The seed-1234 skirmish now:** 46 of 50 captures compare, 0 fail, 1 is known (C1), and the 4 Trees draws
+  wait.
+
+**The ps_1_x range, read against the transcriptions.** Registers are signed, [-1, 1], and only `_sat` and
+the final write clamp to [0, 1] (the PM's decision). The transcriptions saturate every step to [0, 1].
+That differs from ps_1_1 only where an intermediate can go below zero, because above one, the cap of 1
+and `saturate` agree. No transcribed program has such an intermediate:
+- **trapezoid and river water:** products and sums of texels and vertex colours, all in [0, 1];
+- **the reflection:** a `dp3` with a third, `1 - x`, two doublings, `mul` by the strength, and `1 - x`.
+  All are non-negative, and the collapsed `saturate(4x)` equals the two clamped doublings.
+- **monochrome:** `dp3`, `mul` by a non-negative tint, and `lrp`;
+- **the terrain and road chains:** products only.
+
+So the decision changes no transcribed program's output. The one program where the sign matters, texbem's
+environment water, has no transcription and is refused. What is wrong is the transcriptions' comment
+"every ps_1_1 instruction clamps its result to zero and one". It is to be corrected in engineshader.cpp,
+a comment-only change to shared code, under the generator-fix process. -47's interpreter holds the
+signed range, and the replay above passing is the measured half of this reading.
