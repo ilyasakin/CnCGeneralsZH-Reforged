@@ -31,19 +31,42 @@
 # network filters (Little Snitch, LuLu and the like) that ask on their own, pf rules, and a firewall
 # switched on between the check and the run.  Off macOS there is no such dialog and nothing is read.
 #
+# ONE AT A TIME, MACHINE-WIDE.  The game's ports are the machine's, and two net-checks from two worktrees
+# (ctest's RESOURCE_LOCK holds only within one ctest) once collided: the copy that could not bind 8088
+# spun in Transport::init's bind retry, leaking a socket per try, until the machine's file table was full
+# (2026-09-26).  So before its probe the harness takes an exclusive lock on one fixed path,
+# /tmp/zhr-net-check.lock (NET_CHECK_LOCK_FILE), and waits for it (NET_CHECK_LOCK_WAIT, 900 s, then skips).
+# The lock is flock(2), taken through python3's fcntl (macOS has no flock(1)) on descriptor 9, which the
+# harness and both copies of the game inherit: the kernel holds it until every one of them has exited -
+# a copy that outlives a killed harness keeps it - and releases it however they end, so it cannot go
+# stale.  And every copy runs under `ulimit -n` of NET_CHECK_FD_LIMIT (4096): a leak ends in EMFILE for
+# that copy instead of the machine.  A watchdog stops both copies once either holds three quarters of
+# that, and fails the run saying so.
+#
 # RULE 9: the game never runs with the real install as its root: a farm of links, the overlay staged
 # as the app ships it, the user data in the work folder, the install hashed before and after
 # (Tools/install-guard.sh), exit 99 if it changed or could not be checked.
 #
 # Usage: net-check.sh --generals <path> [--peer1 <path>] [--data <dir>] [--seed 3] [--frames 3000]
-#          [--netai 2] [--map "Maps\Golden Oasis\Golden Oasis.map"] [--control] [--keep]
+#          [--netai 2] [--map "Maps\Golden Oasis\Golden Oasis.map"] [--control] [--corrupt-at <frame>] [--legacy-replay] [--keep]
 #   --peer1     the executable for the second copy (default: --generals); an x86_64 build runs under
 #               Rosetta as it is
+#   --corrupt-at <frame>
+#               the playback check's control: before copy 0's replay is played back, every CRC it
+#               recorded at the first CRC frame at or after <frame> is changed by one bit.  Copy 0's
+#               playback must then report "out of sync" at exactly that frame (so the check is live
+#               to the end of the replay), and copy 1's untouched replay must still play back clean
+#   --legacy-replay
+#               the other alignment: before copy 1's replay is played back, the records of the first
+#               frame that carries CRCs are removed, which leaves it shaped like a replay recorded
+#               before d9eccdda or by the retail game (no frame 0 CRC).  Its playback must say
+#               "legacy: frame 0 missing" and stay in sync
 #   --control   the armed control: the second copy is given the next seed, so the two copies start
 #               different worlds from one command stream; the match must be reported FAILED with a CRC
 #               mismatch, so a pass means the check can see one
 # Exit status: 0 the match agrees; 1 it does not; 77 skipped (no data, no second address, a port in
-# use, the firewall on, or no python3 for the probe); 99 the install changed or could not be checked.
+# use for NET_CHECK_PORT_WAIT seconds (600), the firewall on, or no python3 for the probe); 99 the install
+# changed or could not be checked.
 
 set -u
 
@@ -55,6 +78,8 @@ FRAMES=3000
 NETAI=2
 MAP='Maps\Golden Oasis\Golden Oasis.map'
 CONTROL=0
+CORRUPT_AT=""
+LEGACY=0
 KEEP=0
 LIVE_TIMEOUT="${NET_CHECK_LIVE_TIMEOUT:-900}"		# seconds for the match; 3000 frames took 105 s
 while [ $# -gt 0 ]; do
@@ -67,6 +92,8 @@ while [ $# -gt 0 ]; do
 		--netai) NETAI="$2"; shift 2;;
 		--map) MAP="$2"; shift 2;;
 		--control) CONTROL=1; shift;;
+		--corrupt-at) CORRUPT_AT="$2"; shift 2;;
+		--legacy-replay) LEGACY=1; shift;;
 		--keep) KEEP=1; shift;;
 		*) echo "net-check: unknown argument $1" >&2; exit 2;;
 	esac
@@ -100,12 +127,47 @@ if [ "$(uname -s)" = "Darwin" ]; then
 	case "$blockall" in *"disabled"*) ;; *) echo "skip: firewall block-all is not disabled ($blockall)"; exit 77;; esac
 fi
 
+# ---- one net-check on the whole machine (see the header) ------------------------------------------------
+LOCK_FILE="${NET_CHECK_LOCK_FILE:-/tmp/zhr-net-check.lock}"
+LOCK_WAIT="${NET_CHECK_LOCK_WAIT:-900}"
+if ! exec 9>>"$LOCK_FILE"; then
+	echo "skip: cannot open the machine-wide lock $LOCK_FILE"
+	exit 77
+fi
+if ! python3 - "$LOCK_FILE" "$LOCK_WAIT" "$$" "$PWD" <<'LOCK_EOF'
+import fcntl, os, sys, time
+path, wait, pid, where = sys.argv[1], float(sys.argv[2]), sys.argv[3], sys.argv[4]
+deadline, said = time.time() + wait, False
+while True:
+    try:
+        fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)	# on the harness's own descriptor: it outlives this helper
+        break
+    except OSError:
+        try:
+            holder = open(path).read().strip() or "unknown"
+        except OSError:
+            holder = "unknown"
+        if time.time() >= deadline:
+            print("skip: another net-check held the machine-wide lock for %d s (%s)" % (wait, holder))
+            sys.exit(1)
+        if not said:
+            print("net-check: waiting up to %d s for another net-check on this machine (%s)" % (wait, holder), flush=True)
+            said = True
+        time.sleep(2)
+os.ftruncate(9, 0)
+os.write(9, ("pid %s, %s, since %s" % (pid, where, time.strftime("%H:%M:%S"))).encode())
+LOCK_EOF
+then
+	exit 77
+fi
+
 # ---- the second address, found by a probe ------------------------------------------------------------
 if ! command -v python3 >/dev/null 2>&1; then
 	echo "skip: no python3 for the address probe"
 	exit 77
 fi
-PROBE="$(python3 - <<'PROBE_EOF'
+probe() {
+	python3 - <<'PROBE_EOF'
 import re, socket, subprocess, sys
 
 def candidates():
@@ -164,10 +226,23 @@ for c in candidates():
     tried.append(c)
 print("NONE " + " ".join(tried))
 PROBE_EOF
-)"
+}
+# A copy of this harness in another checkout, or a game someone is playing, holds the ports: wait for
+# them (NET_CHECK_PORT_WAIT seconds, default 600) rather than skip, so two ctest runs on one machine
+# queue instead of one of them passing as Skipped.
+PORT_WAIT="${NET_CHECK_PORT_WAIT:-600}"
+port_deadline=$(( $(date +%s) + PORT_WAIT ))
+while :; do
+	PROBE="$(probe)"
+	case "$PROBE" in "BUSY "*) ;; *) break;; esac
+	[ "$(date +%s)" -ge "$port_deadline" ] && break
+	[ -n "${said_waiting:-}" ] || echo "net-check: waiting up to ${PORT_WAIT} s for the game's ports (${PROBE#BUSY })"
+	said_waiting=1
+	sleep 5
+done
 case "$PROBE" in
 	"ADDR "*) SECOND="${PROBE#ADDR }";;
-	"BUSY "*) echo "skip: the game's ports are in use (${PROBE#BUSY }): another copy of the game is running"; exit 77;;
+	"BUSY "*) echo "skip: the game's ports stayed in use for ${PORT_WAIT} s (${PROBE#BUSY }): another copy of the game is running"; exit 77;;
 	*) echo "skip: no up, non-loopback IPv4 address delivers to and from 127.0.0.1 (tried: ${PROBE#NONE })"; exit 77;;
 esac
 HOSTS="127.0.0.1,$SECOND"
@@ -208,6 +283,9 @@ cleanup() {
 	rm -f -- "$(dirname "${EXE[0]}")/${TAG}"*DebugLogFile*.txt "$(dirname "${EXE[1]}")/${TAG}"*DebugLogFile*.txt
 }
 trap cleanup EXIT
+# a signal (a ctest timeout, ^C, a closed pipe) exits through the EXIT trap too, so the copies are
+# stopped, the work folder removed and the install checked however the run ends
+trap 'exit 130' INT TERM HUP PIPE
 install_snapshot "$INSTALL" "$WORK/install-before.list"
 
 # ---- the farm, and the overlay as it ships ------------------------------------------------------------
@@ -219,12 +297,18 @@ OVERLAY="$WORK/overlay"
 	echo "net-check: stage-overlay.sh failed:" >&2; cat "$WORK/stage.out" >&2; exit 1; }
 
 # ---- a copy of the game ---------------------------------------------------------------------------------
+FD_LIMIT="${NET_CHECK_FD_LIMIT:-4096}"
+FD_ALARM=$(( FD_LIMIT * 3 / 4 ))
+fd_count() {	# open descriptors of process $1
+	if [ -d "/proc/$1/fd" ]; then ls "/proc/$1/fd" 2>/dev/null | wc -l | tr -d ' '
+	else lsof -n -P -p "$1" 2>/dev/null | awk 'NR > 1' | wc -l | tr -d ' '; fi
+}
 # start_copy <exe index> <name> <switches...>: runs it in the background, its pid in LAST_PID
 start_copy() {
 	local exe="${EXE[$1]}" name="$2"; shift 2
 	mkdir -p "$WORK/user-$name"
 	rm -f -- "$(dirname "$exe")/${TAG}${name}DebugLogFile.txt"
-	( cd "$ROOT" && exec env ZH_HIDDEN_WINDOW=1 ZH_USER_DATA_DIR="$WORK/user-$name" "$exe" -headless -root "$ROOT" \
+	( cd "$ROOT" && ulimit -n "$FD_LIMIT" && exec env ZH_HIDDEN_WINDOW=1 ZH_USER_DATA_DIR="$WORK/user-$name" "$exe" -headless -root "$ROOT" \
 		-overlay "$OVERLAY" -quickstart -noshellmap -multiInstance -noFPSLimit -maxframes "$FRAMES" \
 		-logPrefix "${TAG}${name}" "$@" > "$WORK/$name.out" 2> "$WORK/$name.err" ) &
 	LAST_PID=$!
@@ -233,17 +317,25 @@ start_copy() {
 log_of() { echo "$(dirname "${EXE[$1]}")/${TAG}$2DebugLogFile.txt"; }
 crc_of() { grep -a 'HEADLESS CRC: 0x' "$1" 2>/dev/null | tail -1 | sed -n 's/.*HEADLESS CRC: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\1 \2/p'; }
 # wait_all <seconds> <pids...>: 0 when every copy ended by itself; 1 when the time ran out; 2 when a log
-# in WATCH_LOGS showed a CRC mismatch first.  In the last two cases the copies are killed: a copy that
-# has seen a mismatch waits on its disconnect screen for good, and the verdict is already known.
+# in WATCH_LOGS showed a CRC mismatch first; 3 when a copy held FD_ALARM descriptors or more (FD_REPORT
+# says which).  In the last three cases the copies are killed: a copy that has seen a mismatch waits on
+# its disconnect screen for good, and the verdict is already known.
 WATCH_LOGS=""
 wait_all() {
 	local limit=$1; shift
-	local deadline=$(( $(date +%s) + limit )) p alive why=0 l
+	local deadline=$(( $(date +%s) + limit )) p alive why=0 l n
 	while :; do
 		alive=0
 		for p in "$@"; do kill -0 "$p" 2>/dev/null && alive=1; done
 		[ "$alive" -eq 0 ] && break
 		for l in $WATCH_LOGS; do grep -a -q 'CRC Mismatch' "$l" 2>/dev/null && why=2; done
+		for p in "$@"; do
+			n=$(fd_count "$p")
+			if [ "${n:-0}" -ge "$FD_ALARM" ]; then
+				FD_REPORT="process $p held $n descriptors (the alarm is $FD_ALARM of a $FD_LIMIT limit): a descriptor leak"
+				why=3
+			fi
+		done
 		[ "$why" -eq 0 ] && [ "$(date +%s)" -ge "$deadline" ] && why=1
 		if [ "$why" -ne 0 ]; then
 			for p in "$@"; do kill "$p" 2>/dev/null; done
@@ -273,11 +365,13 @@ WATCH_LOGS=""
 case $ended in
 	1) how=", STOPPED after $LIVE_TIMEOUT s";;
 	2) how=", stopped at the first CRC mismatch";;
+	3) how=", STOPPED: $FD_REPORT";;
 	*) how="";;
 esac
 echo "  the match: $(( $(date +%s) - started )) s$how"
 
 bad=""
+[ "$ended" -eq 3 ] && bad=" DESCRIPTOR LEAK: $FD_REPORT;"
 LIVE_CRC0=none; LIVE_FRAME0=none; LIVE_CRC1=none; LIVE_FRAME1=none
 for s in 0 1; do
 	log="$(log_of "$s" "live$s")"
@@ -296,6 +390,34 @@ if [ "$LIVE_CRC0" != "$LIVE_CRC1" ] || [ "$LIVE_FRAME0" != "$LIVE_FRAME1" ]; the
 	bad="$bad the copies ended apart ($LIVE_CRC0 at $LIVE_FRAME0 against $LIVE_CRC1 at $LIVE_FRAME1);"
 fi
 
+# edit_replay corrupt|strip <replay> <CRC message type> <frame>: the replay's MSG_LOGIC_CRC records
+# (Recorder.cpp writeToFile) are u32 frame, the message type, i32 player, 2 argument groups (one
+# integer, one boolean), the CRC and the boolean; the type's number is the one this build logged ("CRC
+# message is N").  corrupt changes by one bit every CRC recorded at the first CRC frame at or after
+# <frame>; strip removes every record of the first CRC frame.  Prints that frame, or "none".
+edit_replay() {
+	python3 - "$@" <<'EDIT_EOF'
+import struct, sys
+mode, path, msgtype, at = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+b = bytearray(open(path, "rb").read())
+tag, groups, size = struct.pack("<i", msgtype), bytes([2, 0, 1, 2, 1]), 22
+records = [i for i in range(len(b) - size + 1) if b[i + 4:i + 8] == tag and b[i + 12:i + 17] == groups]
+frames = sorted({struct.unpack_from("<I", b, i)[0] for i in records if struct.unpack_from("<I", b, i)[0] >= at})
+if not frames:
+    print("none"); sys.exit(0)
+frame = frames[0]
+chosen = [i for i in records if struct.unpack_from("<I", b, i)[0] == frame]
+if mode == "corrupt":
+    for i in chosen:
+        struct.pack_into("<I", b, i + 17, struct.unpack_from("<I", b, i + 17)[0] ^ 1)
+else:
+    for i in reversed(chosen):
+        del b[i:i + size]
+open(path, "wb").write(b)
+print(frame)
+EDIT_EOF
+}
+
 # ---- each copy's replay, played back alone --------------------------------------------------------------
 # Only after a match that kept one world: a replay of a desynced match says nothing more.
 LIVE_BAD="$bad"
@@ -305,15 +427,37 @@ for s in 0 1; do
 	if [ ! -f "$rep" ]; then bad="$bad copy $s wrote no replay;"; continue; fi
 	mkdir -p "$WORK/user-back$s/Replays"
 	cp -- "$rep" "$WORK/user-back$s/Replays/netcheck$s.rep"
+	CORRUPTED=""
+	crcmsg="$(grep -a -m1 'CRC message is' "$(log_of 0 live0)" | sed 's/.*CRC message is \([0-9]*\).*/\1/')"
+	EXPECT_ALIGN="recorded from frame 0"
+	if [ "$LEGACY" -eq 1 ] && [ "$s" -eq 1 ]; then
+		stripped="$(edit_replay strip "$WORK/user-back$s/Replays/netcheck$s.rep" "$crcmsg" 0)"
+		echo "  copy 1's replay: the CRC records of frame $stripped removed, as a legacy recording lacks them"
+		EXPECT_ALIGN="legacy: frame 0 missing"
+	fi
+	if [ -n "$CORRUPT_AT" ] && [ "$s" -eq 0 ]; then
+		CORRUPTED="$(edit_replay corrupt "$WORK/user-back$s/Replays/netcheck$s.rep" "$crcmsg" "$CORRUPT_AT")"
+		echo "  copy 0's replay: every recorded CRC at frame $CORRUPTED changed by one bit (the playback check's control)"
+	fi
 	start_copy "$s" "back$s" -replay "netcheck$s"
-	wait_all "$LIVE_TIMEOUT" "$LAST_PID" || bad="$bad the playback of copy $s's replay was STOPPED after $LIVE_TIMEOUT s;"
+	wait_all "$LIVE_TIMEOUT" "$LAST_PID"
+	case $? in
+		0) ;;
+		3) bad="$bad DESCRIPTOR LEAK in the playback of copy $s's replay: $FD_REPORT;";;
+		*) bad="$bad the playback of copy $s's replay was STOPPED after $LIVE_TIMEOUT s;";;
+	esac
 	log="$(log_of "$s" "back$s")"
 	read -r crc frame <<< "$(crc_of "$log")"
 	oos="$(grep -a -m1 'Replay has gone out of sync' "$log" 2>/dev/null)"
-	echo "  copy $s's replay played back: HEADLESS CRC ${crc:-none} at frame ${frame:-none}${oos:+; it logged: $oos}"
+	aligned="$(grep -a -m1 'Replay CRCs: ' "$log" 2>/dev/null | sed 's/.*Replay CRCs: //')"
+	echo "  copy $s's replay played back: HEADLESS CRC ${crc:-none} at frame ${frame:-none}; its CRCs: ${aligned:-no alignment logged}${oos:+; it logged: $oos}"
 	if [ "${crc:-none}" != "$LIVE_CRC0" ] || [ "${frame:-none}" != "$LIVE_FRAME0" ]; then
 		bad="$bad copy $s's replay played back to ${crc:-none} at frame ${frame:-none};"
 	fi
+	# a replay recorded by this build carries its frame 0 CRC (Recorder.h, replayMayLackFirstCRC), and
+	# its every CRC must match
+	[ "$aligned" = "$EXPECT_ALIGN" ] || bad="$bad copy $s's replay CRCs were not \"$EXPECT_ALIGN\" (${aligned:-nothing logged});"
+	[ -z "$oos" ] || bad="$bad copy $s's replay: ${oos#*Replay has gone }${CORRUPTED:+ (its CRCs at frame $CORRUPTED were corrupted)};"
 done
 
 echo

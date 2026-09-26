@@ -134,13 +134,26 @@ AsciiString GetWSAErrorString( Int error )
 
 UDP::UDP()
 {
-  fd=0;
+  fd=-1;
+#if !defined(_WIN32)
+  m_shareAddress=FALSE;
+  m_broadcastsOnly=FALSE;
+#endif
 }
 
 UDP::~UDP()
 {
-	if (fd)
+	closeSocket();
+}
+
+/* -1 is no socket: what socket() returns on failure (SOCKET_ERROR on Windows, mapped to -1 in Bind).  It
+   was 0, which is a valid descriptor off Windows, while a failed socket() left -1 for the destructor to
+   close. */
+void UDP::closeSocket(void)
+{
+	if (fd != -1)
 		closesocket(fd);
+	fd=-1;
 }
 
 Int UDP::Bind(const char *Host,UnsignedShort port)
@@ -174,6 +187,11 @@ Int UDP::Bind(UnsignedInt IP,UnsignedShort Port)
   addr.sin_family=AF_INET;
   addr.sin_port=Port;
   addr.sin_addr.s_addr=IP;
+  /* Each Bind makes a new socket, so the one before it goes first, and one whose bind fails is closed
+     below.  Transport::init retries Bind for up to a second while the port is taken, and every try left
+     its socket open: about 100,000 of them, on every platform, which on a Mac filled the whole system's
+     file table. */
+  closeSocket();
   fd=socket(AF_INET,SOCK_DGRAM,DEFAULT_PROTOCOL);
   #ifdef _WINDOWS
   if (fd==SOCKET_ERROR)
@@ -181,6 +199,26 @@ Int UDP::Bind(UnsignedInt IP,UnsignedShort Port)
   #endif
   if (fd==-1)
     return(UNKNOWN);
+
+#if !defined(_WIN32)
+  // Defect #29: the options have to be on the socket before bind (udp.h, BindForBroadcasts)
+  if (m_shareAddress || m_broadcastsOnly)
+  {
+    int on=1;
+    setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,(char *)&on,sizeof(on));
+    if (m_broadcastsOnly)
+    {
+      setsockopt(fd,SOL_SOCKET,SO_REUSEPORT,(char *)&on,sizeof(on));
+#if defined(IP_RECVDSTADDR)		// macOS and the BSDs
+      setsockopt(fd,IPPROTO_IP,IP_RECVDSTADDR,(char *)&on,sizeof(on));
+#elif defined(IP_PKTINFO)		// Linux
+      setsockopt(fd,IPPROTO_IP,IP_PKTINFO,(char *)&on,sizeof(on));
+#else
+#error "udp.cpp: this platform has neither IP_RECVDSTADDR nor IP_PKTINFO, so a broadcast cannot be told from a unicast datagram"
+#endif
+    }
+  }
+#endif
 
   retval=bind(fd,(struct sockaddr *)&addr,sizeof(addr));
 
@@ -199,6 +237,7 @@ Int UDP::Bind(UnsignedInt IP,UnsignedShort Port)
   {
     status=GetStatus();
     //CERR("Bind failure (" << status << ") IP " << IP << " PORT " << Port )
+    closeSocket();
     return(status);
   }
 
@@ -299,6 +338,8 @@ Int UDP::Read(unsigned char *msg,UnsignedInt len,sockaddr_in *from)
   int    alen=sizeof(sockaddr_in);
 #else
   socklen_t alen=sizeof(sockaddr_in);
+  if (m_broadcastsOnly)
+    return(ReadBroadcast(msg,len,from));
 #endif
 
   if (from!=NULL)
@@ -364,6 +405,70 @@ Int UDP::Read(unsigned char *msg,UnsignedInt len,sockaddr_in *from)
   return(retval);
 }
 
+
+#if !defined(_WIN32)
+Int UDP::BindForBroadcasts(UnsignedShort port)
+{
+  m_broadcastsOnly=TRUE;
+  return(Bind((UnsignedInt)INADDR_ANY,port));
+}
+
+/* Read for the wildcard listener (udp.h): the next datagram sent to 255.255.255.255, 0 when none is
+   waiting.  Anything else, and anything whose destination the kernel did not report, is dropped. */
+Int UDP::ReadBroadcast(unsigned char *msg,UnsignedInt len,sockaddr_in *from)
+{
+  sockaddr_in source;
+  for (;;)
+  {
+    char control[64];
+    struct iovec part;
+    part.iov_base=msg;
+    part.iov_len=len;
+    struct msghdr header;
+    memset(&header,0,sizeof(header));
+    header.msg_name=&source;
+    header.msg_namelen=sizeof(source);
+    header.msg_iov=&part;
+    header.msg_iovlen=1;
+    header.msg_control=control;
+    header.msg_controllen=sizeof(control);
+
+    Int retval=(Int)recvmsg(fd,&header,0);
+    if (retval==-1)
+    {
+      if (errno==EWOULDBLOCK || errno==EAGAIN)
+        return(0);
+      m_lastError=errno;
+      return(-1);
+    }
+
+    Bool toBroadcast=FALSE;
+    for (struct cmsghdr *c=CMSG_FIRSTHDR(&header); c!=NULL; c=CMSG_NXTHDR(&header,c))
+    {
+#if defined(IP_RECVDSTADDR)
+      if (c->cmsg_level==IPPROTO_IP && c->cmsg_type==IP_RECVDSTADDR)
+      {
+        struct in_addr destination;
+        memcpy(&destination,CMSG_DATA(c),sizeof(destination));
+        toBroadcast=(destination.s_addr==htonl(INADDR_BROADCAST));
+      }
+#else
+      if (c->cmsg_level==IPPROTO_IP && c->cmsg_type==IP_PKTINFO)
+      {
+        struct in_pktinfo info;
+        memcpy(&info,CMSG_DATA(c),sizeof(info));
+        toBroadcast=(info.ipi_addr.s_addr==htonl(INADDR_BROADCAST));		// the header's destination
+      }
+#endif
+    }
+    if (!toBroadcast)
+      continue;
+    if (from!=NULL)
+      *from=source;
+    return(retval);
+  }
+}
+#endif
 
 void UDP::ClearStatus(void)
 {

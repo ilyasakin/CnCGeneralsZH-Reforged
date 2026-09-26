@@ -16,6 +16,8 @@
 
 #include "test_harness.h"
 
+#include <limits>
+
 #include "Common/AsciiString.h"
 #include "Common/CommandLine.h"
 #include "Common/UnicodeString.h"
@@ -9070,41 +9072,63 @@ TEST(the_serial_check_is_waived_only_between_two_addresses_on_this_machine)
 }
 
 /* A replay is checked by comparing the CRCs it carries against the ones playback recomputes, one
-	 for one, out of a queue.  A game played over a network never gets its frame 0 CRC into the file
-	 - the logic makes it after that frame's commands have already gone out, so it is never sent,
-	 never executed and never recorded - and playback, having no network to lose it to, makes one
-	 anyway.  Unless playback throws that one away every comparison after it is a frame out, and a
-	 replay that is perfectly in sync reports a desync on its first interval frame. */
-TEST(replay_crc_queue_drops_the_frame_the_network_never_recorded)
+	 for one, out of a queue.  A network game's replay may or may not carry frame 0's CRC: until
+	 d9eccdda the network deleted it while still in pregame (every retail replay starts at frame 1),
+	 and since then it is sent and recorded.  Playback makes one either way, so for a network replay the
+	 queue decides at the first comparison: keep the head if it is the recorded CRC, drop it if the next
+	 one is, and otherwise compare as it stands so a real first-frame desync is still reported.  Either
+	 blind rule reports a desync on every replay of the other kind (Recorder.h). */
+TEST(replay_crc_queue_aligns_to_either_kind_of_network_recording)
 {
-	// only a game that was played over a network is missing that first CRC
-	CHECK( replayIsMissingFirstCRC( GAME_LAN ) );
-	CHECK( replayIsMissingFirstCRC( GAME_INTERNET ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_SKIRMISH ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_SINGLE_PLAYER ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_REPLAY ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_SHELL ) );
-	CHECK( !replayIsMissingFirstCRC( GAME_NONE ) );
+	// only a game that was played over a network can lack that first CRC
+	CHECK( replayMayLackFirstCRC( GAME_LAN ) );
+	CHECK( replayMayLackFirstCRC( GAME_INTERNET ) );
+	CHECK( !replayMayLackFirstCRC( GAME_SKIRMISH ) );
+	CHECK( !replayMayLackFirstCRC( GAME_SINGLE_PLAYER ) );
+	CHECK( !replayMayLackFirstCRC( GAME_REPLAY ) );
+	CHECK( !replayMayLackFirstCRC( GAME_SHELL ) );
+	CHECK( !replayMayLackFirstCRC( GAME_NONE ) );
 
-	// left alone the queue hands back what it was given, in order
+	// computed by playback: frames 0, 1, 2, 3
+	const UnsignedInt computed[ 4 ] = { 0x11111111, 0x22222222, 0x33333333, 0x44444444 };
+
+	// a solo replay is compared one for one from frame 0, and never aligned
 	CRCInfo solo;
-	solo.addCRC( 0x11111111 );
-	solo.addCRC( 0x22222222 );
-	solo.addCRC( 0x33333333 );
-	CHECK_EQ( 0x11111111, solo.readCRC() );
+	for (Int i = 0; i < 4; ++i)
+		solo.addCRC( computed[i] );
+	CHECK_EQ( 0x11111111, solo.readCRCFor( 0x22222222 ) );		// a mismatch it must report
+	CHECK_EQ( (Int)CRCInfo::ALIGN_NONE, (Int)solo.getAlignment() );
 	CHECK_EQ( 0x22222222, solo.readCRC() );
-	CHECK_EQ( 0x33333333, solo.readCRC() );
-	CHECK_EQ( 0, solo.readCRC() );		// an empty queue reads as 0
 
-	// armed, it swallows exactly one - the frame the recording is missing - and no more
-	CRCInfo net;
-	net.skipFirstCRC();
-	net.addCRC( 0x11111111 );
-	net.addCRC( 0x22222222 );
-	net.addCRC( 0x33333333 );
-	CHECK_EQ( 0x22222222, net.readCRC() );
-	CHECK_EQ( 0x33333333, net.readCRC() );
-	CHECK_EQ( 0, net.readCRC() );
+	// a network replay recorded from frame 0 (since d9eccdda): nothing is dropped
+	CRCInfo fromZero;
+	fromZero.allowMissingFirstCRC();
+	for (Int i = 0; i < 4; ++i)
+		fromZero.addCRC( computed[i] );
+	CHECK_EQ( 0x11111111, fromZero.readCRCFor( 0x11111111 ) );
+	CHECK_EQ( (Int)CRCInfo::ALIGN_FROM_FRAME_0, (Int)fromZero.getAlignment() );
+	CHECK_EQ( 0x22222222, fromZero.readCRCFor( 0x22222222 ) );
+	CHECK_EQ( 0x33333333, fromZero.readCRCFor( 0x33333333 ) );
+
+	// a legacy network replay (retail, or before d9eccdda): frame 0's is dropped, once
+	CRCInfo legacy;
+	legacy.allowMissingFirstCRC();
+	for (Int i = 0; i < 4; ++i)
+		legacy.addCRC( computed[i] );
+	CHECK_EQ( 0x22222222, legacy.readCRCFor( 0x22222222 ) );
+	CHECK_EQ( (Int)CRCInfo::ALIGN_FRAME_0_MISSING, (Int)legacy.getAlignment() );
+	CHECK_EQ( 0x33333333, legacy.readCRCFor( 0x33333333 ) );
+	CHECK_EQ( 0x44444444, legacy.readCRCFor( 0x44444444 ) );		// and no more than one
+	CHECK_EQ( 0, legacy.readCRC() );
+
+	// a real desync on the very first CRC is neither kind: compared as it stands, so it is reported
+	CRCInfo desync;
+	desync.allowMissingFirstCRC();
+	for (Int i = 0; i < 4; ++i)
+		desync.addCRC( computed[i] );
+	CHECK_EQ( 0x11111111, desync.readCRCFor( 0x99999999 ) );
+	CHECK_EQ( (Int)CRCInfo::ALIGN_UNDECIDED, (Int)desync.getAlignment() );
+	CHECK_EQ( 0x22222222, desync.readCRCFor( 0x22222222 ) );		// decided once: nothing shifts later
 }
 
 
@@ -14063,6 +14087,53 @@ TEST(the_spectator_page_has_its_pieces_and_no_option_clicks)
 #include "test_camera_behavior.inc"
 #include "test_observer_camera.inc"
 #include "test_production_input.inc"
+// A defence's blind-spot grid is cut into rings half a pathfind cell wide.  A range longer than the map
+// asks for no more rings than the map is long corner to corner: a mod's AttackRange of 1e6 held hundreds of
+// megabytes and froze every platform, and inf gave ARM64 2^31 rings, whose 180-a-ring grid overflowed Int.
+TEST(blind_spot_rings_never_outgrow_the_map)
+{
+	const Real ring = PATHFIND_CELL_SIZE_F * 0.5f;
+	const Real span = 2.0f * 4000.0f;							// a 4,000-unit square map: width plus height
+	CHECK_EQ(blindSpotRingCount(0.0f, span), 0);
+	CHECK_EQ(blindSpotRingCount(ring, span), 1);
+	CHECK_EQ(blindSpotRingCount(300.0f, span), (Int)ceil(300.0f / ring));	// every real reach: as before
+	CHECK_EQ(blindSpotRingCount(1.0e6f, span), (Int)ceil(span / ring) + 1);	// capped by the map
+	CHECK_EQ(blindSpotRingCount(std::numeric_limits<float>::infinity(), span), 0);	// Windows' INT_MIN, floored
+	CHECK_EQ(blindSpotRingCount(std::numeric_limits<float>::quiet_NaN(), span), 0);
+	// no extent known: never a grid whose ring count times 180 rays overflows Int
+	CHECK((long long)blindSpotRingCount(1.0e9f, 0.0f) * 180 <= INT_MAX);
+}
+
+// The two cursor indexes a float decides.  Mouse.ini's FPS or GameData.ini's scroll speed of inf or NaN
+// made them INT_MIN on Windows and indexed a table with that; a negative FPS made a negative frame on
+// every platform.  Anything outside the table is its first entry now, and every in-range index is the one
+// the old expression gave.
+TEST(cursor_frames_and_directions_stay_in_their_tables)
+{
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	const float inf = std::numeric_limits<float>::infinity();
+	CHECK_EQ(mouseCursorFrame(2.7f, 5), 2);
+	CHECK_EQ(mouseCursorFrame(4.99f, 5), 4);
+	CHECK_EQ(mouseCursorFrame(5.0f, 5), 0);
+	CHECK_EQ(mouseCursorFrame(-3.2f, 5), 0);
+	CHECK_EQ(mouseCursorFrame(nan, 5), 0);
+	CHECK_EQ(mouseCursorFrame(inf, 5), 0);
+
+	CHECK_EQ(mouseCursorDirection(nan, 8), 0);
+	CHECK_EQ(mouseCursorDirection(inf, 8), 0);
+	CHECK_EQ(mouseCursorDirection(-1.0f, 8), 0);
+	const double pi = 3.14159265358979323846;
+	for (Int directions = 1; directions <= MAX_2D_CURSOR_DIRECTIONS; ++directions) {
+		for (Int k = 0; k < 2000; ++k) {
+			const Real theta = (Real)(k * 2.0 * pi / 2000.0);
+			Int old = (Int)(theta / (2.0f * pi / (Real)directions) + 0.5f);
+			if (old >= directions)
+				old = 0;
+			CHECK_EQ(mouseCursorDirection(theta, directions), old);
+		}
+	}
+}
+
 // The rank walk.  RankPoints is ten Int thresholds followed by five Real multipliers, and the menus walked
 // it with `while (points >= m_ranks[i + 1]) ++i`, unbounded.  This models that walk over the struct's own
 // fifteen words, with the shipped thresholds and multipliers and Windows' float-to-int conversion for the

@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 
+# P2: the oldest macOS the app runs on.  It has to be set before project(), and every target and
+# vendored library built here inherits it (SDL3, freetype, glslang and the rest through add_subdirectory;
+# FFmpeg through FFMPEG_POSIX_CFLAGS below).  Unset, the tools stamp the build machine's own version into
+# every binary and the app refuses every Mac not on the newest macOS.  13.0: see docs/mac-port/tasks/
+# P2-macos-reach.md for why this and not an older one.  An explicit -DCMAKE_OSX_DEPLOYMENT_TARGET wins;
+# an empty one (as every earlier build cache holds) takes the default.
+if(CMAKE_HOST_APPLE AND "${CMAKE_OSX_DEPLOYMENT_TARGET}" STREQUAL "")
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "The oldest macOS the build runs on (P2)" FORCE)
+endif()
+
 project(GeneralsMD CXX C)
 
 # Which operating system this build is for.  MSVC used to answer that question too, because for
@@ -1018,6 +1028,10 @@ if(ZH_PLATFORM_POSIX)		# bash and perl: the value itself is the same tool on eve
   # the manifest still lists exactly the tracked files (skipped without git: a tarball uses it as shipped)
   add_test(NAME build_fingerprint_manifest COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/fingerprint-manifest.sh --check)
   set_tests_properties(build_fingerprint_manifest PROPERTIES SKIP_RETURN_CODE 77)
+  # the manifest script on itself, in a scratch repository: a line twice fails --check with its name, and
+  # a merge stopped on a conflict (git ls-files then names a path once per stage) is refused
+  add_test(NAME fingerprint_manifest_selfcheck COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_fingerprint_manifest.sh)
+  set_tests_properties(fingerprint_manifest_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 if(ZH_PLATFORM_POSIX)
   # GlobalLanguage registers Language.ini's LocalFontFile with the glyph rasteriser (D6b)
@@ -1416,6 +1430,20 @@ if(ZH_PLATFORM_POSIX)
 
   # A2's checkpoint: every texture of the install through WW3D2's loader into the POSIX device on a
   # null-window (-headless) WW3D, read back and checked against the file.  Needs ZH_GAME_DATA, else Skipped.
+  # The .wak loader's rules: a wave type from the wave table, and no more tracks than the file holds.
+  add_executable(test_water_tracks ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_water_tracks.cpp)
+  set_target_properties(test_water_tracks PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_water_tracks PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_link_libraries(test_water_tracks PRIVATE w3ddevice ww3d2 posixdevice gameengine test_harness)
+  add_test(NAME test_water_tracks COMMAND test_water_tracks)
+
+  # W3DRoadBuffer's column count: at least two, never longer than the map.  See Tests/test_road_buffer.cpp.
+  add_executable(test_road_buffer ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_road_buffer.cpp)
+  set_target_properties(test_road_buffer PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_road_buffer PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_link_libraries(test_road_buffer PRIVATE w3ddevice ww3d2 posixdevice gameengine test_harness)
+  add_test(NAME test_road_buffer COMMAND test_road_buffer)
+
   add_executable(test_install_textures ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_textures.cpp)
   set_target_properties(test_install_textures PROPERTIES CXX_STANDARD 17)
   target_include_directories(test_install_textures PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
@@ -1689,6 +1717,14 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # -mission, headless: a campaign mission, a challenge, a plain map and a missing one each start (or
+  # quit) instead of sitting at the main menu.  Skipped without game data: see the script.
+  add_test(NAME mission_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_mission_check.sh $<TARGET_FILE:generals>)
+  set_tests_properties(mission_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1500)
+  if(ZH_GAME_DATA)
+    set_tests_properties(mission_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # L1's POSIX harness on itself: two headless copies on this machine play one seeded LAN match over
   # 127.0.0.1 and a second local address, agree to frame 1800, and each replay plays back to it; a
   # second copy on another seed is reported FAILED.  One machine, one compiler: see the script.  Skipped
@@ -1717,6 +1753,46 @@ if(ZH_PLATFORM_POSIX)
     DEPENDS ${ZH_OVERLAY_INPUTS} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/stage-overlay.sh
     COMMENT "Staging the development-only overlay (P1)" VERBATIM)
   add_custom_target(zh_overlay_dev ALL DEPENDS ${CMAKE_BINARY_DIR}/overlay-dev.staged)
+
+  # P1 step 5: the macOS app, "Zero Hour Reforged.app" beside the executable, its dSYM beside it
+  # (Tools/make-macos-app.sh: Info.plist, the icon, the staged overlay with its art as APFS clones, the
+  # licences checked against generals' link line, the HUD directive, an ad-hoc signature, verified).
+  # Outside ALL: build it with `ninja macos_app`.  The bundle id belongs to whoever ships; the default is
+  # the project's home (the README's).  ZH_APP_ART=OFF leaves the 1.6 GB of art out of a local bundle.
+  if(APPLE)
+    set(ZH_APP_BUNDLE_ID "io.github.olcayseygan.zero-hour-reforged" CACHE STRING "CFBundleIdentifier of the macOS app")
+    option(ZH_APP_ART "Put the Reforged*.big art archives into the macOS app" ON)
+    set(ZH_APP_ARGS --generals $<TARGET_FILE:generals> --overlay ${CMAKE_BINARY_DIR}/overlay
+        --build ${CMAKE_BINARY_DIR} --out "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app" --bundle-id ${ZH_APP_BUNDLE_ID}
+        --min-macos ${CMAKE_OSX_DEPLOYMENT_TARGET})
+    if(NOT ZH_APP_ART)
+      list(APPEND ZH_APP_ARGS --no-art)
+    endif()
+    # P2 universal2, option A (release time, E2): an x86_64 build's generals, lipo'd into the bundle's
+    set(ZH_X86_64_GENERALS "" CACHE FILEPATH "An x86_64 build's generals, to make the macOS app universal2 (P2)")
+    if(ZH_X86_64_GENERALS)
+      list(APPEND ZH_APP_ARGS --x86-64-generals ${ZH_X86_64_GENERALS})
+    endif()
+    add_custom_target(macos_app
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/make-macos-app.sh ${ZH_APP_ARGS}
+      DEPENDS generals zh_overlay
+      COMMENT "Building Zero Hour Reforged.app (P1 step 5)" VERBATIM)
+    # the bundle script on itself: a bundle from this build's inputs (no art) holds what it should and
+    # verifies, and a HUD-off INI, an unlicensed library and a write after signing are each caught
+    add_test(NAME macos_app_check
+             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_macos_app.sh $<TARGET_FILE:generals>
+                     ${CMAKE_BINARY_DIR}/overlay ${CMAKE_BINARY_DIR} ${CMAKE_OSX_DEPLOYMENT_TARGET})
+    set_tests_properties(macos_app_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+    # E1 on the bundle itself, "tests what ships": no -root, no -overlay, the seal checked after.  It needs
+    # `ninja macos_app` first (outside ALL), and says so when it skips.
+    add_test(NAME replay_check_app
+             COMMAND bash -c "if [ ! -x \"$1/Contents/MacOS/generals\" ]; then echo \"skip: no bundle at $1 - build it with ninja macos_app\"; exit 77; fi; exec \"$0\" --app \"$1\" --seeds 0 --maxframes 1200"
+                     ${CMAKE_CURRENT_SOURCE_DIR}/Tools/replay-check.sh "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app")
+    set_tests_properties(replay_check_app PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+    if(ZH_GAME_DATA)
+      set_tests_properties(replay_check_app PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+    endif()
+  endif()
 
   # P1 step 1: the fork's overlay as a read root gives the game what Windows' one folder gives it - the
   # EXE CRC, the INI CRC and the world state agree between the two layouts - with two armed controls.
@@ -1896,6 +1972,14 @@ add_lib_test(test_gameengine gameengine)
 # T1's terrain golden against the moved code (GameLogic/WorldHeightMapData, TerrainHeightSampling):
 # nine shipped maps out of the install's archives, which must sample exactly as Tests/terrain_golden.txt
 # says the original W3D code did.  Needs ZH_GAME_DATA; Skipped (77) without it.
+# Defect #29: the LAN lobby's broadcast listener off Windows, through the real Transport and UDP, in the
+# layout two copies of the game on one host build (see the test's header).  POSIX only: the listener is.
+if(ZH_PLATFORM_POSIX)
+  add_lib_test(test_lan_broadcast gameengine)
+  # the exe's names and the device layer, as test_terrain_golden links them
+  target_sources(test_lan_broadcast PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
+  target_link_libraries(test_lan_broadcast PRIVATE posixdevice w3ddevice)
+endif()
 add_lib_test(test_terrain_golden gameengine)
 target_compile_definitions(test_terrain_golden PRIVATE
   TERRAIN_GOLDEN_FILE="${CMAKE_CURRENT_SOURCE_DIR}/Tests/terrain_golden.txt")
@@ -2371,21 +2455,43 @@ endif()
 # 2026-09-26 lost a replay_check's work folder mid-run while other sessions' harnesses, of several
 # versions, ran in the same folder.  A test's temporary trees are its own now, and whatever is left
 # behind stays in this build, where it can be seen.
+#
+# And every test on miniaudio's null backend (ZH_AUDIO_BACKEND=null, honoured where the one audio device
+# is opened, AIL_quick_startup in miles_miniaudio.cpp): the rule of no sound and no windows in automated runs.  It reaches the games a test script starts too, so no ctest can make a sound, whatever
+# its switches.  The null device still mixes in real time, which is what the audio tests measure.
 if(ZH_PLATFORM_POSIX)
   get_property(_zh_tests DIRECTORY PROPERTY TESTS)
   foreach(_zh_test IN LISTS _zh_tests)
     file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/test-tmp/${_zh_test})
     set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT
       "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data/${_zh_test}"
-      "TMPDIR=${CMAKE_BINARY_DIR}/test-tmp/${_zh_test}")
+      "TMPDIR=${CMAKE_BINARY_DIR}/test-tmp/${_zh_test}"
+      "ZH_AUDIO_BACKEND=null")
   endforeach()
 
   # The tests that build a farm of the install (a folder of links into it) never run at the same time:
   # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
-  foreach(_zh_test replay_check net_check overlay_crc_check packaging_resolution_check root_readonly_check
+  foreach(_zh_test replay_check replay_check_app net_check overlay_crc_check packaging_resolution_check root_readonly_check
                    lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager)
     if(TEST ${_zh_test})
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
+    endif()
+  endforeach()
+endif()
+
+# P2: on macOS our own code may not call an API newer than the deployment target without guarding it
+# (@available / __builtin_available): that is a build error here, not a crash on a player's older Mac.
+# Every target this file defines - the game, the port's libraries, the tests - but not the vendored
+# projects add_subdirectory brings in (SDL3, freetype, glslang, SPIRV-Cross, litehtml, GameSpy), which
+# guard their own calls and are not ours to fail.  Clang's unguarded-availability-new covers every API
+# introduced since macOS 10.13, so it reaches everything above a 13.0 target.
+if(APPLE)
+  get_property(_zh_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(_zh_target IN LISTS _zh_targets)
+    get_target_property(_zh_type ${_zh_target} TYPE)
+    if(_zh_type MATCHES "^(STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY|EXECUTABLE)$")
+      target_compile_options(${_zh_target} PRIVATE
+        $<$<COMPILE_LANGUAGE:C,CXX>:-Werror=unguarded-availability-new>)
     endif()
   endforeach()
 endif()

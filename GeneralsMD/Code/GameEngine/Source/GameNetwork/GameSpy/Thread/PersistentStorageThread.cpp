@@ -41,6 +41,7 @@
 
 #include "Common/StackDump.h"
 #include "Common/SubsystemInterface.h"
+#include "Platform/StrdupAsWindows.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -627,7 +628,7 @@ Bool PSThreadClass::tryLogin( Int id, std::string nick, std::string password, st
 	client will create the validation token using GenerateAuth, and send it
 	back to the server for use in PreAuthenticatePlayerPM
 	***********/
-	char *munkeeHack = strdup(password.c_str()); // GenerateAuth takes a char*, not a const char* :P
+	char *munkeeHack = strdupAsWindows(password.c_str()); // GenerateAuth takes a char*, not a const char* :P
 	GenerateAuth(GetChallenge(NULL), munkeeHack, validate);
 	free (munkeeHack);
 
@@ -995,7 +996,7 @@ void PSThreadClass::Thread_Function()
 						if (TheGameSpyPSMessageQueue)
 							TheGameSpyPSMessageQueue->trackPlayerStats(req.player);
 
-						char *munkeeHack = strdup(GameSpyPSMessageQueueInterface::formatPlayerKVPairs(req.player).c_str()); // GS takes a char* for some reason
+						char *munkeeHack = strdupAsWindows(GameSpyPSMessageQueueInterface::formatPlayerKVPairs(req.player).c_str()); // GS takes a char* for some reason
 						incrOpCount();
 						DEBUG_LOG(("Setting values %s\n", munkeeHack));
 						SetPersistDataValues(0, req.player.id, pd_public_rw, 0, munkeeHack, setPersistentDataCallback, this);
@@ -1021,7 +1022,7 @@ void PSThreadClass::Thread_Function()
 						cdAuthInfo.id = 0;
 						char cdkeyHash[33] = "";
 						char validationToken[33] = "";
-						char *munkeeHack = strdup(req.cdkey.c_str()); // GenerateAuth takes a char*, not a const char* :P
+						char *munkeeHack = strdupAsWindows(req.cdkey.c_str()); // GenerateAuth takes a char*, not a const char* :P
 
 						GenerateAuth(GetChallenge(NULL), munkeeHack, validationToken); // validation token
 						GenerateAuth("", munkeeHack, cdkeyHash); // cdkey hash

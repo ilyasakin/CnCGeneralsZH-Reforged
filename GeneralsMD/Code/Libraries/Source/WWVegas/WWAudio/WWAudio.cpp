@@ -60,6 +60,7 @@
 
 #ifdef G_CODE_BASE
 #include "../wwlib/argv.h"
+#include "Platform/StrdupAsWindows.h"
 #endif
 
 
@@ -1575,7 +1576,7 @@ WWAudioClass::Build_3D_Driver_List (void)
 		if (::AIL_open_3D_provider (provider) == M3D_NOERR) {
 			DRIVER_INFO_STRUCT *info = W3DNEW DRIVER_INFO_STRUCT;
 			info->driver = provider;
-			info->name = ::strdup (name);
+			info->name = strdupAsWindows(name);
 			m_Driver3DList.Add (info);
 			::AIL_close_3D_provider (provider);
 		} else {

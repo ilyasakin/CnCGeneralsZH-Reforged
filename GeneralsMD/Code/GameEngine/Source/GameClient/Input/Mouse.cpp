@@ -1252,6 +1252,11 @@ void INI::parseMouseCursorDefinition( INI* ini )
 
 			// parse the ini weapon definition
 			ini->initFromINI( cursorInfo, TheMouseCursorFieldParseTable );
+
+			// every platform's cursor table holds MAX_2D_CURSOR_DIRECTIONS images a cursor, and loads as many
+			// as Directions says: more (mod data; shipped is 8) wrote past it
+			if( cursorInfo->numDirections > MAX_2D_CURSOR_DIRECTIONS )
+				cursorInfo->numDirections = MAX_2D_CURSOR_DIRECTIONS;
 		}
 
 	}

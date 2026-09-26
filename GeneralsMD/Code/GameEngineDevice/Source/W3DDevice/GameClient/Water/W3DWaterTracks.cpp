@@ -95,6 +95,23 @@ enum waveType : int
 	WaveTypeMax,
 };
 
+/// A .wak file's record: two end points and a wave type.
+enum { WAK_RECORD_BYTES = 2 * 2 * sizeof(Real) + sizeof(Int) };
+static_assert(sizeof(waveType) == sizeof(Int), "a .wak file stores the wave type as an int");
+
+Bool isWakWaveType(Int type)
+{
+	return type >= WaveTypeFirst && type < WaveTypeMax;
+}
+
+Int wakTrackCount(Int fileSize, Int claimed)
+{
+	const Int held = fileSize >= 4 ? (fileSize - 4) / (Int)WAK_RECORD_BYTES : 0;	// the count is the last four bytes
+	if (claimed < 0)
+		return 0;
+	return claimed < held ? claimed : held;
+}
+
 struct waveInfo
 {
 	Real m_finalWidth;				//final width of of wave when it reaches beach.
@@ -1089,20 +1106,28 @@ void WaterTracksRenderSystem::loadTracks(void)
 
 	if (file)
 	{
+		/* The file sits beside the map, and a map sent in a multiplayer game can bring one: a network
+			 transfer accepts .wak.  So nothing in it is trusted.  The count is capped by what the file
+			 holds, a short read ends the list, and a wave type outside the table is skipped: every one
+			 of those used to index waveTypeInfo, or loop, on whatever the file said.  A duplicate is
+			 skipped as it always was, now without reading on past the count. */
 		file->seek(-4,File::END);
 		file->read(&trackCount,sizeof(trackCount));
+		trackCount = wakTrackCount(file->size(), trackCount);
 		file->seek(0, File::START);
 		for (Int i=0; i<trackCount; i++)
 		{
-		tryagain:
-			file->read(&startPos,sizeof(startPos));
-			file->read(&endPos,sizeof(endPos));
-			file->read(&wtype,sizeof(wtype));
+			Int type = 0;
+			if (file->read(&startPos,sizeof(startPos)) != sizeof(startPos)
+				|| file->read(&endPos,sizeof(endPos)) != sizeof(endPos)
+				|| file->read(&type,sizeof(type)) != sizeof(type))
+				break;
+			if (!isWakWaveType(type))
+				continue;
+			wtype = (waveType)type;
 			//Check if this track already exists.
 			if (findTrack(startPos,endPos,wtype))
-			{	i++;
-				goto tryagain;
-			}
+				continue;
 
 			umod=TheWaterTracksRenderSystem->bindTrack(wtype);
 			if (umod)
