@@ -1011,3 +1011,52 @@ environment water, has no transcription and is refused. What is wrong is the tra
 "every ps_1_1 instruction clamps its result to zero and one". It is to be corrected in engineshader.cpp,
 a comment-only change to shared code, under the generator-fix process. -47's interpreter holds the
 signed range, and the replay above passing is the measured half of this reading.
+
+### A3e-asm: Microsoft's own assembler as the oracle (-47, 2026-09-26)
+
+**Route 1, a PE loader, not Wine.** `Tests/d3dx_assemble/` (ctest `d3dx_assemble_oracle`, opt-in with
+ZH_D3DX9_X64 like d3dx_oracle, skipped (77) without it).
+- The loader maps Microsoft's genuine d3dx9_43.dll and D3DCompiler_43.dll (June 2010 x64, from the
+  Steam redist; sha256 84b900db…67b4 and 44c3a7e3…850e8a, Wine builtins refused). It applies their
+  relocations, binds about 130 imports to Microsoft-ABI stubs over the C library, and traps every
+  other import by name (102 are never called here). It runs both DLLs' own entry points and calls
+  `D3DXAssembleShader` exactly as W3DWater.cpp does, x86_64 under Rosetta, with no window.
+- D3DXAssembleShader does not assemble by itself. It loads D3DCompiler_43 and calls its D3DAssemble,
+  and the loader answers that LoadLibraryA with Microsoft's own D3DCompiler. The run prints what was
+  loaded, and fails unless D3DCompiler_43 came first.
+
+**The departure, the only one:** three C-runtime sites per DLL that read the Windows thread block
+through `gs`. On x86_64 macOS, `gs` holds the pthread slots instead.
+- `__chkstk` (the stack limit at gs:0x10) is patched to a plain `ret`, since this stack is committed.
+- The startup lock's two reads of gs:0x30 are pointed at a stand-in block whose stack-base field is a
+  non-zero id.
+- Every site's bytes are checked before it is patched. No assembler code is touched.
+
+**Result, 2026-09-26:**
+- For all four water texts, Microsoft's tokens equal `FFRef::assemblePixelProgram`'s word for word
+  (37, 21, 23 and 35 words). Microsoft adds no comment tokens.
+- Microsoft's tokens decode under the census. The armed control (one bit of ours flipped) is found.
+- `d3dx_assemble_stub_selfcheck` (native, always run) pins goal (b): the port's stub carries each
+  text exactly (99, 63, 91 and 143 words, with the version token, "ZHSR", the length and zero
+  padding). It has its own armed control.
+
+**What it cannot see:**
+- The shader validator. D3DCompiler loads d3d9.dll for `Direct3DShaderValidatorCreate9`, and d3dx
+  loads it for `DebugSetMute`. Here that load answers NULL, so validation is skipped. A validator can
+  only accept or reject, and these programs run on Windows.
+- Error paths. Only valid text was assembled; an exception stops the run.
+- Any other D3DX build: the patch sites are this build's.
+- What the device does with the text: that is the A3e replay's job.
+
+**Decision (PM, 2026-09-26): the port's D3DXAssembleShader stays a text carrier, not an assembler.**
+The device picks a transcription by the name the engine registers, and (b) pins what it is handed.
+Revisit only if a shader appears that no name identifies.
+
+**Capture v3, wanted (low priority, -a9's writer): the engine's own D3D8 declaration.** Then the
+oracle would decode the vN mapping from the D3DVSD pages instead of taking the device's D3D8-to-D3D9
+table. The fields, per programmable draw:
+- the DWORD stream the engine passed as CreateVertexShader's `pDeclaration`, through `D3DVSD_END()`
+  (D3DVSD_STREAM, D3DVSD_REG with its D3DVSDT type, D3DVSD_SKIP, D3DVSD_CONST blocks included);
+- for each stream the declaration names: its SetStreamSource stride and the byte offset of the draw's
+  first vertex, so the D3D8 layout is read over the right bytes;
+- the D3D9 elements as today, kept for the comparison.
