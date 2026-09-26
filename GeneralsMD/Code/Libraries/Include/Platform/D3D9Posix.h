@@ -463,24 +463,9 @@ struct D3D9PosixGuid
 	uint8_t Data4[8];
 };
 
-struct D3DVECTOR		{ float x, y, z; };
+#include "Platform/D3D9PosixMath.h"		// D3DVECTOR and D3DMATRIX, which D3DX (and so GameEngine) reaches
 struct D3DCOLORVALUE	{ float r, g, b, a; };
 struct D3DRECT			{ int32_t x1, y1, x2, y2; };
-
-struct D3DMATRIX
-{
-	union
-	{
-		struct
-		{
-			float _11, _12, _13, _14;
-			float _21, _22, _23, _24;
-			float _31, _32, _33, _34;
-			float _41, _42, _43, _44;
-		};
-		float m[4][4];
-	};
-};
 
 struct D3DVIEWPORT9
 {
@@ -732,9 +717,10 @@ struct D3DVERTEXELEMENT9
 // NULL.  Release returns the count left, as COM's does.
 //-------------------------------------------------------------------------------------------------
 
-typedef D3D9PosixGuid IID;
-extern const IID IID_IDirect3DTexture9;
-extern const IID IID_IDirect3DCubeTexture9;
+// D3D9's interface identifiers, as GetContainer takes them.  COM spells their type IID, which is
+// guiddef.h's name and not D3D9's, so it is not defined here.
+extern const D3D9PosixGuid IID_IDirect3DTexture9;
+extern const D3D9PosixGuid IID_IDirect3DCubeTexture9;
 
 class IDirect3DDevice9;
 class IDirect3DSurface9;
@@ -797,7 +783,7 @@ public:
 class IDirect3DSurface9 : public IDirect3DResource9
 {
 public:
-	virtual RenderResult GetContainer(const IID &riid, void **container) = 0;
+	virtual RenderResult GetContainer(const D3D9PosixGuid &riid, void **container) = 0;
 	virtual RenderResult GetDesc(D3DSURFACE_DESC *desc) = 0;
 	virtual RenderResult LockRect(D3DLOCKED_RECT *locked, const RenderRect *rect, RenderUInt32 flags) = 0;
 	virtual RenderResult UnlockRect() = 0;
@@ -969,11 +955,14 @@ IDirect3D9 *Direct3DCreate9(unsigned int sdk_version);
 #if !defined(D3D9POSIX_CHECKER)
 // The layouts, checked against MinGW-w64's by Tests/d3d9posix_check.cpp and fixed here for every
 // POSIX compiler: the renderer copies these structures whole and reads their fields by name.
-static_assert(sizeof(D3DMATRIX) == 64, "D3DMATRIX is sixteen floats");
 static_assert(sizeof(D3DVIEWPORT9) == 24, "D3DVIEWPORT9 layout");
 static_assert(sizeof(D3DMATERIAL9) == 68, "D3DMATERIAL9 layout");
 static_assert(sizeof(D3DLIGHT9) == 104, "D3DLIGHT9 layout");
 static_assert(sizeof(D3DSURFACE_DESC) == 32, "D3DSURFACE_DESC layout");
+static_assert(sizeof(D3DLOCKED_RECT) == 16 && offsetof(D3DLOCKED_RECT, pBits) == 8,
+	"D3DLOCKED_RECT layout (INT Pitch, then an eight-aligned pointer)");
+static_assert(sizeof(D3DLOCKED_BOX) == 16 && offsetof(D3DLOCKED_BOX, pBits) == 8,
+	"D3DLOCKED_BOX layout (two INT pitches, then the pointer)");
 static_assert(sizeof(D3DGAMMARAMP) == 1536, "D3DGAMMARAMP layout");
 static_assert(sizeof(D3DCAPS9) == 304, "D3DCAPS9 layout");
 static_assert(sizeof(D3DVERTEXELEMENT9) == 8, "D3DVERTEXELEMENT9 layout");

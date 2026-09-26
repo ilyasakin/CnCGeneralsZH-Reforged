@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check Platform/D3D9Posix.h against MinGW-w64's d3d9.h (decision 7, phase A1).
+"""Check Platform/D3D9Posix.h (and D3D9PosixMath.h) against MinGW-w64's d3d9.h (decision 7, phase A1).
 
 The POSIX header is written from Direct3D 9's published values, not copied from any header.  This
 proves it agrees: it reads the POSIX header, writes a translation unit that includes MinGW-w64's
@@ -24,7 +24,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CODE = os.path.dirname(HERE)
-HEADER = os.path.join(CODE, 'Libraries', 'Include', 'Platform', 'D3D9Posix.h')
+PLATFORM = os.path.join(CODE, 'Libraries', 'Include', 'Platform')
+# D3D9Posix.h, and the vector and matrix it includes from a header of their own for D3DX's sake.
+HEADERS = [os.path.join(PLATFORM, 'D3D9Posix.h'), os.path.join(PLATFORM, 'D3D9PosixMath.h')]
 COMPILER = 'x86_64-w64-mingw32-g++'
 
 # Function-like macros, and the arguments to compare them on.
@@ -39,7 +41,19 @@ FUNCTION_MACROS = {
     'D3DFVF_TEXCOORDSIZE4': ['(0)', '(1)', '(7)'],
 }
 # The POSIX header's own names, which D3D9 has no counterpart for.
-OWN = re.compile(r'^(D3D9POSIX_|PLATFORM_D3D9POSIX_H)')
+OWN = re.compile(r'^(D3D9POSIX_|PLATFORM_D3D9POSIX)')
+
+
+def members(block):
+    """An enumeration's members, split at the commas outside parentheses."""
+    parts, depth, start = [], 0, 0
+    for at, char in enumerate(block):
+        depth += {'(': 1, ')': -1}.get(char, 0)
+        if char == ',' and depth == 0:
+            parts.append(block[start:at])
+            start = at + 1
+    parts.append(block[start:])
+    return [part.strip() for part in parts if part.strip()]
 
 
 def parse(text):
@@ -47,14 +61,22 @@ def parse(text):
     body = re.sub(r'//[^\n]*', '', body)
     macros = [m.group(1) for m in re.finditer(r'^\s*#define\s+(\w+)[ \t]+\S', body, re.M)
               if not OWN.match(m.group(1))]
+    # Nothing is skipped without a word: a function-like macro has to have sample arguments listed
+    # in FUNCTION_MACROS, and an enumerator has to have its value written out.
+    unchecked = [f'function-like macro {m.group(1)} has no samples in FUNCTION_MACROS'
+                 for m in re.finditer(r'^\s*#define\s+(\w+)\(', body, re.M)
+                 if not OWN.match(m.group(1)) and m.group(1) not in FUNCTION_MACROS]
     # *_FORCE_DWORD only makes an enumeration four bytes wide, and the renderer never names one.
     # MinGW-w64 (Wine) gives some 0xffffffff where Microsoft's SDK gives 0x7fffffff, so their values
     # are not compared; the four-byte width is asserted in the header.
     enumerators = []
     for block in re.finditer(r'\benum\s+(\w+)\s*\{(.*?)\}', body, re.S):
-        for member in re.finditer(r'(\w+)\s*=', block.group(2)):
-            if not member.group(1).endswith('_FORCE_DWORD'):
-                enumerators.append(member.group(1))
+        for member in members(block.group(2)):
+            name = re.match(r'\w+', member).group(0)
+            if '=' not in member:
+                unchecked.append(f'enumerator {name} in {block.group(1)} has no value written out')
+            elif not name.endswith('_FORCE_DWORD'):
+                enumerators.append(name)
     structs = {}
     for head in re.finditer(r'\bstruct\s+(\w+)\s*\{', body):
         name = head.group(1)
@@ -78,7 +100,7 @@ def parse(text):
                 if field:
                     fields.append(field.group(1))
         structs[name] = fields
-    return macros, enumerators, structs
+    return macros, enumerators, structs, unchecked
 
 
 def unit(macros, enumerators, structs, control):
@@ -127,7 +149,12 @@ def compile_unit(source):
 
 
 def main():
-    macros, enumerators, structs = parse(open(HEADER).read())
+    macros, enumerators, structs, unchecked = parse(''.join(open(h).read() for h in HEADERS))
+    if unchecked:
+        print(f'd3d9posix_check: FAIL - {len(unchecked)} names this check cannot compare:')
+        for line in unchecked:
+            print(f'  {line}')
+        return 1
     source = unit(macros, enumerators, structs, control=False)
     if '--keep' in sys.argv:
         open(sys.argv[sys.argv.index('--keep') + 1], 'w').write(source)
