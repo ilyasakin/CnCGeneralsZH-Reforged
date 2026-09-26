@@ -38,6 +38,10 @@
 #if defined(_WIN32)
 #include <windows.h>
 #include <shlobj.h>
+#else
+#include <pwd.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 #include "Platform/MSVCCompat.h"	// strcasecmp and strncasecmp, taught to MSVC
 #include <stdio.h>
@@ -207,16 +211,225 @@ inline bool findUserDataDirectory( char *out, size_t outSize )
 	return true;
 }
 #else
-/* Off Windows there is no Documents folder in the shell's sense and no installer registry: where a
-	 user's saves, replays and Options.ini live is C1's to decide (and what Mac and Linux players expect
-	 differs).  Until then there is no user data directory.  GlobalData logs that and leaves
-	 m_userDataDir empty, so those files go to the current directory - its own documented fallback,
-	 not a choice - and Options.ini is not found here, so every early option reads as its default. */
+/* Off Windows (C1, decision D5): the platform's place for an application's own data, under the same
+	 leaf Windows uses by default.  There is no installer registry here, so no localized leaf name.
+	   - macOS: ~/Library/Application Support/Command and Conquer Generals Zero Hour Data
+	   - Linux: $XDG_DATA_HOME/Command and Conquer Generals Zero Hour Data, $XDG_DATA_HOME defaulting
+	     to ~/.local/share as the XDG base directory specification says
+	   - ZH_USER_DATA_DIR, when set, is the directory itself (a POSIX path), for tests and portable
+	     installs.
+	 The directory and any missing parents are made.  The answer ends in '\' as Windows' does, so
+	 every `+ "Save\"` and `endsWith("\")` works unchanged: the engine's paths keep their
+	 Windows spelling and are resolved where they reach the operating system (posixpath.h).
+	 Documents, where Windows keeps it, was considered for macOS and set aside: Apple's guidelines
+	 keep an application's own data in Application Support (C1's task file, D5). */
+
+/** This user's home directory: $HOME, or the password database's entry when $HOME is unset. */
+inline bool findHomeDirectory( char *out, size_t outSize )
+{
+	if (outSize == 0)
+		return false;
+	out[0] = 0;
+	const char *home = ::getenv( "HOME" );
+	if (home == NULL || home[0] != '/')
+	{
+		const struct passwd *entry = ::getpwuid( ::getuid() );
+		home = (entry != NULL) ? entry->pw_dir : NULL;
+	}
+	if (home == NULL || home[0] != '/' || ::strlen( home ) + 1 > outSize)
+		return false;
+	::strcpy( out, home );
+	return true;
+}
+
+/** Makes every missing directory along `path`; whether it is a directory afterwards. */
+inline bool makeDirectoryPath( const char *path )
+{
+	char prefix[4096];
+	const size_t length = ::strlen( path );
+	if (length == 0 || length + 1 > sizeof( prefix ))
+		return false;
+	for (size_t at = 1; at <= length; ++at)
+	{
+		if (at == length || path[at] == '/')
+		{
+			::memcpy( prefix, path, at );
+			prefix[at] = 0;
+			::mkdir( prefix, 0777 );	// one that exists already is the usual case, and fine
+		}
+	}
+	struct stat status;
+	return ::stat( path, &status ) == 0 && S_ISDIR( status.st_mode );
+}
+
+/** The two conventions for where an application keeps its data: Apple's Application Support, and
+	* the XDG base directories every Linux desktop follows.  A parameter rather than an #if, so each is
+	* testable on the other's machine; findUserDataDirectory passes this platform's. */
+enum UserFolderConvention
+{
+	USER_FOLDERS_APPLE,
+	USER_FOLDERS_XDG
+};
+
+#if defined(__APPLE__)
+static const UserFolderConvention PLATFORM_USER_FOLDERS = USER_FOLDERS_APPLE;
+#else
+static const UserFolderConvention PLATFORM_USER_FOLDERS = USER_FOLDERS_XDG;
+#endif
+
+/** The user data directory these inputs name, without the trailing separator: `override` if it is
+	* set, and otherwise the convention's place under `home` or, for XDG, `dataHome` ($XDG_DATA_HOME).
+	* Pure, so a test can check it without the process's own answer being fixed by the first call. */
+inline bool composeUserDataDirectory( UserFolderConvention convention, const char *override, const char *home,
+	const char *dataHome, char *out, size_t outSize )
+{
+	if (outSize == 0)
+		return false;
+	out[0] = 0;
+	const char *leaf = "Command and Conquer Generals Zero Hour Data";
+	int written = -1;
+	if (override != NULL && override[0] != 0)
+		written = ::snprintf( out, outSize, "%s", override );
+	else if (convention == USER_FOLDERS_APPLE && home != NULL && home[0] == '/')
+		written = ::snprintf( out, outSize, "%s/Library/Application Support/%s", home, leaf );
+	else if (convention == USER_FOLDERS_XDG && dataHome != NULL && dataHome[0] == '/')	// a relative one is ignored, as the specification says
+		written = ::snprintf( out, outSize, "%s/%s", dataHome, leaf );
+	else if (convention == USER_FOLDERS_XDG && home != NULL && home[0] == '/')
+		written = ::snprintf( out, outSize, "%s/.local/share/%s", home, leaf );
+	if (written <= 0 || (size_t)written >= outSize)
+	{
+		out[0] = 0;
+		return false;
+	}
+	size_t length = (size_t)written;
+	while (length > 1 && (out[length - 1] == '/' || out[length - 1] == '\\'))
+		out[--length] = 0;
+	return true;
+}
+
 inline bool findUserDataDirectory( char *out, size_t outSize )
 {
-	if (outSize != 0)
+	if (outSize == 0)
+		return false;
+	out[0] = 0;
+
+	// Worked out once a process, as on Windows: WinMain, GlobalData and registry.cpp all ask.
+	static char s_chosen[4096] = "";
+	static bool s_decided = false;
+	if (!s_decided)
+	{
+		s_decided = true;
+		char home[4096];
+		char directory[4096];
+		if (composeUserDataDirectory( PLATFORM_USER_FOLDERS, ::getenv( "ZH_USER_DATA_DIR" ),
+					findHomeDirectory( home, sizeof( home ) ) ? home : NULL,
+					::getenv( "XDG_DATA_HOME" ), directory, sizeof( directory ) )
+				&& ::strlen( directory ) + 2 <= sizeof( s_chosen ) && makeDirectoryPath( directory ))
+			::snprintf( s_chosen, sizeof( s_chosen ), "%s\\", directory );
+	}
+	if (s_chosen[0] == 0 || ::strlen( s_chosen ) + 1 > outSize)
+		return false;
+	::strcpy( out, s_chosen );
+	return true;
+}
+
+/** The value of `key` (XDG_DESKTOP_DIR and the like) in an open xdg-user-dirs file, with a leading
+	* "$HOME" replaced by `home`.  The file's lines are `KEY="$HOME/Desktop"` or `KEY="/absolute"`.
+	* Split out so a test can hand it a file of its own. */
+inline bool findXdgUserDirIn( FILE *fp, const char *key, const char *home, char *out, size_t outSize )
+{
+	if (outSize == 0)
+		return false;
+	out[0] = 0;
+	const size_t keyLen = ::strlen( key );
+	char line[4096];
+	bool found = false;
+	while (::fgets( line, sizeof( line ), fp ) != NULL)
+	{
+		const char *at = line;
+		while (*at == ' ' || *at == '\t')
+			++at;
+		if (::strncmp( at, key, keyLen ) != 0 || at[keyLen] != '=')
+			continue;
+		at += keyLen + 1;
+		if (*at == '"')
+			++at;
+		char value[4096];
+		size_t i = 0;
+		while (*at != 0 && *at != '"' && *at != '\r' && *at != '\n' && i + 1 < sizeof( value ))
+			value[i++] = *at++;
+		value[i] = 0;
+		int written;
+		if (::strncmp( value, "$HOME", 5 ) == 0 && (value[5] == '/' || value[5] == 0))
+			written = ::snprintf( out, outSize, "%s%s", home, value + 5 );
+		else if (value[0] == '/')
+			written = ::snprintf( out, outSize, "%s", value );
+		else
+			continue;		// the specification allows only those two forms
+		found = written > 0 && (size_t)written < outSize;
+		if (!found)
+			out[0] = 0;
+		// keep reading: the last assignment wins, as it would in the shell that sources this file
+	}
+	return found;
+}
+
+/** Where xdg-user-dirs keeps its file: $XDG_CONFIG_HOME/user-dirs.dirs, $XDG_CONFIG_HOME defaulting
+	* to ~/.config. */
+inline bool composeUserDirsFile( const char *home, const char *configHome, char *out, size_t outSize )
+{
+	int written;
+	if (configHome != NULL && configHome[0] == '/')
+		written = ::snprintf( out, outSize, "%s/user-dirs.dirs", configHome );
+	else
+		written = ::snprintf( out, outSize, "%s/.config/user-dirs.dirs", home );
+	return written > 0 && (size_t)written < outSize;
+}
+
+/** Where this user's Desktop is, for a convention and a home directory: ~/Desktop for Apple; for XDG
+	* the Desktop that xdg-user-dirs names (XDG_DESKTOP_DIR), falling back to ~/Desktop.  Without a
+	* trailing separator, as SHGetPathFromIDList gives it. */
+inline bool composeDesktopDirectory( UserFolderConvention convention, const char *home, const char *configHome,
+	char *out, size_t outSize )
+{
+	if (outSize == 0)
+		return false;
+	out[0] = 0;
+	if (home == NULL || home[0] != '/')
+		return false;
+	char dirsFile[4096];
+	if (convention == USER_FOLDERS_XDG && composeUserDirsFile( home, configHome, dirsFile, sizeof( dirsFile ) ))
+	{
+		FILE *fp = ::fopen( dirsFile, "r" );
+		if (fp != NULL)
+		{
+			const bool found = findXdgUserDirIn( fp, "XDG_DESKTOP_DIR", home, out, outSize );
+			::fclose( fp );
+			if (found)
+				return true;
+		}
+	}
+	const int written = ::snprintf( out, outSize, "%s/Desktop", home );
+	if (written <= 0 || (size_t)written >= outSize)
+	{
 		out[0] = 0;
-	return false;
+		return false;
+	}
+	return true;
+}
+
+/** Where this user's Desktop is: the replay menu's "copy" button puts a replay there.  Windows asks
+	* the shell (ReplayMenu.cpp). */
+inline bool findDesktopDirectory( char *out, size_t outSize )
+{
+	char home[4096];
+	if (!findHomeDirectory( home, sizeof( home ) ))
+	{
+		if (outSize != 0)
+			out[0] = 0;
+		return false;
+	}
+	return composeDesktopDirectory( PLATFORM_USER_FOLDERS, home, ::getenv( "XDG_CONFIG_HOME" ), out, outSize );
 }
 #endif
 
