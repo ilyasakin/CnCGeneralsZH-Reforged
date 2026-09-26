@@ -47,13 +47,16 @@ else()
   set(ZH_NOT_YET_PORTABLE "")
 endif()
 
-# GCC (6 and later) assumes a member function's `this` is never null and deletes the checks written on
-# it.  EA's code depends on them: MemoryPoolObject::deleteInstance() begins `if (this)`, and a null
-# pointer's deleteInstance() is called all over the engine (the first one in ScriptEngine::init, where
-# the native Linux build segfaulted, W1).  GCC's own release notes name this switch as the way to keep
-# such code working.  MSVC never made the assumption; clang only warns about it (-Wundefined-bool-
-# conversion) and keeps the check today.  POSIX with GCC only, so nothing changes where it works.
-if(ZH_PLATFORM_POSIX AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+# A compiler may assume a member function's `this` is never null and delete the checks written on it.
+# EA's code depends on three: MemoryPoolObject::deleteInstance() (GameMemory.h:762, `if (this)`, called
+# on null pointers all over the engine), StateMachine::deleteInstance() (StateMachine.h:356) and
+# WindowLayout::destroyWindows() (WindowLayout.cpp:176, `if (this == NULL)`).  GCC 6 and later delete
+# them at -O2 and up - the native Linux build segfaulted in ScriptEngine::init (W1) - and GCC's release
+# notes name this switch as the way to keep such code working.  Clang keeps them today (measured: the
+# Release build's out-of-line deleteInstance and destroyWindows both begin with a null test, `cbz x0`)
+# but warns that it may assume otherwise, so every POSIX compiler gets the switch.  This is what MSVC
+# does already: it never made the assumption.
+if(ZH_PLATFORM_POSIX AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-fno-delete-null-pointer-checks)
 endif()
 
