@@ -1186,6 +1186,31 @@ numbered by stage. -47's reading of the pages pointed toward stage, but by infer
 sentence. A commit following it (c6e52558) was reverted after -18's second read, and the D3D9 profile
 reads the set's register as before. The comment on `stage_register` records both. `WINDOWS-DEBT.md` has the row.
 
+**28. A player's rank walks off its table on remote stats data - fixed.**
+
+- **Where:** `PopupPlayerInfo.cpp:841` and `WOLLobbyMenu.cpp:315` and `:389`. Each finds a rank with
+  `while (rankPoints >= m_ranks[i + 1]) ++i;`, which has no bound. `RankPoints` is ten Int thresholds
+  followed by five Real multipliers.
+- **The points come from the stats service's record,** for the local player and for OTHER players: the
+  lobby tooltips and rank icons, the load screen, the player-info popup.
+- **Every Commander in Chief (≥ 2,000 points) reads one past `m_ranks`, on every build.** That word is
+  `m_winMultiplier`'s bits, 1,077,936,128, and the walk stops only because that number is large.
+- **On shipping Windows, without any overflow,** points above 1,084,227,584 pass every multiplier read as
+  an Int and walk past the struct into the heap. Examples: 400,000,000 wins × 3.0 = 1,200,000,000, or
+  715,000,000 wins.
+- **On arm64 it's worse:** an overflow of the float sum converts to INT_MAX, where Windows gives INT_MIN
+  and `max(0, …)` makes that 0. So any huge record walks off.
+- **Measured** by -18 in `rank_walk_stops_at_the_table_end_and_the_old_one_did_not`, over RankPoints' own
+  fifteen words (the layout is pinned by static_asserts) and the shipped values:
+  - 2,000 → index 9, reading one past;
+  - 1,077,936,129 → index 12;
+  - 1,200,000,000 and INT_MAX → off the struct.
+- **Fixed:** `rankForPoints` (`RankPointValue.h`) stops at `RANK_COMMANDER_IN_CHIEF`. It is identical to
+  the old walk for every points value 0 to 2,100. `CalculateRank`'s float → Int sums go through
+  `floatToIntAsMsvc`. `WINDOWS-DEBT.md` has the row: Windows' rank changes only where the old walk left
+  the table.
+- **Not traced:** how far the out-of-table rank index then reached into later tables on Windows.
+
 **Latent, not numbered: a missing coordinate set under a texture transform.**
 - **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
   D3D9 documents (0,0) ("the system defaults to the u and v coordinates (0,0)"). FFReference's N28 pads
