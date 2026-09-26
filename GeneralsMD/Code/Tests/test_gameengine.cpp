@@ -67,6 +67,42 @@
 #include "Common/GlobalData.h"
 #include "Common/EarlyOptions.h"
 #include "Common/Monitors.h"
+
+#if !defined(_WIN32)
+/* Two Win32 calls these tests make, off Windows, so that each test's text is the same on both.
+	 - _controlfp's rounding field, over <cfenv>.  Tests that put the FPU in a mode the simulation never
+	   uses name it the MSVC way.  There is no x87 precision field here (as on x64 Windows), so the
+	   precision bits are accepted and ignored; the values are MSVC's own, so a word read back and
+	   handed in again round-trips.  The two tests that need the exception masks, or compare
+	   getFPMode() with MSVC's bit layout, are Windows' alone; fpucontrol_selfcheck is POSIX's.
+	 - GetSystemMetrics' primary-display size.  Off Windows the displays are C2's, and until C2 the
+	   primary is Monitors.h's fallback, the 800x600 floor - which is what borderless mode must then
+	   size itself to.  The expectation is that floor, not a call back into findMonitor. */
+#include <cfenv>
+#include <dirent.h>
+#include <limits.h>
+#include <sys/stat.h>
+enum { _MCW_RC = 0x00000300, _RC_NEAR = 0x00000000, _RC_DOWN = 0x00000100, _RC_UP = 0x00000200,
+	_RC_CHOP = 0x00000300, _MCW_PC = 0x00030000, _PC_24 = 0x00020000, _PC_53 = 0x00010000,
+	_PC_64 = 0x00000000 };
+#define FP_MODE_FIELDS ( _MCW_RC )
+static UnsignedInt _controlfp( UnsignedInt value, UnsignedInt mask )
+{
+	static const int modes[ 4 ] = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+	if( mask & _MCW_RC )
+		fesetround( modes[ ( value & _MCW_RC ) >> 8 ] );
+	const int current = fegetround();
+	for( UnsignedInt i = 0; i < 4; ++i )
+		if( modes[ i ] == current )
+			return i << 8;
+	return 0;
+}
+enum { SM_CXSCREEN, SM_CYSCREEN };
+static int GetSystemMetrics( int which )
+{
+	return which == SM_CXSCREEN ? MIN_DISPLAY_MODE_WIDTH : MIN_DISPLAY_MODE_HEIGHT;
+}
+#endif
 #include "Common/OptionsCatalog.h"
 #include "Common/SubsystemInterface.h"
 #include "GameClient/GameText.h"
@@ -3450,8 +3486,12 @@ TEST(gamedatamatch_refuses_a_machine_that_reports_no_data_at_all)
 	 Two machines only compute the same floats if the FPU control word says the same thing on both.
 	 Nothing in the process guarantees that - Direct3D sets it when it creates a device, and any DLL
 	 in the process can set it and never put it back - so GameLogic::update re-asserts it at the top
-	 of every logic frame.  These pin what "asserts it" means. */
+	 of every logic frame.  These pin what "asserts it" means.
 
+	 They read MSVC's _controlfp word, so they are Windows' tests.  setFPMode's POSIX branch, which
+	 writes the <cfenv> state instead, is fpucontrol_selfcheck's (Tests/test_fpucontrol.cpp). */
+
+#if defined(_WIN32)
 TEST(setfpmode_pins_the_control_word_from_whatever_it_finds)
 {
 	UnsignedInt entry = _controlfp( 0, 0 );		// leave the process the way we found it
@@ -3503,6 +3543,7 @@ TEST(setfpmode_leaves_the_exception_mask_in_a_known_state)
 
 	_controlfp( entry, _MCW_PC | _MCW_RC | _MCW_EM );
 }
+#endif	// _WIN32: the _controlfp tests
 
 // ---------------------------------------------------------------------------------------------
 // The disconnect screen's decision (MULTIPLAYER 2.3).  DisconnectManager::update used to bring
@@ -6038,6 +6079,55 @@ static int scanSourceForRuntimeMath(const char *path, const char *displayName)
 
 static int scanTreeForRuntimeMath(const char *dir, const char *display, int *filesScanned)
 {
+#if !defined(_WIN32)
+	/* The same walk over readdir: '/' between names, and the same files skipped.  The roots arrive
+		 spelled with '\\', as Windows takes them; a POSIX path takes '/' only. */
+	char posixDir[PATH_MAX];
+	snprintf(posixDir, sizeof(posixDir), "%s", dir);
+	for (char *c = posixDir; *c != 0; ++c)
+		if (*c == '\\')
+			*c = '/';
+	dir = posixDir;
+	DIR *d = opendir(dir);
+	if (d == NULL)
+		return 0;
+
+	int hits = 0;
+	for (struct dirent *entry = readdir(d); entry != NULL; entry = readdir(d))
+	{
+		if (entry->d_name[0] == '.')
+			continue;
+
+		char child[PATH_MAX];
+		char childDisplay[PATH_MAX];
+		snprintf(child, sizeof(child), "%s/%s", dir, entry->d_name);
+		snprintf(childDisplay, sizeof(childDisplay), "%s/%s", display, entry->d_name);
+
+		struct stat info;
+		if (stat(child, &info) != 0)
+			continue;
+		if (S_ISDIR(info.st_mode))
+		{
+			hits += scanTreeForRuntimeMath(child, childDisplay, filesScanned);
+			continue;
+		}
+
+		const char *dot = strrchr(entry->d_name, '.');
+		if (dot == NULL || (strcmp(dot, ".cpp") != 0 && strcmp(dot, ".h") != 0))
+			continue;
+
+		if (strcmp(entry->d_name, "SimulationMathCrc.cpp") == 0
+			|| strcmp(entry->d_name, "MiniLog.cpp") == 0
+			|| strcmp(entry->d_name, "MiniLog.h") == 0)
+			continue;
+
+		++(*filesScanned);
+		hits += scanSourceForRuntimeMath(child, childDisplay);
+	}
+
+	closedir(d);
+	return hits;
+#else
 	char pattern[MAX_PATH];
 	sprintf(pattern, "%s\\*", dir);
 
@@ -6081,6 +6171,7 @@ static int scanTreeForRuntimeMath(const char *dir, const char *display, int *fil
 
 	FindClose(h);
 	return hits;
+#endif
 }
 
 /* Promised by Libraries/Include/Lib/Trig.h, and the only thing that keeps the conversion from
@@ -6547,7 +6638,7 @@ TEST(original_scheme_and_unknown_colors_pass_through_untouched)
 	TheWritableGlobalData = NEW GlobalData;
 	invalidatePlayerColorScheme();
 
-	const Color sample[] = { 0xFF102030, 0xE6FF0000, 0x00000000, 0xFFFFFFFF };
+	const Color sample[] = { (Color)0xFF102030, (Color)0xE6FF0000, (Color)0x00000000, (Color)0xFFFFFFFF };
 
 	for( Int i = 0; i < 4; ++i )
 		CHECK_EQ( (Int)clientColor( sample[ i ] ), (Int)sample[ i ] );

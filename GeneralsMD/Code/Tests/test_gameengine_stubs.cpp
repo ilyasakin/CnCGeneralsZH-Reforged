@@ -24,7 +24,9 @@
 #include "GameClient/Shadow.h"
 #include "GameLogic/TerrainLogic.h"
 
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 
 //////////////////////////////////////////////////////////////////////////////
 // MapObject's render half, Windows only (see the top of this file)
@@ -47,14 +49,22 @@ RenderObjClass *MapObject::getBridgeRenderObject( BridgeTowerType type )
 // Device layer
 //////////////////////////////////////////////////////////////////////////////
 
+#if defined(_WIN32)
 HWND ApplicationHWnd = NULL;
+#endif
 
 /* Debug.cpp names its log file after this; WinMain.cpp owns it in the real exe. */
 char *gAppPrefix = "test_";
-ProjectedShadowManager *TheProjectedShadowManager = NULL;
-
+/* The exe's names, on every platform: WinMain.cpp defines them in the game on Windows, and C2's
+   entry point will off it.  gAppPrefix is above. */
 const Char *g_strFile = "data\\Generals.str";
 const Char *g_csfFile = "data\\%s\\Generals.csf";
+
+/* The device layer's.  On Windows this test links gameengine alone, so they are stand-ins here; off
+   Windows it links PosixDevice too, whose PosixRenderHooks.cpp and PosixCDManager.cpp define them
+   (and the GameSpy SDK getQR2HostingStatus), so they would be defined twice (B6). */
+#if defined(_WIN32)
+ProjectedShadowManager *TheProjectedShadowManager = NULL;
 
 CDManagerInterface *CreateCDManager( void ) { return NULL; }
 
@@ -91,3 +101,4 @@ int getQR2HostingStatus( void ) { return 0; }
 /* StackDump takes WinMain's address to work out where the exe's own code
    starts; the test is a console app and never gets here. */
 int WINAPI WinMain( HINSTANCE, HINSTANCE, LPSTR, int ) { return 0; }
+#endif	// _WIN32: the device layer's stand-ins

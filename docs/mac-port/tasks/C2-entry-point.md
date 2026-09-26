@@ -74,9 +74,20 @@ B5 made these compile off Windows with a stand-in, and C2 replaces each:
 - **The displays.** `Monitors.h` off Windows reports ONE primary monitor, 800x600, offering that
   one mode: Windows' own no-desktop fallback, with the game's floor for a size. It is not empty on
   purpose, because an empty rect would give borderless a 0x0 resolution. Replace it with SDL3's
-  display list and modes.
+  display list and modes. `test_gameengine.cpp`'s POSIX shim answers `GetSystemMetrics` with the
+  same 800x600 floor as the borderless tests' expectation; it has to follow, to the primary
+  display's size by SDL3, or those two tests will compare against the wrong number.
 - **The window title.** `GameText.cpp`'s `setApplicationWindowTitle()` does nothing off Windows.
   It becomes `SDL_SetWindowTitle` once C2 owns the window.
+
+## The exe's names that stand-ins define today, 2026-09-26 (B6)
+
+`gameengine` names four things `Main/WinMain.cpp` defines on Windows: `CreateGameEngine()`,
+`g_strFile`, `g_csfFile` and `gAppPrefix`. Until this task writes the POSIX entry point, the only
+executables that link `gameengine` off Windows are tests, and they define them: `test_gameengine`'s
+stubs (`g_strFile`, `g_csfFile`, `gAppPrefix`; it never reaches `GameMain`, so needs no
+`CreateGameEngine`) and B6's measuring driver. The real definitions are this task's, beside the entry
+point, with the same values as `WinMain.cpp`'s; `CreateGameEngine` returns C1's `MacGameEngine`.
 
 ## Do not
 
