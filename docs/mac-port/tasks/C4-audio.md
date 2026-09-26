@@ -290,3 +290,17 @@ parseHeadless clears. The mirror holds by construction, with nothing headless-sp
 **Not measured.** How it sounds: a person with `miles_listen`, and at M5 the game. Also not
 exercised: the camera's microphone placement, player-filtered and low-pass events in play, and real
 devices.
+
+## The movies' voice (V1, -47, 2026-09-26)
+
+`miles_miniaudio.cpp` gains one extension beside the capture, for V1: a voice its owner pushes 16-bit
+PCM into (`MSS/mss_ex_pcm.h`: `AIL_ex_open_pcm`, `_queue_pcm`, `_pcm_queued_frames`, `_flush_pcm`,
+`_set_pcm_volume`, `_close_pcm`). It is mixed by the same callback as samples and streams, under
+`mixLock`, and heard by the capture.
+- `VoiceMix` gains `passThrough`: left to left and right to right at the voice's gain, the XAudio2 default
+  matrix the movies' own XAudio2 voice used on Windows. The existing voices keep the summed, panned mix.
+- It answers NULL without a device.
+- The header errors on Windows, where `miles_xaudio2.cpp` has no such voice and the movies keep
+  their own XAudio2 engine.
+
+`test_milesaudiomanager` and `test_miles_miniaudio` pass unchanged; `test_binkvideo` is its check.

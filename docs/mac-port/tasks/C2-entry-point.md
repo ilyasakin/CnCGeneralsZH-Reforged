@@ -151,7 +151,7 @@ point, with the same values as `WinMain.cpp`'s; `CreateGameEngine` returns C1's 
 **Wired** (A1's hand-over):
 - **Factories:** SdlGameEngine's are Win32GameEngine's, the same W3D classes (decision 8). The radar is
   W3DRadar, and HeadlessRadar only under `-nodevice`.
-- **PosixW3DGameClient:** gives the video player. It is the engine's own `VideoPlayer`, which opens
+- **PosixW3DGameClient** (removed by V1, 2026-09-26: `W3DGameClient` makes the Bink player on every platform now): gave the video player. It is the engine's own `VideoPlayer`, which opens
   nothing, until V1. It is not NULL, because GameClient calls the player unguarded.
 - **Window globals:** `ApplicationHWnd` and `ApplicationIsBorderless` are defined in PosixMain.cpp.
   `ApplicationHWnd` is the SDL window, and NULL under `-headless`.
