@@ -106,3 +106,18 @@ trace all three. For each, either show that it's pinned in replays and network g
 replay header carry what the recording machine used and have playback use that. Search for further
 readers of TheGameLODManager, TheGlobalData's LOD fields and the dynamic-LOD skip masks from
 GameLogic, by symbol.
+
+**Traced 2026-09-26 (-18, by symbol, read-only): all three are pinned or neutralised for every game
+that can be replayed or played over a network. No defect.**
+- `getSlowDeathScale()` is always 1.0: since `1b8279c6` ("close every desync the second audit found"),
+  `applyDynamicLODLevel` no longer copies it, and only the constructors write it.
+- `isDebrisSkipped()` never skips: the same commit stopped copying the skip mask, and only the
+  constructors write it (0), so `x & 0 == 0`. The frame-rate-driven dynamic LOD now changes only
+  client-side particle settings.
+- `forceFluffToProp` and `useTrees` are pinned TRUE whenever `TheRecorder->isMultiplayer()`, which
+  holds for LAN, internet and skirmish while recording, and for any replay with an occupied slot
+  during playback. The LOD-dependent path is single player and Generals Challenge only, and those
+  modes are not recordable (`isRecordableGameMode`).
+So E1's `-autoskirmish` runs are unaffected by the POSIX device's DC_UNKNOWN preset. What this does
+NOT cover: other client-only settings read by logic that nobody was looking for. It is a trace of
+these three, not a general audit.
