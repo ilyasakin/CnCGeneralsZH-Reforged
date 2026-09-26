@@ -35,6 +35,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "Platform/MsvcFloatCasts.h"
+
 /*
 **	Turn off some unneeded warnings.
 **	Within the windows headers themselves, Microsoft has disabled the warnings 4290, 4514, 
@@ -331,15 +333,20 @@ __forceinline float fast_float_ceil(float f)
  * the value integral.  cvttss2si has no mode to be left in.  The trunc/floor/ceil helpers below are
  * untouched; they still have callers that want a Real back.
  *
- * Pinned by real_to_int_agrees_with_the_assembly_it_replaced in test_gameengine.cpp. */
+ * Pinned by real_to_int_agrees_with_the_assembly_it_replaced in test_gameengine.cpp.
+ *
+ * The cast is MSVC's cvttss2si written out (Platform/MsvcFloatCasts.h), not the C cast itself.  In range
+ * the two are the same instruction's answer.  Out of range or NaN, C leaves the cast undefined; MSVC and
+ * x86 give INT_MIN, while ARM64 saturates and gives 0 for NaN.  The helper gives INT_MIN everywhere, so
+ * every one of these macros is Windows' answer by construction (-18's float sweep). */
 
-#define REAL_TO_INT(x)						((Int)(x))
-#define REAL_TO_UNSIGNEDINT(x)		((UnsignedInt)(Int)(x))
-#define REAL_TO_SHORT(x)					((Short)(Int)(x))
-#define REAL_TO_UNSIGNEDSHORT(x)	((UnsignedShort)(Int)(x))
-#define REAL_TO_BYTE(x)						((Byte)(Int)(x))
-#define REAL_TO_UNSIGNEDBYTE(x)		((UnsignedByte)(Int)(x))
-#define REAL_TO_CHAR(x)						((Char)(Int)(x))
+#define REAL_TO_INT(x)						((Int)floatToIntAsMsvc(x))
+#define REAL_TO_UNSIGNEDINT(x)		((UnsignedInt)floatToIntAsMsvc(x))
+#define REAL_TO_SHORT(x)					((Short)floatToIntAsMsvc(x))
+#define REAL_TO_UNSIGNEDSHORT(x)	((UnsignedShort)floatToIntAsMsvc(x))
+#define REAL_TO_BYTE(x)						((Byte)floatToIntAsMsvc(x))
+#define REAL_TO_UNSIGNEDBYTE(x)		((UnsignedByte)floatToIntAsMsvc(x))
+#define REAL_TO_CHAR(x)						((Char)floatToIntAsMsvc(x))
 #define DOUBLE_TO_REAL(x)					((Real) (x))
 #define DOUBLE_TO_INT(x)					((Int)(x))
 #define INT_TO_REAL(x)						((Real) (x))

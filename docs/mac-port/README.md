@@ -223,6 +223,11 @@ Status is one of: `not started`, `claimed`, `in progress`, `in review`, `done`, 
 
 ### Known gaps, not on a milestone's critical path
 
+- **Upstream: a missile's turn makes a NaN on purpose (-18's float sweep, 2026-09-26).** `Locomotor.cpp`'s
+  `calcArcTurnToGoal` takes `sqrt(1 - cosine^2)` where rounding can push the cosine just above 1, so a
+  projectile whose nose is on its goal gets a NaN turn rate. `DetTrig` now maps it to 0 explicitly, and
+  all three platforms agree. Stopping the NaN at its source (`sqrt(max(0, ...))`) would change gameplay
+  and every baseline. It is not a port item.
 - **Upstream: retail replay headers (-18's LP64 audit, 2026-09-26).** Retail (VC6, 4-byte `time_t`)
   `.rep` headers are probably offset after `GENREP` in both of the fork's 64-bit builds. `Recorder.cpp`
   writes and reads the header's `time_t` fields raw with `sizeof(time_t)`, which is 8 bytes on Windows
@@ -1242,6 +1247,30 @@ hunting a crash or corruption that only one platform shows, look here first.**
   - The bit is now `(UnsignedInt)1 << ((dt - 1) & 31)`, which is exactly Windows' value for every
     input and defined everywhere. Found by -18's float sweep, chasing why `SlowDeathBehavior.cpp:189`
     never ran.
+- **Float-to-integer conversions out of range or NaN, in the simulation (-18's float sweep; partly fixed).**
+  The census (every conversion the sanitizer instruments in the arm64 binary) found 1,444 sites, 318 of
+  them in the simulation. C leaves an out-of-range or NaN conversion undefined. MSVC and x86 give INT_MIN;
+  ARM64 saturates and gives 0 for NaN.
+  - **`DetTrig` (fixed; bit-identical everywhere).** `fixedAngle` and `arcTanUnit` took NaN through an
+    undefined conversion on every run: Locomotor's `calcArcTurnToGoal` makes a NaN whenever a missile's
+    nose is already on its goal. Every platform happened to answer 0 (x86's INT64_MIN is masked in the
+    first and truncated to index 0 in the second), so non-finite now maps to 0 explicitly.
+  - **Fixed with `floatToIntAsMsvc` (Windows' answer everywhere):**
+    - `SlowDeathBehavior::getProbabilityModifier` (0/0 for debris and hulks);
+    - `AIPlayer::computeBuildDelay` (a map script's base construction speed at a "never" value);
+    - the attack-priority distance modifier (`AI.cpp`, `CommandButtonHuntUpdate.cpp`);
+    - `SupplyWarehouseDockUpdate::setCashValue`, `DumbProjectileBehavior` and `SpawnBehavior` (zero
+      divisors from data);
+    - `SlavedUpdate`'s master health;
+    - `BaseType.h`'s `REAL_TO_*` macros, all of them, by construction.
+  - **A mission designer can hit this one:** the "unit health" script condition
+    (`ScriptConditions.cpp:958`) on a named prop, hulk or `AncientSoldierStatue02` computes 0/0. Windows'
+    INT_MIN and ARM64's 0 answered `== 0` and `>= 0` differently. Fixed.
+  - **Held, not fixed:** float-to-unsigned sites that only negative or infinite data reach. These are the
+    INI duration parsers (`INI.cpp:1744/1752`), pack/unpack variation factors above 1, a reload with a zero
+    rate-of-fire bonus, and a particle uplink with zero pulses. The working hypothesis for MSVC x64 is
+    `cvttss2si` into a 64-bit register, then the low 32 bits (-1 to 0xFFFFFFFF, 2^32 to 0, NaN to 0). It
+    **needs a Windows measurement** before it goes into simulation code. Stock data reaches none of them.
 - **A `va_list` passed by `const` reference.** `StringClass::Format_Args` takes `const va_list &`.
   Where `va_list` is a pointer (MSVC, both arm64 ABIs) the `const` binds to the reference. Under
   x86-64 System V it is an array, the `const` binds to the elements, and it cannot be handed to
