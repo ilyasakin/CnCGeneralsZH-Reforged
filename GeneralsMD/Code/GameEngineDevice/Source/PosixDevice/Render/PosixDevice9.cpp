@@ -21,6 +21,7 @@
 // PosixD3D9Caps.cpp).  See PosixDevice9.h for who owns what and how a device without a window behaves.
 
 #include "PosixDevice9.h"
+#include "Platform/RendererName.h"
 #include "PosixImageOps.h"
 #include "PosixResources9.h"
 #include "SdlGpuFrame.h"
@@ -34,6 +35,11 @@
 #include <string.h>
 
 #include <vector>
+
+#include <SDL3/SDL.h>
+
+// The HUD's renderer name, set when the GPU frame is made (below, with PosixRenderer_Name).
+static void Set_Renderer_Name(const char *driver);
 
 //-------------------------------------------------------------------------------------------------
 // Shaders and vertex declarations: held as given.  A3 translates them at the draw.
@@ -171,6 +177,7 @@ RenderResult PosixDevice9::Create_Gpu_Frame(bool offscreen)
 		fprintf(stderr, "PosixDevice9: a window, and no SDL3 GPU device for it: %s\n", error.c_str());
 		return D3DERR_NOTAVAILABLE;
 	}
+	Set_Renderer_Name(SDL_GetGPUDeviceDriver(Gpu->Device()));
 	Programs = new SdlProgramCache(Gpu->Device());
 	Pipelines = new SdlPipelineCache(Gpu->Device());
 	Samplers = new SdlSamplerCache(Gpu->Device());
@@ -228,6 +235,39 @@ RenderResult PosixDevice9::Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, R
 		}
 	}
 	return D3D_OK;
+}
+
+// ---- The HUD's renderer name (Platform/RendererName.h): the SDL3 backend drawing, or "Headless".
+
+static char16_t RendererName[32] = u"Headless";
+
+const char16_t *PosixRenderer_Name(void)
+{
+	return RendererName;
+}
+
+// "Metal arm64", "Vulkan x64": the SDL3 GPU driver's name, capitalised as its API spells it, and the
+// architecture as Windows' "DX11 x64" carries its own.
+static void Set_Renderer_Name(const char *driver)
+{
+	const char *api = driver;
+	if (strcmp(driver, "metal") == 0) api = "Metal";
+	else if (strcmp(driver, "vulkan") == 0) api = "Vulkan";
+	else if (strcmp(driver, "direct3d12") == 0) api = "D3D12";
+#if defined(__aarch64__) || defined(__arm64__)
+	const char *arch = " arm64";
+#elif defined(__x86_64__)
+	const char *arch = " x64";
+#else
+	const char *arch = "";
+#endif
+	char name[32];
+	snprintf(name, sizeof(name), "%s%s", api, arch);
+	size_t i = 0;
+	for (; name[i] != '\0' && i + 1 < sizeof(RendererName) / sizeof(RendererName[0]); ++i) {
+		RendererName[i] = (char16_t)(unsigned char)name[i];
+	}
+	RendererName[i] = 0;
 }
 
 // ---- The render-target seam (A3d).  See PosixDevice9.h.
