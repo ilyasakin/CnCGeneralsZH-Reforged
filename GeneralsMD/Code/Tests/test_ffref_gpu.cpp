@@ -707,6 +707,30 @@ static void scenarios_lighting(Harness &h)
 	h.light(1, light);
 	h.draw(LIT & ~D3DFVF_TEX1, D3DPT_TRIANGLELIST, grid(10, -3, 3, -2.5f, 2.5f, 4, 8, 0.8f));
 	h.check("two lights, colour from the vertex");
+
+	// The reflection vector, R = 2(N.E)N - E, with E the vertex's own direction to the eye under
+	// LOCALVIEWER and the fixed (0, 0, -1) without it, as Windows' D3D9 draws it (-47's knownprobe, N14).
+	// Unlit, through a COUNT2 transform that puts R.xy's -1..1 onto the texture, over a bumped grid so
+	// the normals vary.
+	for (int local = 1; local >= 0; --local) {
+		h.begin(0xFF000000);
+		h.rs(D3DRS_LIGHTING, 0);
+		h.rs(D3DRS_LOCALVIEWER, local);
+		set_camera(h);
+		h.texture(0, 16, 16, 1, gradient);
+		h.ss(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+		h.ss(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+		h.ss(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+		h.ss(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+		h.tss(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+		h.tss(0, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEREFLECTIONVECTOR);
+		h.tss(0, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT2);
+		D3DMATRIX onto = identity();
+		onto._11 = 0.5f; onto._22 = 0.5f; onto._41 = 0.5f; onto._42 = 0.5f;
+		h.transform(D3DTS_TEXTURE0, onto);
+		h.draw(LIT, D3DPT_TRIANGLELIST, grid(10, -3, 3, -2.5f, 2.5f, 4, 8, 0.8f));
+		h.check(local ? "reflection vector, local viewer" : "reflection vector, no local viewer (N14)");
+	}
 }
 
 static void scenarios_fog_blend_test(Harness &h)
