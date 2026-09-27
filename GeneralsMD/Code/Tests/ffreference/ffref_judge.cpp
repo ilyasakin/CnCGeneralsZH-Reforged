@@ -83,6 +83,22 @@ std::vector<std::string> captureNames( const std::string &dir )
 	return names;
 }
 
+/* The port's D3DX stub assembles nothing: for D3DXAssembleShader it emits a stream that carries the text.
+	 Its layout, as a contributor described it in words (not read from d3dx9posix.cpp): word 0 the version token; word 1
+	 a comment token, 0xFFFE | N << 16, N = 2 + ceil(L / 4); word 2 the tag 0x5253485A ("ZHSR"); word 3 L,
+	 the text's byte count; then the L bytes, zero-padded to a word; then END (0x0000FFFF), no instructions.
+	 Recognised only when all of that holds; anything else is taken as real tokens. */
+bool stubText( const std::vector<uint32_t> &t, std::string &text )
+{
+	if (t.size() < 5 || (t[1] & 0xFFFF) != 0xFFFE || t[2] != 0x5253485Au)
+		return false;
+	const uint32_t n = (t[1] >> 16) & 0x7FFF, length = t[3];
+	if (n < 2 || (size_t)length > (size_t)(n - 2) * 4 || 2 + (size_t)n + 1 != t.size() || t.back() != 0x0000FFFFu)
+		return false;
+	text.assign( (const char *)&t[4], length );
+	return true;
+}
+
 const char *primitiveName( uint32_t t )
 {
 	static const char *names[] = { "?", "points", "lines", "linestrip", "triangles", "strip", "fan" };
@@ -122,6 +138,7 @@ int main( int argc, char *argv[] )
 	std::map<std::string, Texture> textures;
 	std::map<std::string, std::string> textureErrors;
 	int drawn = 0, refused = 0, unreadable = 0, agree = 0, disagree = 0, anisotropic = 0, empty = 0;
+	int stubPrograms = 0;
 	for (size_t n = 0; n < names.size(); ++n)
 	{
 		if (!only.empty() && names[n] != only)
@@ -191,8 +208,20 @@ int main( int argc, char *argv[] )
 			}
 			if (cap.prog.pixelPresent)
 			{
-				if (!decodeProgram( &cap.prog.pixelTokens[0], cap.prog.pixelTokens.size(), pixelProgram )
-						|| !pixelProgram.refusals.empty())
+				std::vector<uint32_t> assembled;
+				std::string text;
+				const std::vector<uint32_t> *tokens = &cap.prog.pixelTokens;
+				if (stubText( cap.prog.pixelTokens, text ))
+				{
+					// the D3DX stub's text carrier: the program is the carried text, assembled here
+					std::string aerr;
+					if (!assemblePixelProgram( text, assembled, aerr ))
+						programRefusal = "the pixel program " + cap.prog.pixelName + ": its carried text: " + aerr;
+					tokens = &assembled;
+					++stubPrograms;
+				}
+				if (programRefusal.empty() && (!decodeProgram( &(*tokens)[0], tokens->size(), pixelProgram )
+						|| !pixelProgram.refusals.empty()))
 					programRefusal = "the pixel program " + cap.prog.pixelName + ": "
 						+ (pixelProgram.refusals.empty() ? std::string( "undecodable" ) : pixelProgram.refusals[0]);
 				pp = &pixelProgram;
@@ -314,5 +343,6 @@ int main( int argc, char *argv[] )
 		printf( "; %d agree, %d disagree, %d empty (nothing written on either side)", agree, disagree, empty );
 	printf( " (of %d captures)\n", (int)names.size() );
 	printf( "  %d draws: ANISOTROPIC replayed as LINEAR\n", anisotropic );
+	printf( "  %d draws: a D3DX stub's carried text assembled by FFReference\n", stubPrograms );
 	return (unreadable || disagree) ? 1 : 0;
 }
