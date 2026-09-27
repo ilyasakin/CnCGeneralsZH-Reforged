@@ -1761,9 +1761,17 @@ if(ZH_PLATFORM_POSIX)
   # and an edited replay is reported DIVERGED.  Same-machine determinism only: see the script.
   add_test(NAME replay_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_replay_check.sh $<TARGET_FILE:generals>)
-  set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)	# three 12000-frame matches since #33
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+  # Defect #33: no override leaves a unit without the locomotors EA gave it (a ReplaceModule of its AI
+  # module discards them unless the block re-states them).  One short run of the game on its data.
+  add_test(NAME locomotor_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_locomotor_check.sh $<TARGET_FILE:generals>)
+  set_tests_properties(locomotor_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+  if(ZH_GAME_DATA)
+    set_tests_properties(locomotor_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
   # -mission, headless: a campaign mission, a challenge, a plain map and a missing one each start (or
   # quit) instead of sitting at the main menu.  Skipped without game data: see the script.
@@ -2534,7 +2542,7 @@ if(ZH_PLATFORM_POSIX)
   # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
   foreach(_zh_test replay_check replay_check_app net_check overlay_crc_check packaging_resolution_check root_readonly_check
                    lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager
-                   mission_check data_gone_check)
+                   mission_check data_gone_check locomotor_check)
     if(TEST ${_zh_test})
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
     endif()
