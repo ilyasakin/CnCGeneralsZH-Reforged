@@ -238,8 +238,8 @@ const OptionDef TheOptionCatalog[] =
 
 	// R1: models drawn between their last two logic states on every render frame, so motion is smooth
 	// on a panel faster than the 30 Hz logic.  The picture only, one logic tick behind; never the game.
-	// Its default is GlobalData's: on off Windows, off on Windows.  Options.ini only for now.
-	{ "SmoothMotion",							"", "",
+	// Its default is GlobalData's: on off Windows, off on Windows.  On Options > Display.
+	{ "SmoothMotion",							OPT_WND( "CheckSmoothMotion" ), "GUI:SmoothMotion",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_smoothMotion, set_m_smoothMotion },
 
