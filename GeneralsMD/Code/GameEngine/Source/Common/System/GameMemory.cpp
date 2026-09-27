@@ -46,6 +46,7 @@
 #include "zhio.h"
 
 // SYSTEM INCLUDES
+#include <new>			// std::nothrow_t, for the nothrow forms of the global operators
 #ifndef _WIN32
 #include <stdlib.h>
 #if defined(__APPLE__)
@@ -3375,6 +3376,47 @@ void operator delete[](void *p) WW_NOEXCEPT_DELETE
 	preMainInitMemoryManager();
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator delete"));
 	TheDynamicMemoryAllocator->freeBytes(p);
+}
+
+//-----------------------------------------------------------------------------
+/**
+	The sized forms (C++14) and the nothrow forms, forwarded to the four above.  The standard library's
+	own versions of these already forward there - its nothrow new calls operator new inside a try and
+	answers NULL for a throw - so a normal build allocates and frees exactly as before.  A sanitizer's
+	runtime supplies all of these itself, though, and without ours they would be the ones found: a
+	sized delete then frees a block TheDynamicMemoryAllocator made with the sanitizer's allocator (TSan
+	stopped before main on it), and a nothrow new hands out a block our delete cannot free
+	(PosixResources9's new (std::nothrow)).  WW_NOEXCEPT_DELETE on the nothrow news too, for the same
+	reason it is on the deletes.
+*/
+void operator delete(void *p, size_t) WW_NOEXCEPT_DELETE
+{
+	operator delete(p);
+}
+
+void operator delete[](void *p, size_t) WW_NOEXCEPT_DELETE
+{
+	operator delete[](p);
+}
+
+void *operator new(size_t size, const std::nothrow_t &) WW_NOEXCEPT_DELETE
+{
+	try { return operator new(size); } catch (...) { return NULL; }
+}
+
+void *operator new[](size_t size, const std::nothrow_t &) WW_NOEXCEPT_DELETE
+{
+	try { return operator new[](size); } catch (...) { return NULL; }
+}
+
+void operator delete(void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE
+{
+	operator delete(p);
+}
+
+void operator delete[](void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE
+{
+	operator delete[](p);
 }
 
 //-----------------------------------------------------------------------------
