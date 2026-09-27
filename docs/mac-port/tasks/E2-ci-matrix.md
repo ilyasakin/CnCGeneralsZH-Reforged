@@ -51,6 +51,15 @@ The PM's per-merge gate, run by hand until now, is one command on this Mac. It b
   From 62440ae8 (defect #34's fix) seed 0 at 12000 frames is 0x5273770F. Before it, that run crashed and
   was left out.
 - The audio and video tests are excluded on every host: no sound on the workers.
+- `--arch` adds an optional leg, `finer-x86`: the same branch built for x86_64 on finer
+  (`-DCMAKE_OSX_ARCHITECTURES=x86_64`, -a9's configure line), with its E1 run under Rosetta.
+  - It lives in `~/zhr-worker/ci-x86_64`, under its own lock, bundle and ref, so it can run beside the
+    arm64 leg.
+  - It builds only what E1 needs (`generals`, `zh_overlay`, `zh_overlay_dev`) and runs no ctest.
+  - Its CRCs join the cross-host comparison: arm64 and x86_64 from one compiler on one machine.
+  - It is off by default, because it is a second full build of the tree.
+- `arch_differential` (E3's arm64-against-x86_64 harness) used to skip on finer for want of Rosetta.
+  With Rosetta installed it runs and passes in finer's ordinary ctest, with no change here.
 
 What it is not: the hosted CI planned below. It runs when the PM runs it, on machines the user lent for the
 port, and `docs/mac-port/tasks/workers.md` lists what it leaves on them (`~/zhr-worker/ci` on the two POSIX
