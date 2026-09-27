@@ -2637,6 +2637,7 @@ Tests/ffreference/ffprogram.h
 Tests/ffreference/ffref_judge.cpp
 Tests/ffreference/ffreference.cpp
 Tests/ffreference/ffreference.h
+Tests/ffreference/knownprobe_windows.cpp
 Tests/ffshader_dump.cpp
 Tests/fs_oracle.cpp
 Tests/gcc_eager_vtable_stubs.cpp
