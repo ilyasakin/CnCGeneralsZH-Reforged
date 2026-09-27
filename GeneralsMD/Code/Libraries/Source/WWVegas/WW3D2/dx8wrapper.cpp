@@ -603,12 +603,13 @@ void DX8Wrapper::Shutdown(void)
 		D3DInterface=NULL;
 	}
 
-#if defined(_WIN32)
-	if (D3D9Lib) {
-		FreeLibrary(D3D9Lib);
-		D3D9Lib = NULL;
-	}
-#endif
+	// D3D9.DLL stays loaded until the process ends: it is not freed here.  Textures outlive this call -
+	// the particle system manager is shut down after the game client that owns the display, and frees
+	// its point groups' textures then - and each Release is a call into this DLL.  This handle is the
+	// only reference to it (the exe and d3dx9_43.dll do not import it), so FreeLibrary unmapped the code
+	// those calls go to: a texture Released after it faults, on Windows as under Wine, and an exit with
+	// particle textures still alive faulted in ~TextureBaseClass.  Nothing is gained by unloading it
+	// moments before the process exits.
 
 	_RenderDeviceNameTable.Clear();		 // note - Delete_All() resizes the vector, causing a reallocation.  Clear is better. jba.
 	_RenderDeviceShortNameTable.Clear();
