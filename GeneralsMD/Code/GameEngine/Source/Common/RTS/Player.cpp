@@ -548,14 +548,13 @@ void Player::init(const PlayerTemplate* pt)
 	m_sciencesHidden.clear();
 
 	{
+		// The timers are the list's own values, so an erase destroys one and there is nothing left to
+		// clear.  This cleared each after its erase, a write into the freed node (ASan, ZH_SANITIZE, at the
+		// reset after a match).  GameMemory keeps a freed block's links in its header (m_nextBlock), so on
+		// that allocator the write landed in dead user data and changed nothing; the frees are as before.
 		SpecialPowerReadyTimerListIterator it = m_specialPowerReadyTimerList.begin();
 		while(it != m_specialPowerReadyTimerList.end())
-		{
-			SpecialPowerReadyTimerType *sprt = &(*it);
 			it = m_specialPowerReadyTimerList.erase( it );
-			if(sprt)
-				sprt->clear();
-		}
 	}
 
 	KindOfPercentProductionChangeListIt it = m_kindOfPercentProductionChangeList.begin();
