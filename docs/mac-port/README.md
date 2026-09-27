@@ -1750,6 +1750,13 @@ hunting a crash or corruption that only one platform shows, look here first.**
   that. ASan found it on ZH_SANITIZE's first full run (headless and offscreen alike, at the reset). The
   dead write is gone; the erases, their frees and their order stay, and E1's CRCs are unchanged (all 12
   lines of replay_check and net_check, on finer).
+- **`unsigned long` is 8 bytes off Windows (LP64) - WWMath's validity checks; fixed.** `Is_Valid_Float`
+  read its float through an `unsigned long *`: on macOS and Linux that is 8 bytes, 4 past the float, on
+  every call (ASan under ZH_SANITIZE, in test_wwmath). The mask kept the answer right. `Is_Valid_Double`
+  took "the second long" as the double's high word, which on LP64 is the 8 bytes after it, so its answer
+  did not depend on its argument; it has no callers. Both now `memcpy` the bits; E1's CRCs are unchanged.
+  Windows is LLP64, where `long` is 4 bytes, so none of this showed there. The same cast in GameSpy's
+  address code, and anywhere else, is the LP64 sweep's.
 
 ### "ctest is green" was not what it looked like
 
