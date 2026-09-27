@@ -46,8 +46,15 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | -a9's further worktrees and builds on finer: `wt-a9-l2`/`build-a9-l2` (L2's branch, for a Mac binary); `wt-a9-san`/`build-a9-tsan`/`build-a9-asan` (PERF candidate 1 under the sanitizers); `wt-a9-lw`/`build-a9-lw` (lock-wait instrumented) | `~/zhr-worker/…` | `git worktree add`, `cmake`/`ninja` via `zheavy` (-a9) | in the folder, then `git -C ~/zhr-worker/repo worktree prune` |
 | -a9's branches in finer's repository | `a9-*` (base, candidates, proof and pixel-proof branches, `a9-l2`, `a9-lw-*`) | fetched from bundles (-a9) | `git -C ~/zhr-worker/repo branch -D` each `a9-*` |
 | the fleet gate's folder (`ci-matrix.sh`, E2): the worktree `ci/wt` (vendor and art cloned in), the build `ci/build`, the logs `ci/*.log`, the lock `ci/lock`; the repository ref `refs/ci/head`; each run's `bundles/ci-matrix-*.bundle` and `.sh`, which the run deletes (the first version's `bundles/ci-host.sh` too) | `~/zhr-worker/ci` | `ci-matrix.sh` (-18) | `git -C ~/zhr-worker/repo worktree remove --force ~/zhr-worker/ci/wt; git -C ~/zhr-worker/repo update-ref -d refs/ci/head; rm -rf ~/zhr-worker/ci ~/zhr-worker/bundles/ci-host.sh ~/zhr-worker/bundles/ci-matrix-*` |
+| the fleet gate's x86_64 leg (`ci-matrix.sh --arch`): the same layout for a build with `CMAKE_OSX_ARCHITECTURES=x86_64`, whose E1 runs under Rosetta; the ref `refs/ci/head-x86_64` | `~/zhr-worker/ci-x86_64` | `ci-matrix.sh --arch` (-18) | `git -C ~/zhr-worker/repo worktree remove --force ~/zhr-worker/ci-x86_64/wt; git -C ~/zhr-worker/repo update-ref -d refs/ci/head-x86_64; rm -rf ~/zhr-worker/ci-x86_64` |
 
-Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wide.
+Nothing had been installed outside `~/zhr-worker`, and nothing system-wide, until Rosetta 2:
+- **Rosetta 2** (Apple's x86_64 translation) was installed on finer on 2026-09-27, at the user's word as the
+  PM relayed it. `oahd` runs, and x86_64 binaries run under it. This is what lets `arch_differential` and
+  `ci-matrix.sh --arch` run there.
+- **It is not cleanly removable.** Apple ships no uninstaller. Its files are in `/Library/Apple/usr/libexec/oah`
+  (package `com.apple.pkg.RosettaUpdateAuto`), which System Integrity Protection guards, so taking it out
+  means SIP off from Recovery. The revert should leave it installed and say so.
 
 ### finer: what was measured
 
