@@ -30,18 +30,29 @@
 	 Bucket, Overridable, ScienceInfo and DynamicAudioEventRTS.  -Wl,--gc-sections does not help, because GNU ld
 	 reports undefined references before it collects sections.
 
-	 WHO LINKS THIS.  The self-checks that build a few real engine TUs without gameengine:
-	 fpucontrol_selfcheck and widechar_crc_gate (both twins).  Each symbol here is one that some such
-	 TU names and none of them runs.  If one ever runs, it says which and aborts: a failing test, never
-	 garbage.  A new header-inline dependency shows up as a link error naming the symbol, and belongs
-	 here.
+	 WHO LINKS THIS.  The tests that build a few real engine TUs without gameengine, on purpose (a
+	 pre-main string, a crash in a child, one file system under test):
+	   - fpucontrol_selfcheck and widechar_crc_gate (both twins);
+	   - test_crash_reporting and test_early_command_line, with ZH_EAGER_VTABLE_STUB_STRINGS;
+	   - gametext_csf, test_premain_strings/unicode and the four built from ZH_POSIXLFS_SOURCES
+	     (test_posixlocalfilesystem, test_registryfile, test_wwdownload_registry, test_bigfilesystem),
+	     with ZH_EAGER_VTABLE_STUB_NO_POOL: they link the real memory manager, so only the audio event
+	     is stubbed.
+	 Each symbol here is one that some such TU names and none of them runs.  If one ever runs, it says
+	 which and aborts: a failing test, never garbage.  A new header-inline dependency shows up as a link
+	 error naming the symbol, and belongs here.  Those ten were measured on Arch's GCC 16 with ld.lld
+	 (L1b, 2026-09-27); clang on macOS links them without it, and linking it there costs nothing.
 
 	 AsciiString::freeBytes and UnicodeString::releaseBuffer are here for the targets that do NOT link
 	 the real AsciiString.cpp and UnicodeString.cpp.  The widechar gate does, so it compiles this file
 	 without ZH_EAGER_VTABLE_STUB_STRINGS; fpucontrol_selfcheck defines it.
 
-	 WHEN IT GOES.  When gameengine links on Linux, these tests can link it instead, and this file
-	 should be deleted, not extended. */
+	 WHEN IT GOES.  gameengine links on Linux now (W1), but these tests build their few TUs alone on
+	 purpose, and linking gameengine for one destructor pulls in the device libraries and their
+	 globals as well (test_lan_broadcast's link needs posixdevice, w3ddevice and test_gameengine_stubs).
+	 So the file stays while they stay self-contained.  It goes when GCC stops emitting these
+	 vtables (defining EMPTY_DTOR's destructors inside their classes might do it; not tried), or when
+	 each test links the engine anyway. */
 
 #include "PreRTS.h"
 
@@ -60,9 +71,11 @@ static void neverCalled( const char *what )
 	abort();
 }
 
+#if !defined(ZH_EAGER_VTABLE_STUB_NO_POOL)
 MemoryPoolFactory *TheMemoryPoolFactory = NULL;
 void MemoryPool::freeBlock( void * ) { neverCalled( "MemoryPool::freeBlock" ); }
 MemoryPool *MemoryPoolFactory::createMemoryPool( const char *, Int, Int, Int ) { neverCalled( "MemoryPoolFactory::createMemoryPool" ); return NULL; }
+#endif
 AudioEventRTS::~AudioEventRTS() { neverCalled( "AudioEventRTS::~AudioEventRTS" ); }
 
 #if defined(ZH_EAGER_VTABLE_STUB_STRINGS)

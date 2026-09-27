@@ -1796,6 +1796,7 @@ Libraries/Source/WWVegas/WW3D2/font3d.h
 Libraries/Source/WWVegas/WW3D2/formconv.cpp
 Libraries/Source/WWVegas/WW3D2/formconv.h
 Libraries/Source/WWVegas/WW3D2/framgrab.h
+Libraries/Source/WWVegas/WW3D2/gdifontmetrics.h
 Libraries/Source/WWVegas/WW3D2/glyphrasteriser.cpp
 Libraries/Source/WWVegas/WW3D2/glyphrasteriser.h
 Libraries/Source/WWVegas/WW3D2/hanim.cpp
@@ -3537,6 +3538,8 @@ Tools/fingerprint-check.sh
 Tools/fingerprint-manifest.sh
 Tools/fingerprint/build_fingerprint.cpp
 Tools/gametext.py
+Tools/gdi-font-metrics-header.py
+Tools/gdi-font-metrics.ps1
 Tools/gentrigtables.py
 Tools/include_case_check.py
 Tools/install-guard.sh
