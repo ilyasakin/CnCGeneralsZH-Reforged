@@ -2695,6 +2695,7 @@ Tests/test_ffvertexd3d9.cpp
 Tests/test_fingerprint_manifest.sh
 Tests/test_fontchars.cpp
 Tests/test_fpucontrol.cpp
+Tests/test_game_results.inc
 Tests/test_gameengine.cpp
 Tests/test_gameengine_stubs.cpp
 Tests/test_gametext_csf.cpp
