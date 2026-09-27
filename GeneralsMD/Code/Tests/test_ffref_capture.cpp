@@ -1207,6 +1207,16 @@ static void check_programs(const std::string &path)
 	}
 }
 
+/// mkdir -p: every folder on the way, not only the last.  ctest names ZH_USER_DATA_DIR inside
+/// <build>/test-user-data, which nothing makes before the first test that writes there.
+static void make_folders(const std::string &path)
+{
+	for (size_t slash = path.find('/', 1); slash != std::string::npos; slash = path.find('/', slash + 1)) {
+		mkdir(path.substr(0, slash).c_str(), 0755);
+	}
+	mkdir(path.c_str(), 0755);
+}
+
 static int round_trip()
 {
 	// ctest gives each test a directory of its own; a direct run has none, and nothing is written then.
@@ -1216,8 +1226,9 @@ static int round_trip()
 		return 1;
 	}
 	const std::string directory = std::string(user) + "/captures";
-	mkdir(user, 0755);
-	mkdir(directory.c_str(), 0755);
+	// All of it: under ctest -j4 on a fresh build this test can run before any other has made
+	// <build>/test-user-data, and a mkdir of the last folder alone then fails (a contributor, the M3 Pro Mac, 2026-09-27).
+	make_folders(directory);
 	// The last run's captures; this directory is the test's own.
 	if (DIR *listing = opendir(directory.c_str())) {
 		while (struct dirent *entry = readdir(listing)) {
