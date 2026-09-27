@@ -50,7 +50,8 @@ public:
 	{
 		NAV_UP, NAV_DOWN, NAV_LEFT, NAV_RIGHT,
 		ACCEPT_DOWN, ACCEPT_UP,		///< A: pressed and released
-		BACK, START, TAB_PREV, TAB_NEXT, PAGE_UP, PAGE_DOWN
+		BACK, START, TAB_PREV, TAB_NEXT, PAGE_UP, PAGE_DOWN,
+		ALT_X, ALT_Y		///< X and Y: the screen's secondary buttons (delete, defaults, save, host...)
 	};
 
 	/// What the device does for the focus: put the pointer on a pixel, press or release the left button there,

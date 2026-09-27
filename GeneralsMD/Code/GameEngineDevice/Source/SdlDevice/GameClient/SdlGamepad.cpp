@@ -363,6 +363,8 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 			case GAMEPAD_BUTTON_START:					action = GamepadFocus::START; break;
 			case GAMEPAD_BUTTON_LEFT_SHOULDER:	action = GamepadFocus::TAB_PREV; break;
 			case GAMEPAD_BUTTON_RIGHT_SHOULDER:	action = GamepadFocus::TAB_NEXT; break;
+			case GAMEPAD_BUTTON_WEST:						action = GamepadFocus::ALT_X; break;
+			case GAMEPAD_BUTTON_NORTH:					action = GamepadFocus::ALT_Y; break;
 			default: break;
 		}
 		pad.menuPress[ button ] = TRUE;

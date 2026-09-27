@@ -193,26 +193,80 @@ const char *const theModalDefaults[] = { ":ButtonNo", ":ButtonCancel", ":ButtonO
 const char *const theScreenDefaults[] = { ":ButtonSinglePlayer", ":ButtonResume", ":ButtonStart", ":ButtonAccept", ":ButtonOk",
 	":ButtonContinue", ":ButtonPlay", ":ButtonLoad", NULL };
 
-/// The screen's first focus: its primary action by name, else its top-left widget
-GameWindow *defaultFocus( const Screen &screen, const std::vector<GameWindow *> &widgets )
+const char *const theXNames[] = { ":ButtonDelete", ":ButtonDeleteReplay", ":ButtonDirectConnect", NULL };
+const char *const theYNames[] = { ":ButtonDefaults", ":ButtonSave", ":ButtonCopyReplay", ":ButtonHost", NULL };
+const char *const theMapSourceNames[] = { ":RadioButtonSystemMaps", ":RadioButtonUserMaps", NULL };
+
+Bool isTab( GameWindow *window )
 {
-	GameWindow *named = byNameTail( widgets, screen.modal ? theModalDefaults : theScreenDefaults, GWS_PUSH_BUTTON );
-	if (named != NULL)
-		return named;
-	GameWindow *best = NULL;
-	Int bestX = 0, bestY = 0;
+	return (window->winGetStyle() & GWS_PUSH_BUTTON) && strstr( nameOf( window ), "Tab" ) != NULL;
+}
+
+Bool isChosen( GameWindow *window )
+{
+	return BitTest( window->winGetInstanceData()->getState(), WIN_STATE_SELECTED );
+}
+
+/// The first widget in reading order, tabs aside: the top row (a band a line high, so a slider a few pixels above
+/// a combo box beside it is not first), then its leftmost
+GameWindow *firstInReadingOrder( const std::vector<GameWindow *> &widgets )
+{
+	const Int ROW = 16;
+	Int top = 0;
+	Bool any = FALSE;
 	for (size_t i = 0; i < widgets.size(); ++i)
 	{
 		Int x, y, width, height;
 		rectOf( widgets[i], x, y, width, height );
-		if (best == NULL || y < bestY || (y == bestY && x < bestX))
+		if (!isTab( widgets[i] ) && (!any || y < top))
+		{
+			top = y;
+			any = TRUE;
+		}
+	}
+	GameWindow *best = NULL;
+	Int bestX = 0;
+	for (size_t i = 0; i < widgets.size(); ++i)
+	{
+		Int x, y, width, height;
+		rectOf( widgets[i], x, y, width, height );
+		if (!isTab( widgets[i] ) && y <= top + ROW && (best == NULL || x < bestX))
 		{
 			best = widgets[i];
 			bestX = x;
-			bestY = y;
 		}
 	}
 	return best;
+}
+
+/// The screen's first focus: a tabbed screen's page's first widget, else the primary action by name, else the first
+/// widget in reading order
+GameWindow *defaultFocus( const Screen &screen, const std::vector<GameWindow *> &widgets )
+{
+	for (size_t i = 0; i < widgets.size() && !screen.modal; ++i)
+		if (isTab( widgets[i] ))
+		{
+			GameWindow *first = firstInReadingOrder( widgets );
+			if (first != NULL)
+				return first;
+			break;
+		}
+	GameWindow *named = byNameTail( widgets, screen.modal ? theModalDefaults : theScreenDefaults, GWS_PUSH_BUTTON );
+	return named != NULL ? named : firstInReadingOrder( widgets );
+}
+
+/// X's or Y's button here, NULL for none; X on a map list picks the map source not shown
+GameWindow *secondaryButton( const std::vector<GameWindow *> &widgets, Bool y )
+{
+	GameWindow *named = byNameTail( widgets, y ? theYNames : theXNames, GWS_PUSH_BUTTON );
+	if (named != NULL || y)
+		return named;
+	for (const char *const *tail = theMapSourceNames; *tail != NULL; ++tail)
+		for (size_t i = 0; i < widgets.size(); ++i)
+			if ((widgets[i]->winGetStyle() & GWS_RADIO_BUTTON) && endsWith( nameOf( widgets[i] ), *tail )
+					&& !isChosen( widgets[i] ))
+				return widgets[i];
+	return NULL;
 }
 
 void pointAt( GameWindow *window )
@@ -292,7 +346,7 @@ Int tabButtons( const std::vector<GameWindow *> &widgets, std::vector<GameWindow
 {
 	tabs.clear();
 	for (size_t i = 0; i < widgets.size(); ++i)
-		if ((widgets[i]->winGetStyle() & GWS_PUSH_BUTTON) && strstr( nameOf( widgets[i] ), "Tab" ) != NULL)
+		if (isTab( widgets[i] ))
 			tabs.push_back( widgets[i] );
 	for (size_t i = 1; i < tabs.size(); ++i)
 		for (size_t j = i; j > 0 && centreOf( tabs[j] ).x < centreOf( tabs[j - 1] ).x; --j)
@@ -302,7 +356,7 @@ Int tabButtons( const std::vector<GameWindow *> &widgets, std::vector<GameWindow
 			tabs[j - 1] = swap;
 		}
 	for (size_t i = 0; i < tabs.size(); ++i)
-		if (BitTest( tabs[i]->winGetInstanceData()->getState(), WIN_STATE_SELECTED ))
+		if (isChosen( tabs[i] ))
 			return (Int)i;
 	return -1;
 }
@@ -468,6 +522,15 @@ Bool GamepadFocus::act( Action action )
 			return TRUE;
 		}
 
+		case ALT_X:
+		case ALT_Y:
+		{
+			GameWindow *button = secondaryButton( widgets, action == ALT_Y );
+			if (button != NULL)
+				press( button );
+			return button != NULL;
+		}
+
 		case PAGE_UP:
 		case PAGE_DOWN:
 		{
@@ -500,19 +563,25 @@ void GamepadFocus::draw( void )
 	}
 
 	// the hint bar: the buttons that do something here, bottom right
-	struct Item { Int button; const char *label; };
-	Item items[4];
+	struct Item { Int button; const char *label; GameWindow *owner; };		// owner: a button whose own text is the word
+	const Int MAX_ITEMS = 6;
+	Item items[ MAX_ITEMS ];
 	Int count = 0;
-	items[ count++ ] = { GAMEPAD_BUTTON_SOUTH, "GUI:GamepadSelect" };
-	items[ count++ ] = { GAMEPAD_BUTTON_EAST, "GUI:GamepadBack" };
+	items[ count++ ] = { GAMEPAD_BUTTON_SOUTH, "GUI:GamepadSelect", NULL };
+	items[ count++ ] = { GAMEPAD_BUTTON_EAST, "GUI:GamepadBack", NULL };
+	GameWindow *xButton = secondaryButton( widgets, FALSE ), *yButton = secondaryButton( widgets, TRUE );
+	if (xButton != NULL)
+		items[ count++ ] = { GAMEPAD_BUTTON_WEST, NULL, xButton };
+	if (yButton != NULL)
+		items[ count++ ] = { GAMEPAD_BUTTON_NORTH, NULL, yButton };
 	if (byNameTail( widgets, theStartNames, GWS_PUSH_BUTTON ) != NULL)
-		items[ count++ ] = { GAMEPAD_BUTTON_START, "GUI:GamepadStart" };
+		items[ count++ ] = { GAMEPAD_BUTTON_START, "GUI:GamepadStart", NULL };
 	std::vector<GameWindow *> tabs;
 	tabButtons( widgets, tabs );
 	if (!tabs.empty())
-		items[ count++ ] = { GAMEPAD_BUTTON_RIGHT_SHOULDER, "GUI:GamepadTabs" };
+		items[ count++ ] = { GAMEPAD_BUTTON_RIGHT_SHOULDER, "GUI:GamepadTabs", NULL };
 
-	static DisplayString *glyphs[4] = { NULL }, *words[4] = { NULL };
+	static DisplayString *glyphs[ MAX_ITEMS ] = { NULL }, *words[ MAX_ITEMS ] = { NULL };
 	const Int points = TheDisplay->getHeight() / 45 > 11 ? TheDisplay->getHeight() / 45 : 11;
 	GameFont *wordFont = TheFontLibrary != NULL ? TheFontLibrary->getFont( AsciiString( "Arial" ), points, TRUE ) : NULL;
 	Int x = TheDisplay->getWidth() - 12;
@@ -530,7 +599,8 @@ void GamepadFocus::draw( void )
 			words[i] = TheDisplayStringManager->newDisplayString();
 		if (glyphs[i] == NULL || words[i] == NULL)
 			continue;
-		const UnicodeString word = TheGameText != NULL ? TheGameText->fetch( items[i].label ) : UnicodeString::TheEmptyString;
+		const UnicodeString word = items[i].owner != NULL ? items[i].owner->winGetText()
+			: (TheGameText != NULL ? TheGameText->fetch( items[i].label ) : UnicodeString::TheEmptyString);
 		if (glyphs[i]->getFont() != glyphFont)
 			glyphs[i]->setFont( glyphFont );
 		if (glyphs[i]->getText() != glyph)
