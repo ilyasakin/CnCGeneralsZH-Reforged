@@ -527,10 +527,18 @@ void screenSize( Int &width, Int &height )
 }
 
 /// The pointer to a pixel: warped, so it comes back as the platform's own motion, or straight to SdlMouse
+void pointerGoesDirect( UnsignedInt time );
+
 void showPointer( Int x, Int y, UnsignedInt time )
 {
 	thePointer.shownX = x;
 	thePointer.shownY = y;
+	static const Bool noWarp = getenv( "ZH_TEST_NO_WARP" ) != NULL && *getenv( "ZH_TEST_NO_WARP" ) != 0;
+	if (noWarp && !thePointer.direct)
+	{
+		pointerGoesDirect( time );		// posts this very move
+		return;
+	}
 	SDL_Window *window = SdlInput_gameWindow();
 	if (!thePointer.direct && window != NULL)
 	{
@@ -542,6 +550,26 @@ void showPointer( Int x, Int y, UnsignedInt time )
 	}
 	else if (SdlMouse::active() != NULL)
 		SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, x, y, SdlMouse::BUTTON_LEFT, 0, 0, time );
+}
+
+/** From here on the pad moves the game's pointer itself and the game draws the cursor: Mouse.ini's polygon
+	* images (W3DMouse's RM_POLYGON, which hides the platform's).  For a platform whose warps never come back;
+	* a trackpad's or a mouse's motion still arrives and moves the same pointer, so one cursor follows every
+	* device.  ZH_TEST_NO_WARP (a test's switch, never a player's) takes this path from the first move, so a
+	* host whose warps do come back can still show it. */
+void pointerGoesDirect( UnsignedInt time )
+{
+	if (thePointer.direct)
+		return;
+	thePointer.warpPending = FALSE;
+	thePointer.direct = TRUE;
+	if (TheMouse != NULL)
+		TheMouse->setRedrawMode( Mouse::RM_POLYGON );
+	DEBUG_LOG(( "SdlGamepad: the pointer's warps do not come back on the %s video driver%s; the pad moves the "
+		"game's pointer directly, and the game draws the cursor itself\n", SDL_GetCurrentVideoDriver(),
+		getenv( "ZH_TEST_NO_WARP" ) != NULL ? " (ZH_TEST_NO_WARP)" : "" ));
+	if (SdlMouse::active() != NULL)
+		SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, thePointer.shownX, thePointer.shownY, SdlMouse::BUTTON_LEFT, 0, 0, time );
 }
 
 /// The pad takes the pointer and puts it on a pixel (a button's centre)
@@ -803,22 +831,9 @@ void SdlGamepad_update( UnsignedInt nowMs )
 		return;
 	}
 
-	// a warp that never comes back: this platform cannot warp the pointer (a Wayland without pointer
-	// warping, perhaps gamescope): the moves go to SdlMouse from here on, and the log says why
+	// a warp that never comes back: this platform cannot warp the pointer (gamescope's Xwayland, measured)
 	if (thePointer.warpPending && ++thePointer.warpWait > WARP_PATIENCE_FRAMES)
-	{
-		thePointer.warpPending = FALSE;
-		thePointer.direct = TRUE;
-		// The platform's pointer cannot follow, so the game draws its own at the game's pointer: Mouse.ini's
-		// polygon images (W3DMouse's RM_POLYGON, which hides the platform's).  A trackpad's or a mouse's motion
-		// still arrives, and moves the game's pointer, so the one drawn cursor follows every device.
-		if (TheMouse != NULL)
-			TheMouse->setRedrawMode( Mouse::RM_POLYGON );
-		DEBUG_LOG(( "SdlGamepad: the pointer's warps do not come back on the %s video driver; the pad moves "
-			"the game's pointer directly, and the game draws the cursor itself\n", SDL_GetCurrentVideoDriver() ));
-		if (SdlMouse::active() != NULL)
-			SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, thePointer.shownX, thePointer.shownY, SdlMouse::BUTTON_LEFT, 0, 0, nowMs );
-	}
+		pointerGoesDirect( nowMs );
 
 	// the left stick moves the pointer: every pad's tilt, a radial dead zone, a squared response
 	Real vx = 0.0f, vy = 0.0f;
