@@ -624,6 +624,7 @@ public:
 	void setCopiedFromDefault();
 
 	void setReskinnedFrom(const ThingTemplate* tt) { DEBUG_ASSERTCRASH(m_reskinnedFrom == NULL, ("should be null")); m_reskinnedFrom = tt; }
+	const ThingTemplate* friend_getReskinnedFrom() const { return m_reskinnedFrom; }	///< #34's load-time check
 
 	Bool isPrerequisite() const { return m_isPrerequisite; }
 

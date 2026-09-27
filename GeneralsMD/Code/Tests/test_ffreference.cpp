@@ -256,6 +256,44 @@ TEST(ffref_lighting_material_sources)
 	CHECK_NEAR( light( s, P, N, true, rgba( 1, 1, 1, 1 ), rgba( 0.2, 0.3, 0.4, 1 ) ).diffuse.r, 0.7, EPS );
 }
 
+/* N7 as Windows' Direct3D 9 measured it (WARP, HAL and REF): an absent specular is 0x00000000, an absent
+   diffuse 0xFFFFFFFF.  Read through D3DTA_SPECULAR (colour and alpha), added with SPECULARENABLE, and the
+   diffuse read with no diffuse in the vertex. */
+TEST(ffref_absent_vertex_colours_as_windows_measures_them)
+{
+	DrawState s = screenState( 4, 4 );
+	s.hasSpecular = false;
+	s.stageState[0][TSS_COLOROP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_COLORARG1] = TA_SPECULAR;
+	s.stageState[0][TSS_ALPHAOP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_ALPHAARG1] = TA_SPECULAR;
+	Target t = exactTarget( 4, 4 );
+	fill( s, t, 0.5, rgba( 1, 0, 0, 0.25 ) );
+	CHECK_NEAR( at( t, 1, 1 ).r, 0.0, EPS );		// case A: black
+	CHECK_NEAR( at( t, 1, 1 ).a, 0.0, EPS );		// case D: alpha 0
+	// specular add with no specular: red stays red (case B)
+	s = screenState( 4, 4 );
+	s.hasSpecular = false;
+	s.renderState[RS_SPECULARENABLE] = 1;
+	s.stageState[0][TSS_COLOROP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_COLORARG1] = TA_DIFFUSE;
+	s.stageState[0][TSS_ALPHAARG1] = TA_DIFFUSE;		// the default reads a texture this draw has not got
+	t = exactTarget( 4, 4 );
+	fill( s, t, 0.5, rgba( 1, 0, 0, 1 ) );
+	CHECK_NEAR( at( t, 1, 1 ).r, 1.0, EPS );
+	CHECK_NEAR( at( t, 1, 1 ).g, 0.0, EPS );
+	// the diffuse read with no diffuse in the vertex: white (case C)
+	s = screenState( 4, 4 );
+	s.hasDiffuse = false;
+	s.stageState[0][TSS_COLOROP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_COLORARG1] = TA_DIFFUSE;
+	s.stageState[0][TSS_ALPHAARG1] = TA_DIFFUSE;
+	t = exactTarget( 4, 4 );
+	fill( s, t, 0.5, rgba( 0, 0, 0, 0 ) );
+	CHECK_NEAR( at( t, 1, 1 ).r, 1.0, EPS );
+	CHECK_NEAR( at( t, 1, 1 ).b, 1.0, EPS );
+}
+
 TEST(ffref_normals_by_the_inverse_transpose)
 {
 	// world shears x by y (x' = x + y): the plane x = 0 becomes x' = y', whose normal is (1,-1,0)/r2.

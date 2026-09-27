@@ -1424,6 +1424,48 @@ locomotors, and a Chinook crashes every platform - fixed.**
   re-stated; a map's own map.ini overrides; and Windows, which hasn't run the fix yet (W2).
 - Upstream patch note: `docs/mac-port/upstream-notes.md`.
 
+**34. Upstream-introduced (fbe8dc6f): a module added to a reskin in a normal INI load erases every copied
+module sharing an interface; the Demolition Technical reskins lose their AI and crash every platform - fixed.**
+
+- **Where:** `ThingTemplate::parseModuleName`. In a normal (non-override) load, every module parsed calls
+  `clearCopiedFromDefaultEntries`, which erases each module the template copied (from `DefaultThingTemplate`,
+  or all of them for an `ObjectReskin`) that shares an interface with the new one. That is how an object
+  that restates a module replaces the default one.
+- **The trigger:** upstream's FixesReforged.ini (fbe8dc6f) replaces `ModuleTag_Death_18`, a death module,
+  with a new SlowDeathBehavior on `Demo_GLAVehicleTechnicalChassisTwo` and `ChassisThree`. In EA's data both
+  are ObjectReskins of ChassisOne, so every module they have is a copy.
+  - The new module is an update and die module, so the parse erased every copied module with either
+    interface. Measured on the loaded templates: each lost 12, namely AIUpdateInterface, PhysicsBehavior,
+    AutoHealBehavior, FlammableUpdate, TransportContain, and every die and death module (DestroyDie,
+    FXListDie, CreateObjectDie, CreateCrateDie, SlowDeathBehavior 15, both FireWeaponWhenDeadBehaviors).
+  - ChassisOne itself is not a copy and kept everything.
+- **The crash:** a live Technical with no AI module. `AIPlayer::queueUnits` (AIPlayer.cpp:3638) recruits one
+  into a team and calls `getAIUpdateInterface()->aiMoveToPosition` on NULL. Seen as E1's seed 0 at 12000
+  frames segfaulting near frame 6600 on feature/mac-port 9f17c203. The stack came from the kept crash
+  report and gdb on the core: the unit was a live Demo_GLAVehicleTechnicalChassisThree with `m_ai` NULL.
+  It's data, so every platform crashes wherever the Demolition General's AI recruits a Technical.
+- **Why #33's guard missed it:** locomotor_check watches a ReplaceModule's removal. Here the AI module is
+  erased later, by the new module's own parse.
+- **Fixed in the engine:** inside ReplaceModule or AddModule (MODULEPARSE_ADD_REMOVE_REPLACE) the clearing is
+  skipped. Such a block names exactly what it replaces, and override files already skip the clearing.
+  - Measured by dumping every loaded template's modules before and after: of 2116 templates, exactly the two
+    reskins change, each regaining those 12 modules and losing none.
+  - EA's INIZH.big and PatchINI.big use ReplaceModule, AddModule and RemoveModule nowhere, and map INIs load as
+    overrides, so EA's data loads exactly as before.
+  - A data-only fix can't reach the reskins: any module added to a copy in a normal load triggers the
+    clearing, and changing ChassisOne doesn't reach reskins that already hold its old module data.
+  - Seed 0 at 12000 then completes (0x5273770F on thinkerer, the new baseline).
+- **The guard:** after load, `ThingFactory::checkReskins` compares each reskin's behaviour modules, by name,
+  with its source's. EA's reskins restate only their Draw, so in EA's data they are equal. Any reskin missing
+  one is logged ("ReskinCheck: ...") and is a DEBUG_CRASH in a debug build. locomotor_check now reads these
+  lines too.
+- **Coverage:** replay_check plays seed 0 at 12000 frames, the W2-era baseline number that caught this. It
+  requires Demolition structures in the match, so the seed still draws that general.
+- **What this cannot see:** a module lost some other way than a copy's clearing; draw and client-update
+  modules (reskins may restate their Draw); and whether the AI actually recruits a reskinned Technical in a
+  given run.
+- Upstream patch note: `docs/mac-port/upstream-notes.md`, beside #33's.
+
 **Latent, not numbered: a bind that fails leaks its socket - every platform, environment-triggered; fixed.**
 - **Where:** `UDP::Bind` made a new socket on every call and never closed one whose bind failed.
   `Transport::init` retries `Bind` in a tight loop for up to a second while the port is taken, so a single

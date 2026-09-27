@@ -1,10 +1,13 @@
 # Notes for upstream
 
-Fixes found in upstream's own code or data while integrating it into the port. Each note is written so
-it can be offered upstream as it stands: the defect, the cause, the patch and how it was checked. Whether
-and when to offer one is the user's decision. Nothing here has been sent anywhere.
+Defects found while porting, in upstream's own code or data (the Reforged project, olcayseygan/CnCGeneralsZH-Reforged)
+or in the libraries the port vendors. Each note is written so it can be offered or reported upstream as it
+stands: the defect, the cause, the patch or repro, and how it was checked, saying what was measured and what is only
+reasoning. Whether and when to send any of them is the user's decision. Nothing here has been sent anywhere.
 
-## Twelve units lose their locomotors to a ReplaceModule, and the Chinooks crash (port defect #33)
+## The Reforged project
+
+### Twelve units lose their locomotors to a ReplaceModule, and the Chinooks crash (port defect #33)
 
 **Introduced by:** fbe8dc6f "fix(data): second pass over the nine generals, 54 more data bugs" and
 179e1f65 "fix(data): patch at least three data bugs in each of the nine generals", in
@@ -65,3 +68,102 @@ header: a ReplaceModule of an AI module must re-state the object's Locomotor lin
 **Not checked:** Windows itself, though the cause is data read by the same code on every platform. The
 load-time check covers every INI file the game loads, upstream's other override files included. It doesn't
 cover a map's own map.ini, which loads with the map.
+
+### A module added to a reskin erases its copied modules; the Demolition Technicals lose their AI (port defect #34)
+
+**Introduced by:** fbe8dc6f, in `FixesReforged.ini`: `ReplaceModule ModuleTag_Death_18` on
+Demo_GLAVehicleTechnicalChassisTwo and Demo_GLAVehicleTechnicalChassisThree.
+
+**Symptom:** the game crashes (a NULL read) when the GLA Demolition General's AI recruits one of those
+Technicals into a team: `AIPlayer::queueUnits`, `getAIUpdateInterface()` is NULL. It happens on every
+platform, in a skirmish or a LAN match.
+
+**Cause:** both are ObjectReskins of ChassisOne, so all their modules are copies. FixesReforged.ini loads as a
+normal INI, not an override file. There, every module parsed runs `clearCopiedFromDefaultEntries`, which
+erases each copied module sharing an interface with the new one. The new SlowDeathBehavior is an update and
+die module, so each Technical lost 12 modules, among them its AI, physics, transport and every die module.
+
+**Why the data alone can't fix it:** any module added to a copy in a normal load triggers the same clearing,
+and a change to ChassisOne doesn't reach reskins that already hold its old module data.
+
+**The port's fix (engine, one condition):** in `ThingTemplate::parseModuleName`, skip
+`clearCopiedFromDefaultEntries` when parsing inside ReplaceModule/AddModule (`MODULEPARSE_ADD_REMOVE_REPLACE`),
+as override files already do:
+
+```cpp
+	else if (self->m_moduleParsingMode == MODULEPARSE_ADD_REMOVE_REPLACE)
+	{
+		// the block names exactly what it replaces: clear nothing else
+	}
+	else
+	{
+		self->m_behaviorModuleInfo.clearCopiedFromDefaultEntries( ... );
+		...
+```
+
+**How it was checked (in the port):**
+- Every loaded template's modules were dumped before and after the fix: of 2116, exactly the two Technicals
+  change, each regaining its 12 modules.
+- EA's INIZH.big and PatchINI.big contain no ReplaceModule or AddModule, so EA's data loads as before.
+- The crashing match (the port's E1 seed 0, 12000 frames) completes.
+- A load-time check now reports any reskin lacking a behaviour module its source has.
+
+**Not checked:** Windows itself, though the parse code is the same on every platform.
+
+## SDL
+
+### An animated cursor on a video driver without native animated cursors crashes `SDL_QuitMouse`
+
+- **Found:** 2026-09-27 by -a9, on thinkerer: Arch Linux, x86_64, and SDL's `offscreen` video driver
+  with no display.
+- **Versions:** SDL 3.4.16 (commit fa2c02bb6e21974a89ea9824bc53c9932abe5f9c, vendored here). SDL `main` as
+  of 2026-09-27 (3.5.0) has the same code in both places named below; that is read, not run.
+
+**What happens.** The process gets SIGSEGV at exit, in `SDL_QuitMouse` (`src/events/SDL_mouse.c`, the
+`next = cursor->next;` line of the loop that destroys `mouse->cursors`), reached from
+`SDL_QuitSubSystem(SDL_INIT_VIDEO)`. It needs these conditions:
+- the video driver has no `CreateAnimatedCursor`. Both the offscreen and the dummy driver lack it, and lack
+  `CreateCursor` too, in which case `SDL_CreateColorCursor` makes a generic cursor and still links it in;
+- the application made an animated cursor with `SDL_CreateAnimatedCursor` and more than one frame;
+- the application did not destroy that cursor itself before quitting video.
+
+The game hit it with the offscreen driver on Linux. Its cursors are Windows `.ani` files, made with
+`SDL_CreateAnimatedCursor` and never destroyed, because SDL frees what is left at quit. The same runs with
+the dummy driver on macOS exited cleanly. The code path is the same, so that is most likely the same
+use-after-free reading freed memory that macOS's allocator had left intact, where glibc had already
+reused it. That is inferred, not measured.
+
+**Why (reading the code).** Without a driver `CreateAnimatedCursor`, `SDL_CreateAnimatedCursor` calls
+`SDL_CreateCursorAnimation`, which makes one cursor per frame with `SDL_CreateColorCursor`.
+`SDL_CreateColorCursor` links each frame into `mouse->cursors`. Then the parent cursor is created and
+linked in as well, at the head. So the list reads: the parent, its frames, and then everything older.
+`SDL_QuitMouse` walks that list:
+
+```c
+cursor = mouse->cursors;
+while (cursor) {
+    next = cursor->next;          // the parent's next is its own last frame
+    SDL_DestroyCursor(cursor);    // destroys the parent, and through SDL_DestroyCursorAnimation its frames
+    cursor = next;                // a frame that has just been freed
+}
+```
+
+Destroying the parent destroys its frames, which are still on the list, including the one `next` points
+to. The loop then reads freed memory. `SDL_DestroyCursor` on the parent unlinks each frame properly when an
+application calls it itself, so only the quit path is affected.
+
+**A minimal reproduction (the shape of it; not run as a separate program).**
+1. `SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen")`, then `SDL_Init(SDL_INIT_VIDEO)`.
+2. Make two 32x32 ARGB8888 surfaces, and `SDL_CreateAnimatedCursor` with both frames (duration 100 each).
+3. `SDL_QuitSubSystem(SDL_INIT_VIDEO)` without destroying the cursor.
+
+Expected: a clean quit. Observed, in the game with these steps: SIGSEGV in `SDL_QuitMouse`.
+
+**Our workaround** (feature/mac-port-l2, 0412e14b). `SdlMouse_releaseCursors` destroys every cursor the
+game made before SDL's video quits. With that, the thinkerer run exits cleanly. No SDL patch is carried.
+
+**Possible upstream fixes**, for whoever files it:
+- keep animation frames off `mouse->cursors`, for example by creating them through the driver's
+  `CreateCursor` directly;
+- or have `SDL_QuitMouse` destroy the cursors that own animations first;
+- or restart the walk from `mouse->cursors` after each destroy.

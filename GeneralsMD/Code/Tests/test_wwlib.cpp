@@ -1661,11 +1661,20 @@ public:
 	}
 
 protected:
+	/* One difference from the loader: running is read only while the lock is held.  Read before taking
+	   it, as the loader does, the worker can release the lock, be preempted, and read running false
+	   after the test thread took the lock and called Stop() - so it exits without ever blocking, and
+	   Stop() returns early.  That window failed the deadlock test under ctest -j4 on thinkerer's four
+	   cores (twice, the second in -18's ci-matrix gate at 8dba78a1).  Read under the lock, a worker
+	   can only see running after acquiring the lock, which the test holds through Stop(), so the stall
+	   the test pins is certain; unlocked, the worker takes the lock, sees running false and exits. */
 	virtual void Thread_Function()
 	{
-		while (running)
+		for (;;)
 		{
 			FastCriticalSectionClass::LockClass lock(m_lock);
+			if (!running)
+				break;
 			m_looping.store(true);
 			for (volatile int i = 0; i < 2000; ++i) {}
 		}
