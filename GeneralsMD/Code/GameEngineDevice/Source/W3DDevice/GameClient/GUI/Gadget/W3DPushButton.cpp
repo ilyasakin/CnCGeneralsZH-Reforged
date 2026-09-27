@@ -56,6 +56,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/Display.h"
+#include "GameClient/GamepadHints.h"
 #include "GameClient/DisplayStringManager.h"
 #include "W3DDevice/GameClient/W3DGameWindow.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
@@ -132,6 +133,8 @@ static GameFont *getBadgeFont( GameWindow *window, Real designPoints = BADGE_DES
 
 }  // end getBadgeFont
 
+static DisplayString *badgeString( const UnicodeString &text, GameFont *font );
+
 // drawButtonText =============================================================
 /** Draw button text to the screen */
 //=============================================================================
@@ -178,6 +181,18 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	if( font != NULL && text->getFont() != font )
 		text->setFont( font );
 
+	// G1: with a gamepad in use its button shows where the key's letter was, or beside a message box's
+	// answer (GamepadHints.h); with the keyboard and mouse in use every button reads as it always did
+	GameFont *glyphFont = NULL;
+	UnicodeString glyphText;
+	const Int glyphPoints = font != NULL ? font->pointSize * 3 / 2 : 12;
+	const GamepadHints::Hint hint = GamepadHints::hintFor( window, glyphPoints, glyphFont, glyphText );
+	if( hint == GamepadHints::HINT_HIDE )
+		return;
+	DisplayString *glyph = hint != GamepadHints::HINT_TEXT ? badgeString( glyphText, glyphFont ) : NULL;
+	if( hint == GamepadHints::HINT_INSTEAD && glyph != NULL )
+		text = glyph;
+
 	// get text size
 	text->getSize( &width, &height );
 
@@ -204,6 +219,14 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 
 	// draw it
 	text->draw( textPos.x, textPos.y, textColor, dropColor );
+
+	// a message box's answer: the pad's button just left of the word
+	if( hint == GamepadHints::HINT_BESIDE && glyph != NULL )
+	{
+		Int glyphWidth, glyphHeight;
+		glyph->getSize( &glyphWidth, &glyphHeight );
+		glyph->draw( textPos.x - glyphWidth - 4, origin.y + (size.y / 2) - (glyphHeight / 2), textColor, dropColor );
+	}
 
 }  // end drawButtonText
 

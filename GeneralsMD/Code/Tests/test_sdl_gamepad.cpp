@@ -47,6 +47,7 @@
 #include "Common/GameMemory.h"
 #include "Common/GlobalData.h"
 #include "Common/INI.h"
+#include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadMap.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/MetaEvent.h"
@@ -724,6 +725,112 @@ TEST(north_with_no_command_bar_shown_does_nothing)
 	frame( pad );
 	CHECK( pad.events.empty() );
 	CHECK( !SdlGamepad_inCommandBar() );
+}
+
+// ---- The hints (GamepadHints.h) ------------------------------------------------------------------
+
+TEST(each_familys_face_glyphs_are_what_sdl_says_is_printed_on_the_buttons)
+{
+	struct Family { GamepadGlyphSet set; SDL_GamepadType type; };
+	const Family families[] = {
+		{ GAMEPAD_GLYPHS_XBOX, SDL_GAMEPAD_TYPE_XBOXONE },
+		{ GAMEPAD_GLYPHS_XBOX, SDL_GAMEPAD_TYPE_STANDARD },
+		{ GAMEPAD_GLYPHS_PLAYSTATION, SDL_GAMEPAD_TYPE_PS5 },
+		{ GAMEPAD_GLYPHS_NINTENDO, SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO },
+		{ GAMEPAD_GLYPHS_STEAM_DECK, SDL_GAMEPAD_TYPE_XBOXONE },		// the Deck's are labelled as an Xbox pad's
+	};
+	const SDL_GamepadButton faces[] = { SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_WEST, SDL_GAMEPAD_BUTTON_NORTH };
+	for (size_t f = 0; f < sizeof( families ) / sizeof( families[0] ); ++f)
+		for (size_t b = 0; b < 4; ++b)
+		{
+			const char *name = GamepadHints::glyphName( families[f].set, faces[b] );
+			const char *printed = NULL;
+			switch (SDL_GetGamepadButtonLabelForType( families[f].type, faces[b] ))
+			{
+				case SDL_GAMEPAD_BUTTON_LABEL_A:				printed = "_button_a"; break;
+				case SDL_GAMEPAD_BUTTON_LABEL_B:				printed = "_button_b"; break;
+				case SDL_GAMEPAD_BUTTON_LABEL_X:				printed = "_button_x"; break;
+				case SDL_GAMEPAD_BUTTON_LABEL_Y:				printed = "_button_y"; break;
+				case SDL_GAMEPAD_BUTTON_LABEL_CROSS:		printed = "_button_cross"; break;
+				case SDL_GAMEPAD_BUTTON_LABEL_CIRCLE:		printed = "_button_circle"; break;
+				case SDL_GAMEPAD_BUTTON_LABEL_SQUARE:		printed = "_button_square"; break;
+				case SDL_GAMEPAD_BUTTON_LABEL_TRIANGLE:	printed = "_button_triangle"; break;
+				default: break;
+			}
+			const bool matches = name != NULL && printed != NULL && strlen( name ) >= strlen( printed )
+				&& strcmp( name + strlen( name ) - strlen( printed ), printed ) == 0;
+			if (!matches)
+				printf( "    family %d button %d: glyph %s, SDL prints %s\n", (int)families[f].set, (int)faces[b], name ? name : "(none)", printed ? printed : "(unknown)" );
+			CHECK( matches );
+		}
+}
+
+TEST(no_family_draws_a_logo_or_a_coloured_glyph)
+{
+	for (Int set = GAMEPAD_GLYPHS_NONE + 1; set < GAMEPAD_GLYPHS_COUNT; ++set)
+	{
+		CHECK( GamepadHints::glyphName( (GamepadGlyphSet)set, GAMEPAD_BUTTON_GUIDE ) == NULL );
+		for (Int button = 0; button < GAMEPAD_GLYPH_COUNT; ++button)
+		{
+			const char *name = GamepadHints::glyphName( (GamepadGlyphSet)set, button );
+			if (name == NULL)
+				continue;
+			const bool plain = strstr( name, "guide" ) == NULL && strstr( name, "home" ) == NULL
+				&& strstr( name, "quickaccess" ) == NULL && strstr( name, "controller_" ) == NULL && strstr( name, "color" ) == NULL;
+			if (!plain)
+				printf( "    family %d draws %s\n", (int)set, name );
+			CHECK( plain );
+		}
+	}
+}
+
+TEST(every_glyph_named_is_in_its_vendored_font_map)
+{
+	const char *const maps[ GAMEPAD_GLYPHS_COUNT ] = { NULL, "kenney_input_xbox_series_map.txt",
+		"kenney_input_playstation_series_map.txt", "kenney_input_nintendo_switch_map.txt", "kenney_input_steam_deck_map.txt" };
+	std::string probe;
+	if (!readFile( (std::string( KENNEY_DIR ) + "/License.txt").c_str(), probe ))
+	{
+		printf( "  SKIP: %s is not vendored (Tools/vendor.sh fetches it): the glyph names are not checked against it\n", KENNEY_DIR );
+		return;
+	}
+	CHECK( probe.find( "Creative Commons Zero, CC0" ) != std::string::npos );
+	for (Int set = GAMEPAD_GLYPHS_NONE + 1; set < GAMEPAD_GLYPHS_COUNT; ++set)
+	{
+		std::string map;
+		CHECK( readFile( (std::string( KENNEY_DIR ) + "/" + maps[set]).c_str(), map ) );
+		for (Int button = 0; button < GAMEPAD_GLYPH_COUNT; ++button)
+		{
+			const char *name = GamepadHints::glyphName( (GamepadGlyphSet)set, button );
+			if (name == NULL)
+				continue;
+			const bool found = map.find( std::string( "\n" ) + name + ":" ) != std::string::npos
+				|| map.compare( 0, strlen( name ) + 1, std::string( name ) + ":" ) == 0;
+			if (!found)
+				printf( "    %s has no %s\n", maps[set], name );
+			CHECK( found );
+		}
+	}
+}
+
+TEST(the_hints_follow_the_device_in_use_live)
+{
+	CHECK( start() );
+	pushMotion( 321, 123 );
+	clear();
+	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_NONE );
+	padButton( SDL_GAMEPAD_BUTTON_WEST, true );		// the virtual pad: SDL knows no family, so Xbox's A B X Y
+	padButton( SDL_GAMEPAD_BUTTON_WEST, false );
+	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_XBOX );
+	pushKey( SDL_SCANCODE_S, true );							// a hand on the keyboard: the letters again
+	pushKey( SDL_SCANCODE_S, false );
+	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_NONE );
+	padButton( SDL_GAMEPAD_BUTTON_WEST, true );
+	padButton( SDL_GAMEPAD_BUTTON_WEST, false );
+	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_XBOX );
+	pushMotion( 322, 124 );												// a hand on the mouse
+	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_NONE );
+	clear();
 }
 
 TEST(a_pad_pulled_out_mid_press_lets_go_of_all_it_held)

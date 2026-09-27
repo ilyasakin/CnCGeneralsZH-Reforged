@@ -312,6 +312,7 @@ GameEngine/Include/GameClient/GameWindowGlobal.h
 GameEngine/Include/GameClient/GameWindowID.h
 GameEngine/Include/GameClient/GameWindowManager.h
 GameEngine/Include/GameClient/GameWindowTransitions.h
+GameEngine/Include/GameClient/GamepadHints.h
 GameEngine/Include/GameClient/GamepadMap.h
 GameEngine/Include/GameClient/GlobalLanguage.h
 GameEngine/Include/GameClient/GraphDraw.h
@@ -966,6 +967,7 @@ GameEngine/Source/GameClient/GraphDraw.cpp
 GameEngine/Source/GameClient/HtmlOverlay.cpp
 GameEngine/Source/GameClient/HtmlTemplate.cpp
 GameEngine/Source/GameClient/InGameUI.cpp
+GameEngine/Source/GameClient/Input/GamepadHints.cpp
 GameEngine/Source/GameClient/Input/GamepadMap.cpp
 GameEngine/Source/GameClient/Input/Keyboard.cpp
 GameEngine/Source/GameClient/Input/Mouse.cpp
@@ -1656,6 +1658,7 @@ Libraries/Source/EABrowserDispatch/BrowserDispatch.idl
 Libraries/Source/EABrowserDispatch/EABrowserDispatch.dsp
 Libraries/Source/FFmpeg/.gitignore
 Libraries/Source/GameSpy/.gitignore
+Libraries/Source/KenneyInputPrompts/.gitignore
 Libraries/Source/SDL3/.gitignore
 Libraries/Source/SDL_shadercross/.gitignore
 Libraries/Source/SPIRV-Cross/.gitignore

@@ -25,6 +25,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadMap.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/Mouse.h"
@@ -37,6 +38,7 @@
 #include <SDL3/SDL.h>
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
@@ -82,6 +84,7 @@ struct Pad
 	Real axis[ SDL_GAMEPAD_AXIS_COUNT ];
 	Bool cameraKey[ 4 ];
 	Real wheelCarry;
+	GamepadGlyphSet glyphs;		///< whose buttons the hints draw while this pad is in use
 };
 
 struct LastClick
@@ -430,6 +433,56 @@ void releasePad( Pad &pad, UnsignedInt time )
 	pad.wheelCarry = 0.0f;
 }
 
+/// The Steam Deck itself, read once: its controls behind Steam Input are a pad SDL calls an Xbox one
+Bool isSteamDeck( void )
+{
+	static int known = -1;
+	if (known < 0)
+	{
+		known = 0;
+		char vendor[ 64 ] = "", product[ 64 ] = "";
+		FILE *file = fopen( "/sys/class/dmi/id/board_vendor", "r" );
+		if (file != NULL)
+		{
+			if (fgets( vendor, sizeof( vendor ), file ) == NULL)
+				vendor[0] = 0;
+			fclose( file );
+		}
+		file = fopen( "/sys/class/dmi/id/product_name", "r" );
+		if (file != NULL)
+		{
+			if (fgets( product, sizeof( product ), file ) == NULL)
+				product[0] = 0;
+			fclose( file );
+		}
+		known = strncmp( vendor, "Valve", 5 ) == 0 && (strncmp( product, "Jupiter", 7 ) == 0 || strncmp( product, "Galileo", 7 ) == 0);
+	}
+	return known == 1;
+}
+
+/// Whose glyphs a pad's hints draw: its family by SDL's type, the Deck's own controls by their IDs
+GamepadGlyphSet glyphsFor( SDL_Gamepad *gamepad )
+{
+	const Uint16 VALVE = 0x28DE, DECK_CONTROLS = 0x1205;
+	if (SDL_GetGamepadVendor( gamepad ) == VALVE && (SDL_GetGamepadProduct( gamepad ) == DECK_CONTROLS || isSteamDeck()))
+		return GAMEPAD_GLYPHS_STEAM_DECK;		// the Deck's controls, straight or through Steam Input
+	switch (SDL_GetGamepadType( gamepad ))
+	{
+		case SDL_GAMEPAD_TYPE_PS3:
+		case SDL_GAMEPAD_TYPE_PS4:
+		case SDL_GAMEPAD_TYPE_PS5:
+			return GAMEPAD_GLYPHS_PLAYSTATION;
+		case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
+		case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
+		case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
+		case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
+		case SDL_GAMEPAD_TYPE_GAMECUBE:
+			return GAMEPAD_GLYPHS_NINTENDO;
+		default:
+			return GAMEPAD_GLYPHS_XBOX;		// Xbox pads, and any pad SDL labels A B X Y
+	}
+}
+
 void openPad( SDL_JoystickID id )
 {
 	if (thePads.size() >= MAX_PADS || findPad( id ) != NULL)
@@ -441,6 +494,7 @@ void openPad( SDL_JoystickID id )
 	memset( &pad, 0, sizeof( pad ) );
 	pad.gamepad = gamepad;
 	pad.id = id;
+	pad.glyphs = glyphsFor( gamepad );
 	for (Int button = 0; button < GAMEPAD_BUTTON_COUNT; ++button)
 	{
 		pad.chordWith[ button ] = GAMEPAD_BUTTON_NONE;
@@ -530,9 +584,11 @@ void stepCommandBar( GamepadButtonType button, UnsignedInt time )
 		movePointerTo( centres[next].x, centres[next].y, time );
 }
 
-/// The pad was used: it takes the pointer, and one parked in the edge band goes to the centre
-void padUsed( UnsignedInt time )
+/// The pad was used: its buttons show in the hints, it takes the pointer, and a pointer parked in the
+/// edge band goes to the centre
+void padUsed( const Pad &pad, UnsignedInt time )
 {
+	GamepadHints::setShown( pad.glyphs );		// the last pad pressed sets the glyphs
 	if (theLastUsed)
 		return;
 	theLastUsed = TRUE;
@@ -589,6 +645,8 @@ void SdlGamepad_stop( void )
 	memset( &thePointer, 0, sizeof( thePointer ) );
 	theLastUsed = FALSE;
 	theCommandBarMode = FALSE;
+	GamepadHints::setShown( GAMEPAD_GLYPHS_NONE );
+	GamepadHints::setCommandBarMode( FALSE );
 }
 
 void SdlGamepad_releaseAll( void )
@@ -613,12 +671,13 @@ void SdlGamepad_noteMotion( Int x, Int y )
 	if (thePointer.warpPending)
 		return;		// the platform's motion from before the warp, still in the queue
 	thePointer.owned = FALSE;
-	theLastUsed = FALSE;
+	SdlGamepad_noteHand();
 }
 
 void SdlGamepad_noteHand( void )
 {
 	theLastUsed = FALSE;
+	GamepadHints::setShown( GAMEPAD_GLYPHS_NONE );		// the keys' letters again
 }
 
 Bool SdlGamepad_isLastUsed( void )
@@ -678,7 +737,7 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 				return TRUE;
 			const GamepadButtonType button = (GamepadButtonType)event.gbutton.button;		// the same order (GamepadMap.h)
 			if (event.gbutton.down)
-				padUsed( milliseconds( event.gbutton.timestamp ) );
+				padUsed( *pad, milliseconds( event.gbutton.timestamp ) );
 			if (event.gbutton.down)
 				pressButton( *pad, button, milliseconds( event.gbutton.timestamp ) );
 			else
@@ -696,7 +755,7 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 				const Real deadZone = (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || event.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
 					? TRIGGER_DEAD_ZONE : STICK_DEAD_ZONE;
 				if (value > deadZone || value < -deadZone)
-					padUsed( milliseconds( event.gaxis.timestamp ) );
+					padUsed( *pad, milliseconds( event.gaxis.timestamp ) );
 			}
 			return TRUE;
 		}
@@ -765,6 +824,7 @@ void SdlGamepad_update( UnsignedInt nowMs )
 		if (x != thePointer.shownX || y != thePointer.shownY)
 			showPointer( x, y, nowMs );
 	}
+	GamepadHints::setCommandBarMode( theCommandBarMode );		// before this frame's drawing reads it
 
 	for (size_t i = 0; i < thePads.size(); ++i)
 	{

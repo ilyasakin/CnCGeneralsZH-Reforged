@@ -1811,7 +1811,8 @@ if(ZH_PLATFORM_POSIX)
     ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gameengine_stubs.cpp)
   target_include_directories(test_sdl_gamepad PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
   target_compile_definitions(test_sdl_gamepad PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
-    GAMEPAD_INI="${CMAKE_CURRENT_SOURCE_DIR}/Data/INI/GamepadReforged.ini")
+    GAMEPAD_INI="${CMAKE_CURRENT_SOURCE_DIR}/Data/INI/GamepadReforged.ini"
+    KENNEY_DIR="${LIBSRC}/KenneyInputPrompts")
   set_target_properties(test_sdl_gamepad PROPERTIES CXX_STANDARD 17)
   target_link_libraries(test_sdl_gamepad PRIVATE sdldevice test_harness)
   add_test(NAME test_sdl_gamepad COMMAND test_sdl_gamepad)
@@ -1866,6 +1867,9 @@ if(ZH_PLATFORM_POSIX)
   # harnesses pass with -overlay - and <build>/overlay-dev, the -scenario and -cinema folders that never
   # ship.  Tools/stage-overlay.sh is the one place the list lives.  Small (10 MB; the art is linked).
   file(GLOB_RECURSE ZH_OVERLAY_INPUTS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Data/*)
+  # G1's button hint fonts, staged into the overlay when vendor.sh has them (stage-overlay.sh)
+  file(GLOB ZH_PROMPT_INPUTS CONFIGURE_DEPENDS ${LIBSRC}/KenneyInputPrompts/*)
+  list(APPEND ZH_OVERLAY_INPUTS ${ZH_PROMPT_INPUTS})
   add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/overlay.staged
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/stage-overlay.sh ${CMAKE_CURRENT_SOURCE_DIR}/Data

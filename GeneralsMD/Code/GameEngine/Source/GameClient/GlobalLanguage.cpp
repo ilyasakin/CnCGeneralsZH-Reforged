@@ -130,6 +130,11 @@ static Bool installLocalFont( const AsciiString &font )
 #endif
 }
 
+Bool GlobalLanguage_installFontFile( const AsciiString &font )
+{
+	return installLocalFont( font );
+}
+
 static void removeLocalFont( const AsciiString &font )
 {
 #if defined(_WIN32)
