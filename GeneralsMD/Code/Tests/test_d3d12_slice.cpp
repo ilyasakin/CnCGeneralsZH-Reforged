@@ -81,7 +81,7 @@ int main(int argc, char ** argv)
 	static const char * const D3DX_NAMES[] = { "D3DXAssembleShader", "D3DXCompileShader", "D3DXDisassembleShader",
 		"D3DXCreateTexture", "D3DXCreateCubeTexture", "D3DXCreateVolumeTexture", "D3DXCreateTextureFromFileExA",
 		"D3DXFilterTexture", "D3DXLoadSurfaceFromSurface", "D3DXGetFVFVertexSize",
-		"ZH_D3D12_Name_Shader", "ZH_D3D12_Keep_D3D8_Declaration" };
+		"ZH_D3D12_Name_Shader", "ZH_D3D12_Keep_D3D8_Declaration", "ZH_D3D12_Set_Shader_Cache_Directory" };
 	for (size_t index = 0; index < sizeof(D3DX_NAMES) / sizeof(D3DX_NAMES[0]); ++index) {
 		if (GetProcAddress(module, D3DX_NAMES[index]) == NULL) {
 			++failures;

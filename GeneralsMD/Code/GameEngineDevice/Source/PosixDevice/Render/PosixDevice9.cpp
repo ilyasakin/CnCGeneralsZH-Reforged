@@ -23,6 +23,7 @@
 #include "PosixDevice9.h"
 #include "SdlCreationLog.h"
 #include "Platform/EngineShaderName.h"
+#include "sdl3shadercompile.h"
 #include "Platform/RendererName.h"
 #include "PosixImageOps.h"
 #include "PosixResources9.h"
@@ -184,6 +185,12 @@ PosixDevice9::~PosixDevice9()
 			Sdl_Creation_Log_Flush();
 		}
 		fprintf(stderr, "PosixDevice9: %u draws recorded, %u presents\n", DrawsRecorded, PresentCount);
+		unsigned shipped = 0, from_user = 0, compiled = 0;
+		SDL3_DXBC_Cache_Statistics(shipped, from_user, compiled);
+		if (shipped + from_user + compiled > 0) {		// Direct3D 12 (-d3d12) keeps its compiled programs
+			fprintf(stderr, "PosixDevice9: Direct3D 12 programs: %u shipped, %u from the player's cache, %u compiled this run\n",
+				shipped, from_user, compiled);
+		}
 		for (std::map<std::string, unsigned int>::const_iterator it = DrawRefusals.begin(); it != DrawRefusals.end(); ++it) {
 			fprintf(stderr, "PosixDevice9:   refused %u: %s\n", it->second, it->first.c_str());
 		}

@@ -1093,6 +1093,8 @@ void W3DDisplay::init( void )
 		if( Direct3D12_Activate( why, sizeof( why ) ) )
 		{
 			TheWritableGlobalData->m_direct3D11 = FALSE;
+			// The programs it compiles are kept in the user data folder: the install is not writable.
+			Direct3D12_Set_Shader_Cache_Directory( TheGlobalData->getPath_UserData().str() );
 			DEBUG_LOG(( "-d3d12: drawing through zh_d3d12.dll\n" ));
 		}
 		else

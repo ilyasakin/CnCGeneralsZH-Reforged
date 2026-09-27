@@ -1658,7 +1658,7 @@ if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
   target_include_directories(zh_d3d12_shim PRIVATE ${ZH_POSIX_D3D9_INCLUDE} ${WW}/WW3D2 ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
   target_compile_definitions(zh_d3d12_shim PRIVATE ${ZH_D3D12_DEVICE_DEFINES})
   target_compile_options(zh_d3d12_shim PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
-  target_link_libraries(zh_d3d12_shim PRIVATE d3dx9posix_d3d12)
+  target_link_libraries(zh_d3d12_shim PRIVATE d3dx9posix_d3d12 sdl3shadercompile SDL3::SDL3-static)
 
   add_library(zh_d3d12 SHARED ${D3D12DEVICE}/D3D12Adapter.cpp ${D3D12DEVICE}/D3D12Exports.cpp ${D3D12DEVICE}/zh_d3d12.def)
   set_target_properties(zh_d3d12 PROPERTIES CXX_STANDARD 17)
@@ -1797,6 +1797,14 @@ if(ZH_D3D12)
   add_dependencies(generals zh_d3d12)
   add_custom_command(TARGET generals POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:zh_d3d12> ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+  # The Direct3D 12 programs that ship with the game (sdl3shadercompile.cpp), compiled on Windows by
+  # Microsoft's d3dcompiler_47 when they were recorded: beside the exe, where the device reads them before
+  # compiling anything, as dx11shaders.shipped is for the Direct3D 11 backend.
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Data/d3d12shaders.shipped)
+    add_custom_command(TARGET generals POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              ${CMAKE_CURRENT_SOURCE_DIR}/Data/d3d12shaders.shipped ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+  endif()
 endif()
 # The game reads its data relative to the working directory, so it has to sit
 # beside Run/'s .big files to find anything (Phase 5).

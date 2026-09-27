@@ -67,6 +67,13 @@ bool SDL3_Translate_SPIRV_To_MSL(const std::vector<unsigned char> & spirv, bool 
 bool SDL3_Translate_SPIRV_To_HLSL(const std::vector<unsigned char> & spirv, bool vertex_stage, std::string & hlsl,
 	std::string & log);
 
+// Direct3D 12's programs are kept, compiled once (sdl3shadercompile.cpp says why and how): the player's
+// cache in this directory (the user data folder), beside the shipped d3d12shaders.shipped.  Named before
+// the first program is made; with none named only the shipped file is read and nothing is written.
+void SDL3_Set_DXBC_Cache_Directory(const char * directory);
+/// How many programs came with the game, from the player's cache, and were compiled this run.
+void SDL3_DXBC_Cache_Statistics(unsigned & shipped, unsigned & from_user, unsigned & compiled);
+
 void SDL3_Shader_Slots(const std::vector<unsigned char> & spirv, bool vertex_stage, unsigned & samplers,
 	unsigned & uniform_buffers);
 

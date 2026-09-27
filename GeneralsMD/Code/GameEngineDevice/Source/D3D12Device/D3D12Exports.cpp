@@ -196,6 +196,12 @@ extern "C" void WINAPI ZH_D3D12_Name_Shader(const void * shader, const char * na
 		ZHP_Name_Shader(ours, name);
 }
 
+// The user data folder, where the device keeps the programs it compiles (d3d12shaders.cache).
+extern "C" void WINAPI ZH_D3D12_Set_Shader_Cache_Directory(const char * directory)
+{
+	ZHP_Set_Shader_Cache_Directory(directory);
+}
+
 extern "C" void WINAPI ZH_D3D12_Keep_D3D8_Declaration(IDirect3DVertexDeclaration9 * declaration, const DWORD * d3d8_tokens)
 {
 	static_assert(sizeof(*d3d8_tokens) == sizeof(unsigned int), "the D3D8 tokens are 32-bit words");
