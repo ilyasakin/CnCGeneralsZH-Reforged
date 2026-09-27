@@ -224,9 +224,15 @@ inline Real deg2rad(Real rad) { return rad * (PI/180); }
 // because undefining a macro that was never defined is well-formed and it keeps the four
 // definitions that follow reading the same on both platforms.  B5.
 #if defined(_WIN32)
+#if defined(_M_ARM64)
+#ifndef _ARM64_
+#define _ARM64_		// the same for Windows on Arm: _AMD64_ there takes winnt.h down the x64 path
+#endif
+#else
 #ifndef _AMD64_
 #define _AMD64_		// windows.h does this before it reaches windef.h, and winnt.h
 #endif				// #errors with "No Target Architecture" without it
+#endif
 #include <windef.h>
 #endif
 #include <string.h>

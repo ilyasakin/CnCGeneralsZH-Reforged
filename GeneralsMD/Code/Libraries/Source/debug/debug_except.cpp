@@ -108,7 +108,11 @@ const char *DebugExceptionhandler::GetExceptionType(struct _EXCEPTION_POINTERS *
 // The faulting instruction's address.
 static size_t ContextIP(const struct _CONTEXT &ctx)
 {
+#if defined(_M_ARM64)
+  return (size_t)ctx.Pc;
+#else
   return (size_t)ctx.Rip;
+#endif
 }
 
 void DebugExceptionhandler::LogExceptionLocation(Debug &dbg, struct _EXCEPTION_POINTERS *exptr)
@@ -124,6 +128,19 @@ void DebugExceptionhandler::LogRegisters(Debug &dbg, struct _EXCEPTION_POINTERS 
 {
   struct _CONTEXT &ctx=*exptr->ContextRecord;
 
+#if defined(_M_ARM64)
+  dbg << Debug::FillChar('0')
+      << Debug::Hex()
+      <<  "PC:" << Debug::Width(16) << ctx.Pc
+      << " SP:" << Debug::Width(16) << ctx.Sp
+      << " FP:" << Debug::Width(16) << ctx.Fp
+      << " LR:" << Debug::Width(16) << ctx.Lr << "\n"
+      <<  "X0:" << Debug::Width(16) << ctx.X0
+      << " X1:" << Debug::Width(16) << ctx.X1
+      << " X2:" << Debug::Width(16) << ctx.X2
+      << " X3:" << Debug::Width(16) << ctx.X3 << "\n"
+      << Debug::Dec() << Debug::FillChar(' ');
+#else
   dbg << Debug::FillChar('0')
       << Debug::Hex()
       <<  "RIP:" << Debug::Width(16) << ctx.Rip
@@ -136,6 +153,7 @@ void DebugExceptionhandler::LogRegisters(Debug &dbg, struct _EXCEPTION_POINTERS 
       << " RSI:" << Debug::Width(16) << ctx.Rsi
       << " RDI:" << Debug::Width(16) << ctx.Rdi << "\n"
       << Debug::Dec() << Debug::FillChar(' ');
+#endif
 }
 
 void DebugExceptionhandler::LogFPURegisters(Debug &dbg, struct _EXCEPTION_POINTERS *exptr)
@@ -144,12 +162,21 @@ void DebugExceptionhandler::LogFPURegisters(Debug &dbg, struct _EXCEPTION_POINTE
 
   // There is no x87 save area to walk: every float the game computes is in an SSE register, and
   // the four the calling convention passes arguments in are the ones worth naming.
+#if defined(_M_ARM64)
+  dbg << Debug::FillChar('0') << Debug::Hex()
+      <<  "V0:" << Debug::Width(16) << ctx.V[0].Low
+      << " V1:" << Debug::Width(16) << ctx.V[1].Low << "\n"
+      <<  "V2:" << Debug::Width(16) << ctx.V[2].Low
+      << " V3:" << Debug::Width(16) << ctx.V[3].Low << "\n"
+      << Debug::Dec() << Debug::FillChar(' ');
+#else
   dbg << Debug::FillChar('0') << Debug::Hex()
       <<  "XMM0:" << Debug::Width(16) << ctx.Xmm0.Low
       << " XMM1:" << Debug::Width(16) << ctx.Xmm1.Low << "\n"
       <<  "XMM2:" << Debug::Width(16) << ctx.Xmm2.Low
       << " XMM3:" << Debug::Width(16) << ctx.Xmm3.Low << "\n"
       << Debug::Dec() << Debug::FillChar(' ');
+#endif
 }
 
 // include exception dialog box

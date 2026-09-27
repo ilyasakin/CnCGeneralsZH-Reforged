@@ -410,13 +410,19 @@ int main(int argument_count, char ** arguments)
 	// on purpose.  Pointed at the game's own function it would compare d3dxportable.h with itself
 	// and could no longer see the dispatch.
 	{
+		char vendor[13];
+#if defined(_M_ARM64)
+		// ARM64 has no CPUID and no d3dx9_43.dll: Microsoft shipped the DLL for x86 and x64 only,
+		// so an ARM64 build fails at the bind above and never gets here.  This only has to compile.
+		strcpy(vendor, "(arm64)");
+#else
 		int registers[4];
 		__cpuid(registers, 0);
-		char vendor[13];
 		memcpy(vendor + 0, &registers[1], 4);
 		memcpy(vendor + 4, &registers[3], 4);
 		memcpy(vendor + 8, &registers[2], 4);
 		vendor[12] = '\0';
+#endif
 
 		D3DXMATRIX basis;
 		memcpy(&basis, D3DX_GOLDEN_BASIS, sizeof(basis));

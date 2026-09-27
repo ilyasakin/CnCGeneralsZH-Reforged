@@ -83,9 +83,15 @@ void StackDump(void (*callback)(const char*))
 	memset(&here, 0, sizeof(here));
 	here.ContextFlags = CONTEXT_FULL;
 	RtlCaptureContext(&here);
+#if defined(_M_ARM64)
+	myeip = here.Pc;
+	myesp = here.Sp;
+	myebp = here.Fp;
+#else
 	myeip = here.Rip;
 	myesp = here.Rsp;
 	myebp = here.Rbp;
+#endif
 
 	MakeStackTrace(myeip,myesp,myebp, 2, callback);
 }
@@ -161,14 +167,24 @@ void MakeStackTrace(DWORD_PTR myeip,DWORD_PTR myesp,DWORD_PTR myebp, int skipFra
 // reads and writes the whole register set to do it: a NULL context walks nowhere.  The three
 // addresses are all a caller hands over, so the rest of the context is captured here and
 // overwritten with them.
+#if defined(_M_ARM64)
+const DWORD machineType = IMAGE_FILE_MACHINE_ARM64;
+#else
 const DWORD machineType = IMAGE_FILE_MACHINE_AMD64;
+#endif
 CONTEXT walkContext;
 memset(&walkContext, 0, sizeof(walkContext));
 walkContext.ContextFlags = CONTEXT_FULL;
 RtlCaptureContext(&walkContext);
+#if defined(_M_ARM64)
+walkContext.Pc = myeip;
+walkContext.Sp = myesp;
+walkContext.Fp = myebp;
+#else
 walkContext.Rip = myeip;
 walkContext.Rsp = myesp;
 walkContext.Rbp = myebp;
+#endif
 STACKFRAME64    stack_frame;
 BOOL            b_ret = TRUE;
 
@@ -542,6 +558,14 @@ void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info )
 	/*
 	** Dump the registers.
 	*/
+#if defined(_M_ARM64)
+	// Windows on Arm: the program counter, stack, frame and link registers, then X0 to X28.
+	const DWORD_PTR faultPC = context->Pc;
+	DOUBLE_DEBUG ( ( "Pc :%016llX\tSp :%016llX\tFp :%016llX\tLr :%016llX\n", context->Pc, context->Sp, context->Fp, context->Lr));
+	for (int x = 0; x < 28; x += 4)
+		DOUBLE_DEBUG ( ( "X%-2d:%016llX\tX%-2d:%016llX\tX%-2d:%016llX\tX%-2d:%016llX\n", x, context->X[x], x + 1, context->X[x + 1], x + 2, context->X[x + 2], x + 3, context->X[x + 3]));
+	DOUBLE_DEBUG ( ( "X28:%016llX\tCpsr:%08X\n", context->X[28], context->Cpsr));
+#else
 	const DWORD_PTR faultPC = context->Rip;
 	DOUBLE_DEBUG ( ( "Rip:%016llX\tRsp:%016llX\tRbp:%016llX\n", context->Rip, context->Rsp, context->Rbp));
 	DOUBLE_DEBUG ( ( "Rax:%016llX\tRbx:%016llX\tRcx:%016llX\n", context->Rax, context->Rbx, context->Rcx));
@@ -551,6 +575,7 @@ void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info )
 	DOUBLE_DEBUG ( ( "R14:%016llX\tR15:%016llX\n", context->R14, context->R15));
 	DOUBLE_DEBUG ( ( "EFlags:%08X \n", context->EFlags));
 	DOUBLE_DEBUG ( ( "CS:%04x  SS:%04x  DS:%04x  ES:%04x  FS:%04x  GS:%04x\n", context->SegCs, context->SegSs, context->SegDs, context->SegEs, context->SegFs, context->SegGs));
+#endif
 
 	/*
 	** Dump the bytes at EIP. This will make it easier to match the crash address with later versions of the game.
@@ -584,7 +609,11 @@ void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info )
 	** already in the log by this point, so a fault in here costs the stack and nothing else.
 	*/
 	DOUBLE_DEBUG (("\nStack Dump:\n"));
+#if defined(_M_ARM64)
+	StackDumpFromContext(context->Pc, context->Sp, context->Fp, NULL);
+#else
 	StackDumpFromContext(context->Rip, context->Rsp, context->Rbp, NULL);
+#endif
 
   DEBUG_LOG(( "********** END EXCEPTION DUMP ****************\n\n" ));
 }																									 

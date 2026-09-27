@@ -373,18 +373,26 @@ int DebugStackwalk::StackWalk(Signature &sig, struct _CONTEXT *ctx)
 
   STACKFRAME64 frame;
   memset(&frame,0,sizeof(frame));
+#if defined(_M_ARM64)
+  const DWORD machine=IMAGE_FILE_MACHINE_ARM64;
+  frame.AddrPC.Offset=walkContext.Pc;
+  frame.AddrStack.Offset=walkContext.Sp;
+  frame.AddrFrame.Offset=walkContext.Fp;
+#else
+  const DWORD machine=IMAGE_FILE_MACHINE_AMD64;
   frame.AddrPC.Offset=walkContext.Rip;
-  frame.AddrPC.Mode=AddrModeFlat;
   frame.AddrStack.Offset=walkContext.Rsp;
-  frame.AddrStack.Mode=AddrModeFlat;
   frame.AddrFrame.Offset=walkContext.Rbp;
+#endif
+  frame.AddrPC.Mode=AddrModeFlat;
+  frame.AddrStack.Mode=AddrModeFlat;
   frame.AddrFrame.Mode=AddrModeFlat;
 
   // The frame this function is standing in is not worth reporting when the caller did not hand
   // over a context of its own.
   bool skipFirst=!ctx;
   while (sig.m_numAddr<Signature::MAX_ADDR&&
-         gDbg._StackWalk64(IMAGE_FILE_MACHINE_AMD64,GetCurrentProcess(),GetCurrentThread(),
+         gDbg._StackWalk64(machine,GetCurrentProcess(),GetCurrentThread(),
                            &frame,&walkContext,NULL,gDbg._SymFunctionTableAccess64,
                            gDbg._SymGetModuleBase64,NULL))
   {

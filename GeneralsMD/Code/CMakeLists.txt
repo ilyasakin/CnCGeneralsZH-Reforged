@@ -1602,10 +1602,15 @@ list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/Source/SdlDevice/")
 # format the video player asks for.  MilesAudioManager.cpp and BinkVideoPlayer.cpp are unchanged and
 # still call AIL_* and Bink*; the reconstructed headers in Miles6/include and Bink/include are still
 # the declarations.  miles_smoke and bink_smoke are the checks.
-set(FFMPEG_DIR ${LIBSRC}/FFmpeg/dist)
+# Windows on ARM64 links its own build, dist-arm64: Tools/ffmpeg-build.bat arm64 makes it.
+if(CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "ARM64")
+  set(FFMPEG_DIR ${LIBSRC}/FFmpeg/dist-arm64)
+else()
+  set(FFMPEG_DIR ${LIBSRC}/FFmpeg/dist)
+endif()
 if(NOT EXISTS ${FFMPEG_DIR}/include)
   message(FATAL_ERROR
-    "FFmpeg is missing from Libraries/Source/FFmpeg/dist - see the vendored-libs rule.")
+    "FFmpeg is missing from ${FFMPEG_DIR} - see the vendored-libs rule (ARM64: Tools/ffmpeg-build.bat arm64).")
 endif()
 
 set(FFMPEG_CORE

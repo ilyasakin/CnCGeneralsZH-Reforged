@@ -80,7 +80,7 @@ unsigned WWProfile_Get_System_Time()
 
 WWINLINE double WWProfile_Get_Inv_Processor_Ticks_Per_Second(void) 
 {
-#ifdef WIN32
+#if defined(WIN32) && !defined(_M_ARM64)	// Windows on Arm has no __rdtsc: the portable tick, as below
 	return CPUDetectClass::Get_Inv_Processor_Ticks_Per_Second();
 #elif defined (_UNIX)
 	return 0.001;
@@ -105,7 +105,7 @@ inline void WWProfile_Get_Ticks(int64_t * ticks)
 {
 #ifdef _UNIX
        *ticks = TIMEGETTIME();
-#elif defined (WIN32)
+#elif defined (WIN32) && !defined(_M_ARM64)
 	*ticks = __rdtsc();
 #else
 	// There is no portable cycle counter; Lib/Clock.h's high-resolution tick is what the rest of
