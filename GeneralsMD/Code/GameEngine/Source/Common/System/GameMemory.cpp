@@ -46,7 +46,9 @@
 #include "zhio.h"
 
 // SYSTEM INCLUDES
-#include <new>			// std::nothrow_t, for the nothrow forms of the global operators
+#ifndef _MSC_VER
+#include <new>			// std::nothrow_t, for the nothrow forms of the global operators below
+#endif
 #ifndef _WIN32
 #include <stdlib.h>
 #if defined(__APPLE__)
@@ -3388,7 +3390,13 @@ void operator delete[](void *p) WW_NOEXCEPT_DELETE
 	stopped before main on it), and a nothrow new hands out a block our delete cannot free
 	(PosixResources9's new (std::nothrow)).  WW_NOEXCEPT_DELETE on the nothrow news too, for the same
 	reason it is on the deletes.
+	Not under MSVC, which keeps the CRT's own forms and compiles exactly what it did before.  No
+	sanitizer runtime is in play there, and one of ours would not be equivalent: the build is /EHa, so
+	the nothrow news' catch (...) would also catch a structured exception (an access violation inside
+	allocateBytes) and answer NULL, where the CRT's, compiled /EHsc, lets it reach the crash handler.
+	MSVC's STL reaches the nothrow new too (stable_sort's temporary buffer), -18's second read.
 */
+#ifndef _MSC_VER
 void operator delete(void *p, size_t) WW_NOEXCEPT_DELETE
 {
 	operator delete(p);
@@ -3418,6 +3426,7 @@ void operator delete[](void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE
 {
 	operator delete[](p);
 }
+#endif
 
 //-----------------------------------------------------------------------------
 /**
