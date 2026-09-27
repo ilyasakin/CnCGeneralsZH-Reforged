@@ -35,6 +35,13 @@
 
 #include <mutex>
 
+#if defined(__APPLE__)
+#include <os/lock.h>
+#include <pthread.h>
+#include <atomic>
+#include <stdint.h>
+#endif
+
 #ifdef PERF_TIMERS
 extern PerfGather TheCritSecPerfGather;
 #endif
@@ -78,10 +85,70 @@ extern PerfGather TheCritSecPerfGather;
 	No spin count is lost in the move.  InitializeCriticalSectionAndSpinCount,
 	SetCriticalSectionSpinCount and TryEnterCriticalSection appear nowhere in this tree, so every
 	one of these locks was already a plain InitializeCriticalSection with the system default.
+
+	On Apple the lock is os_unfair_lock with an owner and a count (PERF1, 2026-09-27), not libc++'s
+	std::recursive_mutex, which is a recursive pthread mutex there.  The allocator takes these locks
+	on every block it hands out or takes back, and on the M3 Pro Mac's profile that mutex was 10% of the main
+	thread in a skirmish and 14% under mobstress.  What it keeps:
+	  - recursion, exactly: the owner re-entering counts up, and the lock is released at zero;
+	  - the pairing of every enter with its exit, and every caller's order of locks above;
+	  - what the allocator hands out.  No allocator code changes, so on one thread the same calls
+	    get the same blocks in the same order.  Between threads, which one wins a contended lock was
+	    never ordered (neither a CRITICAL_SECTION nor a pthread mutex is FIFO), so nothing that
+	    replays the same could depend on it, and this lock stays inside that same freedom.
+	An exit by a thread that does not hold the lock is a programming error on every platform, and here
+	it stops the process in every build: one relaxed load and a compare per exit (a contributor's second read).
+	Without it a non-owner exit at depth above one would quietly count down someone else's depth.  A
+	thread that ends while holding the lock is a bug on every platform too; here a later thread given
+	the same pthread_t would find itself the owner.
+	Windows and Linux keep std::recursive_mutex: Linux's glibc mutex is to be measured before it is
+	replaced, and Windows is not ours to measure.
 */
+#if defined(__APPLE__)
+class RecursiveUnfairLock
+{
+	os_unfair_lock m_lock = OS_UNFAIR_LOCK_INIT;
+	std::atomic<uintptr_t> m_owner{ 0 };	///< the holder's pthread_self(), 0 when free
+	unsigned int m_depth = 0;				///< read and written by the holder only
+
+	static uintptr_t self() { return reinterpret_cast<uintptr_t>( pthread_self() ); }
+
+public:
+	void lock()
+	{
+		const uintptr_t me = self();
+		// Only this thread ever stores its own id, so a relaxed load that sees it is this thread's own
+		// earlier store: the lock is ours already.
+		if (m_owner.load( std::memory_order_relaxed ) == me)
+		{
+			++m_depth;
+			return;
+		}
+		os_unfair_lock_lock( &m_lock );
+		m_owner.store( me, std::memory_order_relaxed );
+		m_depth = 1;
+	}
+
+	void unlock()
+	{
+		if (m_owner.load( std::memory_order_relaxed ) != self())
+			__builtin_trap();		// CriticalSection::exit by a thread that does not hold it
+		if (--m_depth == 0)
+		{
+			m_owner.store( 0, std::memory_order_relaxed );
+			os_unfair_lock_unlock( &m_lock );
+		}
+	}
+};
+#endif
+
 class CriticalSection
 {
+#if defined(__APPLE__)
+	RecursiveUnfairLock m_mutex;
+#else
 	std::recursive_mutex m_mutex;
+#endif
 
 	public:
 		CriticalSection()
