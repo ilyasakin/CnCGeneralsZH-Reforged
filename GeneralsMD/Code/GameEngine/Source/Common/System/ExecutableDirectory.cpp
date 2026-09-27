@@ -34,6 +34,7 @@
 #include <string.h>
 
 #ifndef _WIN32
+#include <sys/stat.h>
 #if defined(__APPLE__)
 #include <limits.h>
 #include <mach-o/dyld.h>
@@ -100,10 +101,25 @@ Bool isExecutableInAppBundle( void )
 	return length >= tail && strcmp( exe + length - tail, bundled ) == 0;
 }
 
+Bool isExecutableInLinuxPackage( void )
+{
+	char exe[ 4096 ];
+	getExecutableDirectory( exe, sizeof( exe ), FALSE );
+	if (exe[0] == 0 || strlcat( exe, "/../share/zero-hour-reforged/overlay", sizeof( exe ) ) >= sizeof( exe ))
+		return FALSE;
+	struct stat status;
+	return stat( exe, &status ) == 0 && S_ISDIR( status.st_mode );
+}
+
+Bool isExecutablePackaged( void )
+{
+	return isExecutableInAppBundle() || isExecutableInLinuxPackage();
+}
+
 void getLogDirectory( char *buf, size_t size, Bool keepTrailingSeparator )
 {
 	getExecutableDirectory( buf, size, keepTrailingSeparator );
-	if (!isExecutableInAppBundle())
+	if (!isExecutablePackaged())
 		return;
 
 	char logs[ 4096 ];

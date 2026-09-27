@@ -166,6 +166,24 @@ static void activateThisApp()
 static void activateThisApp() {}
 #endif
 
+/** Whether this runs in the Steam Deck's Game Mode (P3): gamescope's session names itself in
+	* XDG_CURRENT_DESKTOP, and Steam's gamepad interface sets SteamGamepadUI for what it starts.  A file
+	* dialog may not show there, so PosixMain asks for -root in Steam's launch options instead.  (Both names
+	* are what gamescope and Steam document; the Deck itself has not been measured yet.) */
+static bool inSteamGameMode()
+{
+	const char *desktop = getenv( "XDG_CURRENT_DESKTOP" ), *gamepadUi = getenv( "SteamGamepadUI" );
+	return (desktop != NULL && strcasecmp( desktop, "gamescope" ) == 0) || (gamepadUi != NULL && gamepadUi[0] == '1');
+}
+
+/// What Game Mode says when the Zero Hour folder is found nowhere; the package's README.txt says the same
+static const char GAME_MODE_NO_ROOT[] =
+	"Zero Hour Reforged could not find your Command & Conquer Generals Zero Hour folder.\n\n"
+	"In Steam, open this game's Properties and enter under Launch Options:\n\n"
+	"-root \"~/Games/Command & Conquer Generals Zero Hour\"\n\n"
+	"with the path of your own Zero Hour folder (the one with INIZH.big in it) between the quotes. Or start "
+	"the game once from Desktop Mode to choose the folder there; it is remembered after that.";
+
 /** PosixInstallChooser over SDL: the reason the last choice was refused, if any, in a message box, then
 	* the folder dialog.  FALSE when the player cancels, or when the dialog cannot be shown; then the reason
 	* goes into the std::string the context points at, for the message the caller shows. */
@@ -222,22 +240,27 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 	char buffer[ 4096 ];
 	getExecutableDirectory( buffer, sizeof( buffer ), FALSE );
 	request.executableDirectory = buffer;
-	request.insideAppBundle = isExecutableInAppBundle() != FALSE;
+	request.insideAppBundle = isExecutablePackaged() != FALSE;		// a macOS app, or a Linux package (P3)
 	request.home = findHomeDirectory( buffer, sizeof( buffer ) ) ? buffer : "";
-	if (request.insideAppBundle)
+	if (isExecutableInAppBundle())
 		request.forbidden.push_back( request.executableDirectory + "/../.." );	// the bundle
+	else if (request.insideAppBundle)
+		request.forbidden.push_back( request.executableDirectory + "/.." );		// the Linux package
 	request.forbidden.insert( request.forbidden.end(), overlays.begin(), overlays.end() );
 	request.registryFile = findRegistryFile( buffer, sizeof( buffer ) ) ? buffer : "";
 	std::string dialogFailure;
-	request.chooser = headless ? NULL : chooseFolderWithSdl;
+	const bool gameMode = inSteamGameMode();
+	request.chooser = headless || gameMode ? NULL : chooseFolderWithSdl;
 	request.chooserContext = &dialogFailure;
 
 	PosixInstallChoice choice;
 	if (!PosixChooseInstallRoot( request, choice ))
 	{
-		// the dialog's own failure, when it failed, says more than "none was chosen"
-		const std::string problem = dialogFailure.empty() ? choice.problem
+		// the dialog's own failure, when it failed, says more than "none was chosen"; Game Mode has no dialog
+		std::string problem = dialogFailure.empty() ? choice.problem
 			: dialogFailure + "\n\nStart the game with -root <folder> to name the Zero Hour folder instead.";
+		if (gameMode && !headless)
+			problem = GAME_MODE_NO_ROOT;
 		fprintf( stderr, "generals: %s\n", problem.c_str() );
 		if (request.insideAppBundle && !headless)
 		{

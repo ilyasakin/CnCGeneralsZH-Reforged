@@ -1895,6 +1895,20 @@ if(ZH_PLATFORM_POSIX)
     endif()
   endif()
 
+  # P3: Tools/linux-portable.sh's folder for the Steam Deck, built inside the Steam Runtime's SDK, and E1 through
+  # its own launcher in the Steam Runtime's platform image.  Skipped (77) without docker, the SDK image, or a
+  # portable CMake (ZH_PORTABLE_CMAKE: 3.29 or later, running inside the container - Kitware's release tarball).
+  if(ZH_PLATFORM_LINUX)
+    set(ZH_PORTABLE_CMAKE "" CACHE FILEPATH "A Linux CMake (3.29+, Kitware's release) for linux_portable_check's container build (P3)")
+    add_test(NAME linux_portable_check
+             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_linux_portable.sh ${CMAKE_BINARY_DIR})
+    set(_zh_portable_env "ZH_PORTABLE_CMAKE=${ZH_PORTABLE_CMAKE}")
+    if(ZH_GAME_DATA)
+      list(APPEND _zh_portable_env "ZH_DATA_DIR=${ZH_GAME_DATA}")
+    endif()
+    set_tests_properties(linux_portable_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 7200 ENVIRONMENT "${_zh_portable_env}")
+  endif()
+
   # P1 step 1: the fork's overlay as a read root gives the game what Windows' one folder gives it - the
   # EXE CRC, the INI CRC and the world state agree between the two layouts - with two armed controls.
   add_test(NAME overlay_crc_check

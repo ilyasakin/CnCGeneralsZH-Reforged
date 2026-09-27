@@ -62,35 +62,17 @@ REPO="$(cd "$CODE/../.." && pwd)"
 TABLE="$CODE/Tools/macos-app-licenses.txt"
 
 # ---- the link line against the licence table ----------------------------------------------------------
+. "$CODE/Tools/package-common.sh"		# the link-line reader, the licence entries and the HUD check, shared with P3
 LIBPATHS="$(mktemp "${TMPDIR:-/tmp}/zh-link-libs.XXXXXX")"
 trap 'rm -f -- "$LIBPATHS"' EXIT
-linked="$(python3 - "$NINJA" "$LIBPATHS" <<'LINK_EOF'
-import re, sys
-text = open(sys.argv[1]).read()
-m = re.search(r"^build generals: CXX_EXECUTABLE_LINKER.*?\n  LINK_LIBRARIES = (.*?)\n", text, re.S | re.M)
-if not m:
-    sys.exit("no generals link line in " + sys.argv[1])
-names = sorted(set(re.findall(r"(?:^|[\s/])lib([\w\-+]+)\.a(?=\s|$)", m.group(1))))
-print("\n".join(names))
-with open(sys.argv[2], "w") as paths:		# the libraries themselves, for the minimum-macOS check
-    paths.write("\n".join(sorted(set(t for t in m.group(1).split() if t.endswith(".a")))) + "\n")
-LINK_EOF
-)" || fail "cannot read generals' link line from $NINJA"
+linked="$(package_link_libraries "$NINJA" "$LIBPATHS")" || fail "cannot read generals' link line from $NINJA"
 [ -n "$linked" ] || fail "generals' link line in $NINJA names no static library"
-unlicensed=""
-for lib in $linked; do
-	awk -v l="$lib" '$1 == l { found = 1 } END { exit !found }' "$TABLE" || unlicensed="$unlicensed $lib"
-done
-[ -z "$unlicensed" ] || fail "refused: generals links libraries macos-app-licenses.txt does not cover:$unlicensed"
-ENTRIES="$( { for lib in $linked; do awk -v l="$lib" '$1 == l { print $2 }' "$TABLE"; done; awk '$1 == "+" { print $2 }' "$TABLE"; } | sort -u)"
+ENTRIES="$(package_license_entries "$TABLE" $linked)" || fail "refused: generals links libraries macos-app-licenses.txt does not cover:$ENTRIES"
 
 # ---- the HUD directive, over what will be staged in --------------------------------------------------------
-hud_off='^[[:space:]]*ShowHudOverlay[[:space:]]*=[[:space:]]*(no|false|0)([^[:alnum:]]|$)'
 hud_check() {	# hud_check <dir>: fails naming the files that turn the HUD overlay off
-	# find -L walks every file, symbolic links followed (the staged overlay links its art): a recursive
-	# grep may not follow them, and which grep is first in PATH varies (ugrep's -r does not)
 	local found
-	found="$(find -L "$1" -type f -exec grep -a -i -l -E "$hud_off" -- {} + 2>/dev/null)"
+	found="$(hud_check_files "$1")"
 	[ -z "$found" ] || fail "refused: the HUD overlay must stay on (ShowHudOverlay = No in: $(printf '%s ' $found))"
 }
 hud_check "$OVERLAY"
@@ -232,38 +214,8 @@ done
 
 # the licences
 L="$C/Resources/Licenses"
-license_entry() {	# license_entry <entry>: copies that entry's files into Licenses/
-	local s="$CODE/Libraries/Source"
-	case "$1" in
-		game) cp "$REPO/LICENSE.md" "$L/Zero-Hour-Reforged-LICENSE.md";;
-		ffmpeg)
-			cp "$BUILD/ffmpeg/LICENSE.txt" "$L/FFmpeg-LICENSE.txt" || return 1
-			local v; v="$(awk -F= '/^version=/ {print $2; exit}' "$CODE/Tools/ffmpeg-build-posix.sh")"
-			printf '%s\n' "FFmpeg $v, statically linked under the LGPL version 2.1 or later." \
-				"Source: https://ffmpeg.org/releases/ffmpeg-$v.tar.xz, also kept in this game's repository at" \
-				"GeneralsMD/Code/Libraries/Source/FFmpeg/ffmpeg-$v.tar.xz, configured by" \
-				"GeneralsMD/Code/Tools/ffmpeg-build-posix.sh (its configure line is the build's)." \
-				"To relink the game against another FFmpeg, build it from this game's source:" \
-				"https://github.com/olcayseygan/CnCGeneralsZH-Reforged" > "$L/FFmpeg-SOURCE.txt";;
-		sdl3) cp "$s/SDL3/LICENSE.txt" "$L/SDL3-LICENSE.txt";;
-		shadercross) cp "$s/SDL_shadercross/LICENSE.txt" "$L/SDL_shadercross-LICENSE.txt";;
-		freetype)
-			cp "$s/freetype/LICENSE.TXT" "$L/FreeType-LICENSE.txt" && cp "$s/freetype/docs/FTL.TXT" "$L/FreeType-FTL.txt";;
-		glslang) cp "$s/glslang/LICENSE.txt" "$L/glslang-LICENSE.txt";;
-		spirv-cross) cp "$s/SPIRV-Cross/LICENSE" "$L/SPIRV-Cross-LICENSE.txt";;
-		litehtml) cp "$s/litehtml/LICENSE" "$L/litehtml-LICENSE.txt";;
-		gumbo) cp "$s/litehtml/src/gumbo/LICENSE" "$L/gumbo-LICENSE.txt";;
-		miniaudio) cp "$s/miniaudio/LICENSE" "$L/miniaudio-LICENSE.txt";;
-		gamespy) cp "$s/GameSpy/LICENSE" "$L/GameSpy-LICENSE.txt";;
-		zlib)		# zlib's licence is the comment that opens zlib.h
-			awk 'NR == 1 && !/^\/\*/ { exit 1 } { print } /\*\// { exit }' "$s/Compression/ZLib/zlib.h" > "$L/zlib-LICENSE.txt" &&
-			grep -q "This notice may not be removed" "$L/zlib-LICENSE.txt";;
-		nanosvg) cp "$s/nanosvg/LICENSE.txt" "$L/nanosvg-LICENSE.txt";;
-		*) echo "no license_entry named $1" >&2; return 1;;
-	esac
-}
 for e in $ENTRIES; do
-	license_entry "$e" || fail "cannot write the licence entry '$e'"
+	license_entry "$e" "$L" || fail "cannot write the licence entry '$e'"
 done
 
 # the directive once more, over the finished contents (the clones included)

@@ -2703,6 +2703,7 @@ Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
 Tests/test_lan_broadcast.cpp
+Tests/test_linux_portable.sh
 Tests/test_macos_app.sh
 Tests/test_main.cpp
 Tests/test_miles_miniaudio.cpp
@@ -3562,6 +3563,7 @@ Tools/gentrigtables.py
 Tools/include_case_check.py
 Tools/install-guard.sh
 Tools/linux-check.sh
+Tools/linux-portable.sh
 Tools/lobbyroom_layout.py
 Tools/lobbysettings_layout.py
 Tools/lod-first-run-check.sh
@@ -3684,6 +3686,7 @@ Tools/net-check.sh
 Tools/net_check.py
 Tools/optionsmenu_layout.py
 Tools/overlay-crc-check.sh
+Tools/package-common.sh
 Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
 Tools/pink_laser.py
