@@ -22,6 +22,7 @@
 
 #include "GameClient/Display.h"
 #include "GameClient/IMEManagerPosix.h"
+#include "SdlDevice/GameClient/SdlGamepad.h"
 #include "SdlDevice/GameClient/SdlInput.h"
 #include "SdlDevice/GameClient/SdlKeyTable.h"
 #include "SdlDevice/GameClient/SdlKeyboard.h"
@@ -209,6 +210,6 @@ Bool SdlInput_dispatch( const SDL_Event &event )
 			return TRUE;		// SdlMouse::update asks SDL's mouse focus each frame, as Win32Mouse asks Windows
 
 		default:
-			return FALSE;
+			return SdlGamepad_dispatch( event );		// a gamepad's, or nothing of input's (G1)
 	}
 }

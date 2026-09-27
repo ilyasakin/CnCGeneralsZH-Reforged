@@ -27,6 +27,7 @@
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
+#include "SdlDevice/GameClient/SdlGamepad.h"
 #include "SdlDevice/GameClient/SdlInput.h"
 #include "SdlDevice/GameClient/SdlMouse.h"
 #include "W3DDevice/GameClient/W3DGameClient.h"
@@ -182,6 +183,7 @@ void SdlGameEngine::createWindow( void )
 	}
 	m_sdlVideoStarted = TRUE;
 	ThePlatformDisplays = &TheSdlDisplays;		// Monitors.h answers from SDL's displays from here on
+	SdlGamepad_start();		// G1: gamepads, only for a game with a window; without them it runs on as before
 
 	SDL_WindowFlags flags = 0;
 	if (!m_request.windowed)
@@ -266,6 +268,7 @@ void SdlGameEngine::startOffscreen( void )
 
 void SdlGameEngine_releaseWindow( void )
 {
+	SdlGamepad_stop();		// lets go of what the pads hold, while the keyboard and mouse still take it
 	if (s_pendingWindow != NULL)
 	{
 		if (s_titledWindow == s_pendingWindow)
@@ -324,13 +327,15 @@ void SdlGameEngine::serviceWindowsOS( void )
 
 			case SDL_EVENT_WINDOW_FOCUS_LOST:
 				setIsActive( FALSE );
+				SdlGamepad_releaseAll();		// SDL lets the keys go; the keys and buttons a pad holds go too
 				break;
 
 			default:
-				SdlInput_dispatch( event );		// keys, text and the mouse (C3): SdlInput.h
+				SdlInput_dispatch( event );		// keys, text, the mouse (C3) and gamepads (G1): SdlInput.h
 				break;
 		}
 	}
+	SdlGamepad_update( (UnsignedInt)SDL_GetTicks() );		// the triggers and the right stick, once a frame
 }
 
 // Win32GameEngine's factories, the same W3D classes (decision 8); the radar too: W3DRadar, and

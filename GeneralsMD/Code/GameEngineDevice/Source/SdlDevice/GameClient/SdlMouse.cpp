@@ -71,6 +71,7 @@ SdlMouse::SdlMouse( void )
 	memset( &m_eventBuffer, 0, sizeof( m_eventBuffer ) );
 	m_nextFreeIndex = 0;
 	m_nextGetIndex = 0;
+	m_lastEventX = m_lastEventY = 0;
 	m_currentSdlCursor = NONE;
 	m_directionFrame = 0;		// points up
 	m_lostFocus = FALSE;
@@ -183,6 +184,8 @@ void SdlMouse::addEvent( EventKind kind, Int x, Int y, Button button, Int clicks
 	if (kind == EVENT_NONE || m_eventBuffer[ m_nextFreeIndex ].kind != EVENT_NONE)
 		return;
 	m_positionReported = TRUE;
+	m_lastEventX = x;
+	m_lastEventY = y;
 	SdlMouseEvent &slot = m_eventBuffer[ m_nextFreeIndex ];
 	slot.kind = kind;
 	slot.x = x;
@@ -194,6 +197,19 @@ void SdlMouse::addEvent( EventKind kind, Int x, Int y, Button button, Int clicks
 	m_nextFreeIndex++;
 	if (m_nextFreeIndex >= Mouse::NUM_MOUSE_EVENTS)
 		m_nextFreeIndex = 0;
+}
+
+void SdlMouse::getPointerPosition( Int &x, Int &y ) const
+{
+	if (m_positionReported)
+	{
+		x = m_lastEventX;
+		y = m_lastEventY;
+		return;
+	}
+	float wx = 0, wy = 0;
+	SDL_GetMouseState( &wx, &wy );
+	SdlInput_toGamePixels( wx, wy, x, y );
 }
 
 UnsignedByte SdlMouse::getMouseEvent( MouseIO *result, Bool flush )

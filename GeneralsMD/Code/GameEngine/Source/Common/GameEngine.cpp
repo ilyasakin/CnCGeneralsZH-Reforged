@@ -115,6 +115,7 @@
 #include "GameClient/Water.h"
 #include "GameClient/TerrainRoads.h"
 #include "GameClient/MetaEvent.h"
+#include "GameClient/GamepadMap.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GlobalLanguage.h"
@@ -1275,6 +1276,10 @@ void GameEngine::init( int argc, char *argv[] )
 
 		// Modern with W A S D on the camera: everything Modern binds above, and the keys that moves
 		TheMetaMap->loadWasdBindings("Data\\INI\\CommandMapWASD.ini");
+
+		// A gamepad's buttons, bound to the mouse's buttons and to keys the maps above already bind (G1,
+		// GamepadMap.h).  No CRC, as the command maps have none.
+		initSubsystem(TheGamepadMap,"TheGamepadMap", MSGNEW("GameEngineSubsystem") GamepadMap(), NULL, NULL, "Data\\INI\\GamepadReforged.ini");
 
 
 		initSubsystem(TheActionManager,"TheActionManager", MSGNEW("GameEngineSubsystem") ActionManager(), NULL);

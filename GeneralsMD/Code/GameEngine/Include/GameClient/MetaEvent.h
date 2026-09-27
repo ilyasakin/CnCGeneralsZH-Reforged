@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -364,6 +365,7 @@ public:
 class MetaMap : public SubsystemInterface
 {
 	friend class MetaEventTranslator;
+	friend class GamepadMap;		///< G1: a binding names a command by the maps' own names
 
 private:
 	/// one list of bindings per InputSchemeType, and a third for Modern with W A S D on the camera

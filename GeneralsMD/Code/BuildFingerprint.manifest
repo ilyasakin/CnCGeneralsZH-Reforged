@@ -29,6 +29,7 @@ Data/INI/CommandMapWASD.ini
 Data/INI/CommandSetReforged.ini
 Data/INI/FXListReforged.ini
 Data/INI/FixesReforged.ini
+Data/INI/GamepadReforged.ini
 Data/INI/ObjectCreationListReforged.ini
 Data/INI/ParticleSystemReforged.ini
 Data/INI/ScienceReforged.ini
@@ -311,6 +312,7 @@ GameEngine/Include/GameClient/GameWindowGlobal.h
 GameEngine/Include/GameClient/GameWindowID.h
 GameEngine/Include/GameClient/GameWindowManager.h
 GameEngine/Include/GameClient/GameWindowTransitions.h
+GameEngine/Include/GameClient/GamepadMap.h
 GameEngine/Include/GameClient/GlobalLanguage.h
 GameEngine/Include/GameClient/GraphDraw.h
 GameEngine/Include/GameClient/HeaderTemplate.h
@@ -964,6 +966,7 @@ GameEngine/Source/GameClient/GraphDraw.cpp
 GameEngine/Source/GameClient/HtmlOverlay.cpp
 GameEngine/Source/GameClient/HtmlTemplate.cpp
 GameEngine/Source/GameClient/InGameUI.cpp
+GameEngine/Source/GameClient/Input/GamepadMap.cpp
 GameEngine/Source/GameClient/Input/Keyboard.cpp
 GameEngine/Source/GameClient/Input/Mouse.cpp
 GameEngine/Source/GameClient/LanguageFilter.cpp
@@ -1334,6 +1337,7 @@ GameEngineDevice/Include/SdlDevice/Common/SdlDisplays.h
 GameEngineDevice/Include/SdlDevice/Common/SdlGameEngine.h
 GameEngineDevice/Include/SdlDevice/Common/SdlMessageBox.h
 GameEngineDevice/Include/SdlDevice/GameClient/AniCursor.h
+GameEngineDevice/Include/SdlDevice/GameClient/SdlGamepad.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlInput.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyTable.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyboard.h
@@ -1470,6 +1474,7 @@ GameEngineDevice/Source/SdlDevice/Common/SdlDisplays.cpp
 GameEngineDevice/Source/SdlDevice/Common/SdlGameEngine.cpp
 GameEngineDevice/Source/SdlDevice/Common/SdlMessageBox.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/AniCursor.cpp
+GameEngineDevice/Source/SdlDevice/GameClient/SdlGamepad.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlInput.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyTable.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyboard.cpp
@@ -2723,6 +2728,7 @@ Tests/test_production_input.inc
 Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
 Tests/test_road_buffer.cpp
+Tests/test_sdl_gamepad.cpp
 Tests/test_sdl_gpu_frame.cpp
 Tests/test_sdl_input.cpp
 Tests/test_sdl_pipeline_state.cpp
