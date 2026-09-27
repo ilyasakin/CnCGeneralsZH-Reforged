@@ -1998,6 +1998,9 @@ target_include_directories(test_msvc_float_casts PRIVATE ${CMAKE_CURRENT_SOURCE_
 
 add_lib_test(test_wwmath wwmath wwlib wwsaveload wwdebug)
 target_include_directories(test_wwmath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
+# R1, smooth motion: W3DSmoothMotion.h's blend and verdicts, header-only over WWMath.
+add_lib_test(test_smooth_motion wwmath wwlib wwdebug)
+target_include_directories(test_smooth_motion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include ${WW}/WWLib)
 
 add_lib_test(test_wwlib wwlib wwmath wwsaveload wwdebug)
 target_include_directories(test_wwlib PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWSaveLoad ${WW}/Wwutil)
