@@ -175,20 +175,44 @@ int main( void )
 		}
 	}
 
-	// ---- truncation: the header's contract, MSVC's sign
+	// ---- truncation: MSVC's contract - every unit written, none of them a terminator, and negative.
+	//      Measured on Windows (W2): _vsnwprintf filled all 8 and wrote no terminator, where this test
+	//      used to expect 7 and a terminator.  Compared unit by unit; a guard unit catches a write past.
 	{
-		WideChar out[ 8 ];
+		WideChar out[ 9 ];
+		out[ 8 ] = (WideChar)0x2A2A;
 		const Int result = WideCharFormat( out, 8, W( "%s" ), (const WideChar *)turkish );
-		expect( __LINE__, out, result, "OYUN SE", -1 );		// what fitted, terminated, and negative
+		const W want( "OYUN SE{00C7}" );
+		bool same = result == -1 && out[ 8 ] == (WideChar)0x2A2A;
+		for (int i = 0; same && i < 8; ++i)
+			same = out[ i ] == want.units[ i ];
+		printf( "golden\t%d\t%d\t(8 units, unterminated)\n", __LINE__, (int)result );
+		if (!same)
+		{
+			printf( "FAIL line %d: truncation is not MSVC's 8 units of \"OYUN SE{00C7}\", unterminated, and -1 (got %d)\n",
+				__LINE__, (int)result );
+			++failures;
+		}
 	}
 
 #if !defined(_WIN32)
 	// ---- the two cases where this deliberately differs from, or refuses more than, MSVC
 	{
-		// Exactly outCount units: MSVC writes them unterminated; off Windows it is truncation.
-		WideChar out[ 5 ];
+		// Exactly outCount units: MSVC writes them unterminated and returns 5; off Windows the same
+		// five units, and truncation's sign (-1).  Compared unit by unit, a guard catching a write past.
+		WideChar out[ 6 ];
+		out[ 5 ] = (WideChar)0x2A2A;
 		const Int result = WideCharFormat( out, 5, W( "abcde" ), 0 );
-		expect( __LINE__, out, result, "abcd", -1 );
+		const W want( "abcde" );
+		bool same = result == -1 && out[ 5 ] == (WideChar)0x2A2A;
+		for (int i = 0; same && i < 5; ++i)
+			same = out[ i ] == want.units[ i ];
+		if (!same)
+		{
+			printf( "FAIL line %d: an exact fit is not five units of \"abcde\", unterminated, and -1 (got %d)\n",
+				__LINE__, (int)result );
+			++failures;
+		}
 	}
 	{
 		int ignored = 0;

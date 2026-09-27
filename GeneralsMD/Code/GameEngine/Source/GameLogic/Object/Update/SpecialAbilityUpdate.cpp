@@ -772,7 +772,7 @@ void SpecialAbilityUpdate::startPacking(Bool success)
   const SpecialAbilityUpdateModuleData* data = getSpecialAbilityUpdateModuleData();
   m_packingState = STATE_PACKING;
   Real variation = GameLogicRandomValueReal( 1.0f - data->m_packUnpackVariationFactor, 1.0f + data->m_packUnpackVariationFactor );
-  m_animFrames = data->m_packTime * variation;
+  m_animFrames = floatToUnsignedAsMsvc(data->m_packTime * variation);	// S8: a variation factor over 1 can make it negative
 
   //Set the animation state
   getObject()->clearAndSetModelConditionFlags( 
@@ -825,7 +825,7 @@ void SpecialAbilityUpdate::startUnpacking()
   const SpecialAbilityUpdateModuleData* data = getSpecialAbilityUpdateModuleData();
   m_packingState = STATE_UNPACKING;
   Real variation = GameLogicRandomValueReal( 1.0f - data->m_packUnpackVariationFactor, 1.0f + data->m_packUnpackVariationFactor );
-  m_animFrames = data->m_unpackTime * variation;
+  m_animFrames = floatToUnsignedAsMsvc(data->m_unpackTime * variation);	// S8
 
   //Set the animation state
   getObject()->clearAndSetModelConditionFlags( 

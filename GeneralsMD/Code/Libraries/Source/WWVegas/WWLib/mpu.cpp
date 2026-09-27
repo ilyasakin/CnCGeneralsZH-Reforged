@@ -230,7 +230,10 @@ int Get_RDTSC_CPU_Speed(void)
 
 		total = ( freq + freq2 + freq3 );		// Total last three frequency calcs
 
-	} while ( (tries < 3 ) || (tries < 20) && ((abs(3 * freq -total) > 3*TOLERANCE )|| (abs(3 * freq2-total) > 3*TOLERANCE )|| (abs(3 * freq3-total) > 3*TOLERANCE )));
+	// abs of an int, as this always was: DWORD is unsigned long, and once <stdlib.h>'s C++ overloads
+	// (long, long long) are declared, as Platform/MSVCCompat.h now has them, MSVC finds abs(unsigned long)
+	// ambiguous (W2).  int and long are both 32 bits on Windows, so either overload gave these bits.
+	} while ( (tries < 3 ) || (tries < 20) && ((abs((int)(3 * freq -total)) > 3*TOLERANCE )|| (abs((int)(3 * freq2-total)) > 3*TOLERANCE )|| (abs((int)(3 * freq3-total)) > 3*TOLERANCE )));
 
 	SetThreadPriority(thread, threadPri);
 	SetPriorityClass(process, processPri);

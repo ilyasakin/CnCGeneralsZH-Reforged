@@ -2618,9 +2618,12 @@ Tests/d3dx_golden.h
 Tests/d3dx_oracle/d3dx_oracle.cpp
 Tests/d3dx_oracle/run_d3dx_oracle.sh
 Tests/d3dx_sweep.h
+Tests/ffreference/ffcapture.cpp
+Tests/ffreference/ffcapture.h
 Tests/ffreference/ffdecl_captures.cpp
 Tests/ffreference/ffprogram.cpp
 Tests/ffreference/ffprogram.h
+Tests/ffreference/ffref_judge.cpp
 Tests/ffreference/ffreference.cpp
 Tests/ffreference/ffreference.h
 Tests/ffshader_dump.cpp
