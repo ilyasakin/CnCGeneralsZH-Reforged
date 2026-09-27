@@ -459,6 +459,30 @@ static void scenarios_raster(Harness &h)
 	h.draw(D3DFVF_XYZ | D3DFVF_DIFFUSE, D3DPT_TRIANGLELIST, grid(6, -3, 3, -2, 1.5f, 3, 12, 0));
 	h.check("transformed grid, depth");
 
+	// No depth-stencil surface bound (a capture's DepthBound = 0): D3D9 then draws without depth or stencil,
+	// whatever ZENABLE says.  The device keeps ZENABLE on with GREATER, which nothing passes against the
+	// cleared 1.0, so any depth test draws nothing - in either draw, and in a replay of the first draw alone
+	// (the capture keeps one per signature).  The far quad goes over the near one, as it would without depth.
+	// The reference is told what D3D9 does.
+	h.begin(0xFF000000);
+	h.rs(D3DRS_LIGHTING, 0);
+	IDirect3DSurface9 *depth_surface = NULL;
+	h.Device->GetDepthStencilSurface(&depth_surface);
+	h.Device->SetDepthStencilSurface(NULL);
+	h.Device->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE);
+	h.Device->SetRenderState(D3DRS_ZWRITEENABLE, 1);
+	h.Device->SetRenderState(D3DRS_ZFUNC, D3DCMP_GREATER);
+	h.State.renderState[D3DRS_ZENABLE] = D3DZB_FALSE;
+	h.State.renderState[D3DRS_ZWRITEENABLE] = 0;
+	h.State.renderState[D3DRS_STENCILENABLE] = 0;
+	std::vector<V> near_quad = screen_quad(6, 6, 42, 42, CORNERS), far_quad = screen_quad(22, 22, 58, 58, CORNERS);
+	for (size_t k = 0; k < near_quad.size(); ++k) { near_quad[k].pos[2] = 0.2f; far_quad[k].pos[2] = 0.8f; far_quad[k].diffuse = 0xFF30C0A0; }
+	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE, D3DPT_TRIANGLELIST, near_quad);
+	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE, D3DPT_TRIANGLELIST, far_quad);
+	h.check("no depth surface: depth off whatever ZENABLE says");
+	h.Device->SetDepthStencilSurface(depth_surface);
+	if (depth_surface != NULL) depth_surface->Release();
+
 	h.begin(0xFF000000);
 	h.rs(D3DRS_LIGHTING, 0);
 	h.rs(D3DRS_SHADEMODE, D3DSHADE_FLAT);
@@ -620,7 +644,9 @@ static void scenarios_cascade(Harness &h)
 	h.begin(0xFF000000);
 	h.rs(D3DRS_SPECULARENABLE, 1);
 	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE, D3DPT_TRIANGLELIST, screen_quad(4, 4, 60, 60, CORNERS));
-	h.check("specular add, no vertex specular (N7)", false, "F7: an absent specular (N7)");
+	// F7, settled by Windows' own D3D9 (WARP, HAL and REF, a contributor): an absent vertex specular reads as
+	// 0x00000000, so SPECULARENABLE adds nothing.  FFReference's N7 says so now; an ordinary check again.
+	h.check("specular add, no vertex specular (N7)");
 }
 
 static void scenarios_lighting(Harness &h)

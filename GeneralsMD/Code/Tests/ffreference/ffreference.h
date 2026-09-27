@@ -65,8 +65,12 @@
  *       state does not calculate specular highlights"); without it the lit specular's RGB is 0.  With
  *       it, it is added after the cascade (D3DRENDERSTATETYPE: "added to the base color after the
  *       texture cascade but before alpha blending"), RGB only, saturated.
- *   N7  An absent vertex diffuse or specular is 0xFFFFFFFF, as D3DTA writes for both.  (A reading of
- *       0 for specular was suggested; the page says 0xffffffff, so a disagreement is a finding.)
+ *   N7  An absent vertex diffuse is 0xFFFFFFFF, as D3DTA writes; an absent vertex SPECULAR is 0x00000000,
+ *       RGB and alpha - MEASURED, not read: D3DTA writes 0xffffffff for both, but Windows' own Direct3D 9
+ *       (the Microsoft Basic Render Driver, WARP, d3d10warp.dll 10.0.26100.5074, as a HAL device and as
+ *       REF, 2026-09-27; docs/mac-port/tasks/L2-vulkan-recon.md, "F7 settled") reads an absent specular as
+ *       black with alpha 0 through D3DTA_SPECULAR, adds nothing with SPECULARENABLE, and reads an absent
+ *       diffuse as white.  This was the device's reading (finding F7); the measurement is the authority.
  *       COLORVERTEX with a material source naming a colour the vertex lacks uses the material's.
  *   N8  Vertex fog distance is |z| in camera space, or the camera-space distance with RANGEFOGENABLE.
  *       Table fog wins over vertex fog when both are set.  Table fog uses w (eye distance) unless the

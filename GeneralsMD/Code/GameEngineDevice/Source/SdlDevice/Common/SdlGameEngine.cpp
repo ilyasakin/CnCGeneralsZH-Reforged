@@ -28,6 +28,7 @@
 #include "SdlDevice/Common/SdlGameEngine.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
 #include "SdlDevice/GameClient/SdlInput.h"
+#include "SdlDevice/GameClient/SdlMouse.h"
 #include "W3DDevice/GameClient/W3DGameClient.h"
 #include "PosixDevice/Common/PosixFileResolutionDump.h"
 #include "MilesAudioDevice/MilesAudioManager.h"
@@ -118,9 +119,21 @@ SdlGameEngine::SdlGameEngine( const WindowRequest &request )
 	m_sdlVideoStarted = FALSE;
 }
 
+/* The window and SDL's video outlive the engine, as WinMain's window outlives GameMain: the engine's own
+	 teardown (the base class's, which runs after this) still releases the device, and the GPU device made
+	 on SDL's video must go before the video does.  Under Vulkan, quitting the video unloads the Vulkan
+	 library, and the device's destroy then called into it (the Linux x86_64 host, -offscreen, 2026-09-27).  So the
+	 window is handed on here, and SdlGameEngine_releaseWindow, which PosixMain calls after GameMain,
+	 releases it. */
+static SDL_Window *s_pendingWindow = NULL;
+static Bool s_pendingVideo = FALSE;
+
 SdlGameEngine::~SdlGameEngine()
 {
-	destroyWindow();
+	s_pendingWindow = m_window;
+	s_pendingVideo = m_sdlVideoStarted;
+	m_window = NULL;
+	m_sdlVideoStarted = FALSE;
 }
 
 // The window exists before the engine starts, as WinMain creates it before GameMain: GameText names it
@@ -211,9 +224,13 @@ void SdlGameEngine::createWindow( void )
 
 /* -offscreen (PosixMain.cpp): SDL's video runs, because SDL3 makes no GPU device without it, but no window
 	 is made, and the device draws every frame into its own target.  The display's own video driver first;
-	 where it has no display to add (no window server: a worker over ssh, CI), SDL's dummy driver, with
-	 ZH_SDL_GPU_METAL_WINDOWLESS for the Metal backend, which otherwise wants a view the dummy driver cannot
-	 make (Libraries/Source/sdl3-metal-windowless.patch).  The hint ZH_OFFSCREEN_FRAMES tells the device (a
+	 where it has no display to add (no window server: a worker over ssh, CI), a driver with no display:
+	   - on Apple, SDL's dummy driver, with ZH_SDL_GPU_METAL_WINDOWLESS for the Metal backend, which otherwise
+	     wants a view the dummy driver cannot make (Libraries/Source/sdl3-metal-windowless.patch);
+	   - elsewhere, SDL's offscreen driver, which gives Vulkan a headless surface (VK_EXT_headless_surface)
+	     with no patch.  The dummy driver has no Vulkan surface, and SDL's Vulkan backend refuses it (a contributor's
+	     L2 recon, docs/mac-port/tasks/L2-vulkan-recon.md).
+	 The hint ZH_OFFSCREEN_FRAMES tells the device (a
 	 hint, not ZH_OFFSCREEN itself: the device must not act on the variable when -headless starts no video).
 	 Monitors.h keeps its no-display answers, as
 	 -headless has them, so a run sizes itself from -xres/-yres and Options.ini alone, whatever the host. */
@@ -223,17 +240,22 @@ void SdlGameEngine::startOffscreen( void )
 	SDL_SetHint( "ZH_SDL_GPU_METAL_WINDOWLESS", "1" );
 	// With a window server, the cocoa driver would make the process a Dock application with no window.
 	SDL_SetHint( SDL_HINT_MAC_BACKGROUND_APP, "1" );
+#if defined(__APPLE__)
+	static const char *const NO_DISPLAY_DRIVER = "dummy";
+#else
+	static const char *const NO_DISPLAY_DRIVER = "offscreen";
+#endif
 	const char *driver = "the display's";
 	if (!SDL_Init( SDL_INIT_VIDEO ))
 	{
 		const AsciiString first = SDL_GetError();
-		SDL_SetHint( SDL_HINT_VIDEO_DRIVER, "dummy" );
-		driver = "dummy";
+		SDL_SetHint( SDL_HINT_VIDEO_DRIVER, NO_DISPLAY_DRIVER );
+		driver = NO_DISPLAY_DRIVER;
 		if (!SDL_Init( SDL_INIT_VIDEO ))
 		{
 			char why[ 512 ];
 			snprintf( why, sizeof( why ), "SDL could not start its video subsystem for -offscreen: %s (then, with the "
-				"dummy driver: %s)", first.str(), SDL_GetError() );
+				"%s driver: %s)", first.str(), NO_DISPLAY_DRIVER, SDL_GetError() );
 			RELEASE_CRASH( why );
 			return;
 		}
@@ -242,28 +264,29 @@ void SdlGameEngine::startOffscreen( void )
 	DEBUG_LOG(( "SdlGameEngine: offscreen, no window; SDL video driver %s (%s)\n", SDL_GetCurrentVideoDriver(), driver ));
 }
 
-void SdlGameEngine::destroyWindow( void )
+void SdlGameEngine_releaseWindow( void )
 {
-	if (m_window != NULL)
+	if (s_pendingWindow != NULL)
 	{
-		if (s_titledWindow == m_window)
+		if (s_titledWindow == s_pendingWindow)
 		{
 			TheApplicationWindowTitleHook = NULL;
 			TheW3DWindowFrameHook = NULL;
 			TheW3DWindowSizeHook = NULL;
 			s_titledWindow = NULL;
 		}
-		if (ApplicationHWnd == (RenderWindow)m_window)
+		if (ApplicationHWnd == (RenderWindow)s_pendingWindow)
 			ApplicationHWnd = NULL;
 		setSdlMessageBoxOwner( NULL );
-		SDL_DestroyWindow( m_window );
-		m_window = NULL;
+		SDL_DestroyWindow( s_pendingWindow );
+		s_pendingWindow = NULL;
 	}
-	if (m_sdlVideoStarted)
+	if (s_pendingVideo)
 	{
 		ThePlatformDisplays = NULL;
+		SdlMouse_releaseCursors();		// before SDL_QuitMouse walks its list: SdlMouse.h says why
 		SDL_QuitSubSystem( SDL_INIT_VIDEO );
-		m_sdlVideoStarted = FALSE;
+		s_pendingVideo = FALSE;
 	}
 }
 
