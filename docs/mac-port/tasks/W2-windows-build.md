@@ -124,4 +124,33 @@ fix is identical on Windows or test-only.
   build without the fix shows it.
 - **`_strdup(NULL)` (#31):** the UCRT is taken to return NULL. Measure it.
 - **MSVC float→uint32 (S8):** the conversions `Platform/MsvcFloatCasts.h` models, against cl's own code.
-- **`ZH_GAME_DATA` on the Windows configure:** the two data tests.
+## Measured since (2026-09-27)
+
+- **`ZH_GAME_DATA` on the Windows configure** (`-DZH_GAME_DATA=C:/zhr-worker/data`, with the base game's
+  `generals/` copied too and hash-verified, 712 entries). Both data tests pass on Windows:
+  - `gametext_csf`: its golden hash of the `.csf`'s strings, written "for a Windows run to diff", matches.
+  - `test_terrain_golden`: the terrain golden made off Windows matches.
+  The data copy was unchanged after both.
+- **#32's outcome under MSVC:** the Hovercraft mission on a build without the fix crashed at the end of the
+  match ("Pure virtual function called"; EA's debug library then showed its "Game crash" box, which under
+  `-headless` now writes to stderr instead of waiting). With the fix, it exits 0 at frame 600 (CRC
+  0xF4096AF7).
+- **`_strdup(NULL)` (#31):** `test_msvc_float_casts` calls the UCRT's `_strdup(NULL)` through
+  `strdupAsWindows` on Windows and passes: NULL.
+- **MSVC's float conversions (S8):**
+  - `(unsigned)` is the low 32 bits of a 64-bit truncation.
+  - `(unsigned short)` is the low 16 bits of the 32-bit one.
+  - `(unsigned char)` is the low byte of the 32-bit one.
+  - `(int)` is INT_MIN for NaN, the infinities and anything out of range.
+  All four are measured over 16 to 20 edge values each and are now the helpers in `Platform/MsvcFloatCasts.h`.
+
+- **The game's data gone, on Windows: measured.** The two window archives were copied to an exFAT VHD
+  (`diskpart`, `Z:`) and the farm's two links pointed there. A headless skirmish ran in the desktop session,
+  and the VHD was detached (`detach vdisk`) at logic frame 2400. The game ran to its limit and stopped at
+  the first archive read after it, with **exit status 3** and "GAME DATA GONE: … (WindowZH.big could not be
+  read) …", as on the Mac. So the Windows error a removed volume gives is one of the four `LocalFile.cpp`
+  names. Which of them is not logged. The farm was restored and the VHD deleted.
+  - Two earlier tries measured nothing:
+    - a `Start-Process` argument split on the spaces in the map name, so the match never started;
+    - the detach poller read a stale log and detached before the game began.
+  - This run made each step a separate call and deleted the old log first.

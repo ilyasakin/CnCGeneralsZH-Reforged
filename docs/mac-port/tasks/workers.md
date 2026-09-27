@@ -127,7 +127,7 @@ deleted. The data copy's hash was unchanged. Undo: `Remove-Item -Recurse C:\zhr-
 |---|---|---|---|
 | the work folder | `C:\zhr-worker` | `New-Item` (-18) | `Remove-Item -Recurse -Force C:\zhr-worker` removes everything below |
 | the repository | `C:\zhr-worker\repo` (`core.autocrlf true`), from `fmp.bundle` and `w2.bundle`; its `build64` and the ignored `build.local.bat` naming VS's CMake 3.31.6 | `scp`, `git clone`, `build.bat` (-18) | in the folder |
-| the game data and art copies | `C:\zhr-worker\data\zerohour` (2.9 GB), `C:\zhr-worker\art` (1.6 GB), hash-verified against thinkerer's | `scp -3` through the Mac (-18) | in the folder |
+| the game data and art copies | `C:\zhr-worker\data\zerohour` (2.9 GB), `C:\zhr-worker\data\generals` (1.7 GB), `C:\zhr-worker\art` (1.6 GB), hash-verified against thinkerer's; `build64` configured with `ZH_GAME_DATA=C:/zhr-worker/data` | `scp -3` through the Mac (-18) | in the folder |
 | the farm | `C:\zhr-worker\farm`: symbolic links to the data and the Run folder, copies of the exe and DLLs | `farm.ps1` (-18) | in the folder |
 | scripts, logs, bundles, hash listings | `C:\zhr-worker\*.ps1`, `*.log`, `*.txt`, `*.bundle`, `hashtree.py`, `C:\Users\zhr\recon18.ps1` | `scp` (-18) | in the folder; `recon18.ps1` by hand |
 | ATL for VS 2022 Build Tools | component `Microsoft.VisualStudio.Component.VC.ATL` | `setup.exe modify --add` (-18) | `setup.exe modify --installPath "<BuildTools>" --remove Microsoft.VisualStudio.Component.VC.ATL --quiet` |
@@ -137,4 +137,9 @@ deleted. The data copy's hash was unchanged. Undo: `Remove-Item -Recurse C:\zhr-
 | one-off scheduled tasks `zhr18desk`, `zhr18desk2` | Task Scheduler | `schtasks /create /it` (-18) | already deleted after each run |
 
 On thinkerer, for W2: `~/zhr-worker/tmp18` (hash listings, the VM's host key in a known-hosts file of its
-own, a copy of build-47's `generals`, `playwin.sh`, the Windows replay). Undo: `rm -rf ~/zhr-worker/tmp18`.
+own, a copy of build-47's `generals`, `playwin.sh`, the Windows replay, the bundles). Undo: `rm -rf ~/zhr-worker/tmp18`.
+Also on thinkerer, for #32's armed control and the final W2 check (turns agreed with -47): the worktree
+`~/zhr-worker/wt-18` (vendor and art copied in with `cp --reflink=auto`) and the build `~/zhr-worker/build-18`,
+with its logs `~/zhr-worker/build-18.*.log`. Undo: `git -C ~/zhr-worker/repo worktree remove --force
+~/zhr-worker/wt-18; rm -rf ~/zhr-worker/build-18 ~/zhr-worker/build-18.*.log`. The one core dump it made (the
+#32 mutant's SIGSEGV, pid 3917314) was removed from `/var/lib/systemd/coredump` with `sudo rm` straight after.

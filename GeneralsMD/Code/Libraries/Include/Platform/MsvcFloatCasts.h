@@ -34,10 +34,11 @@
 // is there to catch.
 //
 // Each function here is that MSVC result, computed with defined operations only, so every platform
-// gets the Windows answer and Windows gets the answer it always had.  The MSVC lowering is the
-// documented cvttss2si behaviour; it has not been measured on a Windows machine by this project
-// (WINDOWS-DEBT.md has the row).  One spelling for the whole tree: a float-to-unsigned site that the
-// ARM64 sweep finds uses these, not a local double cast.
+// gets the Windows answer and Windows gets the answer it always had.  Measured on Windows 11 with
+// MSVC 19.44 x64 (W2, docs/mac-port/tasks/W2-windows-build.md): test_msvc_float_casts compares MSVC's
+// own casts with these on Windows and passes, and a probe over sixteen to twenty edge values (the
+// int, uint16 and uint32 edges, +-1e20, the infinities and NaN) matched every one.  One spelling for
+// the whole tree: a float-to-unsigned site that the ARM64 sweep finds uses these, not a local cast.
 
 #pragma once
 
@@ -73,6 +74,24 @@ inline int floatToIntAsMsvc(T value)
 inline unsigned char floatToByteAsMsvc(float value)
 {
 	return (unsigned char)((unsigned int)floatToIntAsMsvc(value) & 0xFFu);
+}
+
+/// (unsigned short)value as MSVC computes it: the low 16 bits of floatToIntAsMsvc, as the byte is
+/// (measured: 70000.5 is 4464, -1.5 is 65535, and 3e9, 2^31, NaN and the infinities are 0).
+inline unsigned short floatToUnsignedShortAsMsvc(float value)
+{
+	return (unsigned short)((unsigned int)floatToIntAsMsvc(value) & 0xFFFFu);
+}
+
+/// (unsigned int)value as MSVC x64 computes it, which is not the int path: cvttss2si into a 64-bit
+/// register, then the low 32 bits.  So -1 is 0xFFFFFFFF, 3e9 is 3000000000, 2^32 is 0 and 5e9 is
+/// 705032704; NaN, the infinities and anything outside int64's range give INT64_MIN, whose low 32 bits
+/// are 0 (measured, W2).  ARM64 saturates instead (a negative to 0, an infinity to 0xFFFFFFFF).
+inline unsigned int floatToUnsignedAsMsvc(float value)
+{
+	if (!(value >= -9223372036854775808.0f && value < 9223372036854775808.0f))
+		return 0u;
+	return (unsigned int)(unsigned long long)(long long)value;
 }
 
 #endif // MSVCFLOATCASTS_H
