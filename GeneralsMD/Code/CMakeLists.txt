@@ -720,6 +720,8 @@ add_library(debug STATIC
   ${LIBSRC}/debug/debug_purecall.cpp
   ${LIBSRC}/debug/debug_stack.cpp)
 target_include_directories(debug PUBLIC ${LIBSRC}/debug)
+# Common/EarlyCommandLine.h, header-only: the crash box stands aside under -headless (W2)
+target_include_directories(debug PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 target_link_libraries(debug PUBLIC dbghelp comctl32 ws2_32)
 # "debug" is also a target_link_libraries config keyword, so it can never be
 # passed as a plain library name.  Link this alias instead.

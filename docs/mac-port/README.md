@@ -1433,6 +1433,11 @@ environment-triggered; fixed.**
   - The Windows error codes, which are named but not measured. A VHD test on the W2 VM is an open item.
   - Reads that are not archive reads: loose files and the user's own folder. These fail as before.
 
+**Latent, not numbered: a crash box that waits under -headless (Windows) - fixed.** EA's debug library
+(`debug_debug.cpp`) shows its "Game crash" box and then `_exit(1)`s. It never asked whether anyone was
+there, so a `-headless` Windows run that hit it (W2: #32's purecall) waited on the box forever. Under
+`-headless` it now writes the text to stderr and the debugger, and exits as the box would have.
+
 **Latent, not numbered: a missing coordinate set under a texture transform.**
 - **The difference:** when TEXCOORDINDEX names a set the vertices lack, `ffvertex` reads (0,0,0,1) where
   D3D9 documents (0,0) ("the system defaults to the u and v coordinates (0,0)"). FFReference's N28 pads
@@ -1549,11 +1554,22 @@ hunting a crash or corruption that only one platform shows, look here first.**
   - **A mission designer can hit this one:** the "unit health" script condition
     (`ScriptConditions.cpp:958`) on a named prop, hulk or `AncientSoldierStatue02` computes 0/0. Windows'
     INT_MIN and ARM64's 0 answered `== 0` and `>= 0` differently. Fixed.
-  - **Held, not fixed:** float-to-unsigned sites that only negative or infinite data reach. These are the
-    INI duration parsers (`INI.cpp:1744/1752`), pack/unpack variation factors above 1, a reload with a zero
-    rate-of-fire bonus, and a particle uplink with zero pulses. The working hypothesis for MSVC x64 is
-    `cvttss2si` into a 64-bit register, then the low 32 bits (-1 to 0xFFFFFFFF, 2^32 to 0, NaN to 0). It
-    **needs a Windows measurement** before it goes into simulation code. Stock data reaches none of them.
+  - **Float-to-unsigned (S8) - measured and fixed.** These are the sites only negative or infinite data
+    reach, and stock data reaches none of them:
+    - the INI duration parsers (`INI.cpp:1744/1752`);
+    - pack/unpack variation factors above 1 (`SpecialAbilityUpdate.cpp`, `HackInternetAIUpdate.cpp`);
+    - a reload with a zero rate-of-fire bonus (`Weapon.cpp`);
+    - a particle uplink with zero scorch marks or pulses (`ParticleUplinkCannonUpdate.cpp`).
+
+    Measured on Windows 11 with MSVC 19.44 x64 (W2):
+    - `(unsigned)` is `cvttss2si` into a 64-bit register, then the low 32 bits: -1 is 0xFFFFFFFF, 5e9 is
+      705032704, and 2^32, NaN, the infinities and ±1e20 are 0. That is the hypothesis, confirmed on
+      every value.
+    - `(unsigned short)` is the low 16 bits of the 32-bit conversion, as the byte is.
+
+    `floatToUnsignedAsMsvc` and `floatToUnsignedShortAsMsvc` (`Platform/MsvcFloatCasts.h`) are those
+    models, and the sites go through them. `test_msvc_float_casts` holds the Windows table and, under
+    MSVC, compares the helpers with MSVC's own casts.
 - **A `va_list` passed by `const` reference.** `StringClass::Format_Args` takes `const va_list &`.
   Where `va_list` is a pointer (MSVC, both arm64 ABIs) the `const` binds to the reference. Under
   x86-64 System V it is an array, the `const` binds to the elements, and it cannot be handed to
