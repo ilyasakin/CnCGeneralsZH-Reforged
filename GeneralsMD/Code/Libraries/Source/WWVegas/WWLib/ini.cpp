@@ -2379,9 +2379,9 @@ void INIClass::DuplicateCRCError(const char *message, const char *section, const
 
 #ifdef NDEBUG
 #ifdef _WINDOWS
-	// Never under -headless, which has nobody to press OK: the line above has said it, and a run with a
-	// broken INI stops with it rather than wait on a box.
-	if (findEarlyCommandLineOption(L"-headless")) {
+	// Never in an unattended run (-headless or ZH_UNATTENDED), which has nobody to press OK: the line
+	// above has said it, and a run with a broken INI stops with it rather than wait on a box.
+	if (isUnattendedProcess()) {
 		fputs(buffer, stderr);
 		fflush(stderr);
 		_exit(2);

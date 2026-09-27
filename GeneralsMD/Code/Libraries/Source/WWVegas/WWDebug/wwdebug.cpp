@@ -330,10 +330,10 @@ void WWDebug_Assert_Fail(const char * expr,const char * file, int line)
 			ExitProcess(0);
 		}
 
-		// Under -headless there is nobody to answer: say it on stderr and take Ignore, which is what
-		// MessageBoxWrapper answers an unattended run's abort/retry/ignore box with (Debug.cpp).
-		if (findEarlyCommandLineOption(L"-headless")) {
-			fprintf(stderr, "WWDebug_Assert_Fail (ignored under -headless): %s (%d) Assert: %s\n", file, line, expr);
+		// In an unattended run (-headless or ZH_UNATTENDED) there is nobody to answer: say it on stderr and
+		// take Ignore, which is what MessageBoxWrapper answers an unattended run's abort/retry/ignore box with.
+		if (isUnattendedProcess()) {
+			fprintf(stderr, "WWDebug_Assert_Fail (ignored, unattended run): %s (%d) Assert: %s\n", file, line, expr);
 			fflush(stderr);
 			return;
 		}

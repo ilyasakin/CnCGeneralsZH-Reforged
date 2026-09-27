@@ -207,19 +207,22 @@ static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, vo
 
 /** The install root (P1 step 4, PosixInstallRoot.h): "-root <dir>"; else Registry.ini's InstallPath while
 	* it still holds the game; else, inside an app bundle, the known places and then the player's own choice
-	* (never under -headless), which is written to Registry.ini's InstallPath so it is asked once; else the
-	* executable's directory.  Read from argv itself rather than EarlyCommandLine.h, whose values end at a
-	* space, because a path may have one. */
+	* (never in an unattended run: -headless or ZH_UNATTENDED), which is written to Registry.ini's
+	* InstallPath so it is asked once; else the executable's directory.  Read from argv itself rather than
+	* EarlyCommandLine.h, whose values end at a space, because a path may have one. */
 static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::string> &overlays, char *out, size_t outSize )
 {
 	PosixInstallRequest request;
-	Bool headless = FALSE;
+	Bool unattended = FALSE;
 	for (int i = 1; i < argc; ++i)
 	{
 		request.arguments.push_back( argv[i] );
 		if (strcasecmp( argv[i], "-headless" ) == 0)
-			headless = TRUE;
+			unattended = TRUE;
 	}
+	// ZH_UNATTENDED too: a scripted run that draws has nobody to answer a chooser or a box either.
+	if (unattendedByEnvironment())
+		unattended = TRUE;
 	char buffer[ 4096 ];
 	getExecutableDirectory( buffer, sizeof( buffer ), FALSE );
 	request.executableDirectory = buffer;
@@ -230,7 +233,7 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 	request.forbidden.insert( request.forbidden.end(), overlays.begin(), overlays.end() );
 	request.registryFile = findRegistryFile( buffer, sizeof( buffer ) ) ? buffer : "";
 	std::string dialogFailure;
-	request.chooser = headless ? NULL : chooseFolderWithSdl;
+	request.chooser = unattended ? NULL : chooseFolderWithSdl;
 	request.chooserContext = &dialogFailure;
 
 	PosixInstallChoice choice;
@@ -240,7 +243,7 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 		const std::string problem = dialogFailure.empty() ? choice.problem
 			: dialogFailure + "\n\nStart the game with -root <folder> to name the Zero Hour folder instead.";
 		fprintf( stderr, "generals: %s\n", problem.c_str() );
-		if (request.insideAppBundle && !headless)
+		if (request.insideAppBundle && !unattended)
 		{
 			activateThisApp();
 			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Zero Hour Reforged", problem.c_str(), NULL );

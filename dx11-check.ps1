@@ -52,6 +52,7 @@
 # and after is a pair of pictures.
 param([double]$Margin = 1.0, [double]$MeanMargin = 1.0, [string]$Map = '',
   [switch]$BackendNoise, [switch]$CountRule, [string[]]$Extra = @())
+$env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 
 Add-Type -AssemblyName System.Drawing
 $run = Join-Path $PSScriptRoot "GeneralsMD\Run"

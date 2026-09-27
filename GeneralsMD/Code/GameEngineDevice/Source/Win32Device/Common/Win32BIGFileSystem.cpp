@@ -92,13 +92,14 @@ static Bool holdsBaseGameArchives(const char *directory)
 static void reportMissingBaseGame(void)
 {
 	DEBUG_LOG(("Win32BIGFileSystem::init - no base game archives anywhere; most of the art and audio will be missing.\n"));
-	// -headless has nobody to press OK: a box here held a gate for 38 minutes (W-ARM64), and a run without
-	// the base game's art could not have told anyone anything anyway.  The reason on stderr, and out.
-	if (findEarlyCommandLineOption( L"-headless" ))
+	// An unattended run (-headless or ZH_UNATTENDED) has nobody to press OK: a box here held a gate for 38
+	// minutes (W-ARM64), and a run without the base game's art could not have told anyone anything anyway.
+	// The reason on stderr, and out.
+	if (isUnattendedProcess())
 	{
 		fprintf(stderr, "generals: none of the base game's .big files could be found (Textures.big in the "
-			"registered Generals folder, ZH_Generals or a sibling Command & Conquer Generals folder); -headless "
-			"stops here rather than wait on a message box\n");
+			"registered Generals folder, ZH_Generals or a sibling Command & Conquer Generals folder); an "
+			"unattended run stops here rather than wait on a message box\n");
 		fflush(stderr);
 		_exit(2);
 	}

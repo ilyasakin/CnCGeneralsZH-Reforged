@@ -48,6 +48,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 
 $exePath = Join-Path $RunDir $Exe
 if (-not (Test-Path $exePath)) { throw "no $Exe in $RunDir" }

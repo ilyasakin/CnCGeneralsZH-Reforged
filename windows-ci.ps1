@@ -80,6 +80,7 @@ param(
 # Continue, not Stop: Windows PowerShell 5.1 turns a native command's stderr, under 2>&1, into a terminating
 # error, and ctest writes "Errors while running CTest" there. Failures are counted by exit status instead.
 $ErrorActionPreference = "Continue"
+$env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 # through powershell -File an array arrives as one comma-joined string: -Seeds, -Runs and -ExpectCrc alike
 $Seeds = @($Seeds | ForEach-Object { $_.Split(',') } | Where-Object { $_ -ne "" } | ForEach-Object { [int]$_ })
 # the E1 runs as "seed@frames"

@@ -11,6 +11,7 @@
 #
 # Exit code is the number of views over the limit.
 param([double]$Limit = 1.5)
+$env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 
 Add-Type -AssemblyName System.Drawing
 $run = Join-Path $PSScriptRoot "GeneralsMD\Run"

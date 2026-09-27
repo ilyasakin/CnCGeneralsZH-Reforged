@@ -197,7 +197,7 @@ static Bool isUnattendedRun( void )
 {
 	static Int cached = -1;
 	if (cached < 0)
-		cached = findEarlyCommandLineOption( L"-headless" ) ? 1 : 0;
+		cached = isUnattendedProcess() ? 1 : 0;	// -headless or ZH_UNATTENDED (EarlyCommandLine.h)
 	return cached != 0;
 }
 

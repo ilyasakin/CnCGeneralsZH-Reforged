@@ -74,6 +74,8 @@
 # VERIFY", never a change. Either fails the run whatever the matches said.
 
 set -u
+# Every game this starts is unattended: no box, chooser or crash report may wait on a person (EarlyCommandLine.h).
+export ZH_UNATTENDED=1
 
 GENERALS=""
 APP=""
