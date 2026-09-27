@@ -316,7 +316,7 @@ void GameStateMap::xfer( Xfer *xfer )
 			xfer->xferAsciiString( &tmp );
 		}
 
-		if (currentVersion >= 2) 
+		if (version >= 2)
 		{
 			// save the game mode.
 			Int gameMode = TheGameLogic->getGameMode();
@@ -347,7 +347,7 @@ void GameStateMap::xfer( Xfer *xfer )
 		xfer->xferAsciiString( &saveGameInfo->pristineMapName );
 		saveGameInfo->pristineMapName = TheGameState->portableMapPathToRealMapPath(saveGameInfo->pristineMapName);
 
-		if (currentVersion >= 2) 
+		if (version >= 2)
 		{
 			// get the game mode.
 			Int gameMode;
@@ -433,8 +433,10 @@ void GameStateMap::xfer( Xfer *xfer )
 	} 
 	else 
 	{
-		if( TheSkirmishGameInfo ) 
+		if( TheSkirmishGameInfo )
 		{
+			if( TheGameInfo == TheSkirmishGameInfo )
+				TheGameInfo = NULL;	// or it is left pointing at freed memory
 			delete TheSkirmishGameInfo;
 			TheSkirmishGameInfo = NULL;
 		}

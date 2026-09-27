@@ -801,6 +801,12 @@ void ThingTemplate::parseReplaceModule(INI *ini, void *instance, void *store, co
 
 	self->m_moduleParsingMode = MODULEPARSE_ADD_REMOVE_REPLACE;
 
+	// The object's Locomotor lines are stored in its AI module's data, so a replaced AI module takes
+	// them along: Lazr_AmericaVehicleChinook's replaced ChinookAIUpdate left it no locomotor, and the
+	// first move order it got off the pad read a null one.
+	const AIUpdateModuleData *aiBefore = self->friend_getAIModuleInfo();
+	const LocomotorTemplateMap locomotorsBefore = aiBefore ? aiBefore->m_locomotorTemplates : LocomotorTemplateMap();
+
 	const char *modToRemove = ini->getNextToken();
 	AsciiString removedModuleName;
 	/* #33: an object's Locomotor sets live in its AI module's data, so replacing that module discards
@@ -823,9 +829,15 @@ void ThingTemplate::parseReplaceModule(INI *ini, void *instance, void *store, co
 		throw INI_INVALID_DATA;
 	}
 
+	const Bool replacesAIModule = aiBefore != NULL && self->friend_getAIModuleInfo() == NULL;
+
 	self->m_moduleBeingReplacedName = removedModuleName;
 	self->m_moduleBeingReplacedTag = modToRemove;
 	ini->initFromINI(self, self->getFieldParse());
+
+	AIUpdateModuleData *aiAfter = self->friend_getAIModuleInfo();
+	if (replacesAIModule && aiAfter != NULL && aiAfter->m_locomotorTemplates.empty())
+		aiAfter->m_locomotorTemplates = locomotorsBefore;
 	self->m_moduleBeingReplacedName.clear();
 	self->m_moduleBeingReplacedTag.clear();
 	if (removedTheAI && setsBefore > 0)

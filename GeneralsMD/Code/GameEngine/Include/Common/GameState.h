@@ -112,6 +112,7 @@ public:
 	UnicodeString description;				// user description for save game file
 	SaveFileType saveFileType;				// type of save file we're dealing with
 	AsciiString missionMapName;				// used for mission saves
+	Int framesPerSecond;							// game speed the match was playing at, 0 in saves older than that
 
 };
 

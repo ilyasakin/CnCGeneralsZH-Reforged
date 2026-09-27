@@ -795,9 +795,7 @@ void ControlBar::populatePurchaseScience( Player* player )
 	win = TheWindowManager->winGetWindowFromId( m_contextParent[ CP_PURCHASE_SCIENCE ], key_progressBarExperience );
 	if(win)
 	{
-		Int progress;
-		progress = ((player->getSkillPoints() - player->getSkillPointsLevelDown()) * 100) /(player->getSkillPointsLevelUp() - player->getSkillPointsLevelDown());
-		GadgetProgressBarSetProgress(win, progress);
+		GadgetProgressBarSetProgress(win, player->getRankProgressPercent());
 	}
 
 	win = TheWindowManager->winGetWindowFromId( m_contextParent[ CP_PURCHASE_SCIENCE ], TheNameKeyGenerator->nameToKey( "GeneralsExpPoints.wnd:StaticTextTitle" ) );
@@ -856,11 +854,9 @@ void ControlBar::updateContextPurchaseScience( void )
 	win = TheWindowManager->winGetWindowFromId( m_contextParent[ CP_PURCHASE_SCIENCE ], key_progressBarExperience );
 	if(win)
 	{
-		Int progress;
-		progress = ((player->getSkillPoints() - player->getSkillPointsLevelDown()) * 100) /(player->getSkillPointsLevelUp() - player->getSkillPointsLevelDown());
-		GadgetProgressBarSetProgress(win, progress);
+		GadgetProgressBarSetProgress(win, player->getRankProgressPercent());
 	}
-	
+
 //	win = TheWindowManager->winGetWindowFromId( m_contextParent[ CP_PURCHASE_SCIENCE ], TheNameKeyGenerator->nameToKey( "ControlBar.wnd:TextEntryGeneralName" ) );
 //	if(win)
 //	{
@@ -5027,9 +5023,11 @@ void CommandButton::cacheButtonImage()
 //-------------------------------------------------------------------------------------------------
 void ControlBar::postProcessCommands( void )
 {
-	for ( CommandButton *button = m_commandButtons; button; button = button->friend_getNext() ) 
+	for ( CommandButton *button = m_commandButtons; button; button = button->friend_getNext() )
 	{
-		button->cacheButtonImage();
+		// a map.ini's edit of a button is an override hanging off it, not a button in this list
+		for ( Overridable *o = button; o; o = o->friend_getNextOverride() )
+			static_cast<CommandButton *>( o )->cacheButtonImage();
 	}
 }
 
@@ -5225,6 +5223,8 @@ void ControlBar::showRallyPoint( const Coord3D *loc )
 		{
 
 			const ThingTemplate* ttn = TheThingFactory->findTemplate("RallyPointMarker");
+			if (!ttn)
+				return;
 			marker = TheThingFactory->newDrawable( ttn );
 			DEBUG_ASSERTCRASH( marker, ("showRallyPoint: Unable to create rally point drawable\n") );
 			if (marker)
@@ -6551,7 +6551,8 @@ void ControlBar::updateSpecialPowerShortcut( void )
 		animateSpecialPowerShortcut(TRUE);
 	}
 	else if( !hasValidShortcutButton 
-					 && !m_specialPowerShortcutParent->winIsHidden() 
+					 && !m_specialPowerShortcutParent->winIsHidden()
+					 && m_animateWindowManagerForGenShortcuts
 					 && m_animateWindowManagerForGenShortcuts->isFinished() )
 	{
 		animateSpecialPowerShortcut(FALSE);		

@@ -1315,7 +1315,8 @@ void updateSkirmishGameOptions( void )
   if ( comboBoxTechRespawn )
     UpdateTechRespawnComboBox( comboBoxTechRespawn, TheSkirmishGameInfo, TRUE );
   Int itemCount = GadgetComboBoxGetLength(comboBoxStartingCash);
-  for ( Int index = 0; index < itemCount; index++ )
+  Int index;
+  for ( index = 0; index < itemCount; index++ )
   {
     Int value  = (Int)(intptr_t)GadgetComboBoxGetItemData(comboBoxStartingCash, index);
     if ( value == TheSkirmishGameInfo->getStartingCash().countMoney() )
@@ -1324,8 +1325,10 @@ void updateSkirmishGameOptions( void )
       break;
     }
   }
-  
-  DEBUG_ASSERTCRASH( index < itemCount, ("Could not find new starting cash amount %d in list", TheSkirmishGameInfo->getStartingCash().countMoney() ) );
+
+  // see LanGameOptionsMenu: an amount from the player's INI that the list does not carry
+  if ( index == itemCount )
+    PopulateStartingCashComboBox( comboBoxStartingCash, TheSkirmishGameInfo );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1700,6 +1703,8 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
 							skirmishMapSelectLayout = NULL;
 						}
 					TheShell->pop();
+          if (TheGameInfo == TheSkirmishGameInfo)
+            TheGameInfo = NULL;	// or it is left pointing at freed memory
           delete TheSkirmishGameInfo;
           TheSkirmishGameInfo = NULL;
 

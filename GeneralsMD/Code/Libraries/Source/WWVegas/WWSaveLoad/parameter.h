@@ -221,14 +221,10 @@ ParameterClass::Get_Name (void) const
 inline void
 ParameterClass::Set_Name (const char *new_name)
 {
-	if (m_Name != NULL) {
-		::free ((void *)m_Name);
-		m_Name = NULL;
-	}
-
-	if (new_name != NULL) {
-		m_Name = strdupAsWindows(new_name);
-	}
+	// Copy before freeing the old name: new_name may point into it (upstream).
+	char *name = (new_name != NULL) ? strdupAsWindows (new_name) : NULL;
+	::free ((void *)m_Name);
+	m_Name = name;
 
 	return ;
 }

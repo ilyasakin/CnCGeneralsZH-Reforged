@@ -656,6 +656,9 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	{
     if(TheSkirmishGameInfo)
     {
+			// This runs before GameLogic::tryStartNewGame, so a restarted skirmish has to get its
+			// pre-random slot setup back here too, or the replay records the first game's draws.
+			TheSkirmishGameInfo->handleOriginalSetups();
 			TheSkirmishGameInfo->setCRCInterval(REPLAY_CRC_INTERVAL);
       theSlotList = GameInfoToAsciiString(TheSkirmishGameInfo);
       DEBUG_LOG(("GameInfo String: %s\n",theSlotList.str()));
@@ -1142,6 +1145,7 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 		m_crcInfo->allowMissingFirstCRC();
 	}
 
+	m_nextFrame = 0;	// the last playback may have left -1 here, and readNextFrame reads forward from it
 	readNextFrame();
 
 	// send a message to the logic for a new game
@@ -1347,9 +1351,22 @@ AsciiString RecorderClass::readAsciiString() {
  * is stopped and the next frame is said to be -1.
  */
 void RecorderClass::readNextFrame() {
+	const UnsignedInt lastFrame = m_nextFrame;
 	Int retcode = fread(&m_nextFrame, sizeof(m_nextFrame), 1, m_file);
-	if (retcode != 1) {
-		DEBUG_LOG(("RecorderClass::readNextFrame - fread failed on frame %d\n", TheGameLogic->getFrame()));
+	//
+	// Commands are written in frame order and none after the duration the header is closed with, so a
+	// frame behind the last one, or past that end, is a damaged file.  Playback used to wait for that
+	// frame, which never comes back or comes after the game is over, and a headless run never ended.
+	// A header left at 0 is a game that never closed its file, and has no end to hold the frame to.
+	//
+	const Bool damaged = retcode == 1 && ( m_nextFrame < lastFrame ||
+		( m_playbackFrameDuration != 0 && m_nextFrame > m_playbackFrameDuration ) );
+	if (retcode != 1 || damaged) {
+		if (damaged)
+			DEBUG_LOG(("RecorderClass::readNextFrame - next command on frame %u after one on frame %u, replay ends on frame %u: file is damaged\n",
+				m_nextFrame, lastFrame, m_playbackFrameDuration));
+		else
+			DEBUG_LOG(("RecorderClass::readNextFrame - fread failed on frame %d\n", TheGameLogic->getFrame()));
 		m_nextFrame = -1;
 		stopPlayback();
 	}

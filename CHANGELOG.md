@@ -771,6 +771,66 @@ A third pass went through the generals' powers, promotions and unit abilities.
 - Switching between fullscreen and windowed on Direct3D 9 no longer crashes. The graphics card can refuse a buffer for a moment while the screen changes, and the game wrote into the one it never got. It writes somewhere harmless now and asks again the next time it draws.
 - Closing the window while the game is still loading closes the game. The close was turned into a message stamped with your player, and no player exists that early.
 - Steam checking or repairing the game files no longer leaves you with a game that crashes the moment it starts. Steam puts its own original exe back and leaves this build's key bindings file in place, and the original read that file, found commands it had never heard of and gave up. The file has a name only this build looks for now, so the original starts as plain Zero Hour.
+- A Propaganda Center's speech, a veterancy promotion or Jarmen Kell picking up scrap no longer throws away a reload in progress. A change to how fast a weapon fires restarted the wait from zero, so a Snipe that was nearly ready went back to the start; the reload now carries over at the new rate.
+- Units in a plain Chinook stop firing. Rocket soldiers riding in a Humvee that drove into a Chinook kept shelling the ground from the helicopter's hold.
+- A Laser Patriot no longer shoots at units outside its range.
+- An empty Emperor or Battle Bus is taken by the first soldier who climbs in, not only when a second one follows.
+- Hackers in an Internet Center keep hacking when you press Stop on a group that includes the building.
+- A force-attack order on one of your own stealthed units, or an ally's, walks the attacker over to it. It used to stand where it was, because the target counted as unseen.
+- Cancelling a unit in a production queue refunds what you paid for it, not whatever it costs by then.
+- A stealthed vehicle whose driver was sniped stops being invisible. The empty hull used to stay stealthed, and no detector could reveal a hull that belongs to nobody.
+- Killing a unit from stealth no longer tells your enemy about it with floating bounty money over the wreck. You still get the money.
+- Search and Destroy widens every building's sight by the same share. It used to hand a building the sight radius of whichever unit set the number, not a larger version of its own.
+- Rising water on a scripted map drowns what is under it, not the helicopters flying over it.
+- A group sent along waypoints with Alt keeps its formation, and a mixed group no longer counts as one formation when its members were in different ones.
+- A missile that reached its target on the same frame its fuel ran out explodes once, not twice.
+- Burning trees, a crashing helicopter, a nuclear silo's open doors and a Hacker or Black Lotus at work make their sound again after you load a save.
+- Loading a save keeps a Search and Destroy sight bonus, a pending order's origin, a script's next check and a dock's approach path, all of which came back wrong. Older saves still load.
+- A garrison entered while the map's playable edge was still closed can no longer be cleared by any blast that lands on the building.
+- Burning infantry run in every direction, not always north-east.
+- A player name long enough to fill the LAN game room no longer hangs the lobby, changing settings there no longer crashes it, and the list of LAN games keeps its place instead of jumping back to the top every time it refreshes.
+- Holding Ctrl while the beacon text box was open no longer leaves force-attack armed after you let go.
+- The camera stops following a unit the moment it goes stealthed or into the fog, instead of showing you where it went.
+- A broken map.ini, a damaged map cache in your user folder or a map name with forward slashes no longer crash the game or lose the map from the list; the cache is rebuilt.
+- A replay no longer crashes when it has no player from this machine, and a skirmish restarted from the menu records its replay with the slots you set up.
+- The Laser and Superweapon generals' supply Chinooks crashed the game the moment their supply center finished. Changing their orders in the game data had left them with no way to fly.
+- A skirmish computer player could crash the game while pulling a unit off one team for another.
+- A map with its own sound effects no longer crashes or freezes the game some time after it has been played.
+- Weapons that promote their shooter with the kill no longer write into a weapon that was already thrown away. Angry mobs were the usual victims.
+- Loading a save of a map with its own map.ini no longer crashes.
+- A Dragon Tank firing at a bunker on a hill hits it. Every missile fired uphill from a raised barrel used to be aimed twice and flew over the target.
+- A Missile Defender grouped with Rangers keeps its laser lock after you give the group the flashbang.
+- Units in guard mode no longer chase enemies they cannot see through the fog, and a Helix or Comanche no longer keeps its engine noise playing after it flies into the fog.
+- Infantry can climb into a Helix that is guarding or attacking; it lands for them.
+- A worker or dozer sent into a Tunnel Network stays inside instead of walking back out to the foundation it was headed for. Loaded workers stop building from inside, and a builder called off halfway stops the construction noise.
+- A Bunker Buster or Neutron Shell on a tunnel's scaffold no longer hits everyone hiding in your tunnel network.
+- Supply trucks move freely round a supply center with China mines around it.
+- An Emergency Repair heals units an Ambulance or a Propaganda Tower is already working on.
+- Your first power plant no longer finishes half the unit in the queue at once, and losing power no longer throws built progress away. The new rate applies from that moment on.
+- Units kept inside a Tunnel Network or a garrison are put out and hurt one at a time, so a demolition rider's blast no longer lets the rest walk out unharmed.
+- A hijacker killed on the frame he reached the tank no longer takes it, and Jarmen Kell no longer spends a snipe on a vehicle that has driven out of range.
+- A Stinger Site killed or sold takes its soldiers with it.
+- The Rebel Ambush drops its rebels on dry ground instead of into the water.
+- A sniped Helix on the ground throws out its passengers the way every other transport does.
+- A Comanche that hits the ground inside a second and a half still throws out its pilot.
+- Helicopters flying to a pad that was destroyed stop, and a helicopter already on a pad ignores a second order to repair there. A Chinook unloading on a pad keeps being repaired.
+- The starting command center no longer counts its power twice.
+- A Battlemaster at the edge of a horde gets the horde bonus like the ones in the middle.
+- A damaged plane only shows the repair cursor on an airfield with a free space.
+- Composite Armor gives the same health whether it was bought before or after a promotion.
+- The Spectre's machine gun keeps firing while the gunship's orbit swings past the edge of the map.
+- Selling a building from a group, with a group hotkey pressed in the same moment, no longer sells tech buildings or captured civilian structures.
+- The network lobby keeps answering joins and chat while the game is minimized, and a map transfer no longer stalls for two minutes on a preview picture from an ordinary paint program.
+- The victory or defeat screen no longer waits thirty seconds when the last opponent had already left.
+- A team you assign with Ctrl and a number selects the right units even when you press the number again before the game has caught up.
+- Keys work after switching away from a window and back, and releasing Ctrl before a letter no longer fires that letter's plain hotkey.
+- A save keeps the game speed it was made at, and its replay keeps its length.
+- Bridges load when the game is switched away from while a map is loading.
+- The minimap stays on in a replay when a mission widens the map's border.
+- The water stops moving while the game is paused.
+- A stealth unit that fires in plain sight no longer vanishes for a few frames before it shows up again.
+- Revealing the fog at a waypoint in a mission reveals it for the right players.
+- Replays recorded before this version that have burning infantry, missiles, captured vehicles, cancelled production, guard mode, tunnels or power plants in them play back differently.
 
 ## The buildings nobody repairs, repair themselves
 
@@ -860,6 +920,7 @@ A third pass went through the generals' powers, promotions and unit abilities.
 - Hold Tab and a scoreboard opens in the top left corner of the screen, beside the menu key; let go and it is gone. All eight seats of a full game fit in the top half of a 720 line screen. It is built from your command bar's steel, grey, red or sand for your side, with the match clock in its corner. Each side sits under a band edged green for yours and red for the enemy, and the band says how many of that side are still in the game, 4/4 down to 0/4. Watching, there is a band for every team. With a group selected, Tab still steps through the units in it as before, so the scoreboard wants one unit or none selected.
 - Every row on your side opens on a stripe of that player's colour, then the general's flag, the player's name and the general under it. Then rank, money in the bank, income per minute, kills and losses, every promotion bought, once, at the level it has reached, and the unit that player has built the most of. Numbers line up on their last digit, and your own row is lit. The promotions are drawn the size of the favourite unit's picture and the same shape, where they used to be 13 pixel squares you had to squint at. Point at a promotion, the favourite unit, a superweapon or something in a player's queue and the same card opens as over a build button: what it is, what it costs, and for a unit its health, damage, attacks a second and range.
 - Beside income per minute, in brackets, is what that player earned a second over the last half minute, "1250(24)" on one line under "PER MIN(PER SEC)". The per-minute number is the average of the whole match, and ten minutes in a lost supply line hardly moves it. The small one falls within half a minute of the trucks stopping, and climbs again once a new line starts paying.
+- The same figure sits beside your money on the command bar, "$ 16800 +40/s", so you see a supply line die without opening anything. Watching a match, it is the player you are looking at.
 - Names are written in white and the player's colour goes on the stripe. Dark red on a black panel measured about 2 to 1 and could barely be read. A player who is out goes grey.
 - An enemy row is a colour, a name and a team and nothing more. What they are playing and what they have in the bank is theirs to know.
 - Watching a match, everybody gets the full row, with a team column to say who is with whom.

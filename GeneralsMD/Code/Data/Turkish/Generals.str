@@ -7942,7 +7942,7 @@ CONTROLBAR:Money
 END
 
 CONTROLBAR:MoneyDescription
-"Sahip olduğunuz para miktarı"
+"Sahip olduğunuz para ve son yarım dakikada saniyede kazandığınız"
 END
 
 UPGRADE:AmericaDroneARmor
@@ -15795,6 +15795,10 @@ END
 
 GUI:ScoreboardPerSecond
 "SANİYEDE"
+END
+
+GUI:ControlBarMoneyEarning
+"$ %d  +%d/sn"
 END
 
 GUI:ScoreboardKills

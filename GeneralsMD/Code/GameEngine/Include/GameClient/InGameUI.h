@@ -1512,6 +1512,7 @@ protected:
 	DisplayString *							m_peaceTimeLabelDisplayString;	///< the word written over that clock
 	DisplayString *							m_peaceCountdownDisplayString;	///< the big digit of its last ten seconds
 	Int													m_lastMoneyDisplayed;		///< so the money gadget is only written when the amount changes
+	Int													m_lastEarningDisplayed;	///< or the money earned a second beside it
 	UnsignedInt									m_hudDrawCount;					///< rendered frames counted by drawHudOverlay itself
 	UnsignedInt									m_hudLastSampleFrame;		///< m_hudDrawCount the fps sample was last refreshed on
 	UnsignedInt									m_hudLastSampleMs;			///< wall clock of that sample
