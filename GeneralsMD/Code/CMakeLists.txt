@@ -2348,7 +2348,8 @@ target_link_libraries(ffshader_dump PRIVATE ffvertex engineshader)
 # A3b: FFReference, D3D9's fixed-function pipeline in double precision from Microsoft's documentation
 # alone - the oracle A3's harness compares the GPU's fixed-function draws against.  Independent of
 # ffshader/ffvertex by construction: it shares no code or headers with them (see ffreference.h).
-add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp ${TESTS}/ffreference/ffprogram.cpp)
+add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp ${TESTS}/ffreference/ffprogram.cpp
+  ${TESTS}/ffreference/ffcapture.cpp)
 target_include_directories(ffreference PUBLIC ${TESTS})
 add_lib_test(test_ffreference ffreference)
 add_lib_test(test_ffprogram ffreference)
@@ -2358,6 +2359,11 @@ target_compile_definitions(test_ffprogram PRIVATE ZH_CODE_DIR="${CMAKE_CURRENT_S
 # test: captures are made on demand (ZH_GPU_CAPTURE) and never committed.  ffdecl_captures <dir>...
 add_executable(ffdecl_captures ${TESTS}/ffreference/ffdecl_captures.cpp)
 target_link_libraries(ffdecl_captures PRIVATE ffreference)
+# L2's oracle side: FFReference's own replay of a capture set, from ffcapture.h's reader (written from
+# the format's description, not from the device or its harness), judged against the GPU's pixels.  A tool,
+# not a test, for the same reason.  ffref_judge <dir> [--gpu <dump dir>] [--only draw_NNNNN]
+add_executable(ffref_judge ${TESTS}/ffreference/ffref_judge.cpp)
+target_link_libraries(ffref_judge PRIVATE ffreference)
 if(ZH_GAME_DATA)
   set_tests_properties(test_ffprogram PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
 endif()
