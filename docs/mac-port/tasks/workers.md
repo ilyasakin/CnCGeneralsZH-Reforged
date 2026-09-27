@@ -25,7 +25,7 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | Ninja 1.12.1 | `~/zhr-worker/bin/ninja` | `ninja-mac.zip` from github.com/ninja-build/ninja/releases (-47) | in the folder |
 | `zheavy`, the one-heavy-job lock | `~/zhr-worker/bin/zheavy`, lock file `~/zhr-worker/.heavy.lock` | written by -47 | in the folder |
 | the game data (the user's own install, 4.6 GB: `zerohour` and `generals`) | `~/zhr-worker/data` | `rsync -a` from this Mac's `/Volumes/External/Games/cnc` (-47) | in the folder |
-| the vendored sources git ignores (4,114 files, SDL3, freetype, GameSpy, …) | `~/zhr-worker/vendor` | `rsync --files-from` of the ignored files of the zhr2-B17 worktree (-47) | in the folder |
+| the vendored sources git ignores (4,114 files, SDL3, freetype, GameSpy, …) | `~/zhr-worker/vendor` | `rsync --files-from` of the ignored files of the zhr2-B17 worktree (-47); on 2026-09-27 `Tools/vendor.sh` at 681d6f9a, run in a scratch worktree over a clone of it, patched one file (SDL3's `src/gpu/metal/SDL_gpu_metal.m`, sdl3-metal-windowless.patch), copied back here and into wt-pm and wt-47 (-47, for the PM) | in the folder |
 | the art archives (`Reforged*.big`, 1.65 GB) | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
 | the repository | `~/zhr-worker/repo` (a clone of `feature/mac-port`), from `~/zhr-worker/zhr.bundle` | `git bundle` here, `scp` there, `git clone` (-47). Nothing was pushed to any public remote | in the folder |
 | worktree for -47 | `~/zhr-worker/wt-47`, branch `agent-47` | `git worktree add` (-47) | in the folder |
@@ -78,7 +78,7 @@ Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wid
 Arch Linux (rolling, kernel 7.1.4), x86_64 i5-8350U with 4 cores and 8 threads, 62 GB, 247 GB free on
 btrfs at the start. It already had cmake 4.4.2, ninja, clang 22.1.8, gcc 16.2.1, python3, rsync and
 docker, and every development package the Linux check installs (X11, Wayland, ALSA, Pulse, Vulkan,
-spirv-tools, ...), so nothing was installed system-wide. No firewall is active (iptables policy
+spirv-tools, ...). One package was installed system-wide: `unifdef` (see the table). No firewall is active (iptables policy
 ACCEPT; firewalld and ufw inactive). It is on the Macs' LAN as `wlan0` 192.168.1.21, and has other
 interfaces (a wired 10.99.0.1, tailscale, a VPN tun0, docker bridges).
 
@@ -96,9 +96,10 @@ Everything is under `/home/zhr/zhr-worker` unless noted:
 | the art archives | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
 | the repository | `~/zhr-worker/repo`, from `~/zhr-worker/bundles/fmp.bundle` (feature/mac-port 9d1c8895) | `git bundle` here, `scp`, `git clone` (-47) | in the folder |
 | worktree and build for -47 | `~/zhr-worker/wt-47` (branch `agent-47`, vendor copied in with `cp --reflink=auto`), `~/zhr-worker/build-47` | `git worktree add`, cmake/ninja via `zheavy` (-47) | in the folder |
+| `unifdef` 2.12-4 (system-wide, `/usr/bin/unifdef`), which widechar_check needs; it was not installed before | pacman | `sudo pacman -S --needed --noconfirm unifdef`, as the PM directed (-47, 2026-09-27) | `sudo pacman -Rs unifdef` |
 
-**Not created: the Windows VM.** The user approved it (relayed by the PM), but this session's permission
+**The Windows VM is not -47's.** The user approved it (relayed by the PM), but this session's permission
 classifier refused its setup as "Unauthorized Persistence" (an auto-started SSH server keyed to this Mac
-inside the VM). Nothing was created for it. It waits for the user to approve it in -47's session, or for
-someone else to set it up.
+inside the VM), and -47 created nothing for it. The user then started it themselves (container
+`zhr-windows`) and the PM handles its access and tools. Its revert entries belong to them, not to this table.
 
