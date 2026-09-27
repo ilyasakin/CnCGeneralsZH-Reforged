@@ -1741,7 +1741,7 @@ void INI::parseDurationReal( INI *ini, void * /*instance*/, void *store, const v
 void INI::parseDurationUnsignedInt( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
 	UnsignedInt val = scanUnsignedInt(ini->getNextToken());
-	*(UnsignedInt *)store = (UnsignedInt)ceilf(ConvertDurationFromMsecsToFrames((Real)val));
+	*(UnsignedInt *)store = floatToUnsignedAsMsvc(ceilf(ConvertDurationFromMsecsToFrames((Real)val)));	// S8: as MSVC x64 converts it
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1749,7 +1749,7 @@ void INI::parseDurationUnsignedInt( INI *ini, void * /*instance*/, void *store, 
 void INI::parseDurationUnsignedShort( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
 {
 	UnsignedInt val = scanUnsignedInt(ini->getNextToken());
-	*(UnsignedShort *)store = (UnsignedShort)ceilf(ConvertDurationFromMsecsToFrames((Real)val));
+	*(UnsignedShort *)store = floatToUnsignedShortAsMsvc(ceilf(ConvertDurationFromMsecsToFrames((Real)val)));	// S8
 }
 
 //-------------------------------------------------------------------------------------------------

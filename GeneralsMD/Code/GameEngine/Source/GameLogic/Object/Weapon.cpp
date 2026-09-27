@@ -2017,7 +2017,7 @@ void Weapon::reloadWithBonus(const Object *sourceObj, const WeaponBonus& bonus, 
 	m_status = RELOADING_CLIP;
 	Real reloadTime = loadInstantly ? 0 : m_template->getClipReloadTime(bonus);
 	m_whenLastReloadStarted = TheGameLogic->getFrame();
-	m_whenWeCanFireAgain = m_whenLastReloadStarted + reloadTime;			
+	m_whenWeCanFireAgain = floatToUnsignedAsMsvc(m_whenLastReloadStarted + reloadTime);	// S8: a zero rate-of-fire bonus makes it infinite			
 	//CRCDEBUG_LOG(("Just set m_whenWeCanFireAgain to %d in Weapon::reloadWithBonus 1\n", m_whenWeCanFireAgain));
 
 			// if we are sharing reload times
