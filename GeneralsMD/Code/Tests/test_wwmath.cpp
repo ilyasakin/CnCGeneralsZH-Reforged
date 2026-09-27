@@ -15,6 +15,9 @@
 #include "test_harness.h"
 
 #include <limits>
+#include <cmath>
+#include <stdint.h>
+#include <string.h>
 
 #include "wwmath.h"
 #include "vector2.h"
@@ -340,6 +343,49 @@ TEST(vector3_is_valid_rejects_nan_and_inf)
 	inf_bits.u = 0x7f800000u;
 	CHECK(!Vector3(nan_bits.f, 0.0f, 0.0f).Is_Valid());
 	CHECK(!Vector3(0.0f, inf_bits.f, 0.0f).Is_Valid());
+}
+
+// Is_Valid_Float and Is_Valid_Double against std::isfinite over every class - normal, denormal, both
+// zeroes, both infinities, quiet and signalling NaNs, the largest finite values - and a stride through every
+// float's bits and every double's high word.  Both read their argument through unsigned long once, which is
+// 8 bytes on LP64: ASan under ZH_SANITIZE catches that here, and Is_Valid_Double answered for the bytes
+// after its argument.
+TEST(is_valid_float_and_double_every_class)
+{
+	static const uint32_t FLOATS[] = { 0x00000000u, 0x80000000u, 0x00000001u, 0x807FFFFFu, 0x00800000u,
+		0x3F800000u, 0xBF800000u, 0x7F7FFFFFu, 0xFF7FFFFFu, 0x7F800000u, 0xFF800000u, 0x7FC00000u, 0xFFC00000u,
+		0x7F800001u, 0x7FBFFFFFu };
+	for (size_t i = 0; i < sizeof(FLOATS) / sizeof(FLOATS[0]); ++i) {
+		float f;
+		memcpy(&f, &FLOATS[i], sizeof(f));
+		CHECK(WWMath::Is_Valid_Float(f) == (std::isfinite(f) != 0));
+	}
+	int float_mismatches = 0;
+	for (uint64_t u = 0; u <= 0xFFFFFFFFull; u += 0x10001ull) {
+		const uint32_t bits = (uint32_t)u;
+		float f;
+		memcpy(&f, &bits, sizeof(f));
+		float_mismatches += WWMath::Is_Valid_Float(f) != (std::isfinite(f) != 0);
+	}
+	CHECK_EQ(float_mismatches, 0);
+
+	static const uint64_t DOUBLES[] = { 0x0000000000000000ull, 0x8000000000000000ull, 0x0000000000000001ull,
+		0x000FFFFFFFFFFFFFull, 0x0010000000000000ull, 0x3FF0000000000000ull, 0xBFF0000000000000ull,
+		0x7FEFFFFFFFFFFFFFull, 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x7FF8000000000000ull,
+		0x7FF0000000000001ull, 0xFFF8000000000000ull };
+	for (size_t i = 0; i < sizeof(DOUBLES) / sizeof(DOUBLES[0]); ++i) {
+		double d;
+		memcpy(&d, &DOUBLES[i], sizeof(d));
+		CHECK(WWMath::Is_Valid_Double(d) == (std::isfinite(d) != 0));
+	}
+	int double_mismatches = 0;
+	for (uint64_t high = 0; high <= 0xFFFFFFFFull; high += 0x10001ull) {
+		const uint64_t bits = (high << 32) | 0x12345678ull;
+		double d;
+		memcpy(&d, &bits, sizeof(d));
+		double_mismatches += WWMath::Is_Valid_Double(d) != (std::isfinite(d) != 0);
+	}
+	CHECK_EQ(double_mismatches, 0);
 }
 
 TEST(vector3_equal_within_epsilon)
