@@ -133,7 +133,8 @@ run with the same seed gave the same HEADLESS CRC (0x78BEA937).
 - These equal macOS arm64 (clang/libc++), macOS x86_64 (Rosetta) and Linux x86_64 (gcc/libstdc++).
   The E1 harness checks record/playback on each.
 - W1's two-host match (macOS against Linux) agrees on 0x341D0C61 @3000 on both hosts.
-- Still owed: cross-playing those replays on Windows (in progress).
+- The triangle is closed both ways: W1's two match replays play on Windows to 0x341D0C61 @3000 with no
+  mismatch, and a replay recorded on Windows (seed 0, 1200 frames) plays on Linux to 0x0177BEF6.
 `-headless`, and its replay checksum matches the Windows build's on the same seed. Playable by a
 machine, not by a person.
 → C1 C2 C5
