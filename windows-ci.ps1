@@ -199,14 +199,15 @@ if (-not $SkipBuild) {
 	# The last build's exe goes first: a build that fails must leave nothing the desktop part could run.
 	Remove-Item (Join-Path $RunDir "generals.exe") -ErrorAction SilentlyContinue
 	Push-Location $Root
-	# not $phase: PowerShell names ignore case, and that would be this script's -Phase, a [string]
-	$phaseStart = Get-Date
+	# not $phase: PowerShell names ignore case, and that would be this script's -Phase, a [string].  A
+	# stopwatch, not Get-Date: the VM's wall clock was once stepped back 7 h in the middle of a gate.
+	$phaseClock = [Diagnostics.Stopwatch]::StartNew()
 	cmd /c "build.bat $Config < NUL" | Tee-Object -Variable buildOut | Out-Host
 	$built = $LASTEXITCODE
 	Pop-Location
 	# how much it rebuilt: MSBuild names each source it compiles on a line of its own
 	$compiled = @($buildOut | Where-Object { "$_" -match '^\s+[\w\.\-]+\.(cpp|c|cc|cxx)$' }).Count
-	$took = "$([int]((Get-Date) - $phaseStart).TotalSeconds) s, $compiled source(s) compiled"
+	$took = "$([int]$phaseClock.Elapsed.TotalSeconds) s, $compiled source(s) compiled"
 	$summary += "build: " + $(if ($built -eq 0) { "ok ($took)" } else { $failed = $true; "FAILED (exit $built; $took)" })
 	if ($built -ne 0) {
 		$summary += "ctest, GPU tests: not run (build failed)"
@@ -223,9 +224,9 @@ if ($DataDir -ne "") { & $tools.CMake -S (Join-Path $Root "GeneralsMD\Code") -B 
 $session0 = (Get-Process -Id $PID).SessionId -eq 0
 Push-Location $Build
 $exclude = if ($session0) { "$NoSound|dx9_smoke|dx9_smoke_msaa|test_dx11device" } else { $NoSound }
-$phaseStart = Get-Date
+$phaseClock = [Diagnostics.Stopwatch]::StartNew()
 $ctestOut = & $tools.CTest -C $Config -j4 --timeout 900 --output-on-failure -E $exclude 2>&1
-$ctestTook = "$([int]((Get-Date) - $phaseStart).TotalSeconds) s"
+$ctestTook = "$([int]$phaseClock.Elapsed.TotalSeconds) s"
 $ctestExit = $LASTEXITCODE
 Pop-Location
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
@@ -234,7 +235,7 @@ $summary += "ctest: " + $(if ($ctestExit -eq 0) { "passed ($ctestTook)" } else {
 $ctestOut | Select-String -Pattern 'tests passed|\*\*\*' | ForEach-Object { $summary += "  " + $_.Line.Trim() }
 
 # the desktop part: here, or in the interactive session through a one-off task
-$phaseStart = Get-Date
+$phaseClock = [Diagnostics.Stopwatch]::StartNew()
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
 $resultFile = Join-Path $WorkDir "desktop-result.json"
 Remove-Item $resultFile, "$resultFile.partial" -ErrorAction SilentlyContinue
@@ -249,14 +250,14 @@ if ($session0) {
 	"@powershell.exe $argList" | Out-File -Encoding ascii $wrapper
 	schtasks /create /tn $task /tr "`"$wrapper`"" /sc once /st 23:59 /it /ru $user /f | Out-Null
 	schtasks /run /tn $task | Out-Null
-	$deadline = (Get-Date).AddMinutes(90)
-	while (-not (Test-Path $resultFile) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 10 }
+	$waitClock = [Diagnostics.Stopwatch]::StartNew()		# not the wall clock: a VM's can step by hours
+	while (-not (Test-Path $resultFile) -and $waitClock.Elapsed.TotalMinutes -lt 90) { Start-Sleep -Seconds 10 }
 	Start-Sleep -Seconds 2
 	schtasks /delete /tn $task /f | Out-Null
 } else {
 	& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Phase desktop -ResultFile $resultFile -Config $Config -MaxFrames $MaxFrames -WorkDir $WorkDir -Runs ($Runs -join ',') -DataDir $DataDir
 }
-$desktopTook = "$([int]((Get-Date) - $phaseStart).TotalSeconds) s"
+$desktopTook = "$([int]$phaseClock.Elapsed.TotalSeconds) s"
 if (-not (Test-Path $resultFile)) {
 	$summary += "desktop part: NO RESULT (it did not finish, $desktopTook)"; $failed = $true
 } else {
