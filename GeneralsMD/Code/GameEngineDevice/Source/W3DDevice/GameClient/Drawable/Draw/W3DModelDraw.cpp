@@ -1201,7 +1201,16 @@ static void parseAsciiStringLC( INI* ini, void * /*instance*/, void *store, cons
 }
 
 //-------------------------------------------------------------------------------------------------
-void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p) 
+/** ReplaceTexture = <old> <new>: draw every model of this module with <new> wherever it names <old>. */
+void W3DModelDrawModuleData::parseReplaceTexture( INI* ini, void *instance, void * /*store*/, const void* /*userData*/ )
+{
+	W3DModelDrawModuleData* self = (W3DModelDrawModuleData*)instance;
+	self->m_replaceTextureOld = ini->getNextAsciiString();
+	self->m_replaceTextureNew = ini->getNextAsciiString();
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 {
   ModuleData::buildFieldParse(p);
 
@@ -1225,6 +1234,7 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "AttachToBoneInAnotherModule", parseAsciiStringLC, NULL, offsetof(W3DModelDrawModuleData, m_attachToDrawableBone) },
 		{ "IgnoreConditionStates", ModelConditionFlags::parseFromINI, NULL, offsetof(W3DModelDrawModuleData, m_ignoreConditionStates) },
 		{ "ReceivesDynamicLights", INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_receivesDynamicLights) },
+		{ "ReplaceTexture", W3DModelDrawModuleData::parseReplaceTexture, NULL, 0 },
     { 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);
@@ -3302,7 +3312,10 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 		}
 		else
 		{
-			m_renderObject = W3DDisplay::m_assetManager->Create_Render_Obj(newState->m_modelName.str(), draw->getScale(), m_hexColor);
+			const W3DModelDrawModuleData* data = getW3DModelDrawModuleData();
+			Bool swapsTexture = !data->m_replaceTextureOld.isEmpty();
+			m_renderObject = W3DDisplay::m_assetManager->Create_Render_Obj(newState->m_modelName.str(), draw->getScale(), m_hexColor,
+				swapsTexture ? data->m_replaceTextureOld.str() : NULL, swapsTexture ? data->m_replaceTextureNew.str() : NULL);
 			DEBUG_ASSERTCRASH(m_renderObject, ("*** ASSET ERROR: Model %s not found!\n",newState->m_modelName.str()));
 		}
 

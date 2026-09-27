@@ -1369,6 +1369,61 @@ crashes (Windows) or hangs (Mac and Linux) the game at the end of the match - fi
       the other's end.
     - `InGameUI.cpp:7188` erases a `std::find` result that only a DEBUG_ASSERTCRASH checks.
 
+**33. Upstream-introduced (fbe8dc6f, 179e1f65): a ReplaceModule of an AI module drops the unit's
+locomotors, and a Chinook crashes every platform - fixed.**
+
+- **Where:** `Data/INI/FixesReforged.ini`, new in upstream's second and first data passes over the nine
+  generals. Its blocks swap a unit's AI module with `ReplaceModule` to change one of its fields. But in Zero
+  Hour an object's `Locomotor = SET_...` lines, which are written at object level, are stored in that
+  module's data: ThingTemplate.cpp:245 parses the field with `AIUpdateModuleData::parseLocomotorSet`,
+  through `friend_getAIModuleInfo`. So the replacement starts with no locomotor sets.
+- **Twelve units lost theirs** (measured, below). Each had a SET_NORMAL line in INIZH.big, and PatchINI.big
+  doesn't touch them:
+  - the Air Force, Laser and Superweapon generals' Chinooks (`ChinookLocomotor`, plus
+    `BasicHelicopterTaxiLocomotor` for taxiing) and Humvees (`HumveeLocomotor`);
+  - the Tank, Infantry and Nuke generals' ECM tanks (`GattlingTankLocomotor`);
+  - the China, Infantry and Nuke Nuke Cannons (`ChinaNukeCannonLocomotor`).
+- **The crash:** a Supply Center's `SpawnBehavior` makes its Chinook, the exit path enters a move state,
+  and `ChinookAIUpdate::isAllowedToAdjustDestination` (ChinookAIUpdate.cpp:1026) calls
+  `getCurLocomotor()->isInvalidPositionAllowed()` on a NULL locomotor. It's a SIGSEGV reading 0x40. The
+  stack came from the kept ReleaseCrashInfo.txt through addr2line on thinkerer.
+  - It's the data, not the platform, so the game crashes the same way on Windows, in a LAN match or a
+    skirmish, whenever an Air Force, Laser or Superweapon general's Supply Center is finished.
+  - It surfaced as net_check failing on the integration of upstream 1641ecb7 (both copies at about 56 s on
+    finer, 66 s on thinkerer): seed 3's AI played the Laser General. replay_check passed only because seeds
+    0 and 1 don't draw those generals.
+  - The other nine weren't seen in a match here. Without a locomotor none of them can move; whether some
+    code path also crashes on them wasn't measured.
+- **Fixed:** each of the twelve blocks re-states its object's own Locomotor lines, and the file's header now
+  states the rule.
+  - The same match then agrees: 0x3453DF90 at frame 1800 on both copies, and both replays play back to it.
+    That's the CRC this port's seed-3, 1800-frame net_check has always had.
+  - The change is data every peer must share (FixesReforged.ini feeds the multiplayer INI checksum), as
+    upstream's commits were.
+- **The guard, `locomotor_check`** (ctest, POSIX, needs the game's data):
+  - `ThingTemplate::parseReplaceModule` counts the locomotor sets an AI module had when a ReplaceModule
+    removes it. After every INI has loaded, `ThingFactory::checkLocomotors` logs each such thing that
+    still has no SET_NORMAL. It's a DEBUG_CRASH in a debug build and no behaviour change in any build.
+  - The test runs the game for 30 frames on its data and overlay, and fails on any such line.
+  - Armed: on 53c76d48's data it fails and names exactly the twelve (the Chinooks lost two sets each, the
+    rest one each); with the fix it passes.
+  - "Has an AI module and no SET_NORMAL" can't be the test. EA's own data has 118 such things (structures,
+    turrets riding other units, bombs, trains), measured; only a replacement that discarded sets is the
+    defect.
+- **Seed coverage:** replay_check (E1) now also plays seed 0 with the generals pinned by `-side`: the
+  Infantry General against the Laser General, 12000 frames. Two conditions: the run must agree with itself,
+  and the Laser General's Supply Center must stand, which makes the Chinook that crashed. Measured on
+  thinkerer: 0xA2FE9432 at frame 12000, with the Laser Humvees fighting.
+  - The ECM tank and the Nuke Cannon aren't proven by any match. In five pinned 12000-frame matches (Laser,
+    Air Force, Infantry, Tank and Nuke generals), the AI's log never showed either: it names units only
+    when they fight. Their locomotors are locomotor_check's to prove.
+  - `replay-check.sh` prints the distinct structures a run built (`built:`), and `--log-lines` prints a
+    run's matching log lines before the log is removed.
+- **What this cannot see:** a unit that loses a locomotor another way (a RemoveModule of its AI module, or
+  an override that re-states the wrong locomotor); a set other than SET_NORMAL dropped while SET_NORMAL is
+  re-stated; a map's own map.ini overrides; and Windows, which hasn't run the fix yet (W2).
+- Upstream patch note: `docs/mac-port/upstream-notes.md`.
+
 **Latent, not numbered: a bind that fails leaks its socket - every platform, environment-triggered; fixed.**
 - **Where:** `UDP::Bind` made a new socket on every call and never closed one whose bind failed.
   `Transport::init` retries `Bind` in a tight loop for up to a second while the port is taken, so a single

@@ -457,6 +457,7 @@ public:
 	CommandSet* friend_getNext() { return m_next; }
 	const FieldParse* friend_getFieldParse() const { return m_commandSetFieldParseTable; }
 	void friend_addToList(CommandSet** listHead);
+	void friend_clearCommands();
 
 private:
 
@@ -1206,8 +1207,6 @@ public:
 	// get method for list of commandbuttons
 	const CommandButton *getCommandButtons( void ) { return m_commandButtons; }
 
-	Drawable *findStandInBuilder( Bool freeOnly );				///< the local player's free builder (or, unless freeOnly, any builder) to stand in for an empty selection
-
 protected:
 
 	ICoord2D m_defaultControlBarPosition;				///< Stored the original position of the control bar on the screen
@@ -1307,7 +1306,6 @@ protected:
 	Int m_chordGroup;																			///< -1, or the structure group (0 = Q, 1 = W) armed by the first chord key
 	UnsignedInt m_chordStartMs;														///< millisecond the chord was armed on, for CHORD_TIMEOUT_MS
 	DrawableID m_chordDrawableID;													///< builder the armed chord addresses; the chord dies if the bar moves to another one
-	DrawableID m_standInBuilderID;												///< with nothing selected, the builder whose command bar is shown (INVALID_DRAWABLE_ID otherwise)
 
 	/** A player upgrade is researched once, so it goes to exactly one of the selected buildings -
 		* and the bar cannot see the queue an earlier click in this same frame just filled, because
