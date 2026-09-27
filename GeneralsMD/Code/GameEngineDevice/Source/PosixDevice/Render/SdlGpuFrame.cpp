@@ -90,6 +90,8 @@ SdlGpuFrame::SdlGpuFrame() :
 	FenceMs(0.0),
 	Flushes(0),
 	AcquireMs(0.0),
+	NotShown(0),
+	NotShownTotal(0),
 	OffscreenMs(0.0),
 	OffscreenPresents(false),
 	OffscreenHz(0),
@@ -323,13 +325,15 @@ bool SdlGpuFrame::Submit_Offscreen(SDL_GPUCommandBuffer * commands)
 }
 
 void SdlGpuFrame::Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms,
-	double & offscreen_ms)
+	double & offscreen_ms, unsigned int & not_shown)
 {
 	flush_ms = FlushMs;
 	fence_ms = FenceMs;
 	flushes = Flushes;
 	acquire_ms = AcquireMs;
 	offscreen_ms = OffscreenMs;
+	not_shown = NotShown;
+	NotShown = 0;
 	OffscreenMs = 0.0;
 	FlushMs = 0.0;
 	FenceMs = 0.0;
@@ -530,6 +534,11 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 		if (acquired && swapchain != NULL) {
 			ok = Present_Into(commands, swapchain, width, height, SDL_GetGPUSwapchainTextureFormat(GpuDevice, Window), ramp)
 				&& ok;
+		} else {
+			// Nothing reaches the display and nothing waits for vsync, so this frame's time is not the
+			// display's pacing: the timing report says how many there were.
+			++NotShown;
+			++NotShownTotal;
 		}
 	} else if (OffscreenPresents) {
 		if (DisplayTexture == NULL) {

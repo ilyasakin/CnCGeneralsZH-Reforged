@@ -162,8 +162,12 @@ public:
 	/// serialized run is a measurement, not a frame rate).  Take_Timing hands over, and zeroes, what was
 	/// spent since the last call: in mid-frame flushes, the fence waits, and how many flushes there were.
 	void Serialize_Submits(bool serialize) { SerializeSubmits = serialize; }
+	/// not_shown: the Presents since the last call whose swapchain gave no drawable, so nothing reached the
+	/// display and nothing waited for vsync (a hidden or minimised window, or a locked session).
 	void Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms,
-		double & offscreen_ms);
+		double & offscreen_ms, unsigned int & not_shown);
+	/// Every windowed Present so far that had no drawable to go to.
+	unsigned int Presents_Not_Shown() const { return NotShownTotal; }
 
 	/// -offscreen, the game with no window: Present draws the gamma pass into a display texture of the back
 	/// buffer's size, as it would into a swapchain's, and keeps at most two frames on the GPU, which a
@@ -202,6 +206,8 @@ private:
 	double FenceMs;
 	unsigned int Flushes;
 	double AcquireMs;		///< waiting in SDL_WaitAndAcquireGPUSwapchainTexture: the display's pacing, not work
+	unsigned int NotShown;			///< Presents with no drawable since the last Take_Timing
+	unsigned int NotShownTotal;		///< and since the frame was made
 	double OffscreenMs;		///< -offscreen's waits: frames in flight, and the pacer
 	bool OffscreenPresents;
 	unsigned int OffscreenHz;

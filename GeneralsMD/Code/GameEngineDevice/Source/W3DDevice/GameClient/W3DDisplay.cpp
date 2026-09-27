@@ -1181,7 +1181,15 @@ void W3DDisplay::init( void )
 	// multisampling is opt-in with "-msaa" / "-msaa N" and silently degrades to whatever the
 	// device supports, so log what was actually granted
 	DEBUG_LOG(("W3DDisplay::init - multisampling: %ux\n", DX8Wrapper::Get_MultiSample_Level()));
+#if defined(_WIN32)
 	DEBUG_LOG(("W3DDisplay::init - vsync: %s\n", DX8Wrapper::Get_Requested_VSync() ? "on" : "off"));
+#else
+	// The POSIX device never reads D3D9's presentation interval: SdlGpuFrame claims the window with SDL's
+	// defaults, whose present mode is VSYNC.  So "off" was only the request, and read as the truth it sent a
+	// 119 fps reading (a locked session: no drawable) looking for a vsync bug.
+	DEBUG_LOG(("W3DDisplay::init - vsync: always on (the SDL GPU swapchain's VSYNC; D3D9 asked for %s, which is not used;"
+		" -offscreen paces by ZH_OFFSCREEN_HZ instead)\n", DX8Wrapper::Get_Requested_VSync() ? "on" : "off"));
+#endif
 	DEBUG_LOG(("W3DDisplay::init - present: %s\n", DX8Wrapper::Is_Flip_Present() ? "flip" : "discard"));
 	DEBUG_LOG(("W3DDisplay::init - adapter: %s\n",
 						 WW3D::Get_Render_Device_Name(WW3D::Get_Render_Device())));
