@@ -464,6 +464,12 @@ static void finishVideo(void);
 // W3DDisplay::~W3DDisplay ====================================================
 /** */
 //=============================================================================
+// R1's aircraft-lead measurement (smoothMotionApply, below), reported by the destructor.
+static double s_aircraftLeadSum = 0.0;
+static unsigned long long s_aircraftLeadCount = 0;
+static Real s_aircraftLeadMax = 0.0f;
+static Real s_aircraftRadiusMax = 0.0f;
+
 W3DDisplay::~W3DDisplay()
 {
 	// R1: how each captured model was treated per tick, for the snap rules' tuning.
@@ -2150,10 +2156,6 @@ float TheSmoothMotionAlpha = 1.0f;
 static UnsignedInt s_smoothPositionFrame = 0xFFFFFFFFu;
 static UnsignedInt s_smoothModelFrame = 0xFFFFFFFFu;
 static Bool s_smoothApplied = FALSE;
-static double s_aircraftLeadSum = 0.0;
-static unsigned long long s_aircraftLeadCount = 0;
-static Real s_aircraftLeadMax = 0.0f;
-static Real s_aircraftRadiusMax = 0.0f;
 
 static void smoothMotionBegin()
 {
