@@ -296,3 +296,30 @@ frozen copies, on both ANV (Intel UHD 620) and lavapipe. Every file matched the 
 **What this cannot see:** fog, LERP and scissor, which this game never draws (per -a9's reading of the
 source), so they are not judged; hardware other than Intel UHD 620 (ANV) and lavapipe; and a draw's
 dependence on the previous draw's depth, since every capture starts cleared.
+
+## F7 settled: Windows' own Direct3D 9 decides (2026-09-27)
+
+F7 asked what an absent vertex specular is: the device used 0, while FFReference's N7 followed the D3DTA
+page's 0xFFFFFFFF. It was settled by measuring Microsoft's own runtime, not by reading.
+`Tests/ffreference/f7probe_windows.cpp` draws 8x8 pretransformed quads into an A8R8G8B8 target and reads
+the pixel back. It was run in the project's Windows 11 VM (desktop session), where the adapter is the
+Microsoft Basic Render Driver (WARP, d3d10warp.dll 10.0.26100.5074), as a HAL device and as REF. Both give
+the same numbers:
+
+| case | vertex format | read | result |
+|:--|:--|:--|:--|
+| A | XYZRHW, DIFFUSE red | COLORARG1 = D3DTA_SPECULAR | 0xFF000000: specular RGB **0** |
+| D | XYZRHW, DIFFUSE alpha 0x40 | ALPHAARG1 = D3DTA_SPECULAR | alpha **0** |
+| B | XYZRHW, DIFFUSE red | SPECULARENABLE, lighting off | 0xFFFF0000: **nothing added** |
+| C | XYZRHW only | COLORARG1 = D3DTA_DIFFUSE | 0xFFFFFFFF: diffuse **white**, as the page says |
+
+The controls with the colour present in the vertex (specular black, green, alpha 0x80) read back as given.
+
+- **The ruling:** an absent specular is 0x00000000, colour and alpha; an absent diffuse is 0xFFFFFFFF. The
+  device was right. FFReference's N7 changes for specular. Its unit test checks all four cases, and fails
+  three checks with the old reading.
+- **After the change:** set3's draw_00032 agrees exactly on ANV and lavapipe (7 of 7). Every other verdict
+  (run4, set2) is unchanged. F7 comes off the known list; the device's selfcheck marks it known, which
+  -a9 will turn back into an expected pass.
+- **What this cannot see:** a GPU driver's own D3D9 (the VM has none, only WARP). But WARP is Microsoft's
+  conformance rasteriser, and its HAL and REF agree.
