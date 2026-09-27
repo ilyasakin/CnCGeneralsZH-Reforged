@@ -1895,6 +1895,16 @@ if(ZH_PLATFORM_POSIX)
     endif()
   endif()
 
+  # The first launch's folder question, headless (the user's rule: no run may need a human): the real generals
+  # through PosixMain's test stand-in for the dialog (ZH_TEST_CHOOSER_ANSWERS) - refusals and their reasons,
+  # asking again, accepting and remembering, cancelling, and the second start asking nothing.  Needs ZH_GAME_DATA.
+  add_test(NAME first_launch_chooser_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_first_launch_chooser.sh $<TARGET_FILE:generals>)
+  set_tests_properties(first_launch_chooser_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(first_launch_chooser_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+
   # P3: Tools/linux-portable.sh's folder for the Steam Deck, built inside the Steam Runtime's SDK, and E1 through
   # its own launcher in the Steam Runtime's platform image.  Skipped (77) without docker, the SDK image, or a
   # portable CMake (ZH_PORTABLE_CMAKE: 3.29 or later, running inside the container - Kitware's release tarball).

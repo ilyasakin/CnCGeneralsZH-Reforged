@@ -2692,6 +2692,7 @@ Tests/test_ffvertex.cpp
 Tests/test_ffvertexcompile.cpp
 Tests/test_ffvertexd3d9.cpp
 Tests/test_fingerprint_manifest.sh
+Tests/test_first_launch_chooser.sh
 Tests/test_fontchars.cpp
 Tests/test_fpucontrol.cpp
 Tests/test_gameengine.cpp

@@ -222,6 +222,51 @@ static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, vo
 	return answer.state == 1;
 }
 
+/** The chooser's stand-in for tests (the user's rule: no run may need a human at any machine).
+	* ZH_TEST_CHOOSER_ANSWERS names a file of answers, one folder a line; each time the chooser is asked it
+	* takes the next line, and "cancel" or the end of the file cancels.  Nothing is shown: the reason the last
+	* answer was refused, which the dialog's message box would have shown, goes to stderr, as each answer does.
+	* PosixMain treats a start with it set as a packaged first launch; the SDL panel itself was proven by the
+	* user's own eyes (2026-09-27), and test_first_launch_chooser runs this path headless. */
+struct ScriptedAnswers
+{
+	std::vector<std::string> answers;
+	size_t next;
+};
+
+static bool readScriptedAnswers( const char *file, ScriptedAnswers &script )
+{
+	FILE *f = fopen( file, "r" );
+	if (f == NULL)
+		return false;
+	char line[ 4096 ];
+	while (fgets( line, sizeof( line ), f ) != NULL)
+	{
+		size_t n = strlen( line );
+		while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r'))
+			line[--n] = 0;
+		script.answers.push_back( line );
+	}
+	fclose( f );
+	script.next = 0;
+	return true;
+}
+
+static bool chooseFolderFromScript( const std::string &why, std::string &chosen, void *context )
+{
+	ScriptedAnswers &script = *(ScriptedAnswers *)context;
+	if (!why.empty())
+		fprintf( stderr, "generals: chooser (test answers): refused, asking again: %s\n", why.c_str() );
+	if (script.next >= script.answers.size() || strcasecmp( script.answers[script.next].c_str(), "cancel" ) == 0)
+	{
+		fprintf( stderr, "generals: chooser (test answers): cancel\n" );
+		return false;
+	}
+	chosen = script.answers[script.next++];
+	fprintf( stderr, "generals: chooser (test answers): answer %s\n", chosen.c_str() );
+	return true;
+}
+
 /** The install root (P1 step 4, PosixInstallRoot.h): "-root <dir>"; else Registry.ini's InstallPath while
 	* it still holds the game; else, inside an app bundle, the known places and then the player's own choice
 	* (never under -headless), which is written to Registry.ini's InstallPath so it is asked once; else the
@@ -252,6 +297,20 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 	const bool gameMode = inSteamGameMode();
 	request.chooser = headless || gameMode ? NULL : chooseFolderWithSdl;
 	request.chooserContext = &dialogFailure;
+	ScriptedAnswers script;
+	const char *answers = getenv( "ZH_TEST_CHOOSER_ANSWERS" );
+	const bool scripted = answers != NULL && answers[0] != 0;
+	if (scripted)
+	{
+		if (!readScriptedAnswers( answers, script ))
+		{
+			fprintf( stderr, "generals: cannot read ZH_TEST_CHOOSER_ANSWERS %s\n", answers );
+			return FALSE;
+		}
+		request.insideAppBundle = true;		// a packaged first launch, whatever the executable's place
+		request.chooser = chooseFolderFromScript;
+		request.chooserContext = &script;
+	}
 
 	PosixInstallChoice choice;
 	if (!PosixChooseInstallRoot( request, choice ))
@@ -259,10 +318,10 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 		// the dialog's own failure, when it failed, says more than "none was chosen"; Game Mode has no dialog
 		std::string problem = dialogFailure.empty() ? choice.problem
 			: dialogFailure + "\n\nStart the game with -root <folder> to name the Zero Hour folder instead.";
-		if (gameMode && !headless)
+		if (gameMode && !headless && !scripted)
 			problem = GAME_MODE_NO_ROOT;
 		fprintf( stderr, "generals: %s\n", problem.c_str() );
-		if (request.insideAppBundle && !headless)
+		if (request.insideAppBundle && !headless && !scripted)
 		{
 			activateThisApp();
 			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Zero Hour Reforged", problem.c_str(), NULL );
