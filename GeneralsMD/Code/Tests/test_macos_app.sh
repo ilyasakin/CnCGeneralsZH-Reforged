@@ -46,7 +46,11 @@ if [ "$(uname -s)" != "Darwin" ] || ! command -v codesign >/dev/null 2>&1; then
 	exit 77
 fi
 SCRIPT="$(cd "$(dirname "$0")/../Tools" && pwd)/make-macos-app.sh"
-T="$(mktemp -d "${TMPDIR:-/tmp}/macos-app-check.XXXXXX")"
+T="$(mktemp -d "${TMPDIR:-/tmp}/macos-app-check.XXXXXX")" || T=""
+if [ -z "$T" ] || [ ! -d "$T" ]; then
+	echo "test_macos_app: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${T:?}"' EXIT
 failed=0
 check() { if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failed=1; fi; }

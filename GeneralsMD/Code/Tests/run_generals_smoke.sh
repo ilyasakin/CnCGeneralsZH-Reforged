@@ -26,7 +26,11 @@
 # data is E1's harness's.  Usage: run_generals_smoke.sh <generals>
 set -u
 GENERALS="$1"
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/generals_smoke.XXXXXX")
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/generals_smoke.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "run_generals_smoke: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/root" "$WORK/user"
 failed=0

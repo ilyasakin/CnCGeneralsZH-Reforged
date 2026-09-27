@@ -2765,6 +2765,7 @@ Tests/test_widechar_crc_gate.cpp
 Tests/test_widechar_file.cpp
 Tests/test_widechar_format.cpp
 Tests/test_widechar_width.inc
+Tests/test_workfolder_guard.sh
 Tests/test_ww3d2.cpp
 Tests/test_wwdownload.cpp
 Tests/test_wwdownload_registry.cpp

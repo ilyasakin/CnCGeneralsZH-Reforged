@@ -42,7 +42,11 @@ CODE="$(cd "$TOOLS/.." && pwd)"
 INSTALL="$(cd "$ZH_DATA_DIR/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$1")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$1")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/mission-check.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/mission-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "run_mission_check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="mc$$_"

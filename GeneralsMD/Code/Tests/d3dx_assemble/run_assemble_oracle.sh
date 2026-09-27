@@ -54,7 +54,11 @@ COMPILER_SHA256=44c3a7e330b54a35a9efa015831392593aa02e7da1460be429d17c3644850e8a
 
 here="$(cd "$(dirname "$0")" && pwd)"
 code_root="${1:-$(cd "$here/../.." && pwd)}"
-work="$(mktemp -d "${TMPDIR:-/tmp}/assemble-oracle.XXXXXX")"
+work="$(mktemp -d "${TMPDIR:-/tmp}/assemble-oracle.XXXXXX")" || work=""
+if [ -z "$work" ] || [ ! -d "$work" ]; then
+	echo "run_assemble_oracle: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${work:?}"' EXIT
 d3dx_source="${ZH_D3DX9_X64:-}"
 
