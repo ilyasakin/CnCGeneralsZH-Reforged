@@ -562,7 +562,7 @@ Bool WorldHeightMap::ParseBlendTileData(DataChunkInput &file, DataChunkInfo *inf
 	// which the simulation reads; what follows is the terrain textures.  T1.
 	if (!parseBlendTileCells(file, info))
 		return false;
-	int i, j;
+	int i;		// and no j: the cell loop that used it is parseBlendTileCells' now (MSVC's C4101, W2)
 	m_numBitmapTiles = file.readInt();
 	DEBUG_ASSERTCRASH(m_numBitmapTiles>0 && m_numBitmapTiles<2048, ("Unlikely numBitmapTiles."));
 	m_numBlendedTiles = file.readInt();
