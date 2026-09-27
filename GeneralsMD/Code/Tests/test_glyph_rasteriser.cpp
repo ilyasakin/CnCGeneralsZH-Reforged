@@ -23,6 +23,7 @@
 #include "test_harness.h"
 
 #include "glyphrasteriser.h"
+#include "gdifontmetrics.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -454,6 +455,54 @@ struct Golden
 #include "glyph_rasteriser_golden.inc"
 
 }  // namespace
+
+/* Linux draws the game's Windows faces with Liberation, which has no VDMX: its heights are GDI's own for
+	 the face it stands in for, measured on Windows 11 (gdifontmetrics.h).  Every face the substitution
+	 table sends to a Liberation family, regular and bold, at every measured size; Arial at 13 px is 13 + 3,
+	 test_fontchars' 16, as a number typed here rather than read back from the table. */
+TEST(glyph_rasteriser_substitutes_take_gdis_heights)
+{
+#if !defined(__linux__)
+	printf( "  skip: macOS reads the Windows faces' own files, whose VDMX the test above checks\n" );
+#else
+	static const struct { const char *asked; const char *windows; } FACES_TO[] = {
+		{ "Arial", "Arial" }, { "Times New Roman", "Times New Roman" }, { "Courier New", "Courier New" },
+		{ "Courier", "Courier New" }, { "FixedSys", "Courier New" },
+		{ "Placard MT Condensed", "Arial" }, { "Abadi MT Bold", "Arial" } };
+	int compared = 0, wrong = 0;
+	for (size_t f = 0; f < sizeof( FACES_TO ) / sizeof( FACES_TO[0] ); ++f)
+		for (int bold = 0; bold < 2; ++bold)
+		{
+			const GdiFontMetrics *m = NULL;
+			for (size_t i = 0; i < sizeof( theGdiFontMetrics ) / sizeof( theGdiFontMetrics[0] ); ++i)
+				if (theGdiFontMetrics[i].bold == (bold != 0) && strcmp( theGdiFontMetrics[i].face, FACES_TO[f].windows ) == 0)
+					m = &theGdiFontMetrics[i];
+			CHECK( m != NULL );
+			if (m == NULL)
+				continue;
+			for (int ppem = GDI_METRICS_FIRST_PPEM; ppem <= GDI_METRICS_LAST_PPEM; ++ppem)
+			{
+				GlyphRasteriserClass r;
+				CHECK( r.Create_Font( FACES_TO[f].asked, ppem, 0, bold != 0, 2 * ppem ) );
+				++compared;
+				const int ascent = m->ascent[ppem - GDI_METRICS_FIRST_PPEM], descent = m->descent[ppem - GDI_METRICS_FIRST_PPEM];
+				if (r.Get_Metrics().Ascent != ascent || r.Get_Metrics().Descent != descent)
+				{
+					if (wrong++ < 5)
+						printf( "  %s%s %dpx: %d+%d, GDI %d+%d\n", FACES_TO[f].asked, bold ? " bold" : "", ppem,
+							r.Get_Metrics().Ascent, r.Get_Metrics().Descent, ascent, descent );
+				}
+			}
+		}
+	CHECK_EQ( wrong, 0 );
+	CHECK_EQ( compared, 7 * 2 * (GDI_METRICS_LAST_PPEM - GDI_METRICS_FIRST_PPEM + 1) );
+	GlyphRasteriserClass arial;
+	CHECK( arial.Create_Font( "Arial", 13, 0, false, 26 ) );
+	CHECK_EQ( arial.Get_Metrics().Ascent, 13 );
+	CHECK_EQ( arial.Get_Metrics().Height, 16 );
+	printf( "  %d substituted face sizes against GDI's measured heights\n", compared );
+#endif
+}
 
 TEST(glyph_rasteriser_matches_its_golden)
 {
