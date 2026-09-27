@@ -49,11 +49,13 @@ static const char CLEAR_PIXEL_HLSL[] =
 	"cbuffer ClearColour : register(b0, space3) { float4 Colour; };\n"
 	"float4 main() : SV_Target0 { return Colour; }\n";
 
-static uint8_t * grow(std::vector<uint8_t> & bytes, uint32_t size, uint32_t & offset)
+static_assert(sizeof(SdlGpuFrame::ArenaByte) == 1, "an arena byte is a byte, so the arena is contiguous bytes");
+
+static uint8_t * grow(std::vector<SdlGpuFrame::ArenaByte> & bytes, uint32_t size, uint32_t & offset)
 {
 	offset = (uint32_t)((bytes.size() + STAGING_ALIGNMENT - 1) & ~(size_t)(STAGING_ALIGNMENT - 1));
 	bytes.resize((size_t)offset + size);
-	return size == 0 ? NULL : &bytes[offset];
+	return size == 0 ? NULL : &bytes[offset].Value;
 }
 
 uint8_t * SdlGpuFrame::Stage(uint32_t size, uint32_t & offset)

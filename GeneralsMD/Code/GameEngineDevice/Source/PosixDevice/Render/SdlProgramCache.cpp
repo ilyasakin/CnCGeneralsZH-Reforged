@@ -19,6 +19,7 @@
 // The generated programs on SDL3 GPU (decision 7, phase A3c).  See SdlProgramCache.h.
 
 #include "SdlProgramCache.h"
+#include "SdlCreationLog.h"
 #include "sdl3shadercompile.h"
 #include "engineshader.h"
 #include "ffshader.h"
@@ -28,6 +29,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 void Sdl_Read_Slot_Lines(const std::string &hlsl, unsigned int slots, std::vector<int> &textures, std::vector<int> &samplers)
 {
@@ -95,6 +97,10 @@ const SdlProgram &SdlProgramCache::Make(std::map<std::string, SdlProgram> &cache
 			}
 		}
 		CompileMilliseconds += (double)(SDL_GetTicksNS() - start) / 1.0e6;
+		if (Sdl_Creation_Log_Asked()) {
+			Sdl_Creation_Log(vertex_stage ? "vprogram" : "pprogram", (double)start / 1.0e6,
+				(double)(SDL_GetTicksNS() - start) / 1.0e6, key.substr(0, 90).c_str());
+		}
 	}
 	if (program.Shader == NULL) {
 		++Refused;
@@ -108,56 +114,134 @@ const SdlProgram &SdlProgramCache::Make(std::map<std::string, SdlProgram> &cache
 	return program;
 }
 
+static uint64_t bytes_hash(const void *bytes, size_t size)
+{
+	const uint8_t *b = (const uint8_t *)bytes;
+	uint64_t hash = 14695981039346656037ull;
+	for (size_t i = 0; i < size; ++i) {
+		hash = (hash ^ b[i]) * 1099511628211ull;
+	}
+	return hash;
+}
+
+SdlProgram *SdlProgramCache::ByBytes::Find(const void *bytes, size_t size)
+{
+	if (Last != NULL && LastBytes.size() == size && memcmp(&LastBytes[0], bytes, size) == 0) {
+		return Last;
+	}
+	std::unordered_map<uint64_t, std::vector<std::pair<std::vector<uint8_t>, SdlProgram *> > >::iterator bucket =
+		Table.find(bytes_hash(bytes, size));
+	if (bucket == Table.end()) {
+		return NULL;
+	}
+	for (size_t i = 0; i < bucket->second.size(); ++i) {
+		const std::vector<uint8_t> &kept = bucket->second[i].first;
+		if (kept.size() == size && memcmp(&kept[0], bytes, size) == 0) {
+			LastBytes = kept;
+			Last = bucket->second[i].second;
+			return Last;
+		}
+	}
+	return NULL;
+}
+
+void SdlProgramCache::ByBytes::Add(const void *bytes, size_t size, SdlProgram *program)
+{
+	const uint8_t *b = (const uint8_t *)bytes;
+	// A description whose padding varied would add itself on every draw: past this many, the lookup stops
+	// growing and such draws go to the key, as they did before.
+	const size_t MAXIMUM_ENTRIES = 16384;
+	if (Entries < MAXIMUM_ENTRIES) {
+		Table[bytes_hash(bytes, size)].push_back(std::make_pair(std::vector<uint8_t>(b, b + size), program));
+		++Entries;
+	}
+	LastBytes.assign(b, b + size);
+	Last = program;
+}
+
 const SdlProgram &SdlProgramCache::Vertex_Program(const VertexPipelineDescription &description)
 {
+	if (SdlProgram *found = VertexByBytes.Find(&description, sizeof(description))) {
+		++found->Uses;
+		return *found;
+	}
 	const std::string key = VertexShader_Key(description);
 	std::map<std::string, SdlProgram>::iterator existing = VertexPrograms.find(key);
 	if (existing != VertexPrograms.end()) {
 		++existing->second.Uses;
+		VertexByBytes.Add(&description, sizeof(description), &existing->second);
 		return existing->second;
 	}
 	std::string hlsl;
 	const bool generated = VertexShader_Generate(description, VERTEX_SHADER_TARGET_SDL3_GPU, hlsl);
-	return Make(VertexPrograms, key, generated, hlsl, true);
+	const SdlProgram &made = Make(VertexPrograms, key, generated, hlsl, true);
+	VertexByBytes.Add(&description, sizeof(description), &VertexPrograms[key]);
+	return made;
 }
 
 const SdlProgram &SdlProgramCache::Engine_Vertex_Program(int program)
 {
+	if (SdlProgram *found = EngineVertexByBytes.Find(&program, sizeof(program))) {
+		++found->Uses;
+		return *found;
+	}
 	const EngineShaderProgram engine = (EngineShaderProgram)program;
 	const std::string key = std::string("engine:") + EngineShader_Name(engine);
 	std::map<std::string, SdlProgram>::iterator existing = VertexPrograms.find(key);
 	if (existing != VertexPrograms.end()) {
 		++existing->second.Uses;
+		EngineVertexByBytes.Add(&program, sizeof(program), &existing->second);
 		return existing->second;
 	}
 	std::string hlsl;
 	const bool written = EngineShader_Vertex_Program(engine, hlsl, VERTEX_SHADER_TARGET_SDL3_GPU);
-	return Make(VertexPrograms, key, written, hlsl, true);
+	const SdlProgram &made = Make(VertexPrograms, key, written, hlsl, true);
+	EngineVertexByBytes.Add(&program, sizeof(program), &VertexPrograms[key]);
+	return made;
 }
 
 const SdlProgram &SdlProgramCache::Engine_Pixel_Program(int program, const PixelPipelineDescription &pipeline)
 {
+	// The program and the pipeline description, side by side, as the lookup's bytes.
+	struct { int Program; PixelPipelineDescription Pipeline; } lookup;
+	memset(&lookup, 0, sizeof(lookup));
+	lookup.Program = program;
+	memcpy(&lookup.Pipeline, &pipeline, sizeof(pipeline));	// padding and all, as the caller built it
+	if (SdlProgram *found = EnginePixelByBytes.Find(&lookup, sizeof(lookup))) {
+		++found->Uses;
+		return *found;
+	}
 	const EngineShaderProgram engine = (EngineShaderProgram)program;
 	const std::string key = std::string("engine:") + EngineShader_Name(engine) + CombinerShader_Pipeline_Key(pipeline);
 	std::map<std::string, SdlProgram>::iterator existing = PixelPrograms.find(key);
 	if (existing != PixelPrograms.end()) {
 		++existing->second.Uses;
+		EnginePixelByBytes.Add(&lookup, sizeof(lookup), &existing->second);
 		return existing->second;
 	}
 	std::string hlsl;
 	const bool written = EngineShader_Pixel_Program(engine, pipeline, hlsl, false, COMBINER_SHADER_TARGET_SDL3_GPU);
-	return Make(PixelPrograms, key, written, hlsl, false);
+	const SdlProgram &made = Make(PixelPrograms, key, written, hlsl, false);
+	EnginePixelByBytes.Add(&lookup, sizeof(lookup), &PixelPrograms[key]);
+	return made;
 }
 
 const SdlProgram &SdlProgramCache::Pixel_Program(const CombinerDescription &description)
 {
+	if (SdlProgram *found = PixelByBytes.Find(&description, sizeof(description))) {
+		++found->Uses;
+		return *found;
+	}
 	const std::string key = CombinerShader_Key(description);
 	std::map<std::string, SdlProgram>::iterator existing = PixelPrograms.find(key);
 	if (existing != PixelPrograms.end()) {
 		++existing->second.Uses;
+		PixelByBytes.Add(&description, sizeof(description), &existing->second);
 		return existing->second;
 	}
 	std::string hlsl;
 	const bool generated = CombinerShader_Generate(description, COMBINER_SHADER_TARGET_SDL3_GPU, hlsl);
-	return Make(PixelPrograms, key, generated, hlsl, false);
+	const SdlProgram &made = Make(PixelPrograms, key, generated, hlsl, false);
+	PixelByBytes.Add(&description, sizeof(description), &PixelPrograms[key]);
+	return made;
 }
