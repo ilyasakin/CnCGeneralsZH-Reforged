@@ -80,6 +80,7 @@
 #include "ffprobe.h"
 #include "ffshadercache.h"
 #include "dx11runtime.h"
+#include "d3d12runtime.h"
 #include "pot.h"
 #include "wwprofile.h"
 #include "ffactory.h"
@@ -504,12 +505,15 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 
 	if (!lite) {
 #if defined(_WIN32)
-		D3D9Lib = LoadLibrary("D3D9.DLL");
+		// -d3d12 (X1): zh_d3d12.dll, already loaded by W3DDisplay (d3d12runtime.h), is the Direct3D 9.
+		if (!Direct3D12_Is_Active()) {
+			D3D9Lib = LoadLibrary("D3D9.DLL");
 
-		if (D3D9Lib == NULL) return false;	// Return false at this point if init failed
+			if (D3D9Lib == NULL) return false;	// Return false at this point if init failed
 
-		Direct3DCreate9Ptr = (Direct3DCreate9Type) GetProcAddress(D3D9Lib, "Direct3DCreate9");
-		if (Direct3DCreate9Ptr == NULL) return false;
+			Direct3DCreate9Ptr = (Direct3DCreate9Type) GetProcAddress(D3D9Lib, "Direct3DCreate9");
+			if (Direct3DCreate9Ptr == NULL) return false;
+		}
 #endif
 
 		/*
@@ -517,7 +521,7 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 		*/
 		WWDEBUG_SAY(("Create Direct3D9\n"));
 #if defined(_WIN32)
-		D3DInterface = Direct3DCreate9Ptr(D3D_SDK_VERSION);
+		D3DInterface = Direct3D12_Is_Active() ? Direct3D12_Create(D3D_SDK_VERSION) : Direct3DCreate9Ptr(D3D_SDK_VERSION);
 #else
 		D3DInterface = Direct3DCreate9(D3D_SDK_VERSION);	// the device is linked in (posixd3d9): nothing to load
 #endif

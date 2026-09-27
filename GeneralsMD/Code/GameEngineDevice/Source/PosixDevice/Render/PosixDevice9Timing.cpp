@@ -38,9 +38,11 @@
 
 #include <SDL3/SDL.h>
 
+#if !defined(_WIN32)
 #include <cxxabi.h>
 #include <dlfcn.h>
 #include <execinfo.h>
+#endif
 #include <mutex>
 #include <string>
 
@@ -245,6 +247,22 @@ void Sdl_Creation_Log(const char *what, double started_ms, double took_ms, const
 	Sdl_Creation_Log_Line(line);
 }
 
+#if defined(_WIN32)
+// The -d3d12 device on Windows (X1): no dladdr or demangler without DbgHelp, so the frames go out as
+// addresses, which a debugger or the map file resolves.
+void Sdl_Creation_Log_Trace(const char *what)
+{
+	void *frames[12];
+	const USHORT count = CaptureStackBackTrace(1, 12, frames, NULL);
+	std::string line = std::string("PosixDevice9 create: trace ") + what + ":";
+	for (USHORT i = 0; i < count; ++i) {
+		char address[32];
+		snprintf(address, sizeof(address), "%s%p", i == 0 ? " " : " <- ", frames[i]);
+		line += address;
+	}
+	Sdl_Creation_Log_Line(line.c_str());
+}
+#else
 void Sdl_Creation_Log_Trace(const char *what)
 {
 	void *frames[12];
@@ -271,6 +289,7 @@ void Sdl_Creation_Log_Trace(const char *what)
 	}
 	Sdl_Creation_Log_Line(line.c_str());
 }
+#endif
 
 void Sdl_Creation_Log_Flush()
 {

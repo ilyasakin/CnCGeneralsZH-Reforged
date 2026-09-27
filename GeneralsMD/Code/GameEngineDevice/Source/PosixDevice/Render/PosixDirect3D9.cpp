@@ -37,6 +37,15 @@ IDirect3D9 * Direct3DCreate9(unsigned int sdk_version)
 	return new PosixDirect3D9();
 }
 
+#if defined(ZH_D3D12_DEVICE)
+// -d3d12 on Windows (X1): the COM adapter in zh_d3d12.dll sees this device's interfaces inside a namespace,
+// beside the SDK's own, so it cannot name Direct3DCreate9 here.  This is the same call with a C name.
+extern "C" void * ZH_PosixDirect3DCreate9(unsigned int sdk_version)
+{
+	return Direct3DCreate9(sdk_version);
+}
+#endif
+
 PosixDirect3D9::PosixDirect3D9()
 {
 }

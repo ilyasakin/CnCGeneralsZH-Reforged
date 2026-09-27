@@ -98,6 +98,7 @@ SdlGpuFrame::SdlGpuFrame() :
 	NextTickNs(0),
 	GpuDevice(NULL),
 	Window(NULL),
+	OwnsWindow(false),
 	BackBuffer(NULL),
 	DepthStencil(NULL),
 	FrontCopy(NULL),
@@ -130,16 +131,51 @@ SdlGpuFrame * SdlGpuFrame::Create(RenderWindow window, unsigned int width, unsig
 	SdlGpuFrame * frame = new SdlGpuFrame();
 	// Debug validation only when asked: it is slow, and the game runs without it.
 	const bool debug = getenv("ZH_GPU_DEBUG") != NULL;
+#if defined(_WIN32)
+	// -d3d12 (X1): SDL's GPU device needs the video subsystem even with no window, and Win32 stays the platform
+	// layer, so nothing else has started it.  DXBC is what the D3D12 backend always takes: the programs reach it
+	// through SPIRV-Cross's HLSL and d3dcompiler_47.dll (SDL_shadercross).  The driver is named: SDL tries Vulkan
+	// before Direct3D 12, and would take it wherever a Vulkan driver is installed.
+	if (!SDL_WasInit(SDL_INIT_VIDEO) && !SDL_InitSubSystem(SDL_INIT_VIDEO)) {
+		error = std::string("SDL_InitSubSystem(VIDEO): ") + SDL_GetError();
+		delete frame;
+		return NULL;
+	}
+	frame->GpuDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXBC | SDL_GPU_SHADERFORMAT_SPIRV, debug, "direct3d12");
+	if (frame->GpuDevice != NULL)
+		fprintf(stderr, "SdlGpuFrame: SDL GPU driver %s\n", SDL_GetGPUDeviceDriver(frame->GpuDevice));
+#else
 	frame->GpuDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL, debug, NULL);
+#endif
 	if (frame->GpuDevice == NULL) {
 		error = std::string("SDL_CreateGPUDevice: ") + SDL_GetError();
 		delete frame;
 		return NULL;
 	}
+#if defined(_WIN32)
+	// On Windows a RenderWindow is the game's own HWND (WinMain), which SDL wraps rather than makes: SDL then
+	// forwards every message it does not keep to the game's WndProc, and puts that WndProc back when the
+	// window is destroyed with this frame.  SDL's event loop is never pumped: WinMain's loop runs the window.
+	if (window != NULL) {
+		const SDL_PropertiesID properties = SDL_CreateProperties();
+		SDL_SetPointerProperty(properties, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, (void *)window);
+		frame->Window = SDL_CreateWindowWithProperties(properties);
+		SDL_DestroyProperties(properties);
+		if (frame->Window == NULL) {
+			error = std::string("SDL_CreateWindowWithProperties(HWND): ") + SDL_GetError();
+			delete frame;
+			return NULL;
+		}
+		frame->OwnsWindow = true;
+	}
+#else
 	// The one place a RenderWindow is taken back to what it is: C2 hands the device its SDL_Window.
 	frame->Window = reinterpret_cast<SDL_Window *>(window);
+#endif
 	if (frame->Window != NULL && !SDL_ClaimWindowForGPUDevice(frame->GpuDevice, frame->Window)) {
 		error = std::string("SDL_ClaimWindowForGPUDevice: ") + SDL_GetError();
+		if (frame->OwnsWindow) SDL_DestroyWindow(frame->Window);
+		frame->OwnsWindow = false;
 		frame->Window = NULL;
 		delete frame;
 		return NULL;
@@ -183,6 +219,7 @@ SdlGpuFrame::~SdlGpuFrame()
 	if (PointSampler != NULL) SDL_ReleaseGPUSampler(GpuDevice, PointSampler);
 	if (Window != NULL) SDL_ReleaseWindowFromGPUDevice(GpuDevice, Window);
 	SDL_DestroyGPUDevice(GpuDevice);
+	if (OwnsWindow) SDL_DestroyWindow(Window);
 }
 
 bool SdlGpuFrame::Create_Targets(unsigned int width, unsigned int height)

@@ -32,7 +32,7 @@
 #include <string>
 #include <vector>
 
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(ZH_D3D12_DEVICE)
 #error "d3dx9posix.cpp is the POSIX D3DX; Windows binds d3dx9_43.dll in d3dx9runtime.cpp"
 #endif
 

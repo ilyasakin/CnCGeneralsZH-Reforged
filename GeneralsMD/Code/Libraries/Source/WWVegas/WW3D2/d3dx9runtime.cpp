@@ -19,9 +19,8 @@
 
 #include "d3dx9runtime.h"
 #include "d3dx9math.h"
-#if defined(_M_ARM64)
 #include "d3dx9portable.h"
-#endif
+#include "d3d12runtime.h"
 
 #include <stdio.h>
 
@@ -57,23 +56,64 @@ static bool BindSucceeded = false;
 
 static void release_module(void);
 
-#if defined(_M_ARM64)
-/* Windows on Arm: Microsoft shipped d3dx9_43.dll for x86 and x64 only, and an ARM64 process cannot load
-	 either.  The arithmetic is bound to the port's own bodies instead (d3dx9portable.cpp, what macOS and
-	 Linux use, held against the DLL by test_d3dx9portable_oracle on x64), so the renderer's matrices and
-	 vertex sizes are right.  The three texture constructors are the device's own Create* calls without
-	 D3DX's size and format fitting, which is enough for the engine to start (DX8Wrapper::_Create_DX8_Texture
-	 called through null here, on the ARM64 VM).  Everything else needs what only the DLL has - image
-	 decoding, filtering, an assembler, a compiler - and refuses as a failed DLL call would: file textures
-	 become MissingTexture, the water keeps its fixed-function path.  The bind still reports failure.
-	 Native ARM64 rendering is -d3d12's (X1), where d3dx9posix serves whole; until then ARM64 players run
-	 the x64 build under Windows' emulation. */
+/* The arithmetic from the port's own bodies (d3dx9portable.cpp, what macOS and Linux use, held against the DLL
+	 by test_d3dx9portable_oracle on x64): Windows on Arm, which has no DLL, and -d3d12 on every architecture, whose
+	 module brings no arithmetic.  None of it reaches the simulation, whose D3DXVec4Transform is d3dx9math.h's. */
 static HRESULT WINAPI portable_matrix_inverse(D3DXMATRIX * out, FLOAT * determinant, const D3DXMATRIX * matrix)
 {
 	// No caller reads the result; the DLL's is the matrix pointer, or null when it is singular.
 	return D3DXPortable_Matrix_Inverse(out, determinant, matrix) != NULL ? S_OK : E_FAIL;
 }
 
+static void bind_portable_math(void)
+{
+	D3DXMatrixInverse = portable_matrix_inverse;
+	D3DXMatrixMultiply = (D3DXMatrixBinaryFunction)D3DXPortable_Matrix_Multiply;
+	D3DXMatrixTranspose = (D3DXMatrixUnaryFunction)D3DXPortable_Matrix_Transpose;
+	D3DXMatrixScaling = (D3DXMatrixTripleFunction)D3DXPortable_Matrix_Scaling;
+	D3DXMatrixTranslation = (D3DXMatrixTripleFunction)D3DXPortable_Matrix_Translation;
+	D3DXMatrixRotationZ = (D3DXMatrixAngleFunction)D3DXPortable_Matrix_Rotation_Z;
+	D3DXVec3Transform = (D3DXVec3TransformFunction)D3DXPortable_Vec3_Transform;
+}
+
+/* -d3d12 (X1): the ten texture and shader entry points from zh_d3d12.dll, which exports them under D3DX's names
+	 for its own device (the module's D3D12Exports.cpp), and the arithmetic from the port's bodies.  d3dx9_43.dll
+	 is neither loaded nor needed: its textures would be d3d9.dll's, which the module's device cannot take. */
+static bool bind_d3d12_runtime(HMODULE module)
+{
+	D3DXAssembleShader = (D3DXAssembleShaderFunction)GetProcAddress(module, "D3DXAssembleShader");
+	D3DXCompileShader = (D3DXCompileShaderFunction)GetProcAddress(module, "D3DXCompileShader");
+	D3DXDisassembleShader = (D3DXDisassembleShaderFunction)GetProcAddress(module, "D3DXDisassembleShader");
+	D3DXCreateTexture = (D3DXCreateTextureFunction)GetProcAddress(module, "D3DXCreateTexture");
+	D3DXCreateCubeTexture = (D3DXCreateCubeTextureFunction)GetProcAddress(module, "D3DXCreateCubeTexture");
+	D3DXCreateVolumeTexture = (D3DXCreateVolumeTextureFunction)GetProcAddress(module, "D3DXCreateVolumeTexture");
+	D3DXCreateTextureFromFileExA = (D3DXCreateTextureFromFileExFunction)GetProcAddress(module, "D3DXCreateTextureFromFileExA");
+	D3DXFilterTexture = (D3DXFilterTextureFunction)GetProcAddress(module, "D3DXFilterTexture");
+	D3DXLoadSurfaceFromSurface = (D3DXLoadSurfaceFromSurfaceFunction)GetProcAddress(module, "D3DXLoadSurfaceFromSurface");
+	D3DXGetFVFVertexSize = (D3DXGetFVFVertexSizeFunction)GetProcAddress(module, "D3DXGetFVFVertexSize");
+	bind_portable_math();
+	return D3DXAssembleShader != NULL
+		&& D3DXCompileShader != NULL
+		&& D3DXDisassembleShader != NULL
+		&& D3DXCreateTexture != NULL
+		&& D3DXCreateCubeTexture != NULL
+		&& D3DXCreateVolumeTexture != NULL
+		&& D3DXCreateTextureFromFileExA != NULL
+		&& D3DXFilterTexture != NULL
+		&& D3DXLoadSurfaceFromSurface != NULL
+		&& D3DXGetFVFVertexSize != NULL;
+}
+
+#if defined(_M_ARM64)
+/* Windows on Arm: Microsoft shipped d3dx9_43.dll for x86 and x64 only, and an ARM64 process cannot load
+	 either.  The arithmetic is bound to the port's own bodies instead (bind_portable_math), so the renderer's
+	 matrices and vertex sizes are right.  The three texture constructors are the device's own Create* calls without
+	 D3DX's size and format fitting, which is enough for the engine to start (DX8Wrapper::_Create_DX8_Texture
+	 called through null here, on the ARM64 VM).  Everything else needs what only the DLL has - image
+	 decoding, filtering, an assembler, a compiler - and refuses as a failed DLL call would: file textures
+	 become MissingTexture, the water keeps its fixed-function path.  The bind still reports failure.
+	 Native ARM64 rendering is -d3d12's (X1), where d3dx9posix serves whole; until then ARM64 players run
+	 the x64 build under Windows' emulation. */
 static UINT WINAPI portable_fvf_vertex_size(DWORD fvf)
 {
 	return D3DXPortable_FVF_Vertex_Size(fvf);
@@ -160,13 +200,7 @@ static void bind_arm64_runtime(void)
 	D3DXFilterTexture = unavailable_filter_texture;
 	D3DXLoadSurfaceFromSurface = unavailable_load_surface;
 	D3DXGetFVFVertexSize = portable_fvf_vertex_size;
-	D3DXMatrixInverse = portable_matrix_inverse;
-	D3DXMatrixMultiply = (D3DXMatrixBinaryFunction)D3DXPortable_Matrix_Multiply;
-	D3DXMatrixTranspose = (D3DXMatrixUnaryFunction)D3DXPortable_Matrix_Transpose;
-	D3DXMatrixScaling = (D3DXMatrixTripleFunction)D3DXPortable_Matrix_Scaling;
-	D3DXMatrixTranslation = (D3DXMatrixTripleFunction)D3DXPortable_Matrix_Translation;
-	D3DXMatrixRotationZ = (D3DXMatrixAngleFunction)D3DXPortable_Matrix_Rotation_Z;
-	D3DXVec3Transform = (D3DXVec3TransformFunction)D3DXPortable_Vec3_Transform;
+	bind_portable_math();
 }
 #endif
 
@@ -208,6 +242,14 @@ bool Bind_D3DX9_Runtime(void)
 		return BindSucceeded;
 	}
 	BindAttempted = true;
+
+	if (Direct3D12_Is_Active()) {
+		BindSucceeded = bind_d3d12_runtime(Direct3D12_Module());
+		if (!BindSucceeded) {
+			release_module();
+		}
+		return BindSucceeded;
+	}
 
 #if defined(_M_ARM64)
 	bind_arm64_runtime();

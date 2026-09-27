@@ -216,6 +216,7 @@ RenderResult PosixDevice9::Create_Gpu_Frame(bool offscreen)
 	Set_Renderer_Name(SDL_GetGPUDeviceDriver(Gpu->Device()));
 	Programs = new SdlProgramCache(Gpu->Device());
 	Pipelines = new SdlPipelineCache(Gpu->Device());
+	Pipelines->Describe_Shader = [this](const SDL_GPUShader *shader) { return Programs->Key_Of(shader); };
 	Samplers = new SdlSamplerCache(Gpu->Device());
 	Mirrors = new SdlResourceMirrors(Gpu);
 	return D3D_OK;

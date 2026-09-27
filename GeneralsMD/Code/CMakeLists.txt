@@ -35,6 +35,15 @@ else()
   endif()
 endif()
 
+# X1: the -d3d12 renderer on Windows - the POSIX device (posixd3d9) on SDL_GPU's D3D12 backend, with its shaders
+# through glslang, SPIRV-Cross (HLSL) and SDL_shadercross to DXBC, and d3dcompiler_47.dll at run time.  Off by
+# default until pictures prove parity with -dx11 (docs/mac-port/tasks/X1-d3d12.md); run Tools\vendor.ps1 -D3D12
+# first.  Decision 3's scoped amendment: SDL3 on Windows for this renderer only, Win32 stays the platform layer.
+option(ZH_D3D12 "Windows: build the -d3d12 renderer (the SDL3 GPU device on D3D12)" OFF)
+if(ZH_D3D12 AND NOT ZH_PLATFORM_WINDOWS)
+  message(FATAL_ERROR "ZH_D3D12 is Windows' option: off Windows the same device is the renderer already")
+endif()
+
 # The other half of the split.  A target that only Windows can build is gated out below; a target
 # whose sources do not compile under clang *yet* is a different thing, and this is it.  Those stay
 # defined on macOS, so that tasks B1-B6 have something to drive with --target and see real errors
@@ -137,6 +146,15 @@ if(ZH_PLATFORM_WINDOWS)
   list(APPEND VENDORED
     ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/DirectX/Include/d3d8.h)
   set(VENDOR_HINT "Run Tools\\vendor.ps1 (build.bat does it for you).")
+  # X1's -d3d12 renderer: the SDL3 GPU stack, which only vendor.ps1 -D3D12 fetches on Windows.
+  if(ZH_D3D12)
+    list(APPEND VENDORED
+      ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/SDL3/CMakeLists.txt
+      ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/glslang/glslang/HLSL/hlslParseHelper.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/SPIRV-Cross/spirv_hlsl.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/SDL_shadercross/src/SDL_shadercross.c)
+    set(VENDOR_HINT "Run Tools\\vendor.ps1 -D3D12 (ZH_D3D12 needs the SDL3 GPU stack).")
+  endif()
 else()
   # SDL3 and miniaudio are the platform layer everywhere but Windows (decision 3).
   list(APPEND VENDORED
@@ -565,10 +583,12 @@ if(ZH_PLATFORM_WINDOWS)
 # The D3DX9 entry points the renderer binds at run time, in a library of their own
 # because GameEngine needs the math half without the renderer: BezierSegment carries
 # D3DXMATRIX and DumbProjectileBehavior steers a shell with it.
-# d3dx9portable.cpp is D3DX's arithmetic, which Windows on ARM64 binds in place of the DLL it does not have.
-# On x64 nothing references it and the linker leaves it out of every program but its oracle test.
+# d3dx9portable.cpp is D3DX's arithmetic, which Windows on ARM64 binds in place of the DLL it does not have,
+# and every architecture binds under -d3d12.  d3d12runtime.cpp is -d3d12's switch (X1): it loads
+# zh_d3d12.dll, which the binder then takes D3DX from and DX8Wrapper its Direct3D 9.
 add_library(d3dx9runtime STATIC
-  ${WW}/WW3D2/d3dx9runtime.cpp ${WW}/WW3D2/d3d8shadertranslate.cpp ${WW}/WW3D2/d3dx9portable.cpp)
+  ${WW}/WW3D2/d3dx9runtime.cpp ${WW}/WW3D2/d3d8shadertranslate.cpp ${WW}/WW3D2/d3dx9portable.cpp
+  ${WW}/WW3D2/d3d12runtime.cpp)
 set_target_properties(d3dx9runtime PROPERTIES CXX_STANDARD 17)
 target_include_directories(d3dx9runtime PUBLIC ${WW}/WW3D2)
 target_link_libraries(d3dx9runtime PUBLIC d3d9)
@@ -885,52 +905,6 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(engineshader PUBLIC ${WW}/WW3D2)
   target_link_libraries(engineshader PUBLIC ffshader)
 
-  # glslang (HLSL to SPIR-V) and SPIRV-Cross (SPIR-V to MSL), fetched and pinned by vendor.sh, with
-  # only the parts decision 4 uses.  Their options are set inside a function so they stay out of the
-  # rest of this file, and both are EXCLUDE_FROM_ALL: what gets built is what links against them.
-  function(zh_add_shader_compilers)
-    # Both read options with the old CMP0077 behaviour, under which option() ignores a normal
-    # variable its parent set.  Without this, every setting below would silently not apply.
-    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
-    set(BUILD_SHARED_LIBS OFF)
-    set(ENABLE_HLSL ON)
-    set(ENABLE_OPT OFF)
-    set(ENABLE_SPIRV ON)
-    set(ENABLE_GLSLANG_BINARIES OFF)
-    set(ENABLE_PCH OFF)
-    set(GLSLANG_TESTS OFF)
-    set(GLSLANG_ENABLE_INSTALL OFF)
-    set(BUILD_EXTERNAL OFF)
-    add_subdirectory(${LIBSRC}/glslang ${CMAKE_CURRENT_BINARY_DIR}/glslang EXCLUDE_FROM_ALL)
-    set(SPIRV_CROSS_CLI OFF)
-    set(SPIRV_CROSS_ENABLE_TESTS OFF)
-    set(SPIRV_CROSS_SHARED OFF)
-    set(SPIRV_CROSS_STATIC ON)
-    set(SPIRV_CROSS_ENABLE_HLSL OFF)
-    set(SPIRV_CROSS_ENABLE_CPP OFF)
-    set(SPIRV_CROSS_ENABLE_REFLECT OFF)
-    set(SPIRV_CROSS_ENABLE_UTIL OFF)
-    set(SPIRV_CROSS_ENABLE_MSL ON)
-    set(SPIRV_CROSS_ENABLE_GLSL ON)
-    set(SPIRV_CROSS_ENABLE_C_API ON)
-    set(SPIRV_CROSS_SKIP_INSTALL ON)
-    add_subdirectory(${LIBSRC}/SPIRV-Cross ${CMAKE_CURRENT_BINARY_DIR}/SPIRV-Cross EXCLUDE_FROM_ALL)
-  endfunction()
-  zh_add_shader_compilers()
-
-  # SDL_shadercross is one C file, built here rather than through its own CMakeLists, whose vendored
-  # mode insists on DXC's source even with DXC off.  No SDL_SHADERCROSS_DXC: HLSL never reaches it,
-  # only the SPIR-V glslang wrote.
-  add_library(sdl3_shadercross STATIC ${LIBSRC}/SDL_shadercross/src/SDL_shadercross.c)
-  target_include_directories(sdl3_shadercross PUBLIC ${LIBSRC}/SDL_shadercross/include)
-  target_link_libraries(sdl3_shadercross PUBLIC SDL3::SDL3-static PRIVATE spirv-cross-c)
-
-  # HLSL to SPIR-V to what a device takes, behind the one function that names the HLSL front end.
-  add_library(sdl3shadercompile STATIC ${WW}/WW3D2/sdl3shadercompile.cpp)
-  target_include_directories(sdl3shadercompile PUBLIC ${WW}/WW3D2)
-  target_link_libraries(sdl3shadercompile PUBLIC SDL3::SDL3-static
-    PRIVATE sdl3_shadercross glslang::glslang glslang::glslang-default-resource-limits)
-
   # ---- Text off Windows (decision 6, D6) -----------------------------------------------------------
   # FreeType 2.14.3, fetched and pinned by vendor.sh, with none of its optional dependencies: the game's
   # fonts are plain TrueType files, and zlib, bzip2, PNG, HarfBuzz and Brotli only matter to compressed,
@@ -988,6 +962,79 @@ if(ZH_PLATFORM_POSIX)
   # will compile them (D3).
   target_link_libraries(w3d_view PRIVATE SDL3::SDL3-static wwmath wwlib wwsaveload wwdebug
     ffvertex engineshader sdl3shadercompile)
+endif()
+
+# ---- X1: SDL3 on Windows, for the -d3d12 renderer only ------------------------------------------------
+# Video (the GPU device needs it initialised, and wraps the game's own HWND) and GPU, nothing else: no
+# dialog, audio, render, joystick and the rest.  Win32Device stays the platform layer (decision 3, amended).
+if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
+  foreach(_sdl_off SDL_SHARED SDL_TEST_LIBRARY SDL_TESTS SDL_EXAMPLES SDL_INSTALL SDL_UNINSTALL
+                   SDL_AUDIO SDL_RENDER SDL_CAMERA SDL_JOYSTICK SDL_HAPTIC SDL_HIDAPI SDL_POWER
+                   SDL_SENSOR SDL_TRAY SDL_OPENGL SDL_OPENGLES SDL_DIALOG)
+    set(${_sdl_off} OFF CACHE BOOL "" FORCE)
+  endforeach()
+  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU)
+    set(${_sdl_on} ON CACHE BOOL "" FORCE)
+  endforeach()
+  add_subdirectory(${LIBSRC}/SDL3 ${CMAKE_CURRENT_BINARY_DIR}/SDL3)
+endif()
+
+# ---- The shader compilers for the SDL3 GPU target (decision 4, D3; X1 on Windows) --------------------
+# Off Windows they compile the generators' SDL3 GPU target for Metal and Vulkan; on Windows, with ZH_D3D12,
+# for D3D12 (DXBC through SPIRV-Cross's HLSL).
+if(ZH_PLATFORM_POSIX OR ZH_D3D12)
+  # glslang (HLSL to SPIR-V) and SPIRV-Cross (SPIR-V to MSL), fetched and pinned by vendor.sh, with
+  # only the parts decision 4 uses.  Their options are set inside a function so they stay out of the
+  # rest of this file, and both are EXCLUDE_FROM_ALL: what gets built is what links against them.
+  function(zh_add_shader_compilers)
+    # Both read options with the old CMP0077 behaviour, under which option() ignores a normal
+    # variable its parent set.  Without this, every setting below would silently not apply.
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(BUILD_SHARED_LIBS OFF)
+    set(ENABLE_HLSL ON)
+    set(ENABLE_OPT OFF)
+    set(ENABLE_SPIRV ON)
+    set(ENABLE_GLSLANG_BINARIES OFF)
+    set(ENABLE_PCH OFF)
+    set(GLSLANG_TESTS OFF)
+    set(GLSLANG_ENABLE_INSTALL OFF)
+    set(BUILD_EXTERNAL OFF)
+    add_subdirectory(${LIBSRC}/glslang ${CMAKE_CURRENT_BINARY_DIR}/glslang EXCLUDE_FROM_ALL)
+    set(SPIRV_CROSS_CLI OFF)
+    set(SPIRV_CROSS_ENABLE_TESTS OFF)
+    set(SPIRV_CROSS_SHARED OFF)
+    set(SPIRV_CROSS_STATIC ON)
+    # HLSL on Windows only: route A of X1 (SPIR-V to HLSL SM5.1, then d3dcompiler_47.dll to DXBC).
+    if(ZH_PLATFORM_WINDOWS)
+      set(SPIRV_CROSS_ENABLE_HLSL ON)
+    else()
+      set(SPIRV_CROSS_ENABLE_HLSL OFF)
+    endif()
+    set(SPIRV_CROSS_ENABLE_CPP OFF)
+    set(SPIRV_CROSS_ENABLE_REFLECT OFF)
+    set(SPIRV_CROSS_ENABLE_UTIL OFF)
+    set(SPIRV_CROSS_ENABLE_MSL ON)
+    set(SPIRV_CROSS_ENABLE_GLSL ON)
+    set(SPIRV_CROSS_ENABLE_C_API ON)
+    set(SPIRV_CROSS_SKIP_INSTALL ON)
+    add_subdirectory(${LIBSRC}/SPIRV-Cross ${CMAKE_CURRENT_BINARY_DIR}/SPIRV-Cross EXCLUDE_FROM_ALL)
+  endfunction()
+  zh_add_shader_compilers()
+
+  # SDL_shadercross is one C file, built here rather than through its own CMakeLists, whose vendored
+  # mode insists on DXC's source even with DXC off.  No SDL_SHADERCROSS_DXC: it takes the SPIR-V glslang
+  # wrote, and on Windows (X1) turns it into DXBC through SPIRV-Cross's HLSL and d3dcompiler_47.dll, which it
+  # loads at run time.  DXIL (and so DXC) is not used.
+  add_library(sdl3_shadercross STATIC ${LIBSRC}/SDL_shadercross/src/SDL_shadercross.c)
+  target_include_directories(sdl3_shadercross PUBLIC ${LIBSRC}/SDL_shadercross/include)
+  target_link_libraries(sdl3_shadercross PUBLIC SDL3::SDL3-static PRIVATE spirv-cross-c)
+
+  # HLSL to SPIR-V to what a device takes, behind the one function that names the HLSL front end.
+  add_library(sdl3shadercompile STATIC ${WW}/WW3D2/sdl3shadercompile.cpp)
+  target_include_directories(sdl3shadercompile PUBLIC ${WW}/WW3D2)
+  target_link_libraries(sdl3shadercompile PUBLIC SDL3::SDL3-static
+    PRIVATE sdl3_shadercross glslang::glslang glslang::glslang-default-resource-limits)
+
 endif()
 
 # d3d8to9 is no longer built.  It was a d3d8.dll next to generals.exe that translated
@@ -1569,6 +1616,65 @@ if(ZH_PLATFORM_POSIX)
   endif()
 endif()
 
+# ---- X1: the -d3d12 device on Windows -------------------------------------------------------------------
+# The same posixd3d9 and the POSIX D3DX (d3dx9posix: textures, the water's source text) as off Windows,
+# compiled against the shim <d3d9.h> in Platform/PosixD3D9, never the SDK's.  Everything that says so is
+# PRIVATE: zh_d3d12.dll's COM adapter (X1 1c) links these while including the SDK's d3d9.h, so neither the
+# shim's include path nor ZH_D3D12_DEVICE may reach it.  windows.h comes first by force, with
+# its configuration chosen here (Platform/RenderTypes.h will not choose it).  The D3DX library is named
+# d3dx9posix_d3d12: d3dx9runtime is Windows' own, the binding of d3dx9_43.dll.
+if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
+  set(ZH_POSIX_D3D9_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include/Platform/PosixD3D9)
+  set(ZH_D3D12_DEVICE_DEFINES ZH_D3D12_DEVICE NOMINMAX WIN32_LEAN_AND_MEAN)
+  set(ZH_D3D12_DEVICE_OPTIONS /FIwindows.h)
+
+  file(GLOB_RECURSE POSIXD3D9_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render/*.cpp)
+  add_library(posixd3d9 STATIC ${POSIXD3D9_SOURCES})
+  set_target_properties(posixd3d9 PROPERTIES CXX_STANDARD 17)
+  target_include_directories(posixd3d9 PRIVATE ${ZH_POSIX_D3D9_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+  target_compile_definitions(posixd3d9 PRIVATE ${ZH_D3D12_DEVICE_DEFINES})
+  target_compile_options(posixd3d9 PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
+  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile engineshader ffshader ffvertex)
+
+  # d3dx9portable.cpp: the arithmetic half of D3DX, which d3dx9posix.cpp forwards to (a contributor, ARM64).  Never
+  # d3dx9runtime.cpp beside these: its Bind_D3DX9_Runtime is the DLL binder's, and would clash with ours.
+  add_library(d3dx9posix_d3d12 STATIC
+    ${WW}/WW3D2/d3dx9posix.cpp ${WW}/WW3D2/d3dx9posix_texture.cpp ${WW}/WW3D2/d3dx9portable.cpp
+    ${WW}/WW3D2/d3d8shadertranslate.cpp)
+  set_target_properties(d3dx9posix_d3d12 PROPERTIES CXX_STANDARD 17)
+  target_include_directories(d3dx9posix_d3d12 PRIVATE ${ZH_POSIX_D3D9_INCLUDE} ${WW}/WW3D2
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_compile_definitions(d3dx9posix_d3d12 PRIVATE ${ZH_D3D12_DEVICE_DEFINES})
+  target_compile_options(d3dx9posix_d3d12 PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
+  target_link_libraries(d3dx9posix_d3d12 PRIVATE posixd3d9)
+
+  # zh_d3d12.dll, the module the game loads under -d3d12: the COM adapter (D3D12Device/) over everything above.
+  # The adapter sees the SDK's d3d9.h and the device's header inside a namespace (D3D12Bridge.h); C4005 is an
+  # error so that a macro the generated D3D12ShimUndefs.h misses cannot quietly take the SDK's meaning.  The
+  # C bridge to d3dx9posix is on the device's side, so it is a library of its own with the device's settings.
+  set(D3D12DEVICE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/D3D12Device)
+  add_library(zh_d3d12_shim STATIC ${D3D12DEVICE}/D3D12ShimBridge.cpp)
+  set_target_properties(zh_d3d12_shim PROPERTIES CXX_STANDARD 17)
+  target_include_directories(zh_d3d12_shim PRIVATE ${ZH_POSIX_D3D9_INCLUDE} ${WW}/WW3D2 ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+  target_compile_definitions(zh_d3d12_shim PRIVATE ${ZH_D3D12_DEVICE_DEFINES})
+  target_compile_options(zh_d3d12_shim PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
+  target_link_libraries(zh_d3d12_shim PRIVATE d3dx9posix_d3d12)
+
+  add_library(zh_d3d12 SHARED ${D3D12DEVICE}/D3D12Adapter.cpp ${D3D12DEVICE}/D3D12Exports.cpp ${D3D12DEVICE}/zh_d3d12.def)
+  set_target_properties(zh_d3d12 PROPERTIES CXX_STANDARD 17)
+  target_include_directories(zh_d3d12 PRIVATE ${D3D12DEVICE} ${WW}/WW3D2 ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+  target_compile_definitions(zh_d3d12 PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_compile_options(zh_d3d12 PRIVATE /we4005)
+  target_link_libraries(zh_d3d12 PRIVATE zh_d3d12_shim d3dx9posix_d3d12 posixd3d9)
+
+  # The slice: the DLL loaded by path as the game will, one triangle drawn offscreen and read back (77: no device).
+  add_executable(test_d3d12_slice ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_d3d12_slice.cpp)
+  target_compile_definitions(test_d3d12_slice PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  add_dependencies(test_d3d12_slice zh_d3d12)
+  add_test(NAME test_d3d12_slice COMMAND test_d3d12_slice $<TARGET_FILE:zh_d3d12>)
+  set_tests_properties(test_d3d12_slice PROPERTIES SKIP_RETURN_CODE 77)
+endif()
+
 # ===========================================================================
 # Phase 4 - GameEngineDevice + Main -> generals.exe
 # ===========================================================================
@@ -1611,6 +1717,8 @@ list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/Source/PosixDevice/")
 # SdlDevice is the same for SDL3 (C2, C3), built below as sdldevice, never on Windows either; the glob
 # above took it in, and W2's first MSVC build found no SDL3 to compile it against.
 list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/Source/SdlDevice/")
+# D3D12Device is zh_d3d12.dll's COM adapter (X1), built above under ZH_D3D12 and never part of the exe.
+list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/Source/D3D12Device/")
 # Sound and video are the game's own.  Miles and Bink were binary-only, and the DLLs the retail
 # game ships are 32-bit, so there is nothing for a 64-bit exe to bind to: what it links instead is
 # those two APIs written over XAudio2 and FFmpeg.  FFmpeg decodes binkvideo and binkaudio natively,
@@ -1662,6 +1770,12 @@ target_link_options(generals PRIVATE /MAP)
 set_target_properties(generals PROPERTIES CXX_STANDARD 17)
 target_link_libraries(generals PRIVATE gameenginedevice
   winmm dsound wsock32 ole32 oleaut32 uuid)
+if(ZH_D3D12)
+  # -d3d12 loads zh_d3d12.dll from the executable's folder (d3d12runtime.cpp), so it goes wherever the exe goes.
+  add_dependencies(generals zh_d3d12)
+  add_custom_command(TARGET generals POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:zh_d3d12> ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+endif()
 # The game reads its data relative to the working directory, so it has to sit
 # beside Run/'s .big files to find anything (Phase 5).
 add_custom_command(TARGET generals POST_BUILD

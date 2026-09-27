@@ -78,6 +78,8 @@ public:
 	const SdlProgram &Engine_Pixel_Program(int program, const struct PixelPipelineDescription &pipeline);
 
 	unsigned int Programs_Built() const { return Built; }
+	/// The key a program was made under, for a refusal's log line: "" for a shader this cache did not make.
+	std::string Key_Of(const SDL_GPUShader *shader) const;
 	unsigned int Programs_Refused() const { return Refused; }
 	double Milliseconds_Compiling() const { return CompileMilliseconds; }
 
