@@ -603,6 +603,100 @@ TEST(ffref_known_list_stages_as_windows_measures_them)
 	}
 }
 
+TEST(ffref_known_list_second_probe_as_windows_measures_it)
+{
+	// N14: the camera-space reflection vector, read through a 256x256 coordinate texture (texel (x, y) =
+	// R x, G y, POINT, CLAMP) with COUNT2 and u = .25 Rz + .5, v = .25 Ry + .5
+	{
+		Texture tex;
+		tex.type = TEXTURE_2D;
+		TextureLevel level;
+		level.width = level.height = 256;
+		for (int y = 0; y < 256; ++y)
+			for (int x = 0; x < 256; ++x)
+				level.texels.push_back( rgba( x / 255.0, y / 255.0, 0, 1 ) );
+		tex.levels.push_back( level );
+		struct Case { double ny, nz; int localViewer; uint32_t centre, corner11; };
+		const Case cases[4] = { { 0, -1, 1, 0xFF6A8000, 0xFF6AA900 }, { 0, -1, 0, 0xFF408000, 0xFF408000 },
+			{ 0.6, -0.8, 1, 0xFF7A9400, 0xFFA1A000 }, { 0.6, -0.8, 0, 0xFF6EBD00, 0xFF6EBD00 } };
+		for (const Case &c : cases)
+		{
+			DrawState s = probeState( false );
+			s.hasNormal = true;
+			s.renderState[RS_LOCALVIEWER] = c.localViewer;
+			s.textures[0] = &tex;
+			s.stageState[0][TSS_COLORARG1] = TA_TEXTURE;
+			s.stageState[0][TSS_TEXCOORDINDEX] = TSS_TCI_CAMERASPACEREFLECTIONVECTOR;
+			s.stageState[0][TSS_TEXTURETRANSFORMFLAGS] = TTFF_COUNT2;
+			s.samplerState[0][SAMP_ADDRESSU] = s.samplerState[0][SAMP_ADDRESSV] = TADDRESS_CLAMP;
+			Matrix &m = s.textureTransform[0];
+			memset( &m, 0, sizeof( m ) );
+			m.m[2][0] = 0.25; m.m[1][1] = 0.25; m.m[3][0] = 0.5; m.m[3][1] = 0.5; m.m[3][3] = 1;
+			Vertex v[4] = { worldVertex( -1, 1, 0.5, rgba( 0, 0, 0, 0 ) ), worldVertex( 1, 1, 0.5, rgba( 0, 0, 0, 0 ) ),
+				worldVertex( -1, -1, 0.5, rgba( 0, 0, 0, 0 ) ), worldVertex( 1, -1, 0.5, rgba( 0, 0, 0, 0 ) ) };
+			for (int i = 0; i < 4; ++i) { v[i].normal[1] = c.ny; v[i].normal[2] = c.nz; }
+			Target t = probeTarget();
+			CHECK( draw( s, PT_TRIANGLESTRIP, v, 4, 0, 4, t ) );
+			measured( t, 32, 32, c.centre, 1 );
+			measured( t, 1, 1, c.corner11, 1 );
+		}
+	}
+	// N28: a stage naming a coordinate set the vertices lack reads (0, 0): texel (0, 0), not (2, 2)
+	{
+		Texture tex = ramp4();
+		for (Color &c : tex.levels[0].texels)
+			c.r = floor( c.r * 4 + 0.5 ) * 64 / 255.0, c.g = floor( c.g * 4 + 0.5 ) * 64 / 255.0;
+		for (int missing = 0; missing < 2; ++missing)
+		{
+			DrawState s = probeState( false );
+			s.texCoordSets = 1;
+			s.texCoordSize[0] = 2;
+			s.textures[0] = &tex;
+			s.stageState[0][TSS_COLORARG1] = TA_TEXTURE;
+			s.stageState[0][TSS_TEXCOORDINDEX] = missing;
+			Vertex v[4] = { worldVertex( -1, 1, 0.5, rgba( 0, 0, 0, 0 ) ), worldVertex( 1, 1, 0.5, rgba( 0, 0, 0, 0 ) ),
+				worldVertex( -1, -1, 0.5, rgba( 0, 0, 0, 0 ) ), worldVertex( 1, -1, 0.5, rgba( 0, 0, 0, 0 ) ) };
+			for (int i = 0; i < 4; ++i) { v[i].tex[0][0] = 0.6; v[i].tex[0][1] = 0.6; }
+			Target t = probeTarget();
+			CHECK( draw( s, PT_TRIANGLESTRIP, v, 4, 0, 4, t ) );
+			measured( t, 32, 32, missing ? 0xFF000000 : 0xFF808000, 0 );
+		}
+	}
+	// N3: the gate's controls, N.L > 0: N.H .848 and .755 with the viewer at (0,0,-1)
+	{
+		const double dirs[2][3] = { { 0, -0.9, 0.4359 }, { 0, -0.99, 0.1411 } };
+		const uint32_t expect[2] = { 0x00D8D8D8, 0x00C1C1C1 };
+		for (int d = 0; d < 2; ++d)
+		{
+			DrawState s = probeLit();
+			s.renderState[RS_SPECULARENABLE] = 1;
+			s.renderState[RS_LOCALVIEWER] = 0;
+			s.material.specular = rgba( 1, 1, 1, 1 );
+			s.material.power = 1;
+			s.lights[0] = directional( dirs[d][0], dirs[d][1], dirs[d][2] );
+			s.lights[0].specular = rgba( 1, 1, 1, 1 );
+			Target t = probeTarget();
+			litQuad( s, t );
+			measured( t, 32, 32, expect[d], 1 );
+		}
+	}
+	// N11: fog (from the specular alpha, no fog mode) is interpolated under flat shading
+	for (int flat = 1; flat >= 0; --flat)
+	{
+		DrawState s = probeState( true );
+		s.renderState[RS_SHADEMODE] = flat ? SHADE_FLAT : SHADE_GOURAUD;
+		s.renderState[RS_FOGENABLE] = 1;
+		s.renderState[RS_FOGCOLOR] = 0xFF000000;
+		s.renderState[RS_FOGTABLEMODE] = FOG_NONE;
+		s.renderState[RS_FOGVERTEXMODE] = FOG_NONE;
+		const Vertex v[3] = { tl( 0, 0, 0xFFFFFFFF, 0x00000000 ), tl( 64, 0, 0xFFFFFFFF, 0x80000000 ), tl( 0, 64, 0xFFFFFFFF, 0xFF000000 ) };
+		Target t = probeTarget();
+		CHECK( draw( s, PT_TRIANGLELIST, v, 3, 0, 3, t ) );
+		measured( t, 10, 10, 0xFF3F3F3F, 1 );
+		measured( t, 30, 20, 0xFF8F8F8F, 1 );
+	}
+}
+
 TEST(ffref_normals_by_the_inverse_transpose)
 {
 	// world shears x by y (x' = x + y): the plane x = 0 becomes x' = y', whose normal is (1,-1,0)/r2.

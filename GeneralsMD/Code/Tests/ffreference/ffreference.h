@@ -60,7 +60,8 @@
  *       Specular is gated by N.Ldir: a light with N.Ldir <= 0 adds no specular - MEASURED, not read (the
  *       page's formula has no gate): WARP and REF give 0 where N.H is .531 and N.Ldir -.436 (knownprobe
  *       N3a, docs/mac-port/tasks/L2-vulkan-recon.md, "The known list measured").
- *   N4  Per-light ambient (Atten * Spot * La) is included, as "Ambient Lighting" writes it.
+ *   N4  Per-light ambient (Atten * Spot * La) is included, as "Ambient Lighting" writes it (measured on
+ *       WARP and REF: attenuated, and none beyond the range; knownprobe F1).
  *   N5  With LIGHTING, the lit diffuse's alpha is the diffuse source's alpha and the lit specular's is
  *       the specular source's alpha; lit colours are clamped to 0..1 after summing all lights.
  *   N6  Lit specular is computed only with SPECULARENABLE ("Specular Lighting": "The default lighting
@@ -84,21 +85,30 @@
  *   N10 Colours, texture coordinates and the fog factor are all interpolated perspective-correct (by
  *       1/w); depth (Z) is interpolated linearly in screen space.
  *   N11 Flat shading takes diffuse and specular from the first vertex of each triangle (list 3i,
- *       strip i, fan i+1, per D3DSHADEMODE); fog is still interpolated.
+ *       strip i, fan i+1, per D3DSHADEMODE); fog is still interpolated.  Measured on WARP and REF
+ *       (knownprobe F8, N11f): every vertex order, the diffuse alpha flat too, fog interpolated.  The
+ *       specular is flat on REF, but WARP interpolates it: this follows REF and the page.
  *   N12 Winding (for culling and two-sided stencil) is judged on screen, y down: clockwise means
  *       (x1-x0)(y2-y0) - (x2-x0)(y1-y0) > 0.  Odd triangles of a strip are taken as (i+1, i, i+2).
  *   N13 Texture-transform input padding: (u) -> (u, 1, 0, 0), (u, v) -> (u, v, 1, 0),
  *       (u, v, w) -> (u, v, w, 1); generated coordinates are (x, y, z, 1).  TTFF COUNTn keeps n
  *       elements; PROJECTED divides the first n-1 by the n-th.  Without TTFF the first two are used.
+ *       The (u, v, 1, 0) padding is measured on WARP and REF: _31/_32 move a COUNT2 set, _41/_42 do not
+ *       (knownprobe F4b/F4c).
  *   N14 Reflection vector ("Cubic Environment Mapping"): R = 2(E.N)N - E with E = norm(-Vcamera) under
- *       LOCALVIEWER, else R = 2 Nz N - (0,0,1); the page's "world-space z of the vertex normal" is read
- *       as the camera-space normal's z, the formula's other N.  The normal is the one lighting uses.
+ *       LOCALVIEWER, else E = (0,0,-1): R = -2 Nz N + (0,0,1) - MEASURED, not read: the page writes
+ *       2 Nz N - (0,0,1), but WARP and REF give R = (0, .96, -.28) for N (0, .6, -.8), which is E =
+ *       (0,0,-1) (knownprobe N14b/N14d), and match E = norm(-Vcamera) with LOCALVIEWER (N14a/N14c).  The
+ *       normal is the one lighting uses.
  *   N15 LOD: lambda = log2(max(|d(uW,vH)/dx|, |d(uW,vH)/dy|)) + MIPMAPLODBIAS, from the exact screen
  *       derivatives.  The pages define no LOD at all ("Texture Filtering with Mipmaps": "Direct3D can
  *       assess which texture in a mipmap set is the closest resolution"), so this is the nominal only,
  *       and the envelope allows +-0.6 (Freedoms::lodDelta, F11, 2026-09-26): any footprint norm from
  *       L-infinity to L1 is within sqrt(2) of this L2 one, +-0.5 in log2, and 2x2 differencing adds
  *       ~0.1.  Apple's GPU measured +0.10 mean, +0.58 worst on x-stretched footprints (-a9's probe).
+ *       Microsoft's own two follow this nominal: WARP and REF read lambda within -0.05..+0.03 of it on
+ *       isotropic, anisotropic and rotated footprints, where L-infinity or L1 would be 0.5 off (knownprobe
+ *       F11).  The +-0.6 stays a ruling for hardware, which no Windows driver here could measure.
  *       lambda <= 0 magnifies.  MIPFILTER NONE uses level MAXMIPLEVEL; POINT the nearest level
  *       (round half up); LINEAR blends floor and floor+1; all clamped to [MAXMIPLEVEL, levels-1].
  *       ANISOTROPIC with MAXANISOTROPY <= 1 filters as LINEAR.  Bump offsets do not enter the LOD.
@@ -107,6 +117,7 @@
  *   N17 DOTPRODUCT3 reads its arguments as signed, 2x - 1, so the sum is 4 * sum((a-.5)(b-.5)), then
  *       saturates; as a COLOROP it also replaces the stage's alpha ("replicate the sum to all color
  *       channels, including alpha").  The page's DirectX 6/7 note (x - .5, RGB only) is not followed.
+ *       Measured on WARP and REF: C0 80 80 . C0 80 80 gives 65 in all four channels (knownprobe F3b).
  *   N18 Triadic operations: MULTIPLYADD = ARG0 + ARG1 * ARG2, LERP = ARG0 * ARG1 + (1 - ARG0) * ARG2
  *       (the page's Arg1/Arg2/Arg3 read as COLORARG0/1/2).
  *   N19 Bump mapping: du' = du * M00 + dv * M10, dv' = du * M01 + dv * M11 (the formula is an image),
@@ -131,13 +142,16 @@
  *       REF give N.H = .949 for Ldir (0,-.6,-.8) and N (0,0,-1), which (0,0,1) would make 0 (knownprobe
  *       F2a0/F2c0).  With LOCALVIEWER, norm(norm(-Vcamera) + Ldir), as written and as measured (F2a1).
  *   N28 A stage whose TEXCOORDINDEX names a coordinate set the vertices lack reads u, v = (0, 0)
- *       (D3DTSS_TEXCOORDINDEX: "the system defaults to the u and v coordinates (0,0)"); the page names
+ *       (D3DTSS_TEXCOORDINDEX: "the system defaults to the u and v coordinates (0,0)"; measured on WARP
+ *       and REF, knownprobe F4f); the page names
  *       no third or fourth component, so the set is padded as any 2-component set is (N13).
  *   N29 ALPHAOP DISABLE under an enabled COLOROP is "undefined behavior" (D3DTEXTUREOP, D3DTOP_DISABLE),
  *       and the game does it.  It is drawn rather than refused: that stage's alpha is unconstrained, with
  *       CURRENT's alpha passed through as the nominal and 0 and 1 as the envelope's variants.  Every
  *       later use of alpha - an operation, the alpha test, the blend - is linear or a threshold in it,
  *       so the two extremes bound what any value could give.  The pixels it moves carry ZONE_UNDEFINED.
+ *       Measured, it is indeed undefined: WARP passes CURRENT's alpha through and REF writes 1
+ *       (knownprobe N29), both inside the envelope.
  *   N30 Where the alpha test is undecided (ZONE_ALPHA_TEST: some variant passes, some fails), the colour
  *       that may be written is bounded by every variant's colour, passing or not.  The variants are
  *       points in a continuous freedom, and colour and alpha move together between them, so the pass

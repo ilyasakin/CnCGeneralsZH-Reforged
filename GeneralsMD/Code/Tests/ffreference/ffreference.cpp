@@ -270,8 +270,8 @@ VOut processVertex( const Context &ctx, const Vertex &v )
 				break;
 			case TSS_TCI_CAMERASPACEREFLECTIONVECTOR:
 			{
-				// N14: R = 2(E.N)N - E
-				double e[3] = { 0, 0, 1 };
+				// N14: R = 2(E.N)N - E, the infinite viewer at (0,0,-1) as N27's
+				double e[3] = { 0, 0, -1 };
 				if (rs[RS_LOCALVIEWER])
 				{
 					e[0] = -cam[0]; e[1] = -cam[1]; e[2] = -cam[2];
