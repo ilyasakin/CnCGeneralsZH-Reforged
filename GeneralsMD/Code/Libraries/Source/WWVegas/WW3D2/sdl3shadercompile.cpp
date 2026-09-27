@@ -126,6 +126,27 @@ bool SDL3_Translate_SPIRV_To_MSL(const std::vector<unsigned char> & spirv, bool 
 	return true;
 }
 
+bool SDL3_Translate_SPIRV_To_HLSL(const std::vector<unsigned char> & spirv, bool vertex_stage, std::string & hlsl,
+	std::string & log)
+{
+	start_shadercross();
+	hlsl.clear();
+	log.clear();
+	if (!shadercross_ok) {
+		log = SDL_GetError();
+		return false;
+	}
+	const SDL_ShaderCross_SPIRV_Info info = spirv_info(spirv, vertex_stage);
+	char * text = static_cast<char *>(SDL_ShaderCross_TranspileHLSLFromSPIRV(&info));
+	if (text == NULL) {
+		log = SDL_GetError();
+		return false;
+	}
+	hlsl = text;
+	SDL_free(text);
+	return true;
+}
+
 void SDL3_Shader_Slots(const std::vector<unsigned char> & spirv, bool vertex_stage, unsigned & samplers,
 	unsigned & uniform_buffers)
 {
@@ -182,7 +203,33 @@ SDL_GPUShader * SDL3_Create_Shader(SDL_GPUDevice * device, const std::vector<uns
 	// shadercross leaves an error from its start-up (it looks for libraries it may not need) where a
 	// later failure that sets none would report it.  Cleared, so a refusal says its own reason.
 	SDL_ClearError();
-	SDL_GPUShader * shader = SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(device, &info, &resources, 0);
+	SDL_GPUShader * shader = NULL;
+	const SDL_GPUShaderFormat formats = SDL_GetGPUShaderFormats(device);
+	if ((formats & SDL_GPU_SHADERFORMAT_SPIRV) == 0 && (formats & SDL_GPU_SHADERFORMAT_DXBC) != 0) {
+		// Direct3D 12 (-d3d12, X1).  shadercross creates a transpiled program with the samplers its own
+		// reflection finds, not the counts it is given, and Direct3D 12's table runs from register 0 for that
+		// many: a program with a gap (the terrain's t0-t3 and the shadow map at t5) reaches past it, and every
+		// pipeline with it is refused.  So the DXBC comes from shadercross and the shader is made here, with
+		// the slots read from the SPIR-V, as SPIR-V devices are given them.
+		size_t size = 0;
+		void * dxbc = SDL_ShaderCross_CompileDXBCFromSPIRV(&info, &size);
+		if (dxbc != NULL) {
+			SDL_GPUShaderCreateInfo create;
+			SDL_zero(create);
+			create.code = static_cast<const Uint8 *>(dxbc);
+			create.code_size = size;
+			create.entrypoint = "main";		// not read for DXBC
+			create.format = SDL_GPU_SHADERFORMAT_DXBC;
+			create.stage = vertex_stage ? SDL_GPU_SHADERSTAGE_VERTEX : SDL_GPU_SHADERSTAGE_FRAGMENT;
+			create.num_samplers = resources.num_samplers;
+			create.num_uniform_buffers = resources.num_uniform_buffers;
+			shader = SDL_CreateGPUShader(device, &create);
+			SDL_free(dxbc);
+		}
+	}
+	else {
+		shader = SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(device, &info, &resources, 0);
+	}
 	if (shader == NULL) {
 		log = SDL_GetError();
 		if (log.empty()) log = "refused, and neither SDL nor SDL_shadercross said why";

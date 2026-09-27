@@ -84,6 +84,8 @@ public:
 	double Milliseconds_Compiling() const { return CompileMilliseconds; }
 
 private:
+	void Dump_Program(const std::string &key, bool vertex_stage, const std::string &hlsl,
+		const std::vector<unsigned char> *spirv);
 	const SdlProgram &Make(std::map<std::string, SdlProgram> &cache, const std::string &key, bool generated,
 		const std::string &hlsl, bool vertex_stage);
 
