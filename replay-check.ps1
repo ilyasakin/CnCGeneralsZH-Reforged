@@ -71,11 +71,18 @@ function Invoke-Run([string[]] $extra, [string] $prefix)
 						"-maxframes", $MaxFrames, "-logPrefix", $prefix) + $extra + $ExtraArgs
 	$proc = Start-Process -FilePath $exePath -ArgumentList $args -WorkingDirectory $RunDir -PassThru
 	$proc.PriorityClass = 'AboveNormal'
+	$null = $proc.Handle		# kept, so ExitCode is still there after the exit
 	if (-not $proc.WaitForExit($TimeoutMinutes * 60 * 1000)) {
 		$proc.Kill()
 		$proc.WaitForExit()
 		Write-Host ("KILLED ({0} wedged past {1} min) " -f $prefix, $TimeoutMinutes) -NoNewline
 		return $null
+	}
+	# The codes an unattended run (ZH_UNATTENDED, -headless) leaves by name instead of waiting on a box;
+	# the reason itself is on the game's stderr and in its log.
+	switch ($proc.ExitCode) {
+		2 { Write-Host ("exit 2: {0} stopped unattended (no base game, or a broken INI) " -f $prefix) -NoNewline }
+		3 { Write-Host ("exit 3: {0} asked for -d3d12 and zh_d3d12.dll could not be used " -f $prefix) -NoNewline }
 	}
 	$log = Join-Path $RunDir "$($prefix)DebugLogFile.txt"
 	if (-not (Test-Path $log)) { return $null }
