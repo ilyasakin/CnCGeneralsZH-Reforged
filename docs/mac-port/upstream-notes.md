@@ -69,6 +69,47 @@ header: a ReplaceModule of an AI module must re-state the object's Locomotor lin
 load-time check covers every INI file the game loads, upstream's other override files included. It doesn't
 cover a map's own map.ini, which loads with the map.
 
+### A module added to a reskin erases its copied modules; the Demolition Technicals lose their AI (port defect #34)
+
+**Introduced by:** fbe8dc6f, in `FixesReforged.ini`: `ReplaceModule ModuleTag_Death_18` on
+Demo_GLAVehicleTechnicalChassisTwo and Demo_GLAVehicleTechnicalChassisThree.
+
+**Symptom:** the game crashes (a NULL read) when the GLA Demolition General's AI recruits one of those
+Technicals into a team: `AIPlayer::queueUnits`, `getAIUpdateInterface()` is NULL. It happens on every
+platform, in a skirmish or a LAN match.
+
+**Cause:** both are ObjectReskins of ChassisOne, so all their modules are copies. FixesReforged.ini loads as a
+normal INI, not an override file. There, every module parsed runs `clearCopiedFromDefaultEntries`, which
+erases each copied module sharing an interface with the new one. The new SlowDeathBehavior is an update and
+die module, so each Technical lost 12 modules, among them its AI, physics, transport and every die module.
+
+**Why the data alone can't fix it:** any module added to a copy in a normal load triggers the same clearing,
+and a change to ChassisOne doesn't reach reskins that already hold its old module data.
+
+**The port's fix (engine, one condition):** in `ThingTemplate::parseModuleName`, skip
+`clearCopiedFromDefaultEntries` when parsing inside ReplaceModule/AddModule (`MODULEPARSE_ADD_REMOVE_REPLACE`),
+as override files already do:
+
+```cpp
+	else if (self->m_moduleParsingMode == MODULEPARSE_ADD_REMOVE_REPLACE)
+	{
+		// the block names exactly what it replaces: clear nothing else
+	}
+	else
+	{
+		self->m_behaviorModuleInfo.clearCopiedFromDefaultEntries( ... );
+		...
+```
+
+**How it was checked (in the port):**
+- Every loaded template's modules were dumped before and after the fix: of 2116, exactly the two Technicals
+  change, each regaining its 12 modules.
+- EA's INIZH.big and PatchINI.big contain no ReplaceModule or AddModule, so EA's data loads as before.
+- The crashing match (the port's E1 seed 0, 12000 frames) completes.
+- A load-time check now reports any reskin lacking a behaviour module its source has.
+
+**Not checked:** Windows itself, though the parse code is the same on every platform.
+
 ## SDL
 
 ### An animated cursor on a video driver without native animated cursors crashes `SDL_QuitMouse`
