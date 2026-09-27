@@ -1401,6 +1401,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/W3DScene.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DShaderManager.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DShadow.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DShroud.h
+GameEngineDevice/Include/W3DDevice/GameClient/W3DSmoothMotion.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DSmudge.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DSnow.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DStatusCircle.h
@@ -2729,6 +2730,7 @@ Tests/test_sdl_platform.cpp
 Tests/test_sdl_program_cache.cpp
 Tests/test_selection_priority.inc
 Tests/test_shader_sdl.cpp
+Tests/test_smooth_motion.cpp
 Tests/test_stage_overlay_hud.sh
 Tests/test_supply_center_save.inc
 Tests/test_support.cpp
@@ -3705,6 +3707,7 @@ Tools/timingTest/timingTest.cpp
 Tools/timingTest/timingTest.dsp
 Tools/timingTest/timingTest.dsw
 Tools/unix_define_check.py
+Tools/update-local-app.sh
 Tools/vendor.ps1
 Tools/vendor.sh
 Tools/versionUpdate/versionUpdate.cpp

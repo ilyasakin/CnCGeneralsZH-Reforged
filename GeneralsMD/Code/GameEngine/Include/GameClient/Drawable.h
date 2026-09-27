@@ -319,6 +319,17 @@ public:
   void onLevelStart();                                                ///< run from GameLogic::startNewGame
 
 	Drawable *getNextDrawable( void ) const { return m_nextDrawable; }	///< return the next drawable in the global list
+
+	/** R1, smooth motion: the logic moved this drawable in one step it did not travel (a teleport, a
+		container's exit, a parachute rider placed): show the new place at once rather than blend to it. */
+	void markMotionDiscontinuity( void ) { m_motionDiscontinuity = TRUE; }
+	Bool isMotionDiscontinuous( void ) const { return m_motionDiscontinuity; }
+	void clearMotionDiscontinuity( void ) { m_motionDiscontinuity = FALSE; }
+	/** R1: the client's record of this drawable's position on its last two logic ticks, taken at the
+		start of a render pass, and the blend of them the picture shows (the camera's lock follows it).
+		FALSE, with the logic position, when there is nothing to blend. */
+	void smoothMotionCapturePosition( UnsignedInt clientFrame );
+	Bool getSmoothMotionPosition( Real alpha, Coord3D *pos ) const;
 	Drawable *getPrevDrawable( void ) const { return m_prevDrawable; }  ///< return the prev drawable in the global list
 	DrawableID getID( void ) const;																			///< return this drawable's unique ID
 
@@ -686,6 +697,11 @@ private:
 		
 	DrawableID m_id;						///< this drawable's unique ID
 	Drawable *m_nextDrawable; 
+	Coord3D m_smoothPrevPos;		///< R1: the position on the logic tick before m_smoothCurPos
+	Coord3D m_smoothCurPos;			///< R1: the position on the last logic tick the client saw
+	UnsignedInt m_smoothFrame;		///< R1: the client frame m_smoothCurPos was taken on
+	Bool m_smoothHavePrev;			///< R1: m_smoothPrevPos is the tick just before, and continuous with it
+	Bool m_motionDiscontinuity;		///< R1: markMotionDiscontinuity since the last capture
 	Drawable *m_prevDrawable;		///< list links
 
   DynamicAudioEventInfo *m_customSoundAmbientInfo; ///< If not NULL, info about the ambient sound to attach to this object

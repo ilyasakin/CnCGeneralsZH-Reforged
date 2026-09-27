@@ -256,7 +256,8 @@ bool PosixChooseInstallRoot( const PosixInstallRequest &request, PosixInstallCho
 		std::string chosen;
 		if (!request.chooser( why, chosen, request.chooserContext ))
 		{
-			choice.problem = "No Zero Hour folder was chosen.";
+			choice.problem = "No Zero Hour folder was chosen, so the game will close.\n\nStart it again to choose the "
+				"folder where Command & Conquer Generals Zero Hour is installed.";
 			return false;
 		}
 		const PosixInstallCheck check = PosixCheckInstallFolderWith( chosen, request.forbidden, request.registryFile );
