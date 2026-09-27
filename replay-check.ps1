@@ -44,7 +44,11 @@ param(
 	# switches to add to both halves of every seed. A switch that reaches the match has to be on for
 	# the recording and the playback alike: turning it on for one of them is a divergence the script
 	# would report as a broken build. -ExtraArgs -unitlimit is the unit limit's determinism check
-	[string[]] $ExtraArgs = @()
+	[string[]] $ExtraArgs = @(),
+	# minutes before a run is killed rather than waited on forever, as ai-batch.ps1 does. -headless
+	# does not stop every dialog (a missing base game still puts up a message box), and no unattended
+	# run may wait on a person; the killed run reports no result, which counts as a failure
+	[int] $TimeoutMinutes = 60
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,7 +70,12 @@ function Invoke-Run([string[]] $extra, [string] $prefix)
 						"-maxframes", $MaxFrames, "-logPrefix", $prefix) + $extra + $ExtraArgs
 	$proc = Start-Process -FilePath $exePath -ArgumentList $args -WorkingDirectory $RunDir -PassThru
 	$proc.PriorityClass = 'AboveNormal'
-	$proc.WaitForExit()
+	if (-not $proc.WaitForExit($TimeoutMinutes * 60 * 1000)) {
+		$proc.Kill()
+		$proc.WaitForExit()
+		Write-Host ("KILLED ({0} wedged past {1} min) " -f $prefix, $TimeoutMinutes) -NoNewline
+		return $null
+	}
 	$log = Join-Path $RunDir "$($prefix)DebugLogFile.txt"
 	if (-not (Test-Path $log)) { return $null }
 	$crcLine = Select-String -Path $log -Pattern "HEADLESS CRC: (0x[0-9A-F]+) at frame (\d+)" | Select-Object -Last 1
@@ -80,6 +89,7 @@ function Invoke-Run([string[]] $extra, [string] $prefix)
 }
 
 $failures = 0
+$diverged = 0		# of the failures, the seeds whose two runs finished and disagreed
 foreach ($seed in $Seeds)
 {
 	Write-Host ("seed {0}: recording ... " -f $seed) -NoNewline
@@ -112,6 +122,7 @@ foreach ($seed in $Seeds)
 		Write-Host ("DIVERGED: live {0} at frame {1}, playback {2} at frame {3}" -f
 								$live.CRC, $live.Frame, $back.CRC, $back.Frame)
 		$failures++
+		$diverged++
 	}
 }
 
@@ -120,8 +131,13 @@ if ($failures -eq 0)
 {
 	Write-Host ("{0} of {0} replays played back to the same world." -f $Seeds.Count)
 }
-else
+elseif ($diverged -gt 0)
 {
 	Write-Host ("{0} of {1} did not. The logic is not deterministic; do not ship it." -f $failures, $Seeds.Count)
+}
+else
+{
+	# a run that crashed, wrote nothing or was killed at -TimeoutMinutes compared nothing: a failure, not a verdict
+	Write-Host ("{0} of {1} gave no result to compare (crashed, killed or wrote no replay); nothing was compared." -f $failures, $Seeds.Count)
 }
 exit $failures

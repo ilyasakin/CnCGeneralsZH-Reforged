@@ -252,7 +252,7 @@ static const char *getCurrentTimeString(void)
 static const char *getCurrentTickString(void)
 {
 	static char TheTickString[32];
-	snprintf(TheTickString, ARRAY_SIZE(TheTickString), "(T=%08lx)",Clock_Milliseconds_Coarse());
+	snprintf(TheTickString, ARRAY_SIZE(TheTickString), "(T=%08x)",Clock_Milliseconds_Coarse());
 	return TheTickString;
 }
 

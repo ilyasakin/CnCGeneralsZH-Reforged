@@ -40,13 +40,21 @@ void getExecutableDirectory( char *buf, size_t size, Bool keepTrailingSeparator 
 
 #if !defined(_WIN32)
 /* Where the debug logs go (P1 step 2): the executable's directory, as on Windows, except when the
-	 executable is inside a macOS app bundle (".app/Contents/MacOS"): writing there would break the
-	 bundle's code signature, so the logs go to the user data directory's Logs folder instead.  "" when
-	 even that cannot be had, which leaves a log unwritten rather than written into the bundle.  The
-	 same trailing-separator rule as getExecutableDirectory.  Safe before main. */
+	 executable is packaged (isExecutablePackaged): writing into a macOS app bundle would break its code
+	 signature, and a Linux package's folder may be read-only, so the logs go to the user data directory's
+	 Logs folder instead.  "" when even that cannot be had, which leaves a log unwritten rather than
+	 written into the package.  The same trailing-separator rule as getExecutableDirectory.  Safe before
+	 main. */
 void getLogDirectory( char *buf, size_t size, Bool keepTrailingSeparator );
 
-/* Whether the running executable is inside a macOS app bundle (its directory ends ".app/Contents/MacOS"):
-	 what decides where the logs go and whether PosixMain may ask the player for their install (P1). */
+/* Whether the running executable is inside a macOS app bundle (its directory ends ".app/Contents/MacOS"). */
 Bool isExecutableInAppBundle( void );
+
+/* Whether the running executable is in a Linux package (P3): <package>/bin/generals, with the overlay at
+	 <package>/share/zero-hour-reforged/overlay. */
+Bool isExecutableInLinuxPackage( void );
+
+/* Either of the two: what decides where the logs go and whether PosixMain may look for the player's
+	 install and ask for it (P1, P3).  An unpacked build is neither, and runs where it is, as always. */
+Bool isExecutablePackaged( void );
 #endif
