@@ -1341,6 +1341,7 @@ GameEngineDevice/Include/SdlDevice/Common/SdlMessageBox.h
 GameEngineDevice/Include/SdlDevice/GameClient/AniCursor.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlGamepad.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlInput.h
+GameEngineDevice/Include/SdlDevice/GameClient/SdlInputScript.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyTable.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyboard.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlMouse.h
@@ -1478,6 +1479,7 @@ GameEngineDevice/Source/SdlDevice/Common/SdlMessageBox.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/AniCursor.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlGamepad.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlInput.cpp
+GameEngineDevice/Source/SdlDevice/GameClient/SdlInputScript.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyTable.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyboard.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlMouse.cpp
@@ -3567,6 +3569,7 @@ Tools/ffprogram-values-check.sh
 Tools/fingerprint-check.sh
 Tools/fingerprint-manifest.sh
 Tools/fingerprint/build_fingerprint.cpp
+Tools/gamepad-crc-check.sh
 Tools/gametext.py
 Tools/gdi-font-metrics-header.py
 Tools/gdi-font-metrics.ps1

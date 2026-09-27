@@ -24,11 +24,13 @@
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
 #include "GameClient/ApplicationWindowTitle.h"
+#include "GameLogic/GameLogic.h"
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
 #include "SdlDevice/GameClient/SdlGamepad.h"
 #include "SdlDevice/GameClient/SdlInput.h"
+#include "SdlDevice/GameClient/SdlInputScript.h"
 #include "SdlDevice/GameClient/SdlMouse.h"
 #include "W3DDevice/GameClient/W3DGameClient.h"
 #include "PosixDevice/Common/PosixFileResolutionDump.h"
@@ -183,7 +185,8 @@ void SdlGameEngine::createWindow( void )
 	}
 	m_sdlVideoStarted = TRUE;
 	ThePlatformDisplays = &TheSdlDisplays;		// Monitors.h answers from SDL's displays from here on
-	SdlGamepad_start();		// G1: gamepads, only for a game with a window; without them it runs on as before
+	if (SdlGamepad_start())		// G1: gamepads, only for a game with a window; without them it runs on as before
+		SdlInputScript_start();		// G1's test 2: ZH_INPUT_SCRIPT, never set by a player (SdlInputScript.h)
 
 	SDL_WindowFlags flags = 0;
 	if (!m_request.windowed)
@@ -304,6 +307,9 @@ void SdlGameEngine::serviceWindowsOS( void )
 {
 	if (!m_sdlVideoStarted)
 		return;
+
+	if (TheGameLogic != NULL)
+		SdlInputScript_play( TheGameLogic->getFrame() );		// nothing without ZH_INPUT_SCRIPT
 
 	SDL_Event event;
 	while (SDL_PollEvent( &event ))
