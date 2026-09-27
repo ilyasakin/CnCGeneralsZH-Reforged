@@ -73,7 +73,8 @@ if ($Runs.Count -eq 0) { $Runs = @($Seeds | ForEach-Object { "$_@$MaxFrames" }) 
 $ExpectCrc = @($ExpectCrc | ForEach-Object { $_.Split(',') } | Where-Object { $_ -ne "" } |
 	ForEach-Object { $k, $v = $_.Split(':', 2); if ($k -notmatch '@') { $k = "$k@$MaxFrames" }; "${k}:$v" })
 $Root = $PSScriptRoot
-$Build = Join-Path $Root "build64"
+# build.bat's folder: an ARM64 machine builds ARM64 into build-arm64
+$Build = Join-Path $Root $(if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "build-arm64" } else { "build64" })
 $RunDir = Join-Path $Root "GeneralsMD\Run"
 $NoSound = "test_milesaudiomanager|miles_smoke|test_miles_miniaudio|test_binkvideo|bink_smoke"
 $GpuTests = "^(dx9_smoke|dx9_smoke_msaa|test_dx11device)$"
