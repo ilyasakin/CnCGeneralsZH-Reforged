@@ -97,9 +97,15 @@ Everything is under `/home/zhr/zhr-worker` unless noted:
 | the repository | `~/zhr-worker/repo`, from `~/zhr-worker/bundles/fmp.bundle` (feature/mac-port 9d1c8895) | `git bundle` here, `scp`, `git clone` (-47) | in the folder |
 | worktree and build for -47 | `~/zhr-worker/wt-47` (branch `agent-47`, vendor copied in with `cp --reflink=auto`), `~/zhr-worker/build-47` | `git worktree add`, cmake/ninja via `zheavy` (-47) | in the folder |
 | `unifdef` 2.12-4 (system-wide, `/usr/bin/unifdef`), which widechar_check needs; it was not installed before | pacman | `sudo pacman -S --needed --noconfirm unifdef`, as the PM directed (-47, 2026-09-27) | `sudo pacman -Rs unifdef` |
+| core dumps of uid 1001 (zhr): 12 from test_crash_reporting's children, one 14.8 MB `generals` from W1's null-this segfault | `/var/lib/systemd/coredump` (outside the worker folder), and their metadata in the systemd journal | systemd-coredump, from our crashing test children (-47) | the 13 files deleted with `sudo find … -name 'core.*.1001.*' -delete` (2026-09-27); uid 1000's chromium core untouched. The journal entries remain (coredumpctl lists them as missing). Since f8825d76 the children set RLIMIT_CORE to 0 and store none |
 
 **The Windows VM is not -47's.** The user approved it (relayed by the PM), but this session's permission
 classifier refused its setup as "Unauthorized Persistence" (an auto-started SSH server keyed to this Mac
 inside the VM), and -47 created nothing for it. The user then started it themselves (container
 `zhr-windows`) and the PM handles its access and tools. Its revert entries belong to them, not to this table.
+
+-47's one use of it (2026-09-27, for L1b's font heights, with -18 told before and after): `C:\zhr-worker\fontmetrics`
+holds `gdi-font-metrics.ps1` (the repository's Tools/ script) and its two outputs, `gdi-metrics.csv` and
+`fonts.txt`. It only read `C:\Windows\Fonts` and installed nothing. Undo: `Remove-Item -Recurse
+C:\zhr-worker\fontmetrics`. -47's ssh host key for it is in -47's scratch folder on the Mac, not in `~/.ssh`.
 
