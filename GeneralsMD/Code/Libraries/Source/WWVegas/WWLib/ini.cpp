@@ -112,6 +112,7 @@
 #include	"trect.h"
 #include	"wwfile.h"
 #include	"pk.h"
+#include "Common/EarlyCommandLine.h"	// -headless, which DuplicateCRCError must not wait on
 #include	"pipe.h"
 #include	"wwstring.h"
 #if defined(_WIN32)
@@ -2378,6 +2379,13 @@ void INIClass::DuplicateCRCError(const char *message, const char *section, const
 
 #ifdef NDEBUG
 #ifdef _WINDOWS
+	// Never under -headless, which has nobody to press OK: the line above has said it, and a run with a
+	// broken INI stops with it rather than wait on a box.
+	if (findEarlyCommandLineOption(L"-headless")) {
+		fputs(buffer, stderr);
+		fflush(stderr);
+		_exit(2);
+	}
 	MessageBox(0, buffer, "Duplicate CRC in INI file.", MB_ICONSTOP | MB_OK);
 #endif
 #endif

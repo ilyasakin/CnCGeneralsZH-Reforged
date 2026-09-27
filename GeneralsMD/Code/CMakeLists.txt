@@ -287,8 +287,10 @@ add_library(wwdebug STATIC
   ${WW}/WWDebug/wwdebug.cpp
   ${WW}/WWDebug/wwmemlog.cpp
   ${WW}/WWDebug/wwprofile.cpp)
+# GameEngine/Include for Common/EarlyCommandLine.h alone (-headless, which no box may wait on), as debuglib has it.
 target_include_directories(wwdebug PUBLIC ${WW}/WWDebug
-  PRIVATE ${WW}/WWLib ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+  PRIVATE ${WW}/WWLib ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
+          ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 
 # ---- wwutil ---------------------------------------------------------------
 add_library(wwutil STATIC
@@ -481,8 +483,10 @@ if(ZH_PLATFORM_POSIX)
   list(APPEND WWLIB_SOURCES ${WW}/WWLib/posixpath.cpp)
 endif()
 add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE} ${WWLIB_SOURCES})
+# GameEngine/Include for Common/EarlyCommandLine.h alone, as wwdebug has it.
 target_include_directories(wwlib PUBLIC ${WW}/WWLib
-  PRIVATE ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+  PRIVATE ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
+          ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 target_link_libraries(wwlib PRIVATE wwdebug)
 if(ZH_PLATFORM_WINDOWS)
   # winmm: timeGetTime/timeBeginPeriod.  version: verchk.cpp's GetFileVersionInfo,

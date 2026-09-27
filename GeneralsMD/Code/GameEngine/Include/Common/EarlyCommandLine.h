@@ -31,6 +31,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include "Platform/MSVCCompat.h"	// _wcsnicmp, which its other includers happened to bring in first
 #endif
 #include <wchar.h>
 #include <wctype.h>
