@@ -525,20 +525,29 @@ missing`; 50 of 56 scenarios were failing before, 0 after):
 - a material source the vertex cannot supply reads the material;
 - table fog is refused by name.
 
-**Findings waiting on a decision.** The harness reports each one as KNOWN, and fails if one starts
-passing, so the list cannot go stale. F1-F4 and F6 are in D3's shared generator (`ffvertex`,
-`ffshader`), which Windows' D3D11 backend runs too, so a fix changes Windows' frames as well:
+**The known list, settled (2026-09-27).** -47 measured every item on Windows' own Direct3D 9, WARP and
+REF (d3dref9.dll), with `knownprobe_windows.cpp` (docs/mac-port/tasks/knownprobe-2026-09-27.txt; the
+per-item verdicts are in L2-vulkan-recon.md, "The known list measured"). Each row below says what the
+generator does now, and what the measurement says. F1-F4, F6 and the two viewer rows are in D3's shared
+generator (`ffvertex`, `ffshader`), which Windows' D3D11 backend runs too.
 
-| # | What differs from D3D9 | Engine exposure |
-|---|---|---|
-| F1 | No per-light ambient. ffvertex.cpp:512 says W3D's lights leave it black, but light environments give point lights `getPointAmbient` (dx8wrapper.cpp:3776), and `Set_Light` copies `LightClass`'s ambient (3699). | Point lights: explosions, fires. |
-| F2 | `LOCALVIEWER` is ignored: the halfway vector is always the infinite viewer's. D3D9's default is TRUE, and the engine never turns it off (W3DWater sets TRUE). | Every specular highlight. |
-| F3 | `DOTPRODUCT3` as a colour op does not replicate into alpha. | render2d.cpp:687 and W3DShaderManager.cpp:791, stage 1. |
-| F4 | 2D texture coordinates under `TTFF_COUNT2` are padded (u, v, 0, 1), so the translation is read from `_41`/`_42`. D3D9 pads (u, v, 1, 0), and the engine's scrolling mappers write `_31`/`_32` (mapper.cpp:183). | Scrolling textures do not scroll. |
-| F6 | No vertex specular: the post-cascade specular add has nothing to add unlit. | No engine FVF found with a specular colour. |
-| F7 | An absent vertex specular: FFReference reads 0xFFFFFFFF (N7, from the D3DTA page), the GPU adds nothing. -47 and I disagreed; the page decides it, so this is a finding. | SPECULARENABLE on an FVF without specular: not seen in the engine. |
-| F8 | Flat shading is not generated (Gouraud always). | Only the volumetric shadows (W3DVolumetricShadow.cpp:3805), which write stencil. |
-| F11 | Apple's LOD: +0.10 to +0.20 on average against the exact derivative, up to +0.58 on an anisotropic footprint (the harness's LOD probe). That fits an L1-like ρ (up to +0.5) plus 2x2 differencing. **-47's ruling:** a symmetric ±0.6, since D3D9 never defines the footprint norm and anything from L∞ to L1 is within √2 of L2, plus 0.1 for differencing. The harness sets it now. Still KNOWN until FFReference also evaluates the integer λ crossings inside the widened interval: with the endpoints alone, linear mips went from 213 outside to 424 (worst 19/255), and point mips kept 4 (worst 126/255, a level jump). | Mip transitions shift by up to half a level, which is inside the ruled freedom. |
+| # | Windows' D3D9, measured | The device now | Evidence |
+|---|---|---|---|
+| F1 | Each light's ambient is added, attenuated and coned (Atten x Spot x La), and is zero past Range. | The same. | 0fa58343 (#23); ffref_gpu "light point with its own ambient"; the measurement. |
+| F2 | LOCALVIEWER is honoured: the halfway vector points at the vertex's own eye direction. | The same, and every lit program is keyed on it. | db890404 (#22); ffref_gpu "light specular, local viewer"; the measurement. |
+| F3 | DOTPRODUCT3 is signed (2x-1), saturated, and replicated into all four channels. | The same. | 12d3dd92 (signed), 03b45c99 (#24, into alpha); the measurement (C0 80 80 . C0 80 80 = 65 in all four). |
+| F4 | Under a COUNT2 transform a 2D set is padded (u, v, 1, 0), so `_31`/`_32` move it and `_41`/`_42` do not. | The same. | 34a3f98b (#21); the measurement. |
+| F6 | An unlit vertex's specular colour is added under SPECULARENABLE. | The same. | 5669c396 (#25), 6f9237eb (#26); ffref_gpu "specular add (vertex specular)"; the measurement. |
+| F7 | An absent vertex specular reads 0x00000000, so nothing is added. | The same. FFReference's N7 now agrees. | -47's 8cf87ea1 and -a9's 142bd719: an ordinary check again. |
+| F12 (N27) | Without LOCALVIEWER the halfway vector's eye is the fixed (0, 0, -1), not the page's (0, 0, 1). | The same since 52b842ba. | ffref_gpu "light specular, no local viewer": exact on ANV and lavapipe; the old generator fails it (2,088 outside). |
+| F13 (N14) | CAMERASPACEREFLECTIONVECTOR without LOCALVIEWER uses the fixed E = (0, 0, -1). | The same since 52b842ba. An unlit program that reads it is keyed `:E`. | ffref_gpu "reflection vector, no local viewer (N14)": exact on both; the old generator fails it (2,876 outside). |
+| F8 | Flat shading takes the first vertex (list 3i, strip i, fan i+1, by the first index). Alpha is flat too, and fog is still interpolated. The specular is flat on REF but interpolated on WARP, the one split between Microsoft's two. | **KNOWN, kept.** Flat shading is not generated (Gouraud always). | The PM, 2026-09-27: the engine's only flat-shaded draws are the volumetric shadows (W3DVolumetricShadow.cpp:3805), which write stencil and never colour. Each API has its own provoking-vertex convention, which makes a fix non-trivial for no visible effect. Revisit only if a draw that writes colour ever uses D3DSHADE_FLAT. |
+| F11 | WARP and REF take the L2 length of the longer axis, within -0.05..+0.03 of exact. Rotated footprints rule out L-infinity and L1. | Apple's is L1-like: +0.10 to +0.20 on average, up to +0.58. | Inside -47's ruled +-0.6 freedom. No action (the PM). |
+
+F12 and F13 are reached by no game draw. The engine never turns LOCALVIEWER off, and both the device and
+the D3D11 backend default it to TRUE (dx11state.cpp:182). A census of the generator's descriptions, 967,680
+of them across the three targets, found 172,800 programs changed by 52b842ba. Every one of them had
+LOCALVIEWER off; none with it on changed.
 
 Not findings: table fog (refused by name; the engine never sets it), and N6 (lit specular only with
 SPECULARENABLE, which the GPU matches).

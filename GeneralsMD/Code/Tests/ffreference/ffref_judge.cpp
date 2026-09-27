@@ -41,6 +41,7 @@
  * side of the comparison must replay them the same way (the harness does, by that ruling).
  *
  *   ffref_judge <capture dir> [--gpu <dump dir>] [--only draw_NNNNN] [--mutate <bits>] [--shift-gpu] [--detail]
+ *               [--lod-delta <levels>]
  *
  * For a disagreement it lists the outside pixels (up to 12): the GPU's colour, the reference's nominal
  * colour and its envelope; with --detail (best with --only) also FFReference's record of the pixel: the
@@ -51,6 +52,8 @@
  * and --shift-gpu compares each capture with the NEXT capture's GPU picture.  Each line also says how
  * many pixels the reference wrote and how many the GPU changed from the clear colour, so a draw that
  * wrote nothing on either side is counted as such ("empty"), never as evidence.
+ * --lod-delta is a diagnostic, never a verdict: it widens one freedom (the LOD's, 0.6 by default), so
+ * a disagreement that goes away under it is one of LOD alone.  The run says so on its first line.
  * Exit status: 0 no disagreement and nothing unreadable; 1 otherwise.
  */
 
@@ -122,6 +125,7 @@ int main( int argc, char *argv[] )
 	std::string gpuDir, only;
 	unsigned mutations = 0;
 	bool shiftGpu = false, detail = false;
+	Freedoms freedoms;
 	for (int i = 2; i < argc; ++i)
 	{
 		if (strcmp( argv[i], "--shift-gpu" ) == 0)
@@ -134,6 +138,11 @@ int main( int argc, char *argv[] )
 			only = argv[++i];
 		else if (i + 1 < argc && strcmp( argv[i], "--mutate" ) == 0)
 			mutations = (unsigned)strtoul( argv[++i], NULL, 0 );
+		else if (i + 1 < argc && strcmp( argv[i], "--lod-delta" ) == 0)
+		{
+			freedoms.lodDelta = atof( argv[++i] );
+			printf( "DIAGNOSTIC: the LOD freedom widened to +-%g levels; not a verdict\n", freedoms.lodDelta );
+		}
 	}
 	std::vector<std::string> names = captureNames( dir );
 	if (names.empty())
@@ -290,7 +299,7 @@ int main( int argc, char *argv[] )
 		Report report;
 		const int count = h.indexCount ? (int)h.indexCount : (int)h.vertexCount;
 		const bool ok = draw( state, (int)h.primitiveType, vertices.empty() ? NULL : &vertices[0], (int)h.vertexCount,
-			h.indexCount ? &cap.indices[0] : NULL, count, target, &report, mutations );
+			h.indexCount ? &cap.indices[0] : NULL, count, target, &report, mutations, freedoms );
 		if (!ok)
 		{
 			printf( "refused %s: %s\n", names[n].c_str(), report.refusals.empty() ? "?" : report.refusals[0].c_str() );
