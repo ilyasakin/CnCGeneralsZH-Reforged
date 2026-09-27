@@ -1430,7 +1430,8 @@ environment-triggered; fixed.**
     retry.
   - Network volumes, whose errors (ETIMEDOUT, ESTALE and others) are not classified as gone. A read that
     only hangs is never classified at all.
-  - The Windows error codes, which are named but not measured. A VHD test on the W2 VM is an open item.
+  - Which of the four Windows error codes a removed drive gives. W2 detached an exFAT VHD under the game on
+    Windows 11 and it stopped with exit status 3, so the code is one of them, but which one is not logged.
   - Reads that are not archive reads: loose files and the user's own folder. These fail as before.
 
 **Latent, not numbered: a crash box that waits under -headless (Windows) - fixed.** EA's debug library
