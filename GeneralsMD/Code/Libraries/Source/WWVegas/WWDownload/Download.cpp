@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 // Download.cpp : Implementation of CDownload
 #include "Platform/MSVCCompat.h"	// mkdir with a mode and strncasecmp, below, on MSVC too (W2)

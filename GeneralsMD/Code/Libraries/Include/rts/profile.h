@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by Ilyas Akin for the macOS/Linux port; see NOTICE.md and the git history.
 
 /////////////////////////////////////////////////////////////////////////EA-V1
 // $File: //depot/GeneralsMD/Staging/code/Libraries/Include/rts/profile.h $

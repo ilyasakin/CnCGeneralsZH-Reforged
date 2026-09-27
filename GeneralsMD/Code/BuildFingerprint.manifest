@@ -3567,6 +3567,7 @@ Tools/gdi-font-metrics.ps1
 Tools/gentrigtables.py
 Tools/include_case_check.py
 Tools/install-guard.sh
+Tools/license-headers.py
 Tools/linux-check.sh
 Tools/lobbyroom_layout.py
 Tools/lobbysettings_layout.py

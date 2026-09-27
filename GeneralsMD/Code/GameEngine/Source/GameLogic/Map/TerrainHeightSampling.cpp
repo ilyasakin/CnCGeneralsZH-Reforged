@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port: moved here from GeneralsMD/Code/GameEngineDevice/Source/W3DDevice/GameClient/BaseHeightMap.cpp and GeneralsMD/Code/GameEngineDevice/Include/W3DDevice/GameClient/BaseHeightMap.h; see NOTICE.md and the git history.
 
 // FILE: TerrainHeightSampling.cpp ////////////////////////////////////////////////////////////////
 // Desc:   BaseHeightMapRenderObjClass's height maths, moved to gameengine (T1).

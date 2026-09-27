@@ -1,3 +1,20 @@
+/*
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 // w3d_view's shaders written by hand in MSL: the other side of the shader-toolchain comparison.
 // They compute what model.vert and model.frag compute.  SDL_gpu.h's order for MSL: textures and
 // samplers from index 0, uniform buffers from [[buffer(0)]], vertex attributes through [[stage_in]]
