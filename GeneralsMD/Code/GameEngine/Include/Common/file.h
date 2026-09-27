@@ -173,6 +173,11 @@ class File : public MemoryPoolObject
 		*/
 		virtual char* readEntireAndClose() = 0;
 		virtual File* convertToRAMFile() = 0;
+
+		/** TRUE when this file's last read or seek failed because the device it is on has gone away: the
+			* drive disconnected, ejected or asleep, while the file was open.  Only LocalFile can tell; the
+			* archive layer asks it when an archive read fails (GameDataGone, Common/Debug.h). */
+		virtual Bool	deviceGone( void ) const { return FALSE; }
 };
 
 

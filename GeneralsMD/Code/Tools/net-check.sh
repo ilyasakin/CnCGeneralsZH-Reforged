@@ -64,6 +64,24 @@
 #   --control   the armed control: the second copy is given the next seed, so the two copies start
 #               different worlds from one command stream; the match must be reported FAILED with a CRC
 #               mismatch, so a pass means the check can see one
+#
+# TWO HOSTS (W1).  Driven from a third machine over ssh, one copy per host, so each side runs behind its
+# own guards (firewall, machine lock, ports, farm, install hash, descriptor cap):
+#   net-check.sh --generals <exe> --peer <slot> --hosts <addr0>,<addr1> [--replay-out <file>] ...
+#               plays the one copy for <slot> (its address must be this machine's), plays its own replay
+#               back, copies the replay to --replay-out, and prints one line:
+#               PEER-RESULT slot= crc= frame= mismatches= dropped= built= ended= back_crc= back_frame= aligned="" oos=""
+#               dropped counts the players this copy disconnected.  A copy whose partner never came (or left)
+#               does not stop: after NetworkDisconnectTime and the disconnect screen it drops the other slot
+#               and plays on alone to a clean end with no mismatch (measured, 2026-09-27: a lone peer 1
+#               logged "disconnecting slot 0 on frame 30" and still reached --frames).  So dropped must be 0.
+#   net-check.sh --generals <exe> --play <replay file> [--frames N]
+#               plays a replay recorded elsewhere (the other host's) and prints
+#               PLAY-RESULT crc= frame= aligned="" oos=""
+# The driver compares the lines: the two live CRCs, each replay played on its own host and on the other.
+# On Linux the firewall gate reads iptables and nft (through sudo -n) and skips if the input chain drops or
+# rejects, or if it cannot tell (NET_CHECK_FIREWALL_UNKNOWN_OK=1 goes ahead anyway).
+#
 # Exit status: 0 the match agrees; 1 it does not; 77 skipped (no data, no second address, a port in
 # use for NET_CHECK_PORT_WAIT seconds (600), the firewall on, or no python3 for the probe); 99 the install
 # changed or could not be checked.
@@ -81,6 +99,10 @@ CONTROL=0
 CORRUPT_AT=""
 LEGACY=0
 KEEP=0
+PEER=""
+HOSTS_ARG=""
+REPLAY_OUT=""
+PLAY=""
 LIVE_TIMEOUT="${NET_CHECK_LIVE_TIMEOUT:-900}"		# seconds for the match; 3000 frames took 105 s
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -95,6 +117,10 @@ while [ $# -gt 0 ]; do
 		--corrupt-at) CORRUPT_AT="$2"; shift 2;;
 		--legacy-replay) LEGACY=1; shift;;
 		--keep) KEEP=1; shift;;
+		--peer) PEER="$2"; shift 2;;
+		--hosts) HOSTS_ARG="$2"; shift 2;;
+		--replay-out) REPLAY_OUT="$2"; shift 2;;
+		--play) PLAY="$2"; shift 2;;
 		*) echo "net-check: unknown argument $1" >&2; exit 2;;
 	esac
 done
@@ -108,6 +134,13 @@ done
 if [ -z "$DATA" ] || [ ! -d "$DATA/zerohour" ]; then
 	echo "skip: no game data (--data or ZH_DATA_DIR, a folder holding zerohour/)"
 	exit 77
+fi
+if [ -n "$PEER" ]; then
+	case "$PEER" in 0|1) ;; *) echo "net-check: --peer is 0 or 1" >&2; exit 2;; esac
+	case "$HOSTS_ARG" in *,*) ;; *) echo "net-check: --peer needs --hosts <addr0>,<addr1>" >&2; exit 2;; esac
+fi
+if [ -n "$PLAY" ] && [ ! -f "$PLAY" ]; then
+	echo "net-check: --play: no replay at $PLAY" >&2; exit 2
 fi
 
 # ---- the firewall, before anything listens ----------------------------------------------------------
@@ -125,6 +158,23 @@ if [ "$(uname -s)" = "Darwin" ]; then
 	case "$state" in *"State = 0"*) ;; *) echo "skip: the application firewall is on ($state); a copy listening off loopback would ask in a dialog"; exit 77;; esac
 	case "$stealth" in *"is off"*) ;; *) echo "skip: firewall stealth mode is not off ($stealth)"; exit 77;; esac
 	case "$blockall" in *"disabled"*) ;; *) echo "skip: firewall block-all is not disabled ($blockall)"; exit 77;; esac
+elif [ "$(uname -s)" = "Linux" ] && [ -n "$PEER" ]; then
+	# Another host has to reach this one: an input chain that drops or rejects would starve the match
+	fw_ipt="$(sudo -n iptables -S INPUT 2>/dev/null)"; ipt=$?
+	fw_nft="$(sudo -n nft list ruleset 2>/dev/null)"; nft=$?
+	if [ $ipt -ne 0 ] && [ $nft -ne 0 ] && [ -z "${NET_CHECK_FIREWALL_UNKNOWN_OK:-}" ]; then
+		echo "skip: cannot read this machine's firewall (sudo -n iptables/nft): a blocked port would look like a desync"
+		exit 77
+	fi
+	if printf '%s\n' "$fw_ipt" | grep -q -E '^-P INPUT (DROP|REJECT)|^-A INPUT .*-j (DROP|REJECT)'; then
+		echo "skip: the iptables INPUT chain drops or rejects: $(printf '%s' "$fw_ipt" | grep -E 'DROP|REJECT' | head -2 | tr '\n' ' ')"
+		exit 77
+	fi
+	if printf '%s\n' "$fw_nft" | grep -q -E 'hook input .*policy drop'; then
+		echo "skip: an nftables input chain has policy drop"
+		exit 77
+	fi
+	echo "net-check: firewall: iptables INPUT $(printf '%s\n' "$fw_ipt" | grep -m1 '^-P INPUT' || echo unreadable), no input chain drops"
 fi
 
 # ---- one net-check on the whole machine (see the header) ------------------------------------------------
@@ -232,7 +282,39 @@ PROBE_EOF
 # queue instead of one of them passing as Skipped.
 PORT_WAIT="${NET_CHECK_PORT_WAIT:-600}"
 port_deadline=$(( $(date +%s) + PORT_WAIT ))
-while :; do
+own_probe() {	# own_probe <address>: ADDR if it is this machine's and both game ports are free on it
+	python3 - "$1" <<'OWN_EOF'
+import socket, sys
+a = sys.argv[1]
+busy = []
+for p in (8086, 8088):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.bind((a, p))
+    except OSError as e:
+        if e.errno == 49 or e.errno == 99:		# EADDRNOTAVAIL: not an address of this machine
+            print("NOTMINE " + a); sys.exit(0)
+        busy.append("%s:%d" % (a, p))
+    finally:
+        s.close()
+print(("BUSY " + " ".join(busy)) if busy else ("ADDR " + a))
+OWN_EOF
+}
+if [ -n "$PLAY" ]; then
+	PROBE="ADDR none"		# a playback opens no socket
+elif [ -n "$PEER" ]; then
+	OWN="$(printf '%s' "$HOSTS_ARG" | cut -d, -f$((PEER + 1)))"
+	while :; do
+		PROBE="$(own_probe "$OWN")"
+		case "$PROBE" in "BUSY "*) ;; *) break;; esac
+		[ "$(date +%s)" -ge "$port_deadline" ] && break
+		[ -n "${said_waiting:-}" ] || echo "net-check: waiting up to ${PORT_WAIT} s for the game's ports (${PROBE#BUSY })"
+		said_waiting=1
+		sleep 5
+	done
+	case "$PROBE" in "NOTMINE "*) echo "skip: --hosts gives slot $PEER the address $OWN, which is not this machine's"; exit 77;; esac
+fi
+while [ -z "$PEER" ] && [ -z "$PLAY" ]; do
 	PROBE="$(probe)"
 	case "$PROBE" in "BUSY "*) ;; *) break;; esac
 	[ "$(date +%s)" -ge "$port_deadline" ] && break
@@ -245,7 +327,7 @@ case "$PROBE" in
 	"BUSY "*) echo "skip: the game's ports stayed in use for ${PORT_WAIT} s (${PROBE#BUSY }): another copy of the game is running"; exit 77;;
 	*) echo "skip: no up, non-loopback IPv4 address delivers to and from 127.0.0.1 (tried: ${PROBE#NONE })"; exit 77;;
 esac
-HOSTS="127.0.0.1,$SECOND"
+if [ -n "$PEER" ]; then HOSTS="$HOSTS_ARG"; elif [ -z "$PLAY" ]; then HOSTS="127.0.0.1,$SECOND"; fi
 
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
@@ -347,6 +429,60 @@ wait_all() {
 	for p in "$@"; do wait "$p" 2>/dev/null; done
 	return 0
 }
+
+# ---- --play: another host's replay, played here ----------------------------------------------------------
+if [ -n "$PLAY" ]; then
+	mkdir -p "$WORK/user-play/Replays"
+	cp -- "$PLAY" "$WORK/user-play/Replays/netcheckplay.rep"
+	start_copy 0 play -replay netcheckplay
+	wait_all "$LIVE_TIMEOUT" "$LAST_PID"; ended=$?
+	log="$(log_of 0 play)"
+	read -r crc frame <<< "$(crc_of "$log")"
+	aligned="$(grep -a -m1 'Replay CRCs: ' "$log" 2>/dev/null | sed 's/.*Replay CRCs: //')"
+	oos="$(grep -a -m1 'Replay has gone out of sync' "$log" 2>/dev/null | sed 's/.*Replay has gone //')"
+	echo "PLAY-RESULT crc=${crc:-none} frame=${frame:-none} ended=$ended aligned=\"$aligned\" oos=\"$oos\""
+	status=1
+	[ -n "${crc:-}" ] && [ "$ended" -eq 0 ] && [ -z "$oos" ] && status=0
+	verify_install || { KEEP=1; exit 99; }
+	exit $status
+fi
+
+# ---- --peer: one copy of a match between two hosts -----------------------------------------------------------
+if [ -n "$PEER" ]; then
+	S="$PEER"
+	echo "net-check: peer $S of $HOSTS, seed $SEED, $NETAI AI, $FRAMES frames, map $MAP"
+	started=$(date +%s)
+	start_copy 0 "live$S" -netgame "$HOSTS" -netslot "$S" -netai "$NETAI" -map "$MAP" -seed "$SEED"
+	WATCH_LOGS="$(log_of 0 "live$S")"
+	wait_all "$LIVE_TIMEOUT" "$LAST_PID"; ended=$?
+	WATCH_LOGS=""
+	echo "  the match: $(( $(date +%s) - started )) s (ended $ended: 0 by itself, 1 time, 2 CRC mismatch, 3 descriptors${FD_REPORT:+: $FD_REPORT})"
+	log="$(log_of 0 "live$S")"
+	mism=$(grep -a -c 'CRC Mismatch' "$log" 2>/dev/null); mism=${mism:-0}
+	dropped=$(grep -a -c 'ConnectionManager::disconnectPlayer - disconnecting slot' "$log" 2>/dev/null); dropped=${dropped:-0}
+	built=$(grep -a -c 'AI BUILT frame [1-9]' "$log" 2>/dev/null); built=${built:-0}
+	read -r crc frame <<< "$(crc_of "$log")"
+	rep="$WORK/user-live$S/Replays/00000000.rep"
+	back_crc=none; back_frame=none; aligned=""; oos=""
+	if [ -f "$rep" ]; then
+		[ -n "$REPLAY_OUT" ] && cp -- "$rep" "$REPLAY_OUT"
+		if [ "$ended" -eq 0 ]; then
+			mkdir -p "$WORK/user-back$S/Replays"
+			cp -- "$rep" "$WORK/user-back$S/Replays/netcheck$S.rep"
+			start_copy 0 "back$S" -replay "netcheck$S"
+			wait_all "$LIVE_TIMEOUT" "$LAST_PID"
+			blog="$(log_of 0 "back$S")"
+			read -r back_crc back_frame <<< "$(crc_of "$blog")"
+			aligned="$(grep -a -m1 'Replay CRCs: ' "$blog" 2>/dev/null | sed 's/.*Replay CRCs: //')"
+			oos="$(grep -a -m1 'Replay has gone out of sync' "$blog" 2>/dev/null | sed 's/.*Replay has gone //')"
+		fi
+	fi
+	echo "PEER-RESULT slot=$S crc=${crc:-none} frame=${frame:-none} mismatches=$mism dropped=$dropped built=$built ended=$ended back_crc=${back_crc:-none} back_frame=${back_frame:-none} aligned=\"$aligned\" oos=\"$oos\""
+	status=1
+	[ "$ended" -eq 0 ] && [ "$mism" -eq 0 ] && [ "$dropped" -eq 0 ] && [ "${frame:-}" = "$FRAMES" ] && [ "${back_crc:-none}" = "${crc:-x}" ] && [ -z "$oos" ] && status=0
+	verify_install || { KEEP=1; exit 99; }
+	exit $status
+fi
 
 SEED1="$SEED"
 [ "$CONTROL" -eq 1 ] && SEED1=$((SEED + 1))

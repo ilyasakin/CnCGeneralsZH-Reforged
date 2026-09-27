@@ -202,7 +202,16 @@ Int UDP::Bind(UnsignedInt IP,UnsignedShort Port)
 
 #if !defined(_WIN32)
   // Defect #29: the options have to be on the socket before bind (udp.h, BindForBroadcasts)
-  if (m_shareAddress || m_broadcastsOnly)
+#if defined(__linux__)
+  // Linux's SO_REUSEADDR lets a second UDP socket bind the very same address and port, which BSD refuses,
+  // and a unicast datagram then goes to only one of them: two copies could share one address unseen.  So
+  // the lobby socket shares nothing there - its listener binds the broadcast address instead of the
+  // wildcard (BindForBroadcasts), and no longer meets it on an address (W1, measured on Arch).
+  const Bool share = m_broadcastsOnly;
+#else
+  const Bool share = m_shareAddress || m_broadcastsOnly;
+#endif
+  if (share)
   {
     int on=1;
     setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,(char *)&on,sizeof(on));
@@ -410,7 +419,14 @@ Int UDP::Read(unsigned char *msg,UnsignedInt len,sockaddr_in *from)
 Int UDP::BindForBroadcasts(UnsignedShort port)
 {
   m_broadcastsOnly=TRUE;
+#if defined(__linux__)
+  // Linux delivers a limited broadcast to a socket bound to 255.255.255.255, so the listener needs no
+  // wildcard and overlaps no lobby socket's address (see Bind).  macOS refuses that bind (EADDRNOTAVAIL),
+  // so there the listener takes the wildcard and Read filters by destination.
+  return(Bind((UnsignedInt)INADDR_BROADCAST,port));
+#else
   return(Bind((UnsignedInt)INADDR_ANY,port));
+#endif
 }
 
 /* Read for the wildcard listener (udp.h): the next datagram sent to 255.255.255.255, 0 when none is

@@ -229,6 +229,10 @@ Int StreamingArchiveFile::read( void *buffer, Int bytes )
 		bytes = m_size - m_curPos;
 
 	Int bytesRead = m_file->read(buffer, bytes);
+	// the archive's drive gone under a stream (music, speech): see Win32BIGFile::openFile.  From the audio's
+	// thread GameDataGone only records it, and the main loop stops the game (GameDataGoneCheck).
+	if (bytesRead < 0 && m_file->deviceGone())
+		GameDataGone(m_file->getName());
 
 	m_curPos += bytesRead;
 

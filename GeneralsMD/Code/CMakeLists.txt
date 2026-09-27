@@ -47,6 +47,32 @@ else()
   set(ZH_NOT_YET_PORTABLE "")
 endif()
 
+# A compiler may assume a member function's `this` is never null and delete the checks written on it.
+# EA's code depends on three: MemoryPoolObject::deleteInstance() (GameMemory.h:762, `if (this)`, called
+# on null pointers all over the engine), StateMachine::deleteInstance() (StateMachine.h:356) and
+# WindowLayout::destroyWindows() (WindowLayout.cpp:176, `if (this == NULL)`).  GCC 6 and later delete
+# them at -O2 and up - the native Linux build segfaulted in ScriptEngine::init (W1) - and GCC's release
+# notes name this switch as the way to keep such code working.  Clang keeps them today (measured: the
+# Release build's out-of-line deleteInstance and destroyWindows both begin with a null test, `cbz x0`)
+# but warns that it may assume otherwise, so every POSIX compiler gets the switch.  This is what MSVC
+# does already: it never made the assumption.
+if(ZH_PLATFORM_POSIX AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  add_compile_options(-fno-delete-null-pointer-checks)
+endif()
+
+# Linux links with LLD when it is there.  The engine's static libraries reference each other in cycles
+# (gameengine, ww3d2, wwsaveload, w3ddevice ...), which GNU ld resolves only in link order, so generals
+# failed to link with hundreds of undefined references; Apple's linker, and LLD, resolve archives in
+# any order.  Without LLD, GNU ld is left as it was and the cycles still need resolving (W1 records it).
+if(ZH_PLATFORM_LINUX)
+  find_program(ZH_LLD NAMES ld.lld)
+  if(ZH_LLD)
+    add_link_options(-fuse-ld=lld)
+  else()
+    message(WARNING "No ld.lld: GNU ld cannot resolve the engine's circular static libraries in link order")
+  endif()
+endif()
+
 # compile_commands.json: every source's exact compile command, which Tools/syntax_sweep.py and
 # clangd read.  Ninja can produce it on demand; a Makefiles tree has nothing else that carries each
 # target's own -D flags.  POSIX only because only the POSIX tooling reads it - include_case_check
@@ -1746,6 +1772,15 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(mission_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # The game's data going away under it (a drive disconnected or asleep): the game must say so and stop
+  # with exit status 3, never crash; the control, a rename, plays on.  macOS only for now (hdiutil); skipped
+  # elsewhere and without game data.  See the script.
+  add_test(NAME data_gone_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_data_gone_check.sh $<TARGET_FILE:generals>)
+  set_tests_properties(data_gone_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
+  if(ZH_GAME_DATA)
+    set_tests_properties(data_gone_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # L1's POSIX harness on itself: two headless copies on this machine play one seeded LAN match over
   # 127.0.0.1 and a second local address, agree to frame 1800, and each replay plays back to it; a
   # second copy on another seed is reported FAILED.  One machine, one compiler: see the script.  Skipped
@@ -2000,6 +2035,9 @@ if(ZH_PLATFORM_POSIX)
   # the exe's names and the device layer, as test_terrain_golden links them
   target_sources(test_lan_broadcast PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
   target_link_libraries(test_lan_broadcast PRIVATE posixdevice w3ddevice)
+  # W1: the same sockets between two hosts, driven by hand from each (a tool, not a test: it needs a peer)
+  add_executable(lan_broadcast_probe ${TESTS}/lan_broadcast_probe.cpp ${TESTS}/test_gameengine_stubs.cpp)
+  target_link_libraries(lan_broadcast_probe PRIVATE gameengine posixdevice w3ddevice)
 endif()
 add_lib_test(test_terrain_golden gameengine)
 target_compile_definitions(test_terrain_golden PRIVATE
@@ -2493,7 +2531,8 @@ if(ZH_PLATFORM_POSIX)
   # The tests that build a farm of the install (a folder of links into it) never run at the same time:
   # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
   foreach(_zh_test replay_check replay_check_app net_check overlay_crc_check packaging_resolution_check root_readonly_check
-                   lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager)
+                   lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager
+                   mission_check data_gone_check)
     if(TEST ${_zh_test})
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
     endif()

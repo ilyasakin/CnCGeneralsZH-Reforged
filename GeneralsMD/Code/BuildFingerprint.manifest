@@ -2626,9 +2626,11 @@ Tests/ffshader_dump.cpp
 Tests/fs_oracle.cpp
 Tests/gcc_eager_vtable_stubs.cpp
 Tests/glyph_rasteriser_golden.inc
+Tests/lan_broadcast_probe.cpp
 Tests/miles_listen.cpp
 Tests/miles_smoke.cpp
 Tests/replay_wide_oracle.cpp
+Tests/run_data_gone_check.sh
 Tests/run_generals_smoke.sh
 Tests/run_mission_check.sh
 Tests/run_net_check.sh
