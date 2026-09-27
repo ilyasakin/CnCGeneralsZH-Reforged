@@ -28,7 +28,8 @@
 **
 ** It creates on hardware and falls back to WARP, and it can be created with no window at all,
 ** which is what lets a test run it: a device with no swap chain has no back buffer and cannot
-** present, and Create_Offscreen says so by refusing both.
+** present, and Create_Offscreen says so by refusing both.  ZH_DX11_DRIVER (warp or null) forces the
+** driver for measuring; the NULL driver's back buffer is a texture and its present does nothing.
 **
 ** Nothing here is bound to D3D9's rules.  A D3D11 device is not lost by an alt-tab, so there is no
 ** TestCooperativeLevel and no Reset_Device; a resize is DXGI's ResizeBuffers and the views are

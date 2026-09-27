@@ -44,7 +44,11 @@
 
 //#define CREATE_DX8_MULTI_THREADED
 //#define CREATE_DX8_FPU_PRESERVE
+#if defined(_WIN32)
+#define WW3D_DEVTYPE Requested_Device_Type()	// HAL unless ZH_D3D9_DEVTYPE says otherwise: see below
+#else
 #define WW3D_DEVTYPE D3DDEVTYPE_HAL
+#endif
 
 #include "dx8wrapper.h"
 #if defined(_WIN32)
@@ -93,6 +97,22 @@
 
 #include "shdlib.h"
 #include <string.h>	// memset, strcpy, strlen
+
+#if defined(_WIN32)
+#include <stdlib.h>	// getenv
+
+/* ZH_D3D9_DEVTYPE=nullref is for measuring, not playing: the reference rasterizer's NULL device
+	 takes every call and draws nothing, so a run times the game's own work in the Direct3D 9
+	 runtime with no driver or rasterizer under it.  It exists only where d3dref9.dll does (the
+	 DirectX SDK's debug runtime); without it CreateDevice fails as it would on a machine with no
+	 device.  Unset, or anything else, the device is the hardware one it has always been.  The
+	 Direct3D 11 side's counterpart is ZH_DX11_DRIVER (dx11device.cpp). */
+static D3DDEVTYPE Requested_Device_Type()
+{
+	const char * requested = getenv("ZH_D3D9_DEVTYPE");
+	return (requested != NULL && _stricmp(requested, "nullref") == 0) ? D3DDEVTYPE_NULLREF : D3DDEVTYPE_HAL;
+}
+#endif
 
 const int DEFAULT_RESOLUTION_WIDTH = 640;
 const int DEFAULT_RESOLUTION_HEIGHT = 480;
