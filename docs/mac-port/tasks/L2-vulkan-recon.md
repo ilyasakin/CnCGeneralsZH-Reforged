@@ -391,3 +391,63 @@ on. -a9 lists them beside F1–F4, F6, F8 and F11.
 - Cases the probe does not draw: spot lights' ambient, LOCALVIEWER with a non-identity view, and the
   specular gate exactly at N·L = 0.
 
+## Metal beside Vulkan: one table (2026-09-27)
+
+By -47, at the PM's request: the same frozen sets, replayed on Metal and judged the same way, so the Mac and
+Linux verdicts sit side by side.
+- **The replay:** finer (M3 Pro, macOS 26.5) ran -a9's `ffref_capture_selfcheck` as a black box, with SDL's
+  dummy video driver and `ZH_SDL_GPU_METAL_WINDOWLESS=1`, `FFREF_GPU_DUMP` on and its own output discarded.
+  The build was feature/mac-port-f7 8cf87ea1.
+- **The judge:** `ffref_judge` with FFReference as of feature/mac-port-known, which carries the N27/N3/N14
+  corrections above.
+- **Re-judging:** the Linux dumps were re-judged with that FFReference too. Every game-set verdict is
+  unchanged by the corrections.
+
+Each cell reads agree / disagree / empty.
+
+| set | captures | ANV (Intel UHD 620) | lavapipe (llvmpipe) | Metal (Apple M3 Pro) |
+|:--|--:|:--|:--|:--|
+| run4 | 49 | 38 / 0 / 11 | not replayed | 35 / **3** / 11 |
+| set2 mobstress | 35 | 29 / 0 / 6 | 29 / 0 / 6 | 25 / **4** / 6 |
+| set2 shellmap | 215 | 182 / 0 / 33 | 181 / 1 / 33 (LVP1) | 164 / **18** / 33 |
+| set2 skirmish | 93 | 63 / 0 / 30 | 63 / 0 / 30 | 61 / **2** / 30 |
+| set3 (synthetic) | 7 | 5 / 2 / 0 | 5 / 2 / 0 | 5 / 2 / 0 |
+
+**F7 and F8 on Metal:**
+- F7: set3's draw_00032, the absent specular, agrees on all three.
+- F8: flat shading is the same on all three in -a9's ffref_gpu_selfcheck (3135 outside, worst 248/255). It is
+  a device deviation, now measured (above).
+
+**set3's two disagreements are the same on all three drivers.** They are draw_00036 (2088 outside) and
+draw_00037 (978 outside): the specular draws with LOCALVIEWER off. They agreed while FFReference used the
+page's (0,0,1) viewer, as the device did. Under the measured (0,0,−1) they disagree, with the numbers
+-a9's armed control of the old generator gives. -a9's feature/mac-port-ffviewer 52b842ba changes the
+device to the measured viewer, and those scenarios are then exact (4096/4096) on ANV and lavapipe.
+
+**Metal's 27 disagreements on game captures are Metal's alone.** ANV draws all 27 inside the envelope.
+- **Size:** 243 pixels outside in all, in frames of 262,144 or 480,000 pixels. Per draw it is 1 to 106
+  pixels, and the worst is 51/255 (mobstress draw_00031).
+- **Where:** every outside pixel is on a minified stage (λ 2 to 8.7), most of them on thin or tiny triangles.
+- **The draws:** run4 14, 28, 29; mobstress 9, 17, 31, 32; shellmap 21, 25, 26, 42, 54, 58, 59, 72, 73, 81,
+  82, 113, 129, 145, 167, 178, 195, 198; skirmish 14, 68.
+
+`ffref_judge --lod-delta` (a diagnostic, never a verdict) widens only the LOD freedom:
+- **±1.0:** 6 of the 27 agree.
+- **±1.5:** 14 agree.
+- **Left at ±1.5:** 13 disagree: run4 29; mobstress 17, 31, 32; shellmap 25, 26, 59, 72, 73, 167, 178, 195,
+  198. That is 1 to 13 pixels each, worst 17/255. At those pixels the GPU sampled a finer level than
+  FFReference at some and a coarser one at others.
+
+So Apple's λ departs from the D3D9 nominal by more than the ±0.6 ruling on real game geometry. WARP and REF
+hold to within 0.05 (F11 above). The rest is not LOD alone.
+
+**The open question** (asked of -a9, answer pending): what the SDL GPU sampler gets on Metal when the replay
+turns ANISOTROPIC into LINEAR. If anisotropy stayed on for Metal only, it would explain "a finer level on
+slivers".
+
+**What this cannot see:**
+- **Other hardware:** any Apple GPU but the M3 Pro, and any Vulkan hardware but Intel's.
+- **run4 on lavapipe:** it was never replayed there.
+- **Draw order:** whether the 27 draws matter in a frame. Each capture starts cleared, so a draw's pixels
+  are judged alone, never under the draws that would cover them.
+
