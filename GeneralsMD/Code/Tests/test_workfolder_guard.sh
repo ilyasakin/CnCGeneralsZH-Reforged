@@ -62,6 +62,7 @@ if command -v git >/dev/null 2>&1 && git -C "$REPO" rev-parse --git-dir >/dev/nu
 	checked=0
 	while IFS= read -r script; do
 		[ -f "$REPO/$script" ] || continue
+		[ "$script" = "GeneralsMD/Code/Tests/test_workfolder_guard.sh" ] && continue		# its text names the pattern on purpose
 		grep -q 'mktemp -d' "$REPO/$script" || continue
 		checked=$((checked + 1))
 		bad="$(unguarded "$REPO/$script" | paste -sd, -)"
