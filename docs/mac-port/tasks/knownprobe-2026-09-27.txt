@@ -1,0 +1,180 @@
+knownprobe_windows.cpp, 2026-09-27, the project's Windows 11 VM (desktop session), second run: HAL, then REF.
+Pixel values are A8R8G8B8 read back at (x,y) of a 64x64 target. See L2-vulkan-recon.md, "The known list measured".
+
+adapter: Microsoft Basic Render Driver (d3d10warp.dll), driver 10.0.26100.5074; device type HAL
+module d3dref9.dll    not loaded
+module d3d9ref.dll    not loaded
+module d3d10warp.dll  loaded
+module d3d9on12.dll   not loaded
+module d3d11.dll      not loaded
+caps: ShadeCaps 0x00084208 TextureOpCaps 0x03FFFFFF VertexProcessingCaps 0x0000017B
+-- F8 flat shading (N11)
+F8a  list, vertices red green blue                                      (10,10) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+F8a  list, same triangle, another pixel                                 (30,20) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+F8b  strip v0..v3 red green blue white, triangle 0                      (10,10) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+F8b  strip, triangle 1 (v1 v2 v3)                                       (54,54) -> 0xFF00FF00 (A 255 R   0 G 255 B   0)
+F8c  fan v0..v3 red green blue white, triangle 0 (v0 v1 v2)             (54,10) -> 0xFF00FF00 (A 255 R   0 G 255 B   0)
+F8c  fan, triangle 1 (v0 v2 v3)                                         (10,54) -> 0xFF0000FF (A 255 R   0 G   0 B 255)
+F8d  indexed list, indices 2 0 1 (vertex 2 blue first)                  (10,10) -> 0xFF0000FF (A 255 R   0 G   0 B 255)
+F8e  list, diffuse alpha 00 80 FF: is alpha flat too?                   (10,10) -> 0x00FFFFFF (A   0 R 255 G 255 B 255)
+F8e  list, alpha, another pixel                                         (30,20) -> 0x00FFFFFF (A   0 R 255 G 255 B 255)
+F8f  list, black diffuse, specular red green blue, SPECULARENABLE       (10,10) -> 0xFFAB2A2A (A 255 R 171 G  42 B  42)
+F8f  list, specular, another pixel                                      (30,20) -> 0xFF347A52 (A 255 R  52 G 122 B  82)
+F8g  control: the same list Gouraud                                     (10,10) -> 0xFFAB2A2A (A 255 R 171 G  42 B  42)
+-- F6 unlit vertex specular
+F6a  diffuse red, specular green, SPECULARENABLE                        (32,32) -> 0xFFFFFF00 (A 255 R 255 G 255 B   0)
+F6b  control: the same without SPECULARENABLE                           (32,32) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+-- F1 per-light ambient (N4); material ambient white, diffuse/specular/emissive 0, AMBIENT 0
+F1a  directional light, ambient (.4 .2 0), diffuse 0                    (32,32) -> 0x00663300 (A   0 R 102 G  51 B   0)
+F1b  point light, Attenuation0 2, ambient (.8 0 .4)                     (32,32) -> 0x00660033 (A   0 R 102 G   0 B  51)
+F1c  the same point light out of range (Range .1)                       (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F1d  control: directional light, ambient 0                              (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+-- F2 specular: material specular white, power 1, diffuse 0; normal (0,0,-1), z .5
+F2a1 Direction (0,.6,.8): Ldir toward the viewer side, LOCALVIEWER 1    (32,32) -> 0x00BDBDBD (A   0 R 189 G 189 B 189)
+F2a1   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x009F9F9F (A   0 R 159 G 159 B 159)
+F2a1   corner                                                           (62,62) -> 0x00DADADA (A   0 R 218 G 218 B 218)
+F2a0 Direction (0,.6,.8): Ldir toward the viewer side, LOCALVIEWER 0    (32,32) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2a0   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2a0   corner                                                           (62,62) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2b1 Direction (0,-.9,-.436): light behind (N.L < 0), LOCALVIEWER 1     (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b1   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b1   corner                                                           (62,62) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b0 Direction (0,-.9,-.436): light behind (N.L < 0), LOCALVIEWER 0     (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b0   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b0   corner                                                           (62,62) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2c1 Direction (.6,0,.8), LOCALVIEWER 1                                 (32,32) -> 0x00BDBDBD (A   0 R 189 G 189 B 189)
+F2c1   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00DBDBDB (A   0 R 219 G 219 B 219)
+F2c1   corner                                                           (62,62) -> 0x00A0A0A0 (A   0 R 160 G 160 B 160)
+F2c0 Direction (.6,0,.8), LOCALVIEWER 0                                 (32,32) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2c0   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2c0   corner                                                           (62,62) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+-- F3 DOTPRODUCT3 (N17): COLORARG1 DIFFUSE, COLORARG2 TFACTOR, ALPHAOP SELECTARG1 DIFFUSE
+F3a  diffuse 0x40FF8080 . tfactor 0xFFFF8080                            (32,32) -> 0xFFFFFFFF (A 255 R 255 G 255 B 255)
+F3b  diffuse 0x40C08080 . tfactor 0xFFC08080                            (32,32) -> 0x41414141 (A  65 R  65 G  65 B  65)
+F3c  diffuse 0x40A0A0A0 . tfactor 0xFFA0A0A0                            (32,32) -> 0x32323232 (A  50 R  50 G  50 B  50)
+-- F4 texture transform (N13): 4x4 texture, texel (i,j) = R 64i G 64j, POINT, uv (.1,.1)
+F4a  control: no transform                                              (32,32) -> 0xFF000000 (A 255 R   0 G   0 B   0)
+F4b  COUNT2, _31 .5 _32 .25 (D3D9 pads (u,v,1,0): moves)                (32,32) -> 0xFF804000 (A 255 R 128 G  64 B   0)
+F4c  COUNT2, _41 .5 _42 .25 (pads (u,v,0,1): moves)                     (32,32) -> 0xFF000000 (A 255 R   0 G   0 B   0)
+F4d  N28: TEXCOORDINDEX 1, vertices have one set (uv .1: cannot tell)   (32,32) -> 0xFF000000 (A 255 R   0 G   0 B   0)
+F4e  control: uv (.6,.6), no transform                                  (32,32) -> 0xFF808000 (A 255 R 128 G 128 B   0)
+F4f  N28: TEXCOORDINDEX 1, vertices have one set, uv (.6,.6)            (32,32) -> 0xFF000000 (A 255 R   0 G   0 B   0)
+-- F11 LOD (N15): 256x256, 9 levels, level L = R 28L; LINEAR/LINEAR/LINEAR; lambda = R/28
+F11a isotropic 3: L2 1.585                                              (32,32) -> 0xFF2C0000 (A 255 R  44 G   0 B   0)
+F11a   another pixel                                                    (17,45) -> 0xFF2C0000 (A 255 R  44 G   0 B   0)
+F11b rotated (2,-2),(2,2): L2 1.5, Linf 1.0, L1 2.0                     (32,32) -> 0xFF2A0000 (A 255 R  42 G   0 B   0)
+F11b   another pixel                                                    (17,45) -> 0xFF2A0000 (A 255 R  42 G   0 B   0)
+F11c anisotropic (4,0),(0,1): max 2.0                                   (32,32) -> 0xFF380000 (A 255 R  56 G   0 B   0)
+F11c   another pixel                                                    (17,45) -> 0xFF380000 (A 255 R  56 G   0 B   0)
+F11d rotated (2.5,1.5),(-1.5,2.5): L2 1.543, Linf 1.322, L1 2.0         (32,32) -> 0xFF2A0000 (A 255 R  42 G   0 B   0)
+F11d   another pixel                                                    (17,45) -> 0xFF2A0000 (A 255 R  42 G   0 B   0)
+-- N14 reflection vector: normal (0,0,-1) at z .5; texel (R,G) -> Rz = (R+.5)/64 - 2, Ry = (G+.5)/64 - 2
+N14a normal (0,0,-1), LOCALVIEWER 1                                     (32,32) -> 0xFF6A8000 (A 255 R 106 G 128 B   0)
+N14a   corner                                                           ( 1, 1) -> 0xFF6AA900 (A 255 R 106 G 169 B   0)
+N14b normal (0,0,-1), LOCALVIEWER 0                                     (32,32) -> 0xFF408000 (A 255 R  64 G 128 B   0)
+N14b   corner                                                           ( 1, 1) -> 0xFF408000 (A 255 R  64 G 128 B   0)
+N14c normal (0,0.6,-0.8), LOCALVIEWER 1                                 (32,32) -> 0xFF7A9400 (A 255 R 122 G 148 B   0)
+N14c   corner                                                           ( 1, 1) -> 0xFFA1A000 (A 255 R 161 G 160 B   0)
+N14d normal (0,0.6,-0.8), LOCALVIEWER 0                                 (32,32) -> 0xFF6EBD00 (A 255 R 110 G 189 B   0)
+N14d   corner                                                           ( 1, 1) -> 0xFF6EBD00 (A 255 R 110 G 189 B   0)
+-- N3 gate: material specular white, power 1; normal (0,0,-1); Direction d, Ldir = -d
+N3a  Direction (0,-0.9,-0.4359)                                         (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+N3b  Direction (0,-0.9,0.4359)                                          (32,32) -> 0x00D8D8D8 (A   0 R 216 G 216 B 216)
+N3c  Direction (0,-0.99,0.1411)                                         (32,32) -> 0x00C1C1C1 (A   0 R 193 G 193 B 193)
+-- N11 fog under flat: white diffuse, specular alpha (fog) 00 80 FF per vertex, fog colour black, no fog mode
+N11f flat                                                               (10,10) -> 0xFF3F3F3F (A 255 R  63 G  63 B  63)
+N11f   another pixel                                                    (30,20) -> 0xFF8F8F8F (A 255 R 143 G 143 B 143)
+N11g control: Gouraud                                                   (10,10) -> 0xFF3F3F3F (A 255 R  63 G  63 B  63)
+N11g   another pixel                                                    (30,20) -> 0xFF8F8F8F (A 255 R 143 G 143 B 143)
+-- N29 ALPHAOP DISABLE with COLOROP SELECTARG1 DIFFUSE (the page: undefined)
+N29  diffuse 0x40FF0000                                                 (32,32) -> 0x40FF0000 (A  64 R 255 G   0 B   0)
+done
+--- ref
+adapter: Microsoft Basic Render Driver (d3d10warp.dll), driver 10.0.26100.5074; device type REF
+module d3dref9.dll    loaded
+module d3d9ref.dll    not loaded
+module d3d10warp.dll  loaded
+module d3d9on12.dll   not loaded
+module d3d11.dll      not loaded
+caps: ShadeCaps 0x00084208 TextureOpCaps 0x03FFFFFF VertexProcessingCaps 0x0000017B
+-- F8 flat shading (N11)
+F8a  list, vertices red green blue                                      (10,10) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+F8a  list, same triangle, another pixel                                 (30,20) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+F8b  strip v0..v3 red green blue white, triangle 0                      (10,10) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+F8b  strip, triangle 1 (v1 v2 v3)                                       (54,54) -> 0xFF00FF00 (A 255 R   0 G 255 B   0)
+F8c  fan v0..v3 red green blue white, triangle 0 (v0 v1 v2)             (54,10) -> 0xFF00FF00 (A 255 R   0 G 255 B   0)
+F8c  fan, triangle 1 (v0 v2 v3)                                         (10,54) -> 0xFF0000FF (A 255 R   0 G   0 B 255)
+F8d  indexed list, indices 2 0 1 (vertex 2 blue first)                  (10,10) -> 0xFF0000FF (A 255 R   0 G   0 B 255)
+F8e  list, diffuse alpha 00 80 FF: is alpha flat too?                   (10,10) -> 0x00FFFFFF (A   0 R 255 G 255 B 255)
+F8e  list, alpha, another pixel                                         (30,20) -> 0x00FFFFFF (A   0 R 255 G 255 B 255)
+F8f  list, black diffuse, specular red green blue, SPECULARENABLE       (10,10) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+F8f  list, specular, another pixel                                      (30,20) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+F8g  control: the same list Gouraud                                     (10,10) -> 0xFFAB2A2A (A 255 R 171 G  42 B  42)
+-- F6 unlit vertex specular
+F6a  diffuse red, specular green, SPECULARENABLE                        (32,32) -> 0xFFFFFF00 (A 255 R 255 G 255 B   0)
+F6b  control: the same without SPECULARENABLE                           (32,32) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+-- F1 per-light ambient (N4); material ambient white, diffuse/specular/emissive 0, AMBIENT 0
+F1a  directional light, ambient (.4 .2 0), diffuse 0                    (32,32) -> 0x00663300 (A   0 R 102 G  51 B   0)
+F1b  point light, Attenuation0 2, ambient (.8 0 .4)                     (32,32) -> 0x00660033 (A   0 R 102 G   0 B  51)
+F1c  the same point light out of range (Range .1)                       (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F1d  control: directional light, ambient 0                              (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+-- F2 specular: material specular white, power 1, diffuse 0; normal (0,0,-1), z .5
+F2a1 Direction (0,.6,.8): Ldir toward the viewer side, LOCALVIEWER 1    (32,32) -> 0x00BDBDBD (A   0 R 189 G 189 B 189)
+F2a1   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x009F9F9F (A   0 R 159 G 159 B 159)
+F2a1   corner                                                           (62,62) -> 0x00DADADA (A   0 R 218 G 218 B 218)
+F2a0 Direction (0,.6,.8): Ldir toward the viewer side, LOCALVIEWER 0    (32,32) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2a0   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2a0   corner                                                           (62,62) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2b1 Direction (0,-.9,-.436): light behind (N.L < 0), LOCALVIEWER 1     (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b1   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b1   corner                                                           (62,62) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b0 Direction (0,-.9,-.436): light behind (N.L < 0), LOCALVIEWER 0     (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b0   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2b0   corner                                                           (62,62) -> 0x00000000 (A   0 R   0 G   0 B   0)
+F2c1 Direction (.6,0,.8), LOCALVIEWER 1                                 (32,32) -> 0x00BDBDBD (A   0 R 189 G 189 B 189)
+F2c1   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00DBDBDB (A   0 R 219 G 219 B 219)
+F2c1   corner                                                           (62,62) -> 0x00A0A0A0 (A   0 R 160 G 160 B 160)
+F2c0 Direction (.6,0,.8), LOCALVIEWER 0                                 (32,32) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2c0   corner (all four vertices differ in V under LOCALVIEWER)         ( 1, 1) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+F2c0   corner                                                           (62,62) -> 0x00F2F2F2 (A   0 R 242 G 242 B 242)
+-- F3 DOTPRODUCT3 (N17): COLORARG1 DIFFUSE, COLORARG2 TFACTOR, ALPHAOP SELECTARG1 DIFFUSE
+F3a  diffuse 0x40FF8080 . tfactor 0xFFFF8080                            (32,32) -> 0xFFFFFFFF (A 255 R 255 G 255 B 255)
+F3b  diffuse 0x40C08080 . tfactor 0xFFC08080                            (32,32) -> 0x41414141 (A  65 R  65 G  65 B  65)
+F3c  diffuse 0x40A0A0A0 . tfactor 0xFFA0A0A0                            (32,32) -> 0x32323232 (A  50 R  50 G  50 B  50)
+-- F4 texture transform (N13): 4x4 texture, texel (i,j) = R 64i G 64j, POINT, uv (.1,.1)
+F4a  control: no transform                                              (32,32) -> 0xFF000000 (A 255 R   0 G   0 B   0)
+F4b  COUNT2, _31 .5 _32 .25 (D3D9 pads (u,v,1,0): moves)                (32,32) -> 0xFF804000 (A 255 R 128 G  64 B   0)
+F4c  COUNT2, _41 .5 _42 .25 (pads (u,v,0,1): moves)                     (32,32) -> 0xFF000000 (A 255 R   0 G   0 B   0)
+F4d  N28: TEXCOORDINDEX 1, vertices have one set (uv .1: cannot tell)   (32,32) -> 0xFF000000 (A 255 R   0 G   0 B   0)
+F4e  control: uv (.6,.6), no transform                                  (32,32) -> 0xFF808000 (A 255 R 128 G 128 B   0)
+F4f  N28: TEXCOORDINDEX 1, vertices have one set, uv (.6,.6)            (32,32) -> 0xFF000000 (A 255 R   0 G   0 B   0)
+-- F11 LOD (N15): 256x256, 9 levels, level L = R 28L; LINEAR/LINEAR/LINEAR; lambda = R/28
+F11a isotropic 3: L2 1.585                                              (32,32) -> 0xFF2D0000 (A 255 R  45 G   0 B   0)
+F11a   another pixel                                                    (17,45) -> 0xFF2D0000 (A 255 R  45 G   0 B   0)
+F11b rotated (2,-2),(2,2): L2 1.5, Linf 1.0, L1 2.0                     (32,32) -> 0xFF2A0000 (A 255 R  42 G   0 B   0)
+F11b   another pixel                                                    (17,45) -> 0xFF2A0000 (A 255 R  42 G   0 B   0)
+F11c anisotropic (4,0),(0,1): max 2.0                                   (32,32) -> 0xFF380000 (A 255 R  56 G   0 B   0)
+F11c   another pixel                                                    (17,45) -> 0xFF380000 (A 255 R  56 G   0 B   0)
+F11d rotated (2.5,1.5),(-1.5,2.5): L2 1.543, Linf 1.322, L1 2.0         (32,32) -> 0xFF2B0000 (A 255 R  43 G   0 B   0)
+F11d   another pixel                                                    (17,45) -> 0xFF2B0000 (A 255 R  43 G   0 B   0)
+-- N14 reflection vector: normal (0,0,-1) at z .5; texel (R,G) -> Rz = (R+.5)/64 - 2, Ry = (G+.5)/64 - 2
+N14a normal (0,0,-1), LOCALVIEWER 1                                     (32,32) -> 0xFF6A8000 (A 255 R 106 G 128 B   0)
+N14a   corner                                                           ( 1, 1) -> 0xFF6AA900 (A 255 R 106 G 169 B   0)
+N14b normal (0,0,-1), LOCALVIEWER 0                                     (32,32) -> 0xFF408000 (A 255 R  64 G 128 B   0)
+N14b   corner                                                           ( 1, 1) -> 0xFF408000 (A 255 R  64 G 128 B   0)
+N14c normal (0,0.6,-0.8), LOCALVIEWER 1                                 (32,32) -> 0xFF7A9400 (A 255 R 122 G 148 B   0)
+N14c   corner                                                           ( 1, 1) -> 0xFFA1A000 (A 255 R 161 G 160 B   0)
+N14d normal (0,0.6,-0.8), LOCALVIEWER 0                                 (32,32) -> 0xFF6EBD00 (A 255 R 110 G 189 B   0)
+N14d   corner                                                           ( 1, 1) -> 0xFF6EBD00 (A 255 R 110 G 189 B   0)
+-- N3 gate: material specular white, power 1; normal (0,0,-1); Direction d, Ldir = -d
+N3a  Direction (0,-0.9,-0.4359)                                         (32,32) -> 0x00000000 (A   0 R   0 G   0 B   0)
+N3b  Direction (0,-0.9,0.4359)                                          (32,32) -> 0x00D8D8D8 (A   0 R 216 G 216 B 216)
+N3c  Direction (0,-0.99,0.1411)                                         (32,32) -> 0x00C1C1C1 (A   0 R 193 G 193 B 193)
+-- N11 fog under flat: white diffuse, specular alpha (fog) 00 80 FF per vertex, fog colour black, no fog mode
+N11f flat                                                               (10,10) -> 0xFF3F3F3F (A 255 R  63 G  63 B  63)
+N11f   another pixel                                                    (30,20) -> 0xFF8F8F8F (A 255 R 143 G 143 B 143)
+N11g control: Gouraud                                                   (10,10) -> 0xFF3F3F3F (A 255 R  63 G  63 B  63)
+N11g   another pixel                                                    (30,20) -> 0xFF8F8F8F (A 255 R 143 G 143 B 143)
+-- N29 ALPHAOP DISABLE with COLOROP SELECTARG1 DIFFUSE (the page: undefined)
+N29  diffuse 0x40FF0000                                                 (32,32) -> 0xFFFF0000 (A 255 R 255 G   0 B   0)
+done
