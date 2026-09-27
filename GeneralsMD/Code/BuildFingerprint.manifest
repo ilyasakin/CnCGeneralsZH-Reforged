@@ -2628,6 +2628,7 @@ Tests/d3dx_golden.h
 Tests/d3dx_oracle/d3dx_oracle.cpp
 Tests/d3dx_oracle/run_d3dx_oracle.sh
 Tests/d3dx_sweep.h
+Tests/ffreference/f7probe_windows.cpp
 Tests/ffreference/ffcapture.cpp
 Tests/ffreference/ffcapture.h
 Tests/ffreference/ffdecl_captures.cpp
