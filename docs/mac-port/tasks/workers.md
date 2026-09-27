@@ -125,6 +125,10 @@ own clone of the integration branch (from -18's repository's objects and a bundl
 `build64` from `build.bat Release`, a rule-9 farm (`w47\farm`: links to the data copy, the build's Run over
 it) and the scripts. A one-off interactive task `zhr47desk` ran the game in the desktop session and was
 deleted. The data copy's hash was unchanged. Undo: `Remove-Item -Recurse C:\zhr-worker\w47`.
+Later uses under the same folder (2026-09-27, -18 told before and after each): `w47\f7` and `w47\known`
+hold the F7 and known-list D3D9 probes (source, MSVC build, outputs). They ran through the one-off
+interactive tasks `zhr47f7` and `zhr47known`, each deleted after its run. They installed nothing, and the
+same undo covers them.
 
 
 ### The Windows VM: what -18 created and installed for W2 (2026-09-27)

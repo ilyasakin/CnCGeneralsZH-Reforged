@@ -322,4 +322,132 @@ The controls with the colour present in the vertex (specular black, green, alpha
   (run4, set2) is unchanged. F7 comes off the known list; the device's selfcheck marks it known, which
   -a9 will turn back into an expected pass.
 - **What this cannot see:** a GPU driver's own D3D9 (the VM has none, only WARP). But WARP is Microsoft's
-  conformance rasteriser, and its HAL and REF agree.
+  conformance rasteriser, and its HAL and REF agree. REF is a separate implementation: the known-list probe
+  below, on the same VM, shows the REF device loading `d3dref9.dll`, Microsoft's reference rasteriser. The
+  HAL device loads only `d3d10warp.dll`.
+
+## The known list measured: Windows' own Direct3D 9 on every open item (2026-09-27)
+
+By -47, at the PM's request: each item on the device's known list (A-posix-d3d9-device.md, "Findings
+waiting on a decision") was measured the way F7 was, not read. Each FFReference reading behind those items
+was measured too. `Tests/ffreference/knownprobe_windows.cpp` draws into a 64x64 A8R8G8B8 target and reads
+pixels back. It ran in the Windows 11 VM's desktop session on two implementations:
+- **HAL:** the Microsoft Basic Render Driver (WARP, `d3d10warp.dll` 10.0.26100.5074);
+- **REF:** `d3dref9.dll`, Microsoft's reference rasteriser. The probe prints the loaded modules, so this is
+  known, not assumed.
+
+It ran twice; the second run added cases and repeated every value of the first. The raw output is
+`docs/mac-port/tasks/knownprobe-2026-09-27.txt`. `test_ffreference`'s known-list tests rebuild each scene and
+pin FFReference to the measured bytes. Armed controls fail them: the old N27/N3 code, a fan's provoking vertex
+moved, DOTPRODUCT3's alpha replicate removed, and (u, v, 0, 1) padding.
+
+| item | the question | Direct3D 9, measured (WARP and REF) | FFReference | the device (-a9's list) |
+|:--|:--|:--|:--|:--|
+| F1 | per-light ambient | **included**: Atten × Spot × La, attenuated (Attenuation0 2 halves it), none beyond Range | already so (N4) | lacks it: **a real deviation** |
+| F2 | LOCALVIEWER | **honoured**: centre 189, corners 159 and 218 with it; 242 everywhere without | honours it; its **infinite viewer was wrong**, now fixed (N27) | ignores it: **a real deviation** on every highlight, since the engine leaves it TRUE |
+| F3 | DOTPRODUCT3 | **signed** (2x − 1) and **replicated into alpha**: C0 80 80 · C0 80 80 = 65 in all four channels | already so (N17) | no alpha replicate: **a real deviation** |
+| F4 | TTFF_COUNT2 padding | **(u, v, 1, 0)**: `_31/_32` move the set, `_41/_42` do not | already so (N13) | pads (u, v, 0, 1): **a real deviation** (scrolling textures) |
+| F6 | unlit vertex specular | **added** under SPECULARENABLE: red + green = 0xFFFFFF00 | already so | adds nothing: **a real deviation** (no engine FVF carries a specular) |
+| F7 | absent specular | settled above: 0 | changed (N7) | right; off the list |
+| F8 | flat shading | **the first vertex**: list 3i, strip i, fan i + 1, indexed by the first index; alpha flat too; fog still interpolated. Specular: **flat on REF, interpolated on WARP** | already so, following REF (N11) | Gouraud always: **a real deviation**, drawn only by the stencil-only volumetric shadows |
+| F11 | the LOD's norm | **L2 of the longer axis**: WARP and REF read λ within −0.05..+0.03 of the exact value on isotropic, anisotropic and rotated footprints; L∞ or L1 would be 0.5 off | the nominal is exactly this (N15) | Apple +0.10 mean, +0.58 worst: inside the ±0.6 ruling, **outside Microsoft's own two** |
+
+**FFReference readings the measurement overturned.** The pages said otherwise on each; the measurement
+decides.
+- **N27, the halfway vector without LOCALVIEWER:** the viewer is at (0,0,−1), the direction a camera
+  looking down +z sees from, not the page's (0,0,1). Ldir (0, −.6, −.8) and N (0,0,−1) give 242 (N·H .949),
+  where (0,0,1) gives 0.
+- **N3, the specular gate:** specular is gated by N·L. With N·L −.436 and N·H .531, both give 0, where the
+  page's formula gives 135. The controls with N·L > 0 (.436, .141) give 216 and 193, as N·H predicts.
+- **N14, the reflection vector without LOCALVIEWER:** E = (0,0,−1), as for N27. The measurements: R =
+  (0, 0, −.99) for N (0,0,−1), and (0, .96, −.28) for N (0, .6, −.8). With LOCALVIEWER, E = norm(−V) is as
+  written and as measured.
+
+**What the device does with LOCALVIEWER off** (-a9's written description of the generator, not read by
+-47):
+- The halfway vector is normalize(L + (0, 0, +1)): the page's viewer, where Direct3D 9 measures (0,0,−1).
+- The reflection vector has no LOCALVIEWER branch: it always uses the local E, where Direct3D 9 measures a
+  fixed (0,0,−1) without it.
+- The N·L gate matches N3, at a threshold of 0.0001.
+
+Both deviations are real, but hidden: the engine never turns LOCALVIEWER off, and every game capture has it
+on. -a9 lists them beside F1–F4, F6, F8 and F11.
+
+**Readings the measurement confirmed.**
+- N4, N11, N13 and N17, as in the table.
+- N28: a missing coordinate set reads (0, 0). Texel (0, 0) where the vertices' (.6, .6) is texel (2, 2).
+- N29 is truly undefined: WARP passes CURRENT's alpha through, REF writes 1. Both are inside FFReference's
+  envelope (CURRENT, 0, 1).
+
+**Where Microsoft's two differ.** WARP and REF agree on every case except these:
+- **F8's flat specular:** REF flat, WARP Gouraud. FFReference follows REF and the page. A flat draw with a
+  specular would need this as a freedom; the engine has none.
+- **N29:** see above.
+- **F11:** one level step (1/28 of a mip level) on two footprints.
+
+**What this cannot see:**
+- A GPU driver's own D3D9: the VM has only WARP and REF, so the ±0.6 LOD ruling remains a ruling for
+  hardware, not a measurement.
+- Cases the probe does not draw: spot lights' ambient, LOCALVIEWER with a non-identity view, and the
+  specular gate exactly at N·L = 0.
+
+## Metal beside Vulkan: one table (2026-09-27)
+
+By -47, at the PM's request: the same frozen sets, replayed on Metal and judged the same way, so the Mac and
+Linux verdicts sit side by side.
+- **The replay:** finer (M3 Pro, macOS 26.5) ran -a9's `ffref_capture_selfcheck` as a black box, with SDL's
+  dummy video driver and `ZH_SDL_GPU_METAL_WINDOWLESS=1`, `FFREF_GPU_DUMP` on and its own output discarded.
+  The build was feature/mac-port-f7 8cf87ea1.
+- **The judge:** `ffref_judge` with FFReference as of feature/mac-port-known, which carries the N27/N3/N14
+  corrections above.
+- **Re-judging:** the Linux dumps were re-judged with that FFReference too. Every game-set verdict is
+  unchanged by the corrections.
+
+Each cell reads agree / disagree / empty.
+
+| set | captures | ANV (Intel UHD 620) | lavapipe (llvmpipe) | Metal (Apple M3 Pro) |
+|:--|--:|:--|:--|:--|
+| run4 | 49 | 38 / 0 / 11 | not replayed | 35 / **3** / 11 |
+| set2 mobstress | 35 | 29 / 0 / 6 | 29 / 0 / 6 | 25 / **4** / 6 |
+| set2 shellmap | 215 | 182 / 0 / 33 | 181 / 1 / 33 (LVP1) | 164 / **18** / 33 |
+| set2 skirmish | 93 | 63 / 0 / 30 | 63 / 0 / 30 | 61 / **2** / 30 |
+| set3 (synthetic) | 7 | 5 / 2 / 0 | 5 / 2 / 0 | 5 / 2 / 0 |
+
+**F7 and F8 on Metal:**
+- F7: set3's draw_00032, the absent specular, agrees on all three.
+- F8: flat shading is the same on all three in -a9's ffref_gpu_selfcheck (3135 outside, worst 248/255). It is
+  a device deviation, now measured (above).
+
+**set3's two disagreements are the same on all three drivers.** They are draw_00036 (2088 outside) and
+draw_00037 (978 outside): the specular draws with LOCALVIEWER off. They agreed while FFReference used the
+page's (0,0,1) viewer, as the device did. Under the measured (0,0,−1) they disagree, with the numbers
+-a9's armed control of the old generator gives. -a9's feature/mac-port-ffviewer 52b842ba changes the
+device to the measured viewer, and those scenarios are then exact (4096/4096) on ANV and lavapipe.
+
+**Metal's 27 disagreements on game captures are Metal's alone.** ANV draws all 27 inside the envelope.
+- **Size:** 243 pixels outside in all, in frames of 262,144 or 480,000 pixels. Per draw it is 1 to 106
+  pixels, and the worst is 51/255 (mobstress draw_00031).
+- **Where:** every outside pixel is on a minified stage (λ 2 to 8.7), most of them on thin or tiny triangles.
+- **The draws:** run4 14, 28, 29; mobstress 9, 17, 31, 32; shellmap 21, 25, 26, 42, 54, 58, 59, 72, 73, 81,
+  82, 113, 129, 145, 167, 178, 195, 198; skirmish 14, 68.
+
+`ffref_judge --lod-delta` (a diagnostic, never a verdict) widens only the LOD freedom:
+- **±1.0:** 6 of the 27 agree.
+- **±1.5:** 14 agree.
+- **Left at ±1.5:** 13 disagree: run4 29; mobstress 17, 31, 32; shellmap 25, 26, 59, 72, 73, 167, 178, 195,
+  198. That is 1 to 13 pixels each, worst 17/255. At those pixels the GPU sampled a finer level than
+  FFReference at some and a coarser one at others.
+
+So Apple's λ departs from the D3D9 nominal by more than the ±0.6 ruling on real game geometry. WARP and REF
+hold to within 0.05 (F11 above). The rest is not LOD alone.
+
+**The open question** (asked of -a9, answer pending): what the SDL GPU sampler gets on Metal when the replay
+turns ANISOTROPIC into LINEAR. If anisotropy stayed on for Metal only, it would explain "a finer level on
+slivers".
+
+**What this cannot see:**
+- **Other hardware:** any Apple GPU but the M3 Pro, and any Vulkan hardware but Intel's.
+- **run4 on lavapipe:** it was never replayed there.
+- **Draw order:** whether the 27 draws matter in a frame. Each capture starts cleared, so a draw's pixels
+  are judged alone, never under the draws that would cover them.
+
