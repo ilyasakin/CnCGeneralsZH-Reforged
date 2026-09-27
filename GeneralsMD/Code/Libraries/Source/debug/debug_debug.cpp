@@ -33,6 +33,7 @@
 #include <new>      // needed for placement new prototype
 #include <stdint.h>
 #include <intrin.h>
+#include "Common/EarlyCommandLine.h"   // -headless, read as Debug.cpp's isUnattendedRun reads it
 
 // a little dummy variable that makes the linker actually include
 // us...
@@ -695,8 +696,19 @@ bool Debug::CrashDone(bool die)
     else
 #endif
     {
-      MessageBox(NULL,help,"Game crash",
-                          MB_OK|MB_ICONSTOP|MB_TASKMODAL|MB_SETFOREGROUND);
+      // A -headless run has nobody to click OK: it waited on this box forever (W2, a purecall under
+      // #32's old loop).  The text goes where a harness can read it, and the run ends as the box would.
+      if (findEarlyCommandLineOption(L"-headless")!=NULL)
+      {
+        fputs("Game crash: ",stderr);
+        fputs(help,stderr);
+        fputs("\n",stderr);
+        fflush(stderr);
+        OutputDebugStringA(help);
+      }
+      else
+        MessageBox(NULL,help,"Game crash",
+                            MB_OK|MB_ICONSTOP|MB_TASKMODAL|MB_SETFOREGROUND);
       curFrameEntry=NULL;
       _exit(1);
     }

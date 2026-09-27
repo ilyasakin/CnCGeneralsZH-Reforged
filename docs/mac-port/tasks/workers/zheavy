@@ -1,0 +1,192 @@
+#!/bin/bash
+# zheavy [--exclusive] <command...>: runs a heavy job (a build, a ctest suite, a sweep, a timing run) when
+# the machine has room for it, in the order the jobs asked.  Every agent's worktree shares one queue.
+#
+#   zheavy ninja -C ~/zhr-worker/build-47                 a default job: builds, ctests, checks
+#   zheavy --exclusive bash perf-a9/ab.sh                 an exclusive job: timing runs, nothing else runs
+#
+# CLASSES.  Up to two default jobs run at once; ninja, make and `cmake --build` in one are capped at -j5
+# (an explicit higher -j is lowered, a missing one is added for ninja; CMAKE_BUILD_PARALLEL_LEVEL=5 and
+# ZHEAVY_JOBS=5 are exported for scripts that build).  An exclusive job runs alone and uncapped: it waits
+# for the running default jobs to finish, and no job behind it starts until it is done.
+#
+# ORDER.  First come, first served: a job takes a numbered ticket and starts only when every job with a
+# lower ticket has started or gone.  So a default job never overtakes an exclusive one waiting ahead of it,
+# even when a default slot is free.  While waiting it says its place and what is running, when that changes.
+#
+# NOTHING GOES STALE.  Every hold is an flock(2), taken by python3's fcntl on a descriptor the command
+# inherits: the machine lock (~/zhr-worker/.heavy.lock, shared by default jobs, exclusive by an exclusive
+# one), a default slot (.heavy/slot0 or slot1; an exclusive job takes both), and while waiting, the job's
+# own ticket.  The kernel releases each when the command and everything it started have exited, however
+# they end, so a crashed holder frees its place and a killed waiter leaves the queue.  A job of the old
+# zheavy (an exclusive flock on .heavy.lock) still excludes every job of this one, and the other way round.
+#
+# ZHEAVY_WAIT: seconds to wait before giving up, exit 75.  Unset: wait for as long as it takes.
+# ZHEAVY_DIR: the queue's folder (default ~/zhr-worker/.heavy), for zheavy's own tests.
+HEAVY_DIR="${ZHEAVY_DIR:-$HOME/zhr-worker/.heavy}"
+# The program is python3's -c, not its stdin, so the command keeps the caller's stdin.
+read -r -d '' ZHEAVY_PY <<'EOF'
+import errno, fcntl, os, re, sys, time
+
+qdir = sys.argv[1]
+args = sys.argv[2:]
+exclusive = False
+if args and args[0] == '--exclusive':
+    exclusive, args = True, args[1:]
+if not args:
+    print("usage: zheavy [--exclusive] <command...>", file=sys.stderr); sys.exit(2)
+wait = os.environ.get('ZHEAVY_WAIT', '')
+deadline = time.time() + float(wait) if wait else None
+agent = os.environ.get('ZH_AGENT', os.environ.get('USER', '?'))
+os.makedirs(os.path.join(qdir, 'tickets'), exist_ok=True)
+machine_path = os.environ.get('ZHEAVY_MACHINE_LOCK', os.path.join(os.path.dirname(qdir.rstrip('/')), '.heavy.lock'))
+slots = [os.path.join(qdir, 'slot%d' % i) for i in (0, 1)]
+
+def cap(argv):
+    """ninja, make and cmake --build at -j5 at most, in a default job"""
+    base = os.path.basename(argv[0])
+    tool = base in ('ninja', 'make', 'gmake') or (base == 'cmake' and '--build' in argv)
+    if exclusive or not tool:
+        return argv, None
+    out, seen, note, i = [], False, None, 0
+    while i < len(argv):
+        a = argv[i]
+        m = re.match(r'^(-j|--parallel)(=?)(\d*)$', a)
+        if m and i > 0:
+            n = m.group(3)
+            if n == '' and i + 1 < len(argv) and argv[i + 1].isdigit():
+                n = argv[i + 1]; i += 1
+            seen = True
+            if n == '' or int(n) > 5:
+                note = '%s %s lowered to 5' % (m.group(1), n or '(unlimited)')
+                n = '5'
+            out += [m.group(1), n]
+        else:
+            out.append(a)
+        i += 1
+    if not seen and base == 'ninja':
+        out[1:1] = ['-j', '5']; note = 'ninja given -j 5'
+    return out, note
+
+desc = '%s%s, pid %d, since %s: %s' % (agent, ' (exclusive)' if exclusive else '', os.getpid(),
+    time.strftime('%H:%M:%S'), ' '.join(args)[:200])
+
+# a ticket: the next number, under the queue's own lock
+qlock = os.open(os.path.join(qdir, 'queue.lock'), os.O_RDWR | os.O_CREAT, 0o644)
+fcntl.flock(qlock, fcntl.LOCK_EX)
+seqf = os.path.join(qdir, 'seq')
+try:
+    seq = int(open(seqf).read().strip() or 0)
+except (OSError, ValueError):
+    seq = 0
+seq += 1
+open(seqf, 'w').write('%d\n' % seq)
+ticket = os.path.join(qdir, 'tickets', '%012d' % seq)
+tfd = os.open(ticket, os.O_RDWR | os.O_CREAT, 0o644)
+fcntl.flock(tfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+os.write(tfd, desc.encode())
+fcntl.flock(qlock, fcntl.LOCK_UN)
+
+def try_lock(path, how):
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, how | fcntl.LOCK_NB)
+        return fd
+    except OSError:
+        os.close(fd)
+        return None
+
+def read(path):
+    try:
+        return open(path).read().strip()
+    except OSError:
+        return ''
+
+def running():
+    """what holds the machine now: the slots' descriptions, and an old zheavy's"""
+    out = []
+    for s in slots:
+        fd = try_lock(s, fcntl.LOCK_EX)
+        if fd is None:
+            out.append(read(s) or 'a job')
+        else:
+            os.close(fd)
+    if not out:
+        fd = try_lock(machine_path, fcntl.LOCK_SH)
+        if fd is None:
+            out.append('old zheavy: ' + (read(machine_path) or '?'))
+        else:
+            os.close(fd)
+    return sorted(set(out))
+
+last, held = None, None
+while True:
+    fcntl.flock(qlock, fcntl.LOCK_EX)
+    ahead = []
+    for name in sorted(os.listdir(os.path.join(qdir, 'tickets'))):
+        path = os.path.join(qdir, 'tickets', name)
+        if path == ticket:
+            break
+        fd = try_lock(path, fcntl.LOCK_EX)
+        if fd is not None:				# its waiter is gone: the kernel let go of its ticket
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+            os.close(fd)
+        else:
+            ahead.append(read(path) or name)
+    if not ahead:
+        # the head of the queue: the machine lock, then a slot (both, for an exclusive job)
+        mfd = try_lock(machine_path, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+        got = []
+        if mfd is not None:
+            for s in slots:
+                fd = try_lock(s, fcntl.LOCK_EX)
+                if fd is not None:
+                    got.append((s, fd))
+                    if not exclusive:
+                        break
+            if len(got) == (2 if exclusive else 1):
+                held = (mfd, got)
+            else:
+                for s, fd in got:
+                    os.close(fd)
+                os.close(mfd)
+        if held:
+            for s, fd in held[1]:
+                os.ftruncate(fd, 0); os.write(fd, desc.encode())
+            os.unlink(ticket); os.close(tfd)
+            fcntl.flock(qlock, fcntl.LOCK_UN)
+            break
+    now = running()
+    fcntl.flock(qlock, fcntl.LOCK_UN)
+    state = (len(ahead), tuple(now))
+    if state != last:
+        where = 'next' if not ahead else '%d ahead (next: %s)' % (len(ahead), ahead[0])
+        print('zheavy: waiting%s, %s; running: %s' % (' (exclusive)' if exclusive else '', where,
+            '; '.join(now) or 'nothing'), file=sys.stderr, flush=True)
+        last = state
+    if deadline is not None and time.time() >= deadline:
+        print('zheavy: gave up after %s s; %d ahead; running: %s' % (wait, len(ahead), '; '.join(now) or 'nothing'),
+            file=sys.stderr)
+        sys.exit(75)
+    time.sleep(2)
+
+argv, note = cap(args)
+if note:
+    print('zheavy: %s (a default job)' % note, file=sys.stderr, flush=True)
+if not exclusive:
+    os.environ['CMAKE_BUILD_PARALLEL_LEVEL'] = '5'
+    os.environ['ZHEAVY_JOBS'] = '5'
+mfd, got = held
+for fd in [mfd] + [fd for s, fd in got]:
+    os.set_inheritable(fd, True)
+os.close(qlock)
+try:
+    os.execvp(argv[0], argv)
+except OSError as e:
+    print('zheavy: cannot run %s: %s' % (argv[0], e), file=sys.stderr)
+    sys.exit(127)
+EOF
+exec python3 -c "$ZHEAVY_PY" "$HEAVY_DIR" "$@"
