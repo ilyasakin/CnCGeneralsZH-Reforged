@@ -1450,7 +1450,7 @@ UnsignedInt PartitionCell::getThreatValue( Int playerIndex )
 void PartitionCell::addThreatValue( Int playerIndex, UnsignedInt threatValue )
 {
 	if (playerIndex >= 0 && playerIndex < MAX_PLAYER_COUNT) {
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(DEBUG_CRASHING)	// only the assert reads it
 		UnsignedInt oldThreatVal = m_threatValue[playerIndex];
 		DEBUG_ASSERTCRASH(oldThreatVal <= oldThreatVal + threatValue, ("adding new threat value overflowed allotted storage."));
 #endif
@@ -1462,7 +1462,7 @@ void PartitionCell::addThreatValue( Int playerIndex, UnsignedInt threatValue )
 void PartitionCell::removeThreatValue( Int playerIndex, UnsignedInt threatValue )
 {
 	if (playerIndex >= 0 && playerIndex < MAX_PLAYER_COUNT) {
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(DEBUG_CRASHING)	// only the assert reads it
 		UnsignedInt oldThreatVal = m_threatValue[playerIndex];
 		DEBUG_ASSERTCRASH(oldThreatVal >= oldThreatVal - threatValue, ("removing new threat value underflowed allotted storage."));
 #endif
@@ -1483,7 +1483,7 @@ UnsignedInt PartitionCell::getCashValue( Int playerIndex )
 void PartitionCell::addCashValue( Int playerIndex, UnsignedInt cashValue )
 {
 	if (playerIndex >= 0 && playerIndex < MAX_PLAYER_COUNT) {
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(DEBUG_CRASHING)	// only the assert reads it
 		UnsignedInt oldCashVal = m_cashValue[playerIndex];
 		DEBUG_ASSERTCRASH(oldCashVal <= oldCashVal + cashValue, ("adding new cash value overflowed allotted storage."));
 #endif
@@ -1495,7 +1495,7 @@ void PartitionCell::addCashValue( Int playerIndex, UnsignedInt cashValue )
 void PartitionCell::removeCashValue( Int playerIndex, UnsignedInt cashValue )
 {
 	if (playerIndex >= 0 && playerIndex < MAX_PLAYER_COUNT) {
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(DEBUG_CRASHING)	// only the assert reads it
 		UnsignedInt oldCashVal = m_cashValue[playerIndex];
 		DEBUG_ASSERTCRASH(oldCashVal >= oldCashVal - cashValue, ("removing new cash value underflowed allotted storage."));
 #endif

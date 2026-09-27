@@ -644,7 +644,7 @@ Module *ModuleFactory::newModule( Thing *thing, const AsciiString& name, const M
 	{
 		Module* mod = (*mt->m_createProc)( thing, moduleData );
 
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(DEBUG_CRASHING)	// only the asserts read bm
 		if (type == MODULETYPE_BEHAVIOR)
 		{
 			BehaviorModule* bm = (BehaviorModule*)mod;

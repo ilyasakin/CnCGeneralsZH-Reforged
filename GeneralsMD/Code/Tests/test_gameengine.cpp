@@ -850,7 +850,9 @@ TEST(real_to_int_does_not_care_what_rounding_mode_it_is_called_in)
 	// truncation toward zero, in every one of them
 	CHECK_EQ( chop, -3 * 1000 + 3 );
 
-	_controlfp( callersMode, _MCW_PC | _MCW_RC );
+	/* The rounding field alone, as above: x64 has no precision field, and a Debug CRT asserts on a
+		 mask that names _MCW_PC (W3). */
+	_controlfp( callersMode, _MCW_RC );
 }
 
 /* computeCRC was assembly that used EBX, ESI and EDI without handing them back, and a witness here

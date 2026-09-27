@@ -1096,7 +1096,8 @@ void ActiveBody::createParticleSystems( const AsciiString &boneBaseName,
 
 		// find the actual bone location to use and mark that bone index as used
 		Int count = 0;
-		for( Int j = 0; j < numBones; j++ )
+		Int j;	// read by the assert after the loop (VC6 scoped it to the function)
+		for( j = 0; j < numBones; j++ )
 		{
 
 			// ignore bone positions that have already been used

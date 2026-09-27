@@ -8666,7 +8666,7 @@ Path *Pathfinder::buildGroundPath(Bool isCrusher, const Coord3D *fromPos, Pathfi
 		}
 
 		// show optimized path
-		for( node = path->getFirstNode(); node; node = node->getNextOptimized() )
+		for( PathNode *node = path->getFirstNode(); node; node = node->getNextOptimized() )
 		{
 			pos = *node->getPosition();
 			addIcon(&pos, PATHFIND_CELL_SIZE_F*.8f, 200, color);
@@ -10959,7 +10959,7 @@ Path *Pathfinder::buildActualPath( const Object *obj, LocomotorSurfaceTypeMask a
 		}
 
 		// show optimized path
-		for( node = path->getFirstNode(); node; node = node->getNextOptimized() )
+		for( PathNode *node = path->getFirstNode(); node; node = node->getNextOptimized() )
 		{
 			pos = *node->getPosition();
 			addIcon(&pos, PATHFIND_CELL_SIZE_F*.8f, 200, color);

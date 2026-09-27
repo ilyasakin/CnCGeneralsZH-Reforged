@@ -2987,7 +2987,7 @@ void GameLogic::deselectObject(Object *obj, PlayerMaskType playerMask, Bool affe
 inline void GameLogic::validateSleepyUpdate() const
 {
 // pretty slow, so do only for DEBUG for now. turn on if you suspect wonkiness.
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(DEBUG_CRASHING)	// it only asserts
 	#define SLEEPY_DEBUG
 #endif
 #ifdef SLEEPY_DEBUG
@@ -3105,8 +3105,11 @@ Int GameLogic::rebalanceChildSleepyUpdate(Int i)
 
 	// our children are i*2 and i*2+1
   Int child = ((i+1)<<1)-1;
-	UpdateModulePtr* pChild = &m_sleepyUpdates[child];
-	UpdateModulePtr* pSZ = &m_sleepyUpdates[m_sleepyUpdates.size()];	// yes, this is off the end.
+	// data() + n, not &m_sleepyUpdates[n]: both are only addresses until the loop below has checked
+	// them against pSZ, and the same addresses in a release build, but a Debug build's checked
+	// operator[] aborts on any n past the end, which child and size() often are (W3).
+	UpdateModulePtr* pChild = m_sleepyUpdates.data() + child;
+	UpdateModulePtr* pSZ = m_sleepyUpdates.data() + m_sleepyUpdates.size();	// yes, this is off the end.
 
   while (pChild < pSZ) 
 	{
@@ -3137,7 +3140,7 @@ Int GameLogic::rebalanceChildSleepyUpdate(Int i)
 		pI = pChild;
 
 		child = ((i+1)<<1)-1;
-		pChild = &m_sleepyUpdates[child];
+		pChild = m_sleepyUpdates.data() + child;
   }
 #else
 	// our children are i*2 and i*2+1

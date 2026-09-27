@@ -1113,7 +1113,8 @@ void updateGameOptions( void )
 		if (comboBoxSuperweapons)
 			UpdateSuperweaponComboBox( comboBoxSuperweapons, theGame, TheLAN->AmIHost() );
 		Int itemCount = GadgetComboBoxGetLength(comboBoxStartingCash);
-    for ( Int index = 0; index < itemCount; index++ )
+    Int index;	// read by the assert after the loop (VC6 scoped it to the function)
+    for ( index = 0; index < itemCount; index++ )
     {
       Int value  = (Int)(intptr_t)GadgetComboBoxGetItemData(comboBoxStartingCash, index);
       if ( value == theGame->getStartingCash().countMoney() )
