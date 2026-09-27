@@ -265,8 +265,9 @@ inline bool pair_samplers(std::string & hlsl)
 		// The new declarations go after the last texture or sampler the program declared, which is
 		// before anything reads them.
 		size_t after = 0;
-		for (size_t t = 0; t < textures.size(); ++t) after = std::max(after, textures[t].line_end);
-		for (size_t k = 0; k < samplers.size(); ++k) after = std::max(after, samplers[k].line_end);
+		// (std::max): windows.h's max macro would otherwise take the call apart under MSVC (W2)
+		for (size_t t = 0; t < textures.size(); ++t) after = (std::max)(after, textures[t].line_end);
+		for (size_t k = 0; k < samplers.size(); ++k) after = (std::max)(after, samplers[k].line_end);
 		const size_t at = hlsl.find('\n', after);
 		hlsl.insert(at == std::string::npos ? hlsl.size() : at + 1, declarations_after_last);
 		hlsl.insert(0, plan);
