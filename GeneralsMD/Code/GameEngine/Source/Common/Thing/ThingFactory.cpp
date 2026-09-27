@@ -567,6 +567,49 @@ static void checkLocomotors( ThingTemplate *first )
 }
 
 //-------------------------------------------------------------------------------------------------
+/* #34: an ObjectReskin that ended up without a behaviour module its source has.  A reskin copies its
+	 source's modules, and EA's reskins restate only their Draw, so in EA's data a reskin's behaviour modules
+	 are its source's, name for name.  Upstream's fbe8dc6f added a module to two reskins in a normal load,
+	 and the parse then erased every copied module sharing an interface with it: the Demolition General's
+	 Technical reskins lost their AI, physics, contain and die modules, and the first AI that recruited one
+	 crashed.  Each reskin missing one of its source's behaviour modules (by module name) is logged,
+	 "ReskinCheck: <name> lacks ...", whichever build, for Tests/run_locomotor_check.sh to read, and is a
+	 DEBUG_CRASH in a debug build. */
+//-------------------------------------------------------------------------------------------------
+static void checkReskins( ThingTemplate *first )
+{
+	Int reskins = 0, lacking = 0;
+	for( ThingTemplate *t = first; t; t = t->friend_getNextTemplate() )
+	{
+		const ThingTemplate *source = t->friend_getReskinnedFrom();
+		if( source == NULL )
+			continue;
+		++reskins;
+		const ModuleInfo &have = t->getBehaviorModuleInfo(), &want = source->getBehaviorModuleInfo();
+		AsciiString missing;
+		for( Int i = 0; i < want.getCount(); ++i )
+		{
+			const AsciiString name = want.getNthName( i );
+			Bool found = FALSE;
+			for( Int j = 0; j < have.getCount() && !found; ++j )
+				found = have.getNthName( j ) == name;
+			if( !found )
+			{
+				missing.concat( " " );
+				missing.concat( name );
+			}
+		}
+		if( missing.isEmpty() )
+			continue;
+		++lacking;
+		DEBUG_LOG(( "ReskinCheck: %s lacks behaviour modules its source %s has:%s\n", t->getName().str(),
+			source->getName().str(), missing.str() ));
+		DEBUG_CRASH(( "%s lacks modules its source %s has (#34):%s", t->getName().str(), source->getName().str(), missing.str() ));
+	}
+	DEBUG_LOG(( "ReskinCheck: %d reskins, %d of them lacking a behaviour module their source has\n", reskins, lacking ));
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Post process phase after loading the database files */
 //-------------------------------------------------------------------------------------------------
 void ThingFactory::postProcessLoad()
@@ -602,6 +645,7 @@ void ThingFactory::postProcessLoad()
 	}  // end for 
 
 	checkLocomotors( m_firstTemplate );
+	checkReskins( m_firstTemplate );
 
 #ifdef CHECK_THING_NAMES
 	dumpMissingStringNames();
