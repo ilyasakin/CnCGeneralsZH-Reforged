@@ -380,17 +380,24 @@ loose files without the archives: skirmish 1920x1080, three runs.
 
 The archives cost nothing measurable.
 
-**finer against this Mac.** finer's work is higher than this Mac's after fix 1: 4.3 to 4.7 ms at p50
-against 3.1 to 3.4, with device draw at 2.0 to 2.2 ms against 1.2 to 1.4. It is the same chip and core
-layout, low power mode is off, the thermals were Nominal, and the bridge rules out the content. Three
-differences are not separated:
-- the present path: offscreen and paced here, a hidden window and vsync on this Mac;
-- the OS: macOS 26.5.2 against 27.0;
-- the machine: a lid-closed laptop's clocks, with the P-cluster read at 2.4 to 3.8 GHz 40 s into
-  runs.
+**finer against this Mac: the machine, not the present path.** finer's work is higher than this Mac's
+after fix 1: 4.3 to 4.7 ms at p50 against 3.1 to 3.4, with device draw at 2.0 to 2.2 ms against 1.2 to
+1.4. It is the same chip and core layout, low power mode is off, the thermals were Nominal, and the
+bridge rules out the content. To separate the present path from the machine, finer's own binary
+(`generals-fix3b`) was run on this Mac twice. The PM approved this as the one exception to "no work on
+this Mac": the seed-1234 skirmish at 1920x1080, silent, off-peak (load 5.1 to 5.6), the farm's content
+(the overlay minus the archives, which the bridge showed to be equivalent).
 
-Separating them would take a `-offscreen` run on this Mac, which isn't possible while the user has
-asked for no work here. Recorded as open.
+| This Mac, the same binary | Work p50 / p95 / p99 (ms) | Device draw p50 (ms) | Draws p50 | Engine match worst (ms) |
+|---|---|---|---|---|
+| `-hiddenwindow` (vsync) | 3.26 / 3.91 / 4.52 | 1.28 | 1580 | 33.7 |
+| `-offscreen`, `ZH_OFFSCREEN_HZ=120` | 3.06 / 3.77 / 5.01 | 1.23 | 1547 | 25.6 |
+| finer, `-offscreen` (the matrix, three runs) | 4.31–4.67 / 5.25–5.58 / 6.86–7.53 | 1.97–2.22 | 1570 | 17.2–18.6 |
+
+The present path makes no measurable difference, so finer's extra 1.2 ms of work, 0.8 ms of it in the
+device's recording, belongs to the machine or its OS: macOS 26.5.2 against 27.0, or the clocks of a
+lid-closed laptop in a closet, whose P-cluster read 2.4 to 3.8 GHz 40 s into runs. Those two are not
+separated. finer's numbers are right for comparing builds on finer, not for comparing with this Mac.
 
 **Installed or created on finer:** listed, with how to undo each, in `docs/mac-port/tasks/workers.md`
 (probe-a9, since deleted; perf-a9 with its farm, bundles, scripts and logs; wt-a9 and its two run
