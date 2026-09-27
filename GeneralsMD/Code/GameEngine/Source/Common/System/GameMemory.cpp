@@ -3334,6 +3334,17 @@ void STLSpecialAlloc::deallocate(void* __p, size_t)
 
 //-----------------------------------------------------------------------------
 /**
+	ZH_SANITIZER_BUILD (CMake's ZH_SANITIZE, sanitizer builds only): none of the global operators below
+	is replaced, so every plain new and delete is the sanitizer runtime's.  The ones below keep a whole
+	game consistent with itself, but not with a system framework loaded beside a sanitizer: on macOS
+	Apple's Metal driver got a block from this operator new and freed it through ASan's operator delete.
+	The pools stay (MemoryPoolObject classes have operators of their own), and so do the strings, which
+	allocate from TheDynamicMemoryAllocator by name.  Without the define, as in every normal build, this
+	file is what it was.
+*/
+#ifndef ZH_SANITIZER_BUILD
+//-----------------------------------------------------------------------------
+/**
 	overload for global operator new; send requests to TheDynamicMemoryAllocator.
 */
 void *operator new(size_t size)
@@ -3483,6 +3494,14 @@ void operator delete[](void * p, const char *, int)
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator delete"));
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
+#else
+// A sanitizer build: the MFC-style forms (NEW and MSGNEW in a debug build) go where a plain new would,
+// so a block from new(__FILE__, __LINE__) and its plain delete meet in the same allocator.
+void* operator new(size_t size, const char *, int) { return ::operator new(size); }
+void operator delete(void * p, const char *, int) { ::operator delete(p); }
+void* operator new[](size_t size, const char *, int) { return ::operator new[](size); }
+void operator delete[](void * p, const char *, int) { ::operator delete[](p); }
+#endif // ZH_SANITIZER_BUILD
 
 //-----------------------------------------------------------------------------
 #ifdef MEMORYPOOL_OVERRIDE_MALLOC
@@ -3582,7 +3601,9 @@ void initMemoryManager()
 	free(linktest);
 #endif
 
-#ifdef MEMORYPOOL_OVERRIDE_MALLOC
+#if defined(ZH_SANITIZER_BUILD)
+	if (theLinkTester != 0)		// the sanitizer's operators are linked, on purpose, so ours count nothing
+#elif defined(MEMORYPOOL_OVERRIDE_MALLOC)
 	if (theLinkTester != 10)
 #else
 	if (theLinkTester != 6)
