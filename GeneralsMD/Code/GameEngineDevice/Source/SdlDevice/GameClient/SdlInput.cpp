@@ -109,6 +109,22 @@ void SdlInput_toGamePixels( Real windowX, Real windowY, Int &gameX, Int &gameY )
 	SdlInput_scaleToGame( windowX, windowY, windowWidth, windowHeight, gameWidth, gameHeight, gameX, gameY );
 }
 
+void SdlInput_toWindowPoints( Int gameX, Int gameY, Real &windowX, Real &windowY )
+{
+	Int windowWidth = 0, windowHeight = 0;
+	SDL_Window *window = SdlInput_gameWindow();
+	if (window != NULL)
+		SDL_GetWindowSize( window, &windowWidth, &windowHeight );
+	const Int gameWidth = TheDisplay != NULL ? (Int)TheDisplay->getWidth() : 0;
+	const Int gameHeight = TheDisplay != NULL ? (Int)TheDisplay->getHeight() : 0;
+	windowX = gameX + 0.5f;
+	windowY = gameY + 0.5f;
+	if (windowWidth > 0 && gameWidth > 0)
+		windowX = windowX * windowWidth / gameWidth;
+	if (windowHeight > 0 && gameHeight > 0)
+		windowY = windowY * windowHeight / gameHeight;
+}
+
 void SdlInput_scaleToGame( Real windowX, Real windowY, Int windowWidth, Int windowHeight,
 	Int gameWidth, Int gameHeight, Int &gameX, Int &gameY )
 {
@@ -145,6 +161,7 @@ Bool SdlInput_dispatch( const SDL_Event &event )
 			if (down && (event.key.scancode == SDL_SCANCODE_RETURN || event.key.scancode == SDL_SCANCODE_KP_ENTER)
 					&& theIME() != NULL)
 				theIME()->enterPressed();
+			SdlGamepad_noteHand();		// a key: the keyboard is the device in use
 			const UnsignedByte dik = SdlKeyTable_dikFor( event.key.scancode );
 			if (dik != 0 && SdlKeyboard::active() != NULL)
 				SdlKeyboard::active()->addKey( dik, down );
@@ -167,6 +184,7 @@ Bool SdlInput_dispatch( const SDL_Event &event )
 				return TRUE;
 			Int x, y;
 			SdlInput_toGamePixels( event.motion.x, event.motion.y, x, y );
+			SdlGamepad_noteMotion( x, y );		// a gamepad's own warp, or a hand on the mouse
 			SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, x, y, SdlMouse::BUTTON_LEFT, 0, 0, milliseconds( event.motion.timestamp ) );
 			return TRUE;
 		}
@@ -182,6 +200,7 @@ Bool SdlInput_dispatch( const SDL_Event &event )
 				case SDL_BUTTON_RIGHT:	button = SdlMouse::BUTTON_RIGHT; break;		// a trackpad's secondary click too
 				default:								return TRUE;		// X1 and X2: WndProc takes no WM_XBUTTON either
 			}
+			SdlGamepad_noteHand();		// a mouse button: the mouse is the device in use
 			if (SdlMouse::active() == NULL)
 				return TRUE;
 			Int x, y;
@@ -193,6 +212,7 @@ Bool SdlInput_dispatch( const SDL_Event &event )
 
 		case SDL_EVENT_MOUSE_WHEEL:
 		{
+			SdlGamepad_noteHand();		// a wheel or a trackpad: the mouse is the device in use
 			// 120 a notch, WHEEL_DELTA; SDL has already applied the user's natural-scrolling setting
 			theWheelCarry += event.wheel.y * 120.0f;
 			const Int delta = (Int)theWheelCarry;		// toward zero: the fraction waits for the next event

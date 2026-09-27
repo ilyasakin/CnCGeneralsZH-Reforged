@@ -28,7 +28,14 @@
 //     press within the system's double-click time and 4 pixels counts as a double click, as SDL counts
 //     a mouse's.  A chord (a binding With a held button) lets that button's own keys go while it lasts.
 //   - The triggers are the wheel, in proportion to how far they are pulled; the right stick holds the
-//     arrow keys, with some hysteresis.  The left stick's pointer is G1's second part.
+//     arrow keys, with some hysteresis.
+//   - The left stick moves the pointer: the platform's own, warped with SDL_WarpMouseInWindow, so the
+//     warp comes back as an ordinary motion event and the cursor, its text, the tooltips and edge
+//     scrolling all follow as they follow a mouse.  A radial dead zone, a squared response, and full
+//     tilt crossing the screen's width in 1.2 s of real time.  Where a warp never comes back (a platform
+//     that cannot warp), the pointer's moves go to SdlMouse directly and the log says so.  A pointer
+//     parked in the edge-scrolling band (the gamescope finding: (0, 0)) is put at the screen's centre
+//     when the pad is first used, so a pad player's camera does not run off to a corner.
 //   - A key or mouse button held by two things at once (two pads, a shoulder and a chord) goes down once
 //     and up when the last lets go.  A pad pulled out, or the window losing the focus, lets go of all
 //     it holds, so nothing is left stuck down.
@@ -59,5 +66,18 @@ void SdlGamepad_releaseAll( void );
 
 /// The pads open now
 Int SdlGamepad_count( void );
+
+/** SdlInput's motion, in the game's pixels, before SdlMouse takes it: a warp of the pad's own coming back,
+	* or a hand on the mouse, which then has the pointer */
+void SdlGamepad_noteMotion( Int x, Int y );
+
+/// SdlInput's key, mouse button or wheel: a hand is on the keyboard or the mouse
+void SdlGamepad_noteHand( void );
+
+/// TRUE while a pad, not the keyboard or mouse, was the last thing used (the button hints show then)
+Bool SdlGamepad_isLastUsed( void );
+
+/// The pointer the pad moves, in the game's pixels; FALSE while the mouse has it
+Bool SdlGamepad_pointer( Int &x, Int &y );
 
 #endif // __SDLGAMEPAD_H

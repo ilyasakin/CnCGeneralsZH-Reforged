@@ -358,7 +358,7 @@ TEST(every_shipped_binding_parses_and_each_command_is_bound)
 {
 	CHECK( start() );
 	CHECK( TheGamepadMap != NULL );
-	CHECK_EQ( TheGamepadMap->getCount(), 20 );
+	CHECK_EQ( TheGamepadMap->getCount(), 21 );		// the mouse 3, modifiers 2, orders 4, groups 8, back buttons 4
 	for (Int i = 0; i < TheGamepadMap->getCount(); ++i)
 	{
 		const GamepadBinding &binding = TheGamepadMap->get( i );
@@ -579,6 +579,118 @@ TEST(the_right_stick_holds_the_arrow_keys_with_some_hysteresis)
 	pushKey( SDL_SCANCODE_RIGHT, false );
 	frame( hand );
 	CHECK( same( pad, hand ) );
+}
+
+namespace {
+
+/// Frames until the pointer's move shows: a warp coming back, or the direct path once warps are given up
+std::vector<std::string> settle( UnsignedInt &now )
+{
+	Output out;
+	for (Int i = 0; i < 8; ++i)
+	{
+		now += 16;
+		SdlGamepad_update( now );
+		pump();
+		frame( out );
+	}
+	return out.events;
+}
+
+bool movedTo( const std::vector<std::string> &events, Int x, Int y )
+{
+	char want[64];
+	snprintf( want, sizeof( want ), "mouse %d,%d L0/0 M0/0 R0/0 wheel 0", x, y );
+	int found = 0;
+	for (size_t i = 0; i < events.size(); ++i)
+		found += events[i] == want ? 1 : 0;
+	if (found != 1)
+	{
+		printf( "    wanted one \"%s\" in:\n", want );
+		for (size_t i = 0; i < events.size(); ++i)
+			printf( "      %s\n", events[i].c_str() );
+	}
+	return found == 1;
+}
+
+}  // namespace
+
+TEST(the_left_stick_moves_the_pointer_and_the_move_arrives_as_the_mouses)
+{
+	CHECK( start() );
+	pushMotion( 400, 300 );
+	clear();
+	UnsignedInt now = 30000;
+	SdlGamepad_update( now );
+	padAxis( SDL_GAMEPAD_AXIS_LEFTX, SDL_JOYSTICK_AXIS_MAX );		// full tilt right
+	now += 100;
+	SdlGamepad_update( now );		// 0.1 s at 800 / 1.2 s = 66.7 pixels
+	padAxis( SDL_GAMEPAD_AXIS_LEFTX, 0 );
+	const std::vector<std::string> events = settle( now );
+	CHECK( movedTo( events, 466, 300 ) );
+	Int x, y;
+	CHECK( SdlGamepad_pointer( x, y ) && x == 466 && y == 300 );
+	CHECK( SdlGamepad_isLastUsed() );
+	// a click now lands where the pointer was put, as the mouse's would
+	Output pad, hand;
+	padButton( SDL_GAMEPAD_BUTTON_SOUTH, true );
+	padButton( SDL_GAMEPAD_BUTTON_SOUTH, false );
+	frame( pad );
+	pushButton( SDL_BUTTON_LEFT, true, 1, 466, 300 );
+	pushButton( SDL_BUTTON_LEFT, false, 1, 466, 300 );
+	frame( hand );
+	CHECK( same( pad, hand ) );
+}
+
+TEST(a_hand_on_the_mouse_takes_the_pointer_back)
+{
+	CHECK( start() );
+	pushMotion( 123, 234 );
+	clear();
+	Int x, y;
+	CHECK( !SdlGamepad_pointer( x, y ) );
+	CHECK( !SdlGamepad_isLastUsed() );
+}
+
+TEST(a_pointer_parked_in_the_edge_band_goes_to_the_centre_when_the_pad_is_first_used)
+{
+	CHECK( start() );
+	pushMotion( 0, 0 );		// where gamescope left it: in the band, so the camera would edge-scroll
+	clear();
+	UnsignedInt now = 40000;
+	SdlGamepad_update( now );
+	padAxis( SDL_GAMEPAD_AXIS_LEFTY, 10000 );		// a nudge past the dead zone: the pad is in use
+	padAxis( SDL_GAMEPAD_AXIS_LEFTY, 0 );
+	CHECK( movedTo( settle( now ), 400, 300 ) );
+	// armed: out of the band, first use leaves the pointer where it is
+	pushMotion( 200, 100 );
+	clear();
+	padAxis( SDL_GAMEPAD_AXIS_LEFTY, 10000 );
+	padAxis( SDL_GAMEPAD_AXIS_LEFTY, 0 );
+	const std::vector<std::string> events = settle( now );
+	CHECK( events.empty() );
+	Int x, y;
+	CHECK( SdlGamepad_pointer( x, y ) && x == 200 && y == 100 );
+}
+
+TEST(full_tilt_holds_the_pointer_at_the_screens_edge_where_it_edge_scrolls)
+{
+	CHECK( start() );
+	pushMotion( 400, 300 );
+	clear();
+	UnsignedInt now = 50000;
+	SdlGamepad_update( now );
+	padAxis( SDL_GAMEPAD_AXIS_LEFTX, SDL_JOYSTICK_AXIS_MIN );		// full tilt left for a second
+	for (Int i = 0; i < 10; ++i)
+	{
+		now += 100;
+		SdlGamepad_update( now );
+		pump();
+	}
+	padAxis( SDL_GAMEPAD_AXIS_LEFTX, 0 );
+	settle( now );
+	Int x, y;
+	CHECK( SdlGamepad_pointer( x, y ) && x == 0 && y == 300 );
 }
 
 TEST(a_pad_pulled_out_mid_press_lets_go_of_all_it_held)

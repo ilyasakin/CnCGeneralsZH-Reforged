@@ -51,6 +51,9 @@ SDL_Window *SdlInput_gameWindow( void );
 /// A position in the window's points to the game's pixels, held inside the game's screen
 void SdlInput_toGamePixels( Real windowX, Real windowY, Int &gameX, Int &gameY );
 
+/// A position in the game's pixels to the window's points, at the pixel's centre (the inverse of that)
+void SdlInput_toWindowPoints( Int gameX, Int gameY, Real &windowX, Real &windowY );
+
 /** The arithmetic of that: scaled from a windowWidth x windowHeight window to a gameWidth x gameHeight
 	* screen and held inside it.  A size of 0 leaves that axis unscaled and unheld. */
 void SdlInput_scaleToGame( Real windowX, Real windowY, Int windowWidth, Int windowHeight,

@@ -20,15 +20,19 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "GameClient/Display.h"
 #include "GameClient/GamepadMap.h"
 #include "GameClient/KeyDefs.h"
+#include "GameClient/Mouse.h"
 #include "Platform/DoubleClickTime.h"
 #include "SdlDevice/GameClient/SdlGamepad.h"
+#include "SdlDevice/GameClient/SdlInput.h"
 #include "SdlDevice/GameClient/SdlKeyboard.h"
 #include "SdlDevice/GameClient/SdlMouse.h"
 
 #include <SDL3/SDL.h>
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
@@ -48,6 +52,10 @@ const Real WHEEL_NOTCHES_PER_SECOND = 6.0f;		///< a trigger pulled all the way
 const Real CAMERA_KEY_ON = 0.5f;							///< the right stick's tilt that holds an arrow key...
 const Real CAMERA_KEY_OFF = 0.35f;						///< ...and the tilt below which it lets go
 const Int DOUBLE_CLICK_DISTANCE = 4;					///< Windows' SM_CXDOUBLECLK and SM_CYDOUBLECLK
+const Real STICK_DEAD_ZONE = 0.15f;						///< the left stick's, radial
+const Real POINTER_CROSSING_SECONDS = 1.2f;		///< full tilt crosses the screen's width in this long
+const Int EDGE_BAND = 3;											///< LookAtXlat's edgeScrollSize: a pointer this near an edge scrolls
+const Int WARP_PATIENCE_FRAMES = 5;						///< frames a warp may take to come back before it is given up on
 
 /// What one press did, so that its release undoes exactly that
 struct Pressed
@@ -89,6 +97,19 @@ LastClick theLastClicks[ MOUSE_BUTTONS ];
 Bool theStarted = FALSE;
 Bool theUpdated = FALSE;
 UnsignedInt theLastUpdate = 0;
+Bool theLastUsed = FALSE;					///< a pad, not a hand, was the last thing used
+
+/// The pointer the left stick moves
+struct Pointer
+{
+	Bool owned;						///< the pad has it; FALSE once a hand moves the mouse
+	Real x, y;						///< in the game's pixels, the fraction kept
+	Int shownX, shownY;		///< where it was last put
+	Bool warpPending;			///< a warp has not come back yet
+	Int warpWait;					///< frames it has waited
+	Bool direct;					///< warps never come back here: moves go to SdlMouse directly
+};
+Pointer thePointer;
 
 UnsignedInt milliseconds( Uint64 timestampNs )
 {
@@ -107,6 +128,18 @@ void keyUp( UnsignedByte dik )
 		SdlKeyboard::active()->addKey( dik, FALSE );
 }
 
+/// Where a pad's click or wheel goes: the pad's pointer while it has it, else where the mouse left it
+void pointerPosition( SdlMouse *mouse, Int &x, Int &y )
+{
+	if (thePointer.owned)
+	{
+		x = thePointer.shownX;
+		y = thePointer.shownY;
+	}
+	else
+		mouse->getPointerPosition( x, y );
+}
+
 void mouseDown( Int button, UnsignedInt time )
 {
 	if (theMouseHolds[ button ]++ != 0)
@@ -115,7 +148,7 @@ void mouseDown( Int button, UnsignedInt time )
 	if (mouse == NULL)
 		return;
 	Int x, y;
-	mouse->getPointerPosition( x, y );
+	pointerPosition( mouse, x, y );
 	// SDL's click count: one more for a press soon enough after the last and near enough to it
 	LastClick &last = theLastClicks[ button ];
 	Int clicks = 1;
@@ -138,7 +171,7 @@ void mouseUp( Int button, UnsignedInt time )
 	if (mouse == NULL)
 		return;
 	Int x, y;
-	mouse->getPointerPosition( x, y );
+	pointerPosition( mouse, x, y );
 	mouse->addEvent( SdlMouse::EVENT_BUTTON_UP, x, y, (SdlMouse::Button)button, theLastClicks[ button ].clicks, 0, time );
 }
 
@@ -312,6 +345,58 @@ void closePad( SDL_JoystickID id, UnsignedInt time )
 		}
 }
 
+/// The game's screen in pixels: the display's, or the window's before there is one
+void screenSize( Int &width, Int &height )
+{
+	width = TheDisplay != NULL ? (Int)TheDisplay->getWidth() : 0;
+	height = TheDisplay != NULL ? (Int)TheDisplay->getHeight() : 0;
+	SDL_Window *window = SdlInput_gameWindow();
+	if ((width <= 0 || height <= 0) && window != NULL)
+		SDL_GetWindowSize( window, &width, &height );
+}
+
+/// The pointer to a pixel: warped, so it comes back as the platform's own motion, or straight to SdlMouse
+void showPointer( Int x, Int y, UnsignedInt time )
+{
+	thePointer.shownX = x;
+	thePointer.shownY = y;
+	SDL_Window *window = SdlInput_gameWindow();
+	if (!thePointer.direct && window != NULL)
+	{
+		Real wx, wy;
+		SdlInput_toWindowPoints( x, y, wx, wy );
+		SDL_WarpMouseInWindow( window, wx, wy );
+		thePointer.warpPending = TRUE;
+		thePointer.warpWait = 0;
+	}
+	else if (SdlMouse::active() != NULL)
+		SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, x, y, SdlMouse::BUTTON_LEFT, 0, 0, time );
+}
+
+/// The pad was used: it takes the pointer, and one parked in the edge band goes to the centre
+void padUsed( UnsignedInt time )
+{
+	if (theLastUsed)
+		return;
+	theLastUsed = TRUE;
+	if (thePointer.owned || SdlMouse::active() == NULL)
+		return;
+	Int x, y, width, height;
+	SdlMouse::active()->getPointerPosition( x, y );
+	screenSize( width, height );
+	thePointer.owned = TRUE;
+	thePointer.x = (Real)x;
+	thePointer.y = (Real)y;
+	thePointer.shownX = x;
+	thePointer.shownY = y;
+	if (width > 0 && height > 0 && (x < EDGE_BAND || y < EDGE_BAND || x >= width - EDGE_BAND || y >= height - EDGE_BAND))
+	{
+		thePointer.x = (Real)(width / 2);
+		thePointer.y = (Real)(height / 2);
+		showPointer( width / 2, height / 2, time );
+	}
+}
+
 Real triggerPull( Real value )
 {
 	return value <= TRIGGER_DEAD_ZONE ? 0.0f : (value - TRIGGER_DEAD_ZONE) / (1.0f - TRIGGER_DEAD_ZONE);
@@ -344,6 +429,8 @@ void SdlGamepad_stop( void )
 	memset( theKeyHolds, 0, sizeof( theKeyHolds ) );
 	memset( theMouseHolds, 0, sizeof( theMouseHolds ) );
 	memset( theLastClicks, 0, sizeof( theLastClicks ) );
+	memset( &thePointer, 0, sizeof( thePointer ) );
+	theLastUsed = FALSE;
 }
 
 void SdlGamepad_releaseAll( void )
@@ -356,6 +443,36 @@ void SdlGamepad_releaseAll( void )
 Int SdlGamepad_count( void )
 {
 	return (Int)thePads.size();
+}
+
+void SdlGamepad_noteMotion( Int x, Int y )
+{
+	if (thePointer.warpPending && x == thePointer.shownX && y == thePointer.shownY)
+	{
+		thePointer.warpPending = FALSE;		// the pad's own warp, back as the platform's motion
+		return;
+	}
+	if (thePointer.warpPending)
+		return;		// the platform's motion from before the warp, still in the queue
+	thePointer.owned = FALSE;
+	theLastUsed = FALSE;
+}
+
+void SdlGamepad_noteHand( void )
+{
+	theLastUsed = FALSE;
+}
+
+Bool SdlGamepad_isLastUsed( void )
+{
+	return theLastUsed;
+}
+
+Bool SdlGamepad_pointer( Int &x, Int &y )
+{
+	x = thePointer.shownX;
+	y = thePointer.shownY;
+	return thePointer.owned;
 }
 
 Bool SdlGamepad_dispatch( const SDL_Event &event )
@@ -378,6 +495,8 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 				return TRUE;
 			const GamepadButtonType button = (GamepadButtonType)event.gbutton.button;		// the same order (GamepadMap.h)
 			if (event.gbutton.down)
+				padUsed( milliseconds( event.gbutton.timestamp ) );
+			if (event.gbutton.down)
 				pressButton( *pad, button, milliseconds( event.gbutton.timestamp ) );
 			else
 				releaseButton( *pad, button, milliseconds( event.gbutton.timestamp ) );
@@ -391,6 +510,10 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 			{
 				const Real value = event.gaxis.value / 32767.0f;
 				pad->axis[ event.gaxis.axis ] = value < -1.0f ? -1.0f : (value > 1.0f ? 1.0f : value);
+				const Real deadZone = (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || event.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
+					? TRIGGER_DEAD_ZONE : STICK_DEAD_ZONE;
+				if (value > deadZone || value < -deadZone)
+					padUsed( milliseconds( event.gaxis.timestamp ) );
 			}
 			return TRUE;
 		}
@@ -410,6 +533,55 @@ void SdlGamepad_update( UnsignedInt nowMs )
 	theUpdated = TRUE;
 	theLastUpdate = nowMs;
 
+	// a warp that never comes back: this platform cannot warp the pointer (a Wayland without pointer
+	// warping, perhaps gamescope): the moves go to SdlMouse from here on, and the log says why
+	if (thePointer.warpPending && ++thePointer.warpWait > WARP_PATIENCE_FRAMES)
+	{
+		thePointer.warpPending = FALSE;
+		thePointer.direct = TRUE;
+		DEBUG_LOG(( "SdlGamepad: the pointer's warps do not come back on the %s video driver; the pad moves "
+			"the game's pointer directly, and the platform's own pointer stays where it is\n", SDL_GetCurrentVideoDriver() ));
+		if (SdlMouse::active() != NULL)
+			SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, thePointer.shownX, thePointer.shownY, SdlMouse::BUTTON_LEFT, 0, 0, nowMs );
+	}
+
+	// the left stick moves the pointer: every pad's tilt, a radial dead zone, a squared response
+	Real vx = 0.0f, vy = 0.0f;
+	for (size_t i = 0; i < thePads.size(); ++i)
+	{
+		const Real sx = thePads[i].axis[ SDL_GAMEPAD_AXIS_LEFTX ], sy = thePads[i].axis[ SDL_GAMEPAD_AXIS_LEFTY ];
+		const Real tilt = sqrtf( sx * sx + sy * sy );
+		if (tilt <= STICK_DEAD_ZONE)
+			continue;
+		const Real past = ((tilt > 1.0f ? 1.0f : tilt) - STICK_DEAD_ZONE) / (1.0f - STICK_DEAD_ZONE);
+		vx += sx / tilt * past * past;
+		vy += sy / tilt * past * past;
+	}
+	Int width, height;
+	screenSize( width, height );
+	if ((vx != 0.0f || vy != 0.0f) && width > 0 && height > 0 && seconds > 0.0f)
+	{
+		if (!thePointer.owned && SdlMouse::active() != NULL)
+		{
+			Int x, y;
+			SdlMouse::active()->getPointerPosition( x, y );
+			thePointer.owned = TRUE;
+			thePointer.x = (Real)x;
+			thePointer.y = (Real)y;
+			thePointer.shownX = x;
+			thePointer.shownY = y;
+		}
+		const Real speed = width / POINTER_CROSSING_SECONDS;		// pixels a second at full tilt
+		thePointer.x += vx * speed * seconds;
+		thePointer.y += vy * speed * seconds;
+		// held to the screen: at an edge it edge-scrolls, as a mouse there does
+		thePointer.x = thePointer.x < 0.0f ? 0.0f : (thePointer.x > width - 1 ? (Real)(width - 1) : thePointer.x);
+		thePointer.y = thePointer.y < 0.0f ? 0.0f : (thePointer.y > height - 1 ? (Real)(height - 1) : thePointer.y);
+		const Int x = (Int)thePointer.x, y = (Int)thePointer.y;
+		if (x != thePointer.shownX || y != thePointer.shownY)
+			showPointer( x, y, nowMs );
+	}
+
 	for (size_t i = 0; i < thePads.size(); ++i)
 	{
 		Pad &pad = thePads[i];
@@ -422,7 +594,7 @@ void SdlGamepad_update( UnsignedInt nowMs )
 		if (delta != 0 && SdlMouse::active() != NULL)
 		{
 			Int x, y;
-			SdlMouse::active()->getPointerPosition( x, y );
+			pointerPosition( SdlMouse::active(), x, y );
 			SdlMouse::active()->addEvent( SdlMouse::EVENT_WHEEL, x, y, SdlMouse::BUTTON_LEFT, 0, delta, nowMs );
 		}
 
