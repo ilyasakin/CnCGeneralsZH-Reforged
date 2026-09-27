@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #
-# Defect #33's guard: no override may leave a unit without the locomotors EA gave it.
+# The load-time module checks, one short run for both:
+#   #33: no override may leave a unit without the locomotors EA gave it;
+#   #34: no ObjectReskin may end up without a behaviour module its source has.
 #
 # An object's "Locomotor = SET_..." lines are stored in its AI module's data, so a ReplaceModule of that
 # module discards them unless the block re-states them. Upstream's fbe8dc6f and 179e1f65 did that to 12
@@ -9,8 +11,14 @@
 # discards, and ThingFactory's checkLocomotors logs, once everything has loaded:
 #   LocomotorCheck: <name> lost its <n> locomotor set(s) to a ReplaceModule of its AI module, ...
 #   LocomotorCheck: <r> things had an AI module with locomotors replaced, <m> of them left without a SET_NORMAL
+# And (#34) a reskin copies its source's modules; a module added to one in a normal INI load used to erase
+# every copied module sharing an interface with it (upstream's fbe8dc6f left the Demolition General's
+# Technical reskins with no AI, and the first AI that recruited one crashed). ThingFactory's checkReskins logs
+#   ReskinCheck: <name> lacks behaviour modules its source <source> has: ...
+#   ReskinCheck: <r> reskins, <m> of them lacking a behaviour module their source has
 # This loads the shipped data and the overlay through the game itself (one 30-frame run of
-# Tools/replay-check.sh, rule 9 as ever) and requires the summary line, with m = 0 and no "lost" line.
+# Tools/replay-check.sh, rule 9 as ever) and requires both summary lines, with m = 0 and no "lost" or
+# "lacks" line.
 # replay-check's own verdict is not this test's: 30 frames is an idle match, which it rightly calls IDLE.
 #
 # WHAT THIS CANNOT SEE: a unit that loses a locomotor some other way (a RemoveModule of its AI module, or
@@ -28,7 +36,7 @@ if [ -z "${ZH_DATA_DIR:-}" ]; then
 	exit 77
 fi
 
-out="$(bash "$HARNESS" --generals "$GENERALS" --seeds "0" --maxframes 30 --log-lines 'LocomotorCheck:' 2>&1)"
+out="$(bash "$HARNESS" --generals "$GENERALS" --seeds "0" --maxframes 30 --log-lines 'LocomotorCheck:|ReskinCheck:' 2>&1)"
 status=$?
 printf '%s\n' "$out"
 if [ "$status" -eq 99 ]; then
@@ -54,4 +62,19 @@ if printf '%s\n' "$out" | grep -q 'log: LocomotorCheck: .* lost its'; then
 	failed=1
 fi
 [ "$failed" -eq 0 ] && echo "ok: $replaced things had their AI module replaced with locomotors; every one still has a SET_NORMAL"
+
+reskin="$(printf '%s\n' "$out" | grep -m1 'log: ReskinCheck: [0-9]* reskins')"
+if [ -z "$reskin" ]; then
+	echo "FAIL: no ReskinCheck summary in the run's log"
+	exit 1
+fi
+reskins="$(printf '%s' "$reskin" | sed -n 's/.*ReskinCheck: \([0-9]*\) reskins.*/\1/p')"
+lacking="$(printf '%s' "$reskin" | sed -n 's/.*, \([0-9]*\) of them lacking.*/\1/p')"
+if [ "${lacking:-x}" != "0" ] || printf '%s\n' "$out" | grep -q 'log: ReskinCheck: .* lacks'; then
+	echo "FAIL: $lacking reskin(s) lack behaviour modules their source has (#34):"
+	printf '%s\n' "$out" | grep 'log: ReskinCheck: .* lacks' | sed 's/.*ReskinCheck: /  /'
+	failed=1
+else
+	echo "ok: $reskins reskins, each with every behaviour module its source has"
+fi
 exit $failed
