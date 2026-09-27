@@ -177,10 +177,12 @@ static void append_light(std::string & body, unsigned index, FixedFunctionValue 
 
 	// The specular term is Blinn's half vector ("Specular Lighting"): between the light and the eye,
 	// where the eye is the vertex's own direction to the camera with D3DRS_LOCALVIEWER, which is D3D9's
-	// default and which the engine never turns off, and the fixed (0, 0, 1) without it.
+	// default and which the engine never turns off, and the fixed (0, 0, -1) without it.  The page says
+	// (0, 0, 1); Windows' own D3D9 (WARP and REF, a contributor's knownprobe, N27) draws with (0, 0, -1), which is
+	// also where the local viewer's direction points for a vertex straight ahead.
 	body += local_viewer
 		? "        float3 half_vector = normalize(to_light + normalize(-view_position.xyz));\n"
-		: "        float3 half_vector = normalize(to_light + float3(0.0, 0.0, 1.0));\n";
+		: "        float3 half_vector = normalize(to_light + float3(0.0, 0.0, -1.0));\n";
 	snprintf(line, sizeof(line),
 		"        float highlight = pow(max(dot(view_normal, half_vector), 0.0), MaterialPower.x);\n"
 		"        specular_light += Light%uSpecular.rgb * highlight * attenuation"
@@ -234,8 +236,12 @@ static bool append_texture_coordinates(std::string & body,
 			break;
 
 		case FF_TSS_TCI_CAMERASPACEREFLECTIONVECTOR:
-			snprintf(line, sizeof(line),
-				"    float4 generated%u = float4(reflect(normalize(view_position.xyz), view_normal), 1.0);\n",
+			// R = 2(N.E)N - E, E the unit direction to the eye: the vertex's own with D3DRS_LOCALVIEWER,
+			// and the fixed (0, 0, -1) without it, as Windows' D3D9 draws it (a contributor's knownprobe, N14).
+			// reflect(I, N) is I - 2(N.I)N, so I is -E: the camera-space position, or (0, 0, 1).
+			snprintf(line, sizeof(line), description.LocalViewer
+				? "    float4 generated%u = float4(reflect(normalize(view_position.xyz), view_normal), 1.0);\n"
+				: "    float4 generated%u = float4(reflect(float3(0.0, 0.0, 1.0), view_normal), 1.0);\n",
 				stage);
 			break;
 
@@ -743,6 +749,16 @@ std::string VertexShader_Key(const VertexPipelineDescription & description)
 	// its specular is kept; so every lit program's key says which, and a key names one text.
 	if (description.LightingEnabled && description.LocalViewer) {
 		key += ":V";
+	}
+	// An unlit program reads LOCALVIEWER only through a reflection vector, and then only its absence
+	// changes the text, so only that is keyed: every key the engine makes (LOCALVIEWER on) stays as it was.
+	if (!description.LightingEnabled && !description.LocalViewer) {
+		for (unsigned stage = 0; stage < description.StageCount; ++stage) {
+			if ((description.Stages[stage].TextureCoordinateIndex & ~COORDINATE_SET_MASK) == FF_TSS_TCI_CAMERASPACEREFLECTIONVECTOR) {
+				key += ":E";
+				break;
+			}
+		}
 	}
 
 	snprintf(field, sizeof(field), ":F%u,%lu", description.FogEnabled ? 1u : 0u,
