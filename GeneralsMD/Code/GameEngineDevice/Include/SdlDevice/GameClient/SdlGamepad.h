@@ -32,8 +32,9 @@
 //   - The left stick moves the pointer: the platform's own, warped with SDL_WarpMouseInWindow, so the
 //     warp comes back as an ordinary motion event and the cursor, its text, the tooltips and edge
 //     scrolling all follow as they follow a mouse.  A radial dead zone, a squared response, and full
-//     tilt crossing the screen's width in 1.2 s of real time.  Where a warp never comes back (a platform
-//     that cannot warp), the pointer's moves go to SdlMouse directly and the log says so.  A pointer
+//     tilt crossing the screen's width in 1.2 s of real time.  Where a warp never comes back (gamescope's
+//     Xwayland, the Steam Deck's Game Mode, measured), the pointer's moves go to SdlMouse directly and
+//     the game draws the cursor itself (RM_POLYGON), so the cursor on screen is the one the pad moves.  A pointer
 //     parked in the edge-scrolling band (the gamescope finding: (0, 0)) is put at the screen's centre
 //     when the pad is first used, so a pad player's camera does not run off to a corner.
 //   - Command-bar mode (GamepadMap's CommandBar, North by default): the pointer goes to the command

@@ -809,8 +809,13 @@ void SdlGamepad_update( UnsignedInt nowMs )
 	{
 		thePointer.warpPending = FALSE;
 		thePointer.direct = TRUE;
+		// The platform's pointer cannot follow, so the game draws its own at the game's pointer: Mouse.ini's
+		// polygon images (W3DMouse's RM_POLYGON, which hides the platform's).  A trackpad's or a mouse's motion
+		// still arrives, and moves the game's pointer, so the one drawn cursor follows every device.
+		if (TheMouse != NULL)
+			TheMouse->setRedrawMode( Mouse::RM_POLYGON );
 		DEBUG_LOG(( "SdlGamepad: the pointer's warps do not come back on the %s video driver; the pad moves "
-			"the game's pointer directly, and the platform's own pointer stays where it is\n", SDL_GetCurrentVideoDriver() ));
+			"the game's pointer directly, and the game draws the cursor itself\n", SDL_GetCurrentVideoDriver() ));
 		if (SdlMouse::active() != NULL)
 			SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, thePointer.shownX, thePointer.shownY, SdlMouse::BUTTON_LEFT, 0, 0, nowMs );
 	}
