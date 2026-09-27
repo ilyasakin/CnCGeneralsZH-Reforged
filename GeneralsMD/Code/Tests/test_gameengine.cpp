@@ -33,6 +33,10 @@
 #include "Common/MapObject.h"
 #include "Common/RandomMapGenerator.h"
 #include "Common/StackDump.h"
+#if defined(__linux__)
+#include <dlfcn.h>
+#include <unistd.h>
+#endif
 #include "Lib/Trig.h"
 #include "GameNetwork/Connection.h"
 #include "GameLogic/CRCSnapshotRing.h"
@@ -705,10 +709,43 @@ TEST(stackdump_walks_the_callers)
 
 	s_stackText[ 0 ] = 0;
 	::StackDumpFromAddresses( frames, 12, collectStackLine );
+#if defined(__linux__)
+	/* glibc's dladdr names only .dynsym's symbols, and this function is static, so no link flag names
+	   it in-process (-rdynamic exports globals only, and would let a dlopened Vulkan driver bind its
+	   zlib calls to the game's own zlib).  StackDumpPosix.cpp then writes "<module>+0x<offset>", which
+	   is resolved offline as atos does on macOS.  So here the check is that the dump carries that
+	   offset and that it resolves, through the executable's own symbol table, to this function:
+	   binutils' addr2line, which every GCC build has beside it (GCC assembles with binutils' as). */
+	{
+		CHECK( strstr( s_stackText, "test_gameengine+0x" ) != NULL );
+		char exe[ 1024 ];
+		const ssize_t n = readlink( "/proc/self/exe", exe, sizeof( exe ) - 1 );
+		CHECK( n > 0 );
+		exe[ n > 0 ? n : 0 ] = 0;
+		Dl_info info;
+		CHECK( dladdr( frames[ 0 ], &info ) != 0 && info.dli_fbase != NULL );
+		char command[ 1400 ];
+		snprintf( command, sizeof( command ), "addr2line -f -e '%s' 0x%lx 2>&1", exe,
+							(unsigned long)( (char *)frames[ 0 ] - (char *)info.dli_fbase ) );
+		char resolved[ 512 ] = "";
+		FILE *pipe = popen( command, "r" );
+		CHECK( pipe != NULL );
+		if( pipe != NULL )
+		{
+			if( fgets( resolved, sizeof( resolved ), pipe ) == NULL )
+				resolved[ 0 ] = 0;
+			pclose( pipe );
+		}
+		if( strstr( resolved, "stackdump_walks_the_callers" ) == NULL )
+			printf( "%s\n  %s -> %s\n", s_stackText, command, resolved );
+		CHECK( strstr( resolved, "stackdump_walks_the_callers" ) != NULL );
+	}
+#else
 	/* Needs the PDB next to the exe; without symbols this is where it shows. */
 	if( strstr( s_stackText, "stackdump_walks_the_callers" ) == NULL )
 		printf( "%s\n", s_stackText );
 	CHECK( strstr( s_stackText, "stackdump_walks_the_callers" ) != NULL );
+#endif
 }
 
 /* fast_float_trunc was an __asm block in a header everything includes, and it wrote to registers

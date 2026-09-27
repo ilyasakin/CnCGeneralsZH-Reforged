@@ -17,6 +17,7 @@
 */
 
 // Download.cpp : Implementation of CDownload
+#include "Platform/MSVCCompat.h"	// mkdir with a mode and strncasecmp, below, on MSVC too (W2)
 #include "DownloadDebug.h"
 #include "Lib/Clock.h"
 #include "download.h"

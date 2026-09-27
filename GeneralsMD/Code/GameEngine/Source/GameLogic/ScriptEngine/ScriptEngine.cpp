@@ -5405,7 +5405,10 @@ void ScriptEngine::reset( void )
 
 	VecSequentialScriptPtrIt seqScriptIt;
 	for (seqScriptIt = m_sequentialScripts.begin(); seqScriptIt != m_sequentialScripts.end(); ) {
-		cleanupSequentialScript(seqScriptIt, TRUE);
+		// the iterator cleanupSequentialScript returns, as every other caller takes it: the one passed in
+		// was erased from the vector (defect #32's idiom; release builds walked on by accident, since a
+		// vector iterator is a pointer and the next script moves into the erased slot)
+		seqScriptIt = cleanupSequentialScript(seqScriptIt, TRUE);
 	}
 
 	// clear out all the lists of object types that were in the old map.

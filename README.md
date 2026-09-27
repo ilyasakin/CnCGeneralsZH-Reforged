@@ -150,7 +150,10 @@ stencil volumes were both built and measured, then reverted, and CHANGELOG says 
 Double-click `build.bat`. That is the whole thing on a clone that has never been built: it finds
 cmake, fetches what EA stripped and what GitHub will not hold, configures, builds, and copies the
 exe and the five FFmpeg DLLs into `GeneralsMD/Run/`. Three minutes on a 2024 desktop. Visual Studio
-2022 with the Desktop C++ workload is the one prerequisite.
+2022 with the Desktop C++ workload is the one prerequisite (it brings ATL, which `PreRTS.h` needs; a
+Build Tools install needs the `Microsoft.VisualStudio.Component.VC.ATL` component added). To run the game
+and its tests, the machine also needs the DirectX End-User Runtime (June 2010), for `d3dx9_43.dll`:
+Microsoft's full `directx_Jun2010_redist.exe` (winget's `Microsoft.DirectX` installs nothing).
 
 x64 only. The 32-bit build and the last of the inline assembly went in September 2026, and `-A
 Win32` is now a configure error.

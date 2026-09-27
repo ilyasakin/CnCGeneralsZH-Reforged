@@ -55,6 +55,8 @@
 
 #if defined(__APPLE__)
 #include <mach/mach.h>
+#else
+#include <sys/resource.h>
 #endif
 
 #include <string>
@@ -98,6 +100,11 @@ static int child( const char *kind, const char *logPath )
 	// This child's crashes are the test's, not the machine's: no report to ReportCrash.
 	task_set_exception_ports( mach_task_self(), EXC_MASK_CRASH | EXC_MASK_CORPSE_NOTIFY, MACH_PORT_NULL,
 		EXCEPTION_DEFAULT, THREAD_STATE_NONE );
+#else
+	// Nor a core file: systemd-coredump honours a zero RLIMIT_CORE too.  Before this, every run left a
+	// dozen cores in /var/lib/systemd/coredump (L1b, 2026-09-27).
+	struct rlimit noCore = { 0, 0 };
+	setrlimit( RLIMIT_CORE, &noCore );
 #endif
 	const std::string what = kind;
 	if (what != "segv-noinstall")
@@ -218,6 +225,54 @@ static int runChild( const char *self, const char *kind, std::string &folder )
 	return status;
 }
 
+#if defined(__linux__)
+/* True when a raw frame of this executable in report[from, to) - "<exe>+0x<offset>" - is in <function>,
+	 by binutils' addr2line over the executable's own symbol table, as a Linux crash report is read.
+	 GCC assembles with binutils' as, so addr2line is there wherever this builds.  Each frame is asked at
+	 its offset and one byte before: a caller's frame is a return address, which after a call that never
+	 returns (child's abort, trap and raise, inlined into main) is the first byte of the NEXT function -
+	 symbolizers take return address - 1 for that - while the crashing PC may be its function's first
+	 byte (crashByNullWrite's is), where - 1 is the function before.  And each is asked for its inline
+	 chain (-i): GCC inlines child into main and splits main's unlikely paths into main.cold, where the
+	 innermost name at abort's return address is std::thread's operator==; main is further out. */
+static bool rawFramesResolveTo( const std::string &report, size_t from, size_t to, const char *function )
+{
+	char exe[ 1024 ];
+	const ssize_t n = readlink( "/proc/self/exe", exe, sizeof( exe ) - 1 );
+	if (n <= 0)
+		return false;
+	exe[ n ] = 0;
+	const char *slash = strrchr( exe, '/' );
+	const std::string module = std::string( slash ? slash + 1 : exe ) + "+0x";
+	std::string command = std::string( "addr2line -f -i -C -e '" ) + exe + "'";
+	int frames = 0;
+	for (size_t at = report.find( module, from ); at != std::string::npos && at < to; at = report.find( module, at ))
+	{
+		at += module.size();
+		const size_t end = report.find_first_not_of( "0123456789ABCDEFabcdef", at );
+		const unsigned long offset = strtoul( report.substr( at, end - at ).c_str(), NULL, 16 );
+		char both[ 64 ];
+		snprintf( both, sizeof( both ), " 0x%lx 0x%lx", offset, offset ? offset - 1 : 0 );
+		command += both;
+		++frames;
+	}
+	if (frames == 0)
+		return false;
+	FILE *pipe = popen( (command + " 2>&1").c_str(), "r" );
+	if (pipe == NULL)
+		return false;
+	bool found = false;
+	char line[ 512 ];
+	while (fgets( line, sizeof( line ), pipe ) != NULL)
+	{
+		line[ strcspn( line, "\n" ) ] = 0;
+		found = found || strcmp( line, function ) == 0 || std::string( line ) == std::string( function ) + ".cold";
+	}
+	pclose( pipe );
+	return found;
+}
+#endif
+
 // The named pass names what dladdr can: exported functions.  abort, fpe, bus and trap crash inside the C
 // library or in the static child(), so the name checked for them is main, their exported caller.
 static void expectReport( const char *self, const char *kind, int signal, const char *reason,
@@ -248,8 +303,16 @@ static void expectReport( const char *self, const char *kind, int signal, const 
 	// raw frames: "  <module>(0) : <module>+0x..." in the dump; named ones after "Current stack:"
 	check( dump != std::string::npos && report.find( "(0) : ", dump ) < current, kind, "raw frames in Windows' line shape" );
 	if (function != NULL)
+#if defined(__linux__)
+		/* glibc's dladdr names only .dynsym's symbols, so the named pass names libc and not this program
+		   (and a find() of "main" used to pass on "__libc_start_main").  What a Linux report gives is its
+		   raw frames, resolved offline: so the check is that one of them resolves to the function. */
+		check( dump != std::string::npos && rawFramesResolveTo( report, dump, current, function ), kind,
+			"the crashing function, resolved offline from the raw frames" );
+#else
 		check( current != std::string::npos && report.find( function, current ) != std::string::npos, kind,
 			"the crashing function, named" );
+#endif
 
 	const std::string log = readFile( folder + "/DebugLogFile.txt" );
 	check( log.compare( 0, 26, "a line the log already had" ) == 0 && log.find( "\nLast error:\n" ) != std::string::npos,
