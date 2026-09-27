@@ -410,6 +410,7 @@ int main( int argc, char *argv[] )
 
 		// run the game main loop
 		GameMain(argc, argv);
+		SdlGameEngine_releaseWindow();		// after the engine, as WinMain's DestroyWindow
 
 		delete TheVersion;
 		TheVersion = NULL;

@@ -79,11 +79,15 @@ protected:
 private:
 	void createWindow( void );
 	void startOffscreen( void );		///< -offscreen: SDL's video, and no window (SdlGameEngine.cpp)
-	void destroyWindow( void );
 
 	WindowRequest m_request;
 	SDL_Window *m_window;
 	Bool m_sdlVideoStarted;
 };
+
+/** Releases the game's window and SDL's video, after the engine is gone (PosixMain, after GameMain), as
+	* WinMain destroys its window after GameMain.  The engine's destructor hands them on; the GPU device the
+	* engine's teardown releases is made on SDL's video, so the video must outlive it. */
+void SdlGameEngine_releaseWindow( void );
 
 #endif // __SDLGAMEENGINE_H

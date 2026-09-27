@@ -107,4 +107,11 @@ protected:
 	static SdlMouse *s_active;
 };
 
+/** Destroys every cursor SdlMouse made, before SDL's video goes (SdlGameEngine::destroyWindow).  Left to
+	* SDL_QuitMouse, an animated cursor on a video driver with no animated cursors of its own crashes it: SDL
+	* builds the animation from per-frame cursors that are also on its cursor list, and destroying the whole
+	* frees frames the list still holds (SDL 3.4.16, and main as of 2026-09-27; the Linux -offscreen run on
+	* thinkerer).  Destroyed here, the frames leave the list with it. */
+void SdlMouse_releaseCursors( void );
+
 #endif // __SDLMOUSE_H
