@@ -105,10 +105,26 @@ function Get-CtestExe {
 # ran fast (7 h, until RealTimeIsUniversal) stamped its outputs in the future; once the clock was put right,
 # MSBuild took them for newer than any edited source and rebuilt nothing, and a Debug round tested a stale
 # generals.exe.  Deleting them makes the build redo exactly those.
-function Remove-FutureOutputs([string[]] $dirs) {
+# Files git tracks are never touched: a checkout made while the clock ran fast dates them in the future too,
+# and Run\ holds some (BrowserEngine.dll, which dx8webbrowser.cpp #imports; a sweep of Run\ on winarm
+# deleted it and the next build failed).  If git cannot list them, nothing is deleted and -1 comes back.
+function Remove-FutureOutputs([string] $root, [string[]] $dirs) {
 	$limit = (Get-Date).AddMinutes(5)
-	$future = @($dirs | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object {
-		Get-ChildItem -LiteralPath $_ -Recurse -File -Force -ErrorAction SilentlyContinue } | Where-Object { $_.LastWriteTime -gt $limit })
+	$present = @($dirs | Where-Object { Test-Path -LiteralPath $_ })
+	if ($present.Count -eq 0) { return 0 }
+	# git refuses a path outside the work tree, and nothing outside it is tracked
+	$top = [System.IO.Path]::GetFullPath($root).TrimEnd('\') + '\'
+	$inside = @($present | Where-Object { [System.IO.Path]::GetFullPath($_).StartsWith($top, [StringComparison]::OrdinalIgnoreCase) })
+	$listed = @()
+	if ($inside.Count -gt 0) {
+		$listed = @(git -C $root -c core.quotepath=off ls-files -- $inside)
+		if ($LASTEXITCODE -ne 0) { return -1 }
+	}
+	$tracked = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+	$listed | ForEach-Object { [void]$tracked.Add([System.IO.Path]::GetFullPath((Join-Path $root $_))) }
+	$future = @($present | ForEach-Object {
+		Get-ChildItem -LiteralPath $_ -Recurse -File -Force -ErrorAction SilentlyContinue } |
+		Where-Object { $_.LastWriteTime -gt $limit -and -not $tracked.Contains($_.FullName) })
 	$future | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
 	return $future.Count
 }
@@ -208,7 +224,8 @@ if ($Bundle -ne "" -or $Ref -ne "") {
 if ($CheckedOut -ne "") { $summary += "checked out: $CheckedOut" }
 
 if (-not $SkipBuild) {
-	$futureOutputs = Remove-FutureOutputs @($Build, $RunDir)
+	$futureOutputs = Remove-FutureOutputs $Root @($Build, $RunDir)
+	if ($futureOutputs -lt 0) { $summary += "build: git could not list the tracked files, so no output dated in the future was deleted" }
 	if ($futureOutputs -gt 0) { $summary += "build: deleted $futureOutputs output(s) dated in the future (a clock that ran fast); they are rebuilt" }
 	# The last build's exe goes first: a build that fails must leave nothing the desktop part could run.
 	Remove-Item (Join-Path $RunDir "generals.exe") -ErrorAction SilentlyContinue
