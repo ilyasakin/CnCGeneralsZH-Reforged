@@ -3,7 +3,7 @@
 # make-macos-app.sh: builds "Zero Hour Reforged.app" (P1 step 5, the task file's section 3), the
 # macos_app CMake target's one step.
 #
-#   Contents/Info.plist, PkgInfo
+#   Contents/Info.plist, PkgInfo       with ZHReforgedCommit and ZHReforgedBuildDate: which build this is
 #   Contents/MacOS/generals            stripped; its dSYM beside the bundle (<out>.dSYM), not in it, for C5
 #   Contents/Resources/AppIcon.icns    from Main/Generals.ico's 48 px image (soft on Retina: an open item)
 #   Contents/Resources/Overlay/        the staged overlay (zh_overlay), its art archives as APFS clones
@@ -173,6 +173,12 @@ cp "$EXE" "$C/MacOS/generals" && strip -S -x "$C/MacOS/generals" || fail "cannot
 version="$(awk '/#define VERSION_MAJOR/ {a=$3} /#define VERSION_MINOR/ {b=$3} /#define VERSION_BUILDNUM/ {c=$3} END {print a"."b"."c}' "$BUILD/generated/BuildVersion.h")"
 minos="$MIN_MACOS"
 [ "$version" != ".." ] || fail "cannot read the version from $BUILD/generated/BuildVersion.h"
+# which build this is, for the player and for Tools/update-local-app.sh: the source commit (with -dirty when
+# tracked files differ from it) and the time the bundle was made, in UTC; "unknown" outside a git checkout
+source_dir="$(cd "$(dirname "$0")/.." && pwd)"
+commit="$(git -C "$source_dir" rev-parse --short=10 HEAD 2>/dev/null || echo unknown)"
+if [ "$commit" != unknown ] && ! git -C "$source_dir" diff --quiet HEAD -- . 2>/dev/null; then commit="$commit-dirty"; fi
+built="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 cat > "$C/Info.plist" <<PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -181,6 +187,7 @@ cat > "$C/Info.plist" <<PLIST_EOF
 	<key>CFBundleDevelopmentRegion</key>		<string>en</string>
 	<key>CFBundleDisplayName</key>			<string>Zero Hour Reforged</string>
 	<key>CFBundleExecutable</key>			<string>generals</string>
+	<key>CFBundleGetInfoString</key>		<string>Zero Hour Reforged $version, $commit, built $built</string>
 	<key>CFBundleIconFile</key>			<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>			<string>$BUNDLE_ID</string>
 	<key>CFBundleInfoDictionaryVersion</key>	<string>6.0</string>
@@ -191,6 +198,8 @@ cat > "$C/Info.plist" <<PLIST_EOF
 	<key>LSApplicationCategoryType</key>		<string>public.app-category.strategy-games</string>
 	<key>LSMinimumSystemVersion</key>		<string>$minos</string>
 	<key>NSHighResolutionCapable</key>		<true/>
+	<key>ZHReforgedBuildDate</key>			<string>$built</string>
+	<key>ZHReforgedCommit</key>			<string>$commit</string>
 </dict>
 </plist>
 PLIST_EOF
