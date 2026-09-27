@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 // The backend driven the way the engine drives a device: set a transform, set a stage state, set a
 // stream, draw.  Nothing here builds a shader or a state object by hand, because the point is that

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port: parts come from GeneralsMD/Code/GameEngineDevice/Include/W3DDevice/GameClient/W3DWater.h, the rest is new code, copyright 2026 İlyas Akın; see NOTICE.md and the git history.
 
 // FILE: WaterGridMotion.h ////////////////////////////////////////////////////////////////////////
 // Desc:   The water grid's mesh motion, one step per logic frame (T1c, defect 17).

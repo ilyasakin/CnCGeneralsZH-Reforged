@@ -19,6 +19,7 @@
 **	(https://github.com/crosire/d3d8to9, BSD 3-clause), vendored in this tree at
 **	Libraries/Source/d3d8to9, with its proxy-object plumbing removed.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 #include "d3d8shadertranslate.h"
 #include "d3dx9runtime.h"

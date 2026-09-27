@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Portions adapted from GeneralsMD/Code/Libraries/Source/WWVegas/WW3D2/dx11runtime.cpp by Olcay Seygan (upstream CnCGeneralsZH-Reforged), GPL-3.0-or-later.
 
 // dx11runtime.h off Windows (decision 7, phase A1): there is no Direct3D 11, so every call answers as
 // dx11runtime.cpp does on a Windows machine where Direct3D11_Create failed.  Nothing is ever active:
