@@ -112,7 +112,12 @@ list_top_level() {
 
 lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
-sha256_of() { shasum -a 256 "$1" | awk '{print $1}'; }
+# shasum is Perl's, and some Linux installs keep it off the PATH (Arch: /usr/bin/core_perl); coreutils'
+# sha256sum gives the same digest.  Without either the checks below would fail and delete what they check.
+sha256_of() {
+  if command -v shasum > /dev/null 2>&1; then shasum -a 256 "$1" | awk '{print $1}'
+  else sha256sum "$1" | awk '{print $1}'; fi
+}
 
 # --- zlib 1.1.4, flat. maketree.c is a generator with its own main() and does not belong in the lib.
 install_zlib() {
