@@ -2,7 +2,7 @@
 
 - **Milestone:** M4
 - **Depends on:** A3e
-- **Status:** in progress: fix 1 made and measured; the long frames traced to the shared machine's memory pressure; fix 2 measured and deferred; fix 3 and the second-machine matrix to be measured on finer (see "After the PM's decisions")
+- **Status:** in review. Fix 1 made (the device's recording halved). Fix 3 kept by the PM's decision (proven identical; no measurable gain). Fix 2 measured and deferred. The long frames were this shared Mac's memory compressor under load, and are absent on a quiet second machine (finer). An engine profile and a ranked list of same-result speed-ups are next.
 - **Owner:** -a9
 
 > **Void: every timing taken on finer before 02:32 local, 2026-09-27.** finer, a MacBook Pro with its
@@ -289,8 +289,11 @@ replacement.
 - **Fix 3 neither causes nor hides it:** the G runs were on fix 1 and the instruments only.
 - **Excluded:** runs A3, B3 and F1 to F3 (22:25 to 22:31), when two other harnesses had filled the
   machine's file table. They were rerun as G1 to G3 and C1 to C2.
-- **What this cannot see:** there was no run on an unloaded machine. Whether a quiet Mac has any long
-  frame in the match is for the finer runs below.
+- **What this could not see, until finer:** there was no run on an unloaded machine. On finer (below),
+  24 runs had no long frame in steady state. Free pages there fell as low as here, about 60 MB, but the
+  compressor was idle: at most 110 decompressions and no compressions a second, against this Mac's
+  151,000 and 247,000 at C2's stall. What stalls this Mac is the compressor's churn under the shared
+  load, not the free-page count alone.
 
 **The load-time frames**, measured, with no action:
 - **The shell build:** one frame of 655 to 839 ms at 0.3 s after the first present, all the engine's own.
@@ -311,10 +314,84 @@ replacement.
   `GameLogic::clearGameData` on the -maxframes exit. Handed to -18 as a player question: does closing a
   MacBook's lid mid-game crash it?
 
-### A second machine: finer (to do)
+### A second machine: finer (2026-09-27)
 
-The PERF1 matrix and fix 3's A/B, on finer (M3 Pro, 11 cores, 36 GB, macOS 26.5), hidden and with
-`-noaudio`, with the HUD on, `vm_stat` and the load recorded, and finer's native resolution as the third
-column.
+**The machine.** A MacBook Pro 14-inch (Mac15,6): M3 Pro, 5 performance and 6 efficiency cores (as this
+Mac), 36 GB, macOS 26.5.2. The lid is closed, it's on AC, and `pmset -a disablesleep 1` is set (the
+user's approval; it's on the workers' revert list). There's no display and no window server for zhr, so
+every run is `-offscreen` (decision 10). "Native resolution" is the panel's specification, 3024x1964,
+because no display was attached for zhr. Low power mode is off.
 
-**Installed or created on finer** (the user wants it all reverted at the end): none yet.
+**The runs.** The fix-3 build (`perf1-finer-run`: this branch with `-offscreen` merged in, plus the
+FFmpeg fix), from `ssh zhr@finer.local`:
+- `-offscreen`, `ZH_OFFSCREEN_HZ=120` (frames paced at 120 a second in place of vsync), `-noaudio`,
+  `-overlay <build>/overlay`, the HUD on;
+- the same scenes, frames and timing windows as this Mac's matrix, three runs a configuration;
+- `zheavy` held for each whole batch;
+- 60 s idle before every run;
+- the load, `vm_stat 1`, and the thermal pressure and cluster frequencies (`powermetrics`) before, 40 s
+  in and after each run.
+
+Every thermal reading was Nominal, the load was 1.2 to 2.1, and there were no sleeps.
+
+| Scene, resolution | Frame p50 / p99 / worst (ms) | Work p50 / p95 / p99 (ms) | Draws | Device draw p50 | Record+submit mean | Engine CPU mean | Engine match p99 / worst | Long frames in steady state |
+|---|---|---|---|---|---|---|---|---|
+| skirmish, 800x600 | 8.33 / 8.46–8.60 / 16.31–16.67 | 4.61–4.68 / 5.71–5.75 / 7.00–7.34 | 1786 | 2.20–2.23 | 0.71–0.72 | 1.79–1.83 | 9.25 / 16.53–16.71 | 0, 0, 0 |
+| skirmish, 1920x1080 | 8.33 / 8.35–8.74 / 16.66 | 4.31–4.67 / 5.25–5.58 / 6.86–7.53 | 1570 | 1.97–2.22 | 0.64–0.68 | 1.74–1.85 | 9.25–9.50 / 17.21–18.58 | 0, 0, 0 |
+| skirmish, 3024x1964 | 8.33 / 8.34–8.83 / 8.84–16.67 | 3.40–3.90 / 4.64–4.92 / 6.23–7.38 | 919 | 1.40–1.57 | 0.47–0.52 | 1.67–1.82 | 9.25–9.50 / 23.77–24.55 | 0, 0, 0 |
+| shell, 800x600 | 8.33 / 8.50–8.79 / 16.67–25.00 | 4.49–4.65 / 5.88–6.02 / 7.25–8.32 | 1336 | 1.73–1.79 | 1.42–1.48 | 1.46–1.51 | — | 0, 0, 0 |
+| shell, 1920x1080 | 8.33 / 8.33–8.50 / 16.67 | 4.29–4.51 / 5.58–5.84 / 6.06–6.99 | 1187 | 1.69–1.77 | 1.07–1.16 | 1.48–1.68 | — | 0, 0, 0 |
+| shell, 3024x1964 | 8.33 / 8.34 / 16.67 | 3.22–3.39 / 4.22–4.45 / 4.76–5.09 | 1034 | 1.48–1.56 | 0.62–0.65 | 1.20–1.27 | — | 0, 0, 0 |
+
+- **Record+submit** here is the present less the offscreen wait: the gamma pass into a texture of its
+  own, with no swapchain.
+- **Long frames in steady state** means frames over 50 ms after 10 s into a skirmish (the match
+  under way), or after 120 s in the shell. The shell has a burst of about 9 frames a second between 71
+  and 76 s, before its measured window; it isn't counted.
+- **The 3024x1964 rows are reruns,** on the same build with one fix to the timing aid (60506d38). The
+  engine makes a device and replaces it before the first frame at that size, and the replaced device's
+  teardown used up the one report, so the first six 3024 runs reported "0 frames". The fix touches
+  only the report. The skirmish draws only 919 a frame at this size, against 1,570 at 1920x1080. That
+  is noted, not explained.
+
+**The hitch is absent on the quiet machine.** No steady-state long frame appeared in any of the 24
+runs, and the engine's own worst match frame was 16 to 25 ms.
+- Free pages fell to about 3,600 (roughly 60 MB) in some of these runs too, with no stall. So low
+  free memory alone is not what stalled this Mac. The compressor churning was.
+- Per second at most, measured by `vm_stat 1`:
+
+  | Machine and run | Decompressions | Compressions | Page-ins |
+  |---|---|---|---|
+  | finer, all runs | 110 | 0 | 1,902 |
+  | this Mac, B2 (a clean run) | 24,658 | 43,911 | 17,159 |
+  | this Mac, C2 (the 842 ms stall) | 150,674 | 246,572 | 39,493 |
+
+**The content, bridged.** This Mac's baseline had the overlay's loose files copied into its farm, but not
+its three art archives (ReforgedNormals, ReforgedTerrain and ReforgedTextures.big). The archive lists in
+the debug logs show it. So this Mac's baseline equals "the overlay minus the three art archives". A
+run with no overlay at all can't start ("could not open 'Data\INI\FXListReforged.ini'"); three such
+bridge runs failed at once and are discarded. The bridge that was run instead uses the overlay's 40
+loose files without the archives: skirmish 1920x1080, three runs.
+
+| skirmish, 1920x1080 | Work p50 / p95 / p99 | Device draw p50 | Record+submit | Engine CPU | Engine match worst |
+|---|---|---|---|---|---|
+| the full overlay | 4.31–4.67 / 5.25–5.58 / 6.86–7.53 | 1.97–2.22 | 0.64–0.68 | 1.74–1.85 | 17.21–18.58 |
+| without the three archives | 4.37–4.67 / 5.33–5.75 / 7.26–8.45 | 2.00–2.21 | 0.64–0.67 | 1.76–1.86 | 17.31–17.70 |
+
+The archives cost nothing measurable.
+
+**finer against this Mac.** finer's work is higher than this Mac's after fix 1: 4.3 to 4.7 ms at p50
+against 3.1 to 3.4, with device draw at 2.0 to 2.2 ms against 1.2 to 1.4. It is the same chip and core
+layout, low power mode is off, the thermals were Nominal, and the bridge rules out the content. Three
+differences are not separated:
+- the present path: offscreen and paced here, a hidden window and vsync on this Mac;
+- the OS: macOS 26.5.2 against 27.0;
+- the machine: a lid-closed laptop's clocks, with the P-cluster read at 2.4 to 3.8 GHz 40 s into
+  runs.
+
+Separating them would take a `-offscreen` run on this Mac, which isn't possible while the user has
+asked for no work here. Recorded as open.
+
+**Installed or created on finer:** listed, with how to undo each, in `docs/mac-port/tasks/workers.md`
+(probe-a9, since deleted; perf-a9 with its farm, bundles, scripts and logs; wt-a9 and its two run
+branches; build-a9).
