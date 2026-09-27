@@ -399,6 +399,23 @@ device's recording, belongs to the machine or its OS: macOS 26.5.2 against 27.0,
 lid-closed laptop in a closet, whose P-cluster read 2.4 to 3.8 GHz 40 s into runs. Those two are not
 separated. finer's numbers are right for comparing builds on finer, not for comparing with this Mac.
 
+**Not the local LLM either.** For all the finer runs above, the user's local LLM stack was resident there
+(mlx-dspark serving a 27B model, and LM Studio: about 28 GB resident, 21 GB of it compressed). It was
+stopped at the user's word, and the skirmish at 1920x1080 was run again: the same binary and settings,
+three runs, the lock held, all Nominal, no sleeps. Before the runs there were 1,110,029 free pages
+(17 GB), and the compressor held 47,199 pages.
+
+| skirmish, 1920x1080 on finer | Work p50 / p95 / p99 (ms) | Device draw p50 | Record+submit | Engine CPU | Engine match worst | P-cluster 40 s in |
+|---|---|---|---|---|---|---|
+| the LLM resident (the matrix) | 4.31–4.67 / 5.25–5.58 / 6.86–7.53 | 1.97–2.22 | 0.64–0.68 | 1.74–1.85 | 17.2–18.6 | 2022, 2097, 2149 MHz |
+| the LLM stopped | 4.44–4.71 / 5.47–5.73 / 7.70–8.32 | 2.01–2.21 | 0.65–0.68 | 1.77–1.88 | 17.5–18.0 | 2123, 2059, 2116 MHz |
+
+Nothing moved, so the gap to this Mac is the OS or the clocks. The one clue: 40 s into every one of these
+runs, finer's P-cluster read about 2.0 to 2.2 GHz, where an M3 Pro's performance cores reach about
+4 GHz. That suggests the cores run slowly under this load there: a closed lid's thermal or power
+policy, or how macOS treats work started from an ssh session with no GUI login. This Mac's clock was
+not read (`powermetrics` needs sudo here), so the comparison is not closed.
+
 **Installed or created on finer:** listed, with how to undo each, in `docs/mac-port/tasks/workers.md`
 (probe-a9, since deleted; perf-a9 with its farm, bundles, scripts and logs; wt-a9 and its two run
 branches; build-a9).
