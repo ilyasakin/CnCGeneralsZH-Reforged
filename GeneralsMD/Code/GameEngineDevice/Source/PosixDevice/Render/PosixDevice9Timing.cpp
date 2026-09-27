@@ -27,9 +27,10 @@
 //     including the swapchain wait;
 //   - swapchain wait: SDL_WaitAndAcquireGPUSwapchainTexture's, which is the display's pacing (a hidden
 //     window still waits for vsync), and work: the frame without it - what the frame costs;
-//   - never presented: frames whose swapchain gave no drawable (a minimised window, or a locked session's).
-//     They reach no display and wait for no vsync, so a run full of them measures the game unpaced - the
-//     MacBook Air's locked session read as 119 fps on a 60 Hz panel - and the count says so;
+//   - not paced: frames presented to a window SDL called hidden, occluded or minimised, and frames whose
+//     swapchain gave no drawable.  macOS hands a hidden or occluded window drawables and does not wait for
+//     vsync, so a run full of them measures the game unpaced - a -hiddenwindow run, and the MacBook Air's
+//     locked session, read as 119 fps on a 60 Hz panel - and the counts say so;
 //   - GPU (ZH_GPU_TIMING_SYNC=1 only): every submit waits for its fence, and the waits add up.  That
 //     serialises CPU and GPU, so a SYNC run's frame times are not the game's: it measures the GPU.
 // What is left of the frame after the device's parts is the engine's own CPU time (and, unsynced, any
@@ -64,6 +65,7 @@ struct TimingState
 	Uint64 LastPresent;
 	bool Reported;
 	std::vector<double> Frame, Work, DrawMs, FlushMs, PresentMs, AcquireMs, OffscreenMs, FenceMs, Draws, Flushes;
+	unsigned int NotVisible;	///< measured frames presented to a window that was not visible
 	unsigned int NotShown;		///< measured frames with no drawable
 	bool Offscreen;
 };
@@ -81,6 +83,7 @@ TimingState &timing_state()
 		state.FirstPresent = 0;
 		state.LastPresent = 0;
 		state.Reported = false;
+		state.NotVisible = 0;
 		state.NotShown = 0;
 		state.Offscreen = false;
 	}
@@ -120,8 +123,8 @@ void PosixDevice9::Timing_Present(double present_ms, unsigned int draws)
 	TimingState &state = timing_state();
 	const Uint64 now = SDL_GetTicksNS();
 	double flush_ms = 0.0, fence_ms = 0.0, acquire_ms = 0.0, offscreen_ms = 0.0;
-	unsigned int flushes = 0, not_shown = 0;
-	Gpu->Take_Timing(flush_ms, fence_ms, flushes, acquire_ms, offscreen_ms, not_shown);
+	unsigned int flushes = 0, not_visible = 0, not_shown = 0;
+	Gpu->Take_Timing(flush_ms, fence_ms, flushes, acquire_ms, offscreen_ms, not_visible, not_shown);
 	state.Offscreen = Gpu->Offscreen_Presents();
 	if (state.FirstPresent == 0) {
 		state.FirstPresent = now;
@@ -147,6 +150,9 @@ void PosixDevice9::Timing_Present(double present_ms, unsigned int draws)
 		state.Flushes.push_back((double)flushes);
 		state.PresentMs.push_back(present_ms);
 		state.FenceMs.push_back(fence_ms);
+		if (not_visible > 0) {
+			++state.NotVisible;
+		}
 		if (not_shown > 0) {
 			++state.NotShown;
 		}
@@ -181,10 +187,10 @@ void PosixDevice9::Timing_Report()
 		report("offscreen wait", state.OffscreenMs, "ms");
 	} else {
 		report("swapchain wait", state.AcquireMs, "ms");
-		fprintf(stderr, "PosixDevice9 timing: %u of %zu frames never presented%s\n", state.NotShown, state.Frame.size(),
-			state.NotShown == 0 ? ""
-				: " (the swapchain gave no drawable: a minimised window or a locked session; those frames waited for"
-				  " no vsync, so the times above are not the display's pacing)");
+		fprintf(stderr, "PosixDevice9 timing: %u of %zu frames presented to a window that was not visible, %u with no"
+			" drawable%s\n", state.NotVisible, state.Frame.size(), state.NotShown,
+			state.NotVisible == 0 && state.NotShown == 0 ? ""
+				: " (hidden, occluded or minimised: the display did not pace them, so the times above are not its pacing)");
 	}
 	report("draws", state.Draws, "");
 	report("device draw", state.DrawMs, "ms");

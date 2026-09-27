@@ -90,6 +90,8 @@ SdlGpuFrame::SdlGpuFrame() :
 	FenceMs(0.0),
 	Flushes(0),
 	AcquireMs(0.0),
+	NotVisible(0),
+	NotVisibleTotal(0),
 	NotShown(0),
 	NotShownTotal(0),
 	OffscreenMs(0.0),
@@ -325,13 +327,15 @@ bool SdlGpuFrame::Submit_Offscreen(SDL_GPUCommandBuffer * commands)
 }
 
 void SdlGpuFrame::Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms,
-	double & offscreen_ms, unsigned int & not_shown)
+	double & offscreen_ms, unsigned int & not_visible, unsigned int & not_shown)
 {
 	flush_ms = FlushMs;
 	fence_ms = FenceMs;
 	flushes = Flushes;
 	acquire_ms = AcquireMs;
 	offscreen_ms = OffscreenMs;
+	not_visible = NotVisible;
+	NotVisible = 0;
 	not_shown = NotShown;
 	NotShown = 0;
 	OffscreenMs = 0.0;
@@ -527,6 +531,12 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 		SDL_GPUTexture * swapchain = NULL;
 		Uint32 width = 0;
 		Uint32 height = 0;
+		// Asked before the acquire: SDL keeps these flags from the window's own events (on macOS, OCCLUDED from
+		// NSWindow's occlusion state), and a window in any of them is not paced by the display.
+		if ((SDL_GetWindowFlags(Window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_OCCLUDED | SDL_WINDOW_MINIMIZED)) != 0) {
+			++NotVisible;
+			++NotVisibleTotal;
+		}
 		// No texture (a minimised window) is not a failure: there is nothing to show this frame.
 		const Uint64 acquire_start = SDL_GetTicksNS();
 		const bool acquired = SDL_WaitAndAcquireGPUSwapchainTexture(commands, Window, &swapchain, &width, &height);
