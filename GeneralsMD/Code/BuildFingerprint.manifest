@@ -98,6 +98,7 @@ Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/LanGameOptionsMenu.wnd
 Data/Window/Menus/OptionsMenu.wnd
 Data/Window/Menus/SkirmishGameOptionsMenu.wnd
+Data/dx11shaders.shipped
 GameEngine/GameEngine.dsp
 GameEngine/Include/Common/AcademyStats.h
 GameEngine/Include/Common/ActionManager.h
