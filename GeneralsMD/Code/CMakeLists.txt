@@ -431,6 +431,11 @@ set(WWLIB_SOURCES
   ${WW}/WWLib/widestring.cpp ${WW}/WWLib/win.cpp        ${WW}/WWLib/WWCOMUtil.cpp
   ${WW}/WWLib/wwfile.cpp     ${WW}/WWLib/wwfont.cpp     ${WW}/WWLib/wwstring.cpp
   ${WW}/WWLib/xpipe.cpp      ${WW}/WWLib/xstraw.cpp     ${WW}/WWLib/xsurface.cpp)
+# Windows on Arm leaves mpu.cpp out, as the build off Windows does (the POSIX list below says why nothing
+# needs it): its four functions read the x86 time-stamp counter, which ARM64 does not have.
+if(CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "ARM64")
+  list(REMOVE_ITEM WWLIB_SOURCES ${WW}/WWLib/mpu.cpp)
+endif()
 # Win32 subsystem code, left out of wwlib everywhere but Windows.  Each of these is a whole file of
 # one Windows API rather than a type leaking out of one, so there is nothing to port short of
 # reimplementing the API.  On Windows this list is not read, and wwlib gets the same sources in the
