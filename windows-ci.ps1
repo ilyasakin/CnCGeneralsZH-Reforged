@@ -88,7 +88,8 @@ if ($Runs.Count -eq 0) { $Runs = @($Seeds | ForEach-Object { "$_@$MaxFrames" }) 
 $ExpectCrc = @($ExpectCrc | ForEach-Object { $_.Split(',') } | Where-Object { $_ -ne "" } |
 	ForEach-Object { $k, $v = $_.Split(':', 2); if ($k -notmatch '@') { $k = "$k@$MaxFrames" }; "${k}:$v" })
 $Root = $PSScriptRoot
-$Build = Join-Path $Root "build64"
+# build.bat's folder: an ARM64 machine builds ARM64 into build-arm64
+$Build = Join-Path $Root $(if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "build-arm64" } else { "build64" })
 $RunDir = Join-Path $Root "GeneralsMD\Run"
 $NoSound = "test_milesaudiomanager|miles_smoke|test_miles_miniaudio|test_binkvideo|bink_smoke"
 $GpuTests = "^(dx9_smoke|dx9_smoke_msaa|test_dx11device)$"
@@ -108,20 +109,29 @@ function Get-TreeListing([string] $dir) {
 	}
 }
 
+# A symbolic link where the token may make one, else a hard link: the desktop part runs with the signed-in
+# user's token, which under UAC cannot create symbolic links (the ARM64 VM), and a farm without its links
+# only shows the game's missing-install dialog.  A hard link needs no privilege and keeps what the farm is
+# for: deleting it (GameEngine::init deletes INIZH.big) leaves the data.  Neither is a failure, loudly.
+function New-FarmLink([string] $path, [string] $target) {
+	try { New-Item -ItemType SymbolicLink -Path $path -Target $target -ErrorAction Stop | Out-Null }
+	catch { New-Item -ItemType HardLink -Path $path -Target $target -ErrorAction Stop | Out-Null }
+}
+
 function New-Farm([string] $data, [string] $farm) {
 	if (Test-Path $farm) { cmd /c "rmdir /s /q `"$farm`"" | Out-Null }		# links go, never their targets
 	New-Item -ItemType Directory $farm | Out-Null
 	Get-ChildItem -LiteralPath $data -Recurse -File | Where-Object { $_.Name -notlike '._*' } | ForEach-Object {
 		$dst = Join-Path $farm $_.FullName.Substring($data.Length + 1)
 		New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
-		New-Item -ItemType SymbolicLink -Path $dst -Target $_.FullName | Out-Null
+		New-FarmLink $dst $_.FullName
 	}
 	Get-ChildItem -LiteralPath $RunDir -Recurse -File | Where-Object { $_.Extension -ne '.pdb' } | ForEach-Object {
 		$dst = Join-Path $farm $_.FullName.Substring($RunDir.Length + 1)
 		New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
 		if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Force }	# the link, never its target
 		if ($_.Extension -in '.exe', '.dll') { Copy-Item -LiteralPath $_.FullName $dst }
-		else { New-Item -ItemType SymbolicLink -Path $dst -Target $_.FullName | Out-Null }
+		else { New-FarmLink $dst $_.FullName }
 	}
 }
 
@@ -140,7 +150,8 @@ function Invoke-DesktopPart {
 		New-Item -ItemType Directory -Force $WorkDir | Out-Null
 		$before = @(Get-TreeListing $zh)
 		$farm = Join-Path $WorkDir "farm"
-		New-Farm $zh $farm
+		try { New-Farm $zh $farm }
+		catch { $r.E1 = "FAILED (could not make the farm: $($_.Exception.Message))"; return $r }
 		$failures = 0
 		foreach ($run in $Runs) {
 			$seed, $frames = $run.Split('@')

@@ -18,6 +18,7 @@
 // Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 #include "dx11runtime.h"
+#include "d3d12runtime.h"
 
 #include <map>
 #include <string>
@@ -557,6 +558,12 @@ void Direct3D11_Mirror_Pixel_Shader(const void * shader)
 void Direct3D11_Register_Engine_Shader(const void * shader, const char * file_path)
 {
 	if (shader == NULL || file_path == NULL) {
+		return;
+	}
+	// -d3d12 (X1): the device inside zh_d3d12.dll reads the name, as the POSIX device does off Windows, and
+	// there is no Direct3D 11 backend running to map it for.
+	if (Direct3D12_Is_Active()) {
+		Direct3D12_Name_Shader(shader, file_path);
 		return;
 	}
 

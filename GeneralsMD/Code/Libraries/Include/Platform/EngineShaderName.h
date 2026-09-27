@@ -30,7 +30,7 @@
 #ifndef ENGINESHADERNAME_H
 #define ENGINESHADERNAME_H
 
-#if !defined(_WIN32)
+#if !defined(_WIN32) || defined(ZH_D3D12_DEVICE)
 void PosixDevice_Name_Shader(const void *shader, const char *name);
 /// The engine's own D3D8 declaration a vertex declaration of the device's was decoded from
 /// (d3d8shadertranslate), through its D3DVSD_END: kept on the declaration for capture version 3, so

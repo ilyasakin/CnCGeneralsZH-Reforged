@@ -1434,6 +1434,13 @@ GameEngineDevice/Include/Win32Device/Common/Win32LocalFileSystem.h
 GameEngineDevice/Include/Win32Device/GameClient/Win32DIKeyboard.h
 GameEngineDevice/Include/Win32Device/GameClient/Win32DIMouse.h
 GameEngineDevice/Include/Win32Device/GameClient/Win32Mouse.h
+GameEngineDevice/Source/D3D12Device/D3D12Adapter.cpp
+GameEngineDevice/Source/D3D12Device/D3D12Adapter.h
+GameEngineDevice/Source/D3D12Device/D3D12Bridge.h
+GameEngineDevice/Source/D3D12Device/D3D12Exports.cpp
+GameEngineDevice/Source/D3D12Device/D3D12ShimBridge.cpp
+GameEngineDevice/Source/D3D12Device/D3D12ShimUndefs.h
+GameEngineDevice/Source/D3D12Device/zh_d3d12.def
 GameEngineDevice/Source/MilesAudioDevice/MilesAudioManager.cpp
 GameEngineDevice/Source/PosixDevice/Common/PosixCDManager.cpp
 GameEngineDevice/Source/PosixDevice/Common/PosixFileResolutionDump.cpp
@@ -1732,9 +1739,13 @@ Libraries/Source/WWVegas/WW3D2/coltest.h
 Libraries/Source/WWVegas/WW3D2/coltype.h
 Libraries/Source/WWVegas/WW3D2/composite.cpp
 Libraries/Source/WWVegas/WW3D2/composite.h
+Libraries/Source/WWVegas/WW3D2/d3d12runtime.cpp
+Libraries/Source/WWVegas/WW3D2/d3d12runtime.h
 Libraries/Source/WWVegas/WW3D2/d3d8shadertranslate.cpp
 Libraries/Source/WWVegas/WW3D2/d3d8shadertranslate.h
 Libraries/Source/WWVegas/WW3D2/d3dx9math.h
+Libraries/Source/WWVegas/WW3D2/d3dx9portable.cpp
+Libraries/Source/WWVegas/WW3D2/d3dx9portable.h
 Libraries/Source/WWVegas/WW3D2/d3dx9posix.cpp
 Libraries/Source/WWVegas/WW3D2/d3dx9posix.h
 Libraries/Source/WWVegas/WW3D2/d3dx9posix_texture.cpp
@@ -2670,7 +2681,9 @@ Tests/test_cinema.inc
 Tests/test_clock.cpp
 Tests/test_compression.cpp
 Tests/test_crash_reporting.cpp
+Tests/test_d3d12_slice.cpp
 Tests/test_d3d9device.h
+Tests/test_d3dx9portable_oracle.cpp
 Tests/test_d3dx9posix.cpp
 Tests/test_d3dx_assemble_stub.cpp
 Tests/test_d3dxportable.cpp
@@ -3726,6 +3739,7 @@ Tools/vfx_tune.py
 Tools/water_grid_oracle_extract.py
 Tools/widechar_check.py
 Tools/widechar_check_allow.txt
+Tools/windows-d3d12-licenses.txt
 Tools/windows_view_diff.py
 Tools/wndlayout.py
 Tools/wolSetup/StdAfx.cpp

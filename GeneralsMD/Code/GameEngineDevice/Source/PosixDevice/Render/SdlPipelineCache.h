@@ -38,6 +38,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <functional>
 #include <string>
 #include <unordered_map>
 
@@ -108,6 +109,8 @@ public:
 	/// Null when the device refuses it; logged once per key.
 	SDL_GPUGraphicsPipeline *Pipeline(const SdlPipelineKey &key);
 	unsigned int Pipelines_Built() const { return Built; }
+	/// Names a program for a refusal's log line (the device points it at SdlProgramCache::Key_Of).
+	std::function<std::string(const SDL_GPUShader *)> Describe_Shader;
 
 private:
 	SDL_GPUDevice *Device;
