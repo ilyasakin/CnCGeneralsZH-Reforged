@@ -2318,6 +2318,11 @@ target_compile_definitions(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameen
 set_target_properties(test_crash_reporting PROPERTIES CXX_STANDARD 17)
 target_link_libraries(test_crash_reporting PRIVATE wwlib wwdebug)
 add_test(NAME test_crash_reporting COMMAND test_crash_reporting)
+# It crashes on purpose (a null write, an abort, raised SIGFPE and SIGBUS) and checks the crash handler's report.  Under
+# ZH_SANITIZE the sanitizer's own SEGV handler reports and exits first, which proves nothing about ours.
+if(ZH_SANITIZE)
+  set_tests_properties(test_crash_reporting PROPERTIES DISABLED TRUE)
+endif()
 
 # The BIG archive reader on POSIX, against the real game data under rule 9 (C1 (f)): every path's
 # owning archive against an independent reading of the mount order, and the bytes of a sample against
