@@ -522,6 +522,30 @@ check and no equivalent hint; the patch goes when SDL gains one, or when `-offsc
 needed on such hosts. Rejected: running the game in another account's desktop session, and asking for a
 GUI login on every worker. Second reader: -18.
 
+**11. Units are drawn between logic ticks, one tick behind: smooth motion (R1, taken 2026-09-27).** The
+logic ticks at 30 Hz. The client moved a model only on the render frame that follows a tick
+(`W3DView::update` draws drawables only when W3D's clock moved). So on a 120 or 144 Hz panel, four frames in
+five showed the same unit positions under a camera that moves every frame, which reads as judder. A user
+reported "the main menu was really choppy" on a 144 Hz Mac.
+- **Decided:** with the SmoothMotion option, `W3DDisplay::draw` keeps each model's last two logic transforms.
+  Just before the scene renders, it shows a blend of them, by the fraction of a tick that has passed. Right
+  after the render it puts the logic transforms back, so picking and the logic see exactly what they saw
+  before.
+- **Snaps:** a model is shown at its logic transform instead when it has no earlier transform, is a new
+  model, was hidden, skipped a tick, moved more than 60 units or turned more than 120 degrees in one tick,
+  or was marked a teleport.
+- **Camera:** a camera locked to a unit follows its blended position.
+- **What it changes:** the PICTURE, never the GAME. The picture is one logic tick (33 ms) behind the
+  simulation.
+- **Defaults:** on everywhere but Windows, where the picture stays as it was unless a player opts in. The
+  setting is Options.ini SmoothMotion and Options > Display > Smooth Motion.
+- **Proof:** the seed-1234 skirmish rendered to frame 1800 ends on the same CRC with it on and off. A
+  deliberate leak of the blend into the objects (`ZH_R1_LEAK`, a test control) changes that CRC.
+- **Details:** design and measurements are in `tasks/R1-smooth-motion.md`.
+- **Rejected:**
+  - pacing presents to a multiple of the refresh: 144/30 is 4.8, so no pacing makes it even;
+  - asking the display for 120 Hz: exclusive fullscreen only, and it changes the player's display mode.
+
 ### Rule: a project-wide definition in front of an uncompilable header needs a second reader
 
 Added 2026-09-22 after two Windows-only breaks in one afternoon, both with the same shape and
