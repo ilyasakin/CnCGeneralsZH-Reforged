@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#
 #	Copyright 2026 İlyas Akın
 #	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 #
