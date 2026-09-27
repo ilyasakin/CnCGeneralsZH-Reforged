@@ -1,3 +1,20 @@
+/*
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 // The D3DX functions whose bodies are arithmetic and nothing else: the renderer's matrix functions and the
 // FVF vertex size.  macOS and Linux use them as D3DX itself (d3dx9posix.cpp forwards to them), and Windows on
 // ARM64, which has no d3dx9_43.dll (Microsoft shipped it for x86 and x64 only), binds them in the DLL's
