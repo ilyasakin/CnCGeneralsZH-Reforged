@@ -80,6 +80,8 @@ check '[ -f "$APP/Contents/Resources/Overlay/Install_Final.bmp" ] && [ -d "$APP/
 nlic=$(ls "$APP/Contents/Resources/Licenses" | wc -l | tr -d ' ')
 check '[ "$nlic" -ge 13 ] && [ -f "$APP/Contents/Resources/Licenses/Zero-Hour-Reforged-LICENSE.md" ] && [ -f "$APP/Contents/Resources/Licenses/FFmpeg-SOURCE.txt" ] && grep -q "may not be removed" "$APP/Contents/Resources/Licenses/zlib-LICENSE.txt"' \
 	"the licences ($nlic files: the game, FFmpeg with its source pointer, zlib from its header, ...)"
+check 'grep -q "this notice may not be removed or altered" "$APP/Contents/Resources/Licenses/LZH-Light-LICENSE.txt" && grep -q "GNU GPL option, version 2 or later" "$APP/Contents/Resources/Licenses/FreeType-OPTION.txt" && [ -f "$APP/Contents/Resources/Licenses/FreeType-GPLv2.txt" ]' \
+	"LZH-Light's notice, and FreeType's GPLv2-or-later option with its GPLv2 text"
 check 'codesign --verify --deep --strict "$APP" 2>/dev/null && codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc"' "signed ad hoc, and it verifies --deep --strict"
 check '[ -z "$(find -L "$APP" -type f -exec grep -a -i -l -E "^[[:space:]]*ShowHudOverlay[[:space:]]*=[[:space:]]*(no|false|0)([^[:alnum:]]|$)" -- {} + 2>/dev/null)" ]' \
 	"and nothing in it turns the HUD overlay off"
