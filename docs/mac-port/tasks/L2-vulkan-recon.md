@@ -63,20 +63,33 @@ Linux ctest environment, 42513f12). All six pass, and `-V` shows each ran its ch
 
 Before L1b these six were "Skipped" on Linux with `SDL_Init: No available video device`.
 
-## Questions for -a9
+## Answered since (2026-09-27)
 
-- Are F7 and F8, and their pixel counts, the same on Metal? If not, the difference is the first thing to
-  look at on Vulkan.
-- The refusals above (table fog, cube/volume textures, sampling the target, border and mirror-once
-  samplers): are they the device's known A3c limits on every backend, or anything Vulkan-specific?
-- Should a software implementation (lavapipe, `sudo pacman -S vulkan-swrast`) be a second Vulkan to
-  compare against? Nothing is installed for it yet. It would be logged in workers.md first.
+- **F7 and F8 are the same on three backends.** -a9 ran ffref_gpu_selfcheck on Metal (finer): F8
+  3135 outside, worst 248/255 at (59, 4); F7 2970 outside, worst 248/255 at (5, 5), the same as ANV's.
+  Lavapipe gives the same numbers too (below). Three implementations agree pixel for pixel, so both
+  findings sit on the device's or the reference's side, not in any driver. F8 is filed as flat shading
+  and F7 as N7 (specular add with no vertex specular). For F8, what is measured is the worst pixel, GPU
+  5 250 0 against reference 255 0 0; which vertex supplies the flat colour on each side has not been
+  checked (-a9's correction: an earlier "first vertex" reading was an inference).
+- **The refusals are the device's own limits, on every backend** (-a9, from the code; no Metal count for
+  these runs). Table fog and fog from the specular alpha are the fixed-function path. Cube and volume
+  textures are refused because the resource mirror is 2D-only. Sampling the target being drawn into is
+  refused up front because it is an error in SDL3 GPU. Border and mirror-once addressing are refused
+  because SDL3 GPU has only repeat, mirrored repeat and clamp to edge. The refused program comes from the
+  backend-independent generator.
+- **Lavapipe is installed** on thinkerer (vulkan-swrast 26.2.2, llvmpipe on LLVM 22.1.8), with the PM's
+  approval, and logged in workers.md. `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json` selects it
+  (the loader's debug output confirms only that ICD loads). Without it SDL picks ANV, because SDL ranks CPU
+  devices last. The six selfchecks pass on it, and ffref_gpu's numbers equal ANV's.
+- **-a9's -offscreen** will fall back per platform: SDL's dummy driver plus the Metal hint on Apple, the
+  offscreen driver on Linux.
 
 ## What this cannot see
 
 - The game drawing a frame on Vulkan (`-offscreen` in the game itself): not run. It is the device's
   territory.
-- Any Vulkan other than Mesa ANV on Kaby Lake: no AMD, no NVIDIA, no lavapipe.
+- Any hardware Vulkan other than Mesa ANV on Kaby Lake: no AMD, no NVIDIA. Lavapipe is the one other implementation measured.
 - Presentation to a real window (X11 or Wayland) on Linux.
 - Whether FFReference judgements from Linux captures agree with Metal's. That is -47's later task (3),
   from the capture format.
