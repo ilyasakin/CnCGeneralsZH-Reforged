@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -2484,7 +2485,10 @@ void W3DModelDraw::adjustAnimation(const ModelConditionInfo* prevState, Real pre
 					isCommonMaintainFrameFlagSet(m_curState->m_flags, prevState->m_flags) &&
 					prevAnimFraction >= 0.0)
 			{
-				startFrame = REAL_TO_INT(prevAnimFraction * animHandle->Get_Num_Frames()-1);
+				// getCurrentAnimFraction is frame / (frames - 1), so this is its inverse. EA wrote
+				// fraction * frames - 1, which put every carried-over animation a frame back (upstream #157)
+				// rounded, since frame 5 of 11 comes back as 4.9999995
+				startFrame = REAL_TO_INT(prevAnimFraction * (animHandle->Get_Num_Frames()-1) + 0.5f);
 			}
 
 			m_renderObject->Set_Animation(animHandle, startFrame, m_curState->m_mode);
@@ -2767,11 +2771,12 @@ void W3DModelDraw::handleClientTurretPositioning()
 */
 void W3DModelDraw::handleClientRecoil()
 {
-	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
-	if (!(m_curState->m_validStuff & ModelConditionInfo::BARRELS_VALID))
+	if (!m_curState || !(m_curState->m_validStuff & ModelConditionInfo::BARRELS_VALID))
 	{
 		return;
 	}
+
+	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
 
 	// do recoil, if any
 	for (int wslot = 0; wslot < WEAPONSLOT_COUNT; ++wslot)
@@ -3973,6 +3978,44 @@ void W3DModelDraw::reactToTransformChange( const Matrix3D* oldMtx,
 		}
 	}
 } 
+
+//-------------------------------------------------------------------------------------------------
+/** R1, smooth motion (W3DSmoothMotion.h): on the first render pass after a logic tick, the transform the
+	render object holds now (doDrawModule's, or reactToTransformChange's for a model out of view) becomes
+	the current one, and the tick's verdict - blend, or show it as it is - is decided and counted. */
+void W3DModelDraw::smoothMotionCapture(UnsignedInt clientFrame, Bool marked)
+{
+	if (m_renderObject == NULL)
+		return;
+	m_smoothMotion.capture(m_renderObject->Get_Transform(), m_renderObject, m_renderObject->Is_Hidden() != 0, clientFrame,
+		marked != FALSE);
+}
+
+//-------------------------------------------------------------------------------------------------
+/** R1: just before the scene renders, show the render object `alpha` of the way from its previous logic
+	transform to its current one, when this tick's verdict allows it. */
+void W3DModelDraw::smoothMotionApply(Real alpha)
+{
+	if (m_renderObject == NULL || m_smoothMotion.Model != m_renderObject || m_smoothMotion.Snap != SMOOTH_BLENDED)
+		return;
+	Matrix3D shown;
+	if (SmoothMotion_Blend(m_smoothMotion.Prev, m_smoothMotion.Cur, alpha, shown) != SMOOTH_BLENDED)
+		return;
+	m_renderObject->Set_Transform(shown);
+	m_smoothMotion.Applied = true;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** R1: straight after the render, the logic transform goes back, so picking and anything the logic reads
+	from the render object (ParticleUplinkCannonUpdate's bones) see exactly what they did before. */
+void W3DModelDraw::smoothMotionRestore()
+{
+	if (!m_smoothMotion.Applied)
+		return;
+	m_smoothMotion.Applied = false;
+	if (m_renderObject != NULL && m_smoothMotion.Model == m_renderObject)
+		m_renderObject->Set_Transform(m_smoothMotion.Cur);
+}
 
 //-------------------------------------------------------------------------------------------------
 const ModelConditionInfo* W3DModelDraw::findBestInfo(const ModelConditionFlags& c) const

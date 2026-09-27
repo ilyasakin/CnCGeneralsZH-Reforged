@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -268,7 +269,8 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 				other->isKindOf( KINDOF_FS_FACTORY ) ||
 				other->isKindOf( KINDOF_FS_BASE_DEFENSE ) ||
 				other->isKindOf( KINDOF_FS_TECHNOLOGY ) ||
-				other->isKindOf( KINDOF_REBUILD_HOLE ) )
+				other->isKindOf( KINDOF_REBUILD_HOLE ) ||
+				other->isFactionStructure() )	// supply centers, fakes and internet centers carry none of the four above
 		{
 			playImpactSound(other, other->getPosition());
 			other->kill(); 
@@ -286,6 +288,7 @@ void RailroadBehavior::onCollide( Object *other, const Coord3D *loc, const Coord
 			other->kill();
 			return;
 		}
+		return;	// any other structure is left standing
 	}
 
 	
@@ -572,6 +575,9 @@ void RailroadBehavior::loadTrackData( void )
 	m_track->m_length = 0.0f;
 	Waypoint *scanner = anchorWaypoint;
 	Real distFromTo = 0.0f;
+	std::set<WaypointID> visited;	// every waypoint already on the track
+	if ( scanner )
+		visited.insert( scanner->getID() );
 
 
 	//Let's start buliding our own track data from the waypoint data we find
@@ -640,6 +646,12 @@ void RailroadBehavior::loadTrackData( void )
 			m_track->m_isLooping = TRUE;
 			break; // it must be a looping track. Cool.
 		}
+
+		// A path that loops back to some waypoint other than the anchor never met the test above and
+		// grew the track until memory ran out: the map attached to upstream #1324 crashed on load.
+		// The track ends where it would start repeating.
+		if ( scanner && !visited.insert( scanner->getID() ).second )
+			break;
 	}
 
 }  // end loadTrackData

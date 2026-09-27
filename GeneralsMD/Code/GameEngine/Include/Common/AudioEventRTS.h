@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -147,7 +148,8 @@ public:
 	void setPlayingAudioIndex( Int pai )  { m_playingAudioIndex = pai; };
 
 	Bool getUninterruptable( ) const { return m_uninterruptable; }
-	void setUninterruptable( Bool uninterruptable ) { m_uninterruptable = uninterruptable; } 
+	void setUninterruptable( Bool uninterruptable ) { m_uninterruptable = uninterruptable; }
+	void setSkipAttack( Bool skipAttack ) { m_skipAttack = skipAttack; }	///< start on the loop itself, for a loop picked up again mid-way
 
 
 	// This will retrieve the appropriate position based on type.	
@@ -187,6 +189,7 @@ protected:
 	Bool m_shouldFade;							///< This should fade in or out (if it is starting or stopping)
 	Bool m_isLogicalAudio;					///< Should probably only be true for scripted sounds
 	Bool m_uninterruptable;
+	Bool m_skipAttack;
 
 	// Playing attributes
 	Real m_pitchShift;							///< Pitch shift that should occur on this piece of audio

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -131,6 +132,8 @@ public:
 	Int getDisguisedPlayerIndex() const { return m_disguiseAsPlayerIndex; }
 	const ThingTemplate *getDisguisedTemplate() { return m_disguiseAsTemplate; }
 	void markAsDetected( UnsignedInt numFrames = 0 );
+	void keepDetected( UnsignedInt numFrames );	///< extend the detection only: no disguise loss, no wake-ups
+
 	void disguiseAsObject( const Object *target ); //wrapper function for ease.
 	Real getFriendlyOpacity() const;
 	UnsignedInt getStealthDelay() const { return getStealthUpdateModuleData()->m_stealthDelay; }

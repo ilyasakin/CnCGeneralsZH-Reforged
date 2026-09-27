@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port: moved here from GeneralsMD/Code/GameEngineDevice/Include/W3DDevice/GameClient/WorldHeightMap.h; see NOTICE.md and the git history.
 
 // FILE: WorldHeightMapData.h /////////////////////////////////////////////////////////////////////
 // Desc:   A map's terrain as the simulation reads it: heights, cells, cliff bits, and the chunks the

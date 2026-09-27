@@ -15,6 +15,7 @@
 #include "test_harness.h"
 
 #include <atomic>	/* the B14 thread tests below share flags between threads */
+#include <chrono>	/* mutexclass_timed_acquire_gives_up_and_says_so times its wait finer than Clock_Milliseconds_Coarse */
 
 #include "global.h"       /* UINT4 / PROTO_LIST, which md5.h assumes */
 #include "realcrc.h"
@@ -433,6 +434,21 @@ TEST(lcw_round_trip)
 		CHECK_EQ(out_len, (int)sizeof(src));
 		CHECK_MEM(src, back, sizeof(src));
 	}
+}
+
+// A long run (0xFE) that ends the output exactly.  From an aligned start the run writes 4 bytes to reach
+// alignment and then its aligned part a word at a time; 16 bytes leave 12 for the words, which is 4 mod 8,
+// where the words used to go in pairs and the last pair wrote 4 bytes past the run - here past the output,
+// into the canaries.  No sanitizer needed: the canaries are the check.
+TEST(lcw_long_run_stays_inside_the_output)
+{
+	static const unsigned char stream[] = { 0xFE, 16, 0, 0x5A, 0x80 };
+	alignas(16) unsigned char out[32];
+	memset(out, 0xC3, sizeof(out));
+	int out_len = LCW_Uncomp(stream, out, 16);
+	CHECK_EQ(out_len, 16);
+	for (int i = 0; i < 16; ++i) CHECK_EQ((int)out[i], 0x5A);
+	for (int i = 16; i < 32; ++i) CHECK_EQ((int)out[i], 0xC3);
 }
 
 TEST(lcw_compresses_repetitive_data)
@@ -1806,12 +1822,17 @@ TEST(mutexclass_timed_acquire_gives_up_and_says_so)
 	worker.Execute();
 	while (!worker.Held) { ThreadClass::Sleep_Ms(1); }
 
-	unsigned start = Clock_Milliseconds_Coarse();
+	/* Timed with steady_clock (QueryPerformanceCounter on MSVC), not Clock_Milliseconds_Coarse: on Windows that
+	   is GetTickCount, in 15.625 ms ticks at the default timer resolution, and a 60 ms wait reads as 46.9 ms
+	   whenever only three tick boundaries fall inside it.  It failed the integration gate once (2026-09-27);
+	   on the VM, 200 such waits read as low as 47 ms by GetTickCount and never under 61 ms by steady_clock.
+	   The other coarse-clock bounds in this file allow 50 ms or more. */
+	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 	{
 		MutexClass::LockClass timed(m, 60);
 		CHECK(timed.Failed());
 	}
-	CHECK((Clock_Milliseconds_Coarse() - start) >= 50);
+	CHECK(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() >= 50);
 
 	worker.Stop(1000);
 }

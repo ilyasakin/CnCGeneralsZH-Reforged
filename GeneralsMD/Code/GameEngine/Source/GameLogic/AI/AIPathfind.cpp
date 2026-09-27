@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -545,9 +546,14 @@ void Path::appendNode( const Coord3D *pos, PathfindLayerEnum layer )
 	node->setPosition( pos );
 	node->setLayer(layer);
 
-	m_path = node->appendToList( m_path );
+	// m_pathTail is always the last node of a non-empty m_path, so append there rather than
+	// walking the whole list to find the end (appendToList) for every node added.
+	if (m_path == NULL)
+		m_path = node;
+	else
+		m_pathTail->append( node );
 
-	if (m_isOptimized && m_pathTail) 
+	if (m_isOptimized && m_pathTail)
 	{
 		m_pathTail->setNextOptimized(node);
 	}

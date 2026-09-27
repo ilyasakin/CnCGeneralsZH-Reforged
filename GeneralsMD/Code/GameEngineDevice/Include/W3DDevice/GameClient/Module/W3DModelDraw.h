@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -51,6 +52,7 @@ public:
 
 #else
 #include "WW3D2/rendobj.h"
+#include "W3DDevice/GameClient/W3DSmoothMotion.h"
 #endif
 #include "Common/SparseMatchFinder.h"
 #include "GameClient/ParticleSys.h"
@@ -375,6 +377,11 @@ public:
 	virtual void reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle);
 	virtual void reactToGeometryChange() { }
 
+	// R1, smooth motion (W3DSmoothMotion.h): W3DDisplay::draw's capture, blend and restore.
+	virtual void smoothMotionCapture(UnsignedInt clientFrame, Bool marked);
+	virtual void smoothMotionApply(Real alpha);
+	virtual void smoothMotionRestore();
+
 	// this method must ONLY be called from the client, NEVER From the logic, not even indirectly.
 	virtual Bool clientOnly_getRenderObjInfo(Coord3D* pos, Real* boundingSphereRadius, Matrix3D* transform) const;
 	virtual Bool clientOnly_getRenderObjBoundBox(OBBoxClass * boundbox) const;
@@ -516,6 +523,7 @@ private:
 	Bool													m_hideHeadlights;
 	Bool													m_pauseAnimation;
 	Int														m_animationMode;
+	SmoothMotionTrack							m_smoothMotion;										///< R1: the render object's last two logic transforms
 
 	void adjustAnimation(const ModelConditionInfo* prevState, Real prevAnimFraction);
 	Real getCurrentAnimFraction() const;

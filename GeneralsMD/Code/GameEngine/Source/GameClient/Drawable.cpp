@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -474,6 +475,11 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	// Added By Sadullah Nader
 	// Initialization missing and needed
 	m_nextDrawable = NULL;
+	m_smoothPrevPos.zero();
+	m_smoothCurPos.zero();
+	m_smoothFrame = 0xFFFFFFFFu;	// never captured
+	m_smoothHavePrev = FALSE;
+	m_motionDiscontinuity = FALSE;
 	m_prevDrawable = NULL;
 	//
 
@@ -4977,11 +4983,44 @@ void Drawable::setInstanceMatrix( const Matrix3D *instance )
 
 
 //-------------------------------------------------------------------------------------------------
+/** R1, smooth motion: at the start of a render pass, after a new logic tick, move the last position into
+	m_smoothPrevPos and take the current one.  The blend is allowed only across one tick, with no marked
+	discontinuity and no step longer than a unit could travel (the same 60 world units as the models'
+	rule, W3DSmoothMotion.h's SMOOTH_SNAP_DISTANCE_UNITS). */
+void Drawable::smoothMotionCapturePosition( UnsignedInt clientFrame )
+{
+	if (clientFrame == m_smoothFrame)
+		return;
+	const Bool nextTick = m_smoothFrame != 0xFFFFFFFFu && clientFrame == m_smoothFrame + 1;
+	m_smoothPrevPos = m_smoothCurPos;
+	m_smoothCurPos = *getPosition();
+	const Real dx = m_smoothCurPos.x - m_smoothPrevPos.x;
+	const Real dy = m_smoothCurPos.y - m_smoothPrevPos.y;
+	const Real dz = m_smoothCurPos.z - m_smoothPrevPos.z;
+	const Real SNAP_DISTANCE = 60.0f;
+	m_smoothHavePrev = nextTick && !m_motionDiscontinuity && (dx * dx + dy * dy + dz * dz) <= SNAP_DISTANCE * SNAP_DISTANCE;
+	m_smoothFrame = clientFrame;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** R1: where the picture shows this drawable, `alpha` of the way from its previous logic position to its
+	current one.  The logic position, and FALSE, when there is no blend. */
+Bool Drawable::getSmoothMotionPosition( Real alpha, Coord3D *pos ) const
+{
+	*pos = *getPosition();
+	if (!m_smoothHavePrev)
+		return FALSE;
+	pos->x = m_smoothPrevPos.x + (m_smoothCurPos.x - m_smoothPrevPos.x) * alpha;
+	pos->y = m_smoothPrevPos.y + (m_smoothCurPos.y - m_smoothPrevPos.y) * alpha;
+	pos->z = m_smoothPrevPos.z + (m_smoothCurPos.z - m_smoothPrevPos.z) * alpha;
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** 
  * Return the Drawable's world transform.
  * If this Drawable is attached to an Object, return the Object's transform instead.
  */
-//-------------------------------------------------------------------------------------------------
 const Matrix3D *Drawable::getTransformMatrix( void ) const
 {
 	const Object *obj = getObject();
@@ -6216,6 +6255,19 @@ void TintEnvelope::setDecayFrames( UnsignedInt frames )
 	Real recipFrames = ( -1.0f ) / (Real)MAX(1,frames);
 	m_decayRate.Set( m_peakColor );
 	m_decayRate.Scale( Vector3(recipFrames, recipFrames, recipFrames) );
+}
+
+//-------------------------------------------------------------------------------------------------
+void TintEnvelope::release(void)
+{
+	/* play() aims the decay at the peak it was given, which is only right when the tint got there.
+		 An EMP running out under a Frenzy starts the frenzy red from the disabled grey, and a frenzy
+		 that ends before that attack finishes decayed the grey along the red: away from zero, into a
+		 cyan that never met the rest test. Decay from the colour we are at, at the same pace. */
+	const Real peakLength = m_peakColor.Length();
+	if (peakLength > FADE_RATE_EPSILON)
+		m_decayRate = m_currentColor * ( -m_decayRate.Length() / peakLength );
+	m_envState = ENVELOPE_STATE_DECAY;
 }
 
 //-------------------------------------------------------------------------------------------------

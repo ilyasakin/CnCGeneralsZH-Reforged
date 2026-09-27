@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -72,7 +73,9 @@ void LANAPI::handleRequestLocations( LANMessage *msg, UnsignedInt senderIP )
 				reply.GameInfo.gameName[g_lanGameNameLength] = 0;
 				reply.GameInfo.inProgress = m_currentGame->isGameInProgress();
 
-				sendMessage(&reply);
+				// Empty when the room's options cannot fit the packet at all; announce nothing then.
+				if (!gameOpts.isEmpty())
+					sendMessage(&reply);
 			}
 			else
 			{
@@ -197,8 +200,10 @@ void LANAPI::handleRequestGameInfo( LANMessage *msg, UnsignedInt senderIP )
 			LANMessage reply;
 			fillInLANMessage( &reply );
 			reply.LANMessageType = LANMessage::MSG_GAME_ANNOUNCE;
-			
+
 			AsciiString gameOpts = GameInfoToAsciiString(m_currentGame);
+			if (gameOpts.isEmpty())
+				return;
 			strlcpy(reply.GameInfo.options,gameOpts.str(),ARRAY_SIZE(reply.GameInfo.options));
 			WideCharNCpy(reply.GameInfo.gameName, m_currentGame->getName().str(), g_lanGameNameLength);
 			reply.GameInfo.gameName[g_lanGameNameLength] = 0;

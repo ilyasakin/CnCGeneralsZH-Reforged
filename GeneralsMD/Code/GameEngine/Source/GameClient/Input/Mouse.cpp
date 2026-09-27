@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -84,6 +85,7 @@ static const FieldParse TheMouseCursorFieldParseTable[] =
 	{ "Frames",							INI::parseInt,	NULL,	offsetof( CursorInfo, numFrames ) },
 	{ "FPS",							INI::parseReal, NULL, offsetof( CursorInfo, fps)},
 	{ "Directions",							INI::parseInt,	NULL,	offsetof( CursorInfo, numDirections ) },
+	{ NULL, NULL, NULL, 0 }
 };
 
 static const FieldParse TheMouseFieldParseTable[] = 
@@ -109,7 +111,7 @@ static const FieldParse TheMouseFieldParseTable[] =
 	{ "DragTolerance",							INI::parseUnsignedInt,	NULL,		offsetof( Mouse, m_dragTolerance) },
 	{ "DragTolerance3D",						INI::parseUnsignedInt,	NULL,		offsetof( Mouse, m_dragTolerance3D) },
 	{ "DragToleranceMS",						INI::parseUnsignedInt,	NULL,		offsetof( Mouse, m_dragToleranceMS) },
-
+	{ NULL, NULL, NULL, 0 }
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

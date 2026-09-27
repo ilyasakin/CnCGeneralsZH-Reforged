@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -405,6 +406,7 @@ public:
 	Bool m_buildPlacementShadows;		///< whether that structure casts a shadow while it rides the cursor
 	Bool m_zoomToCursor;				///< the mouse wheel zooms toward whatever the cursor is over
 	Bool m_isometricCamera;				///< the tactical view from far off down a narrow cone, near enough orthographic
+	Bool m_smoothMotion;				///< R1: models shown between their last two logic states each render frame (W3DSmoothMotion.h)
 	Bool m_formationDrag;				///< dragging the right button spreads the selection along the line drawn
 	Bool m_showAllyCursors;				///< in a network game, draw where each ally's mouse is pointing
 	Bool m_chromaLighting;				///< put the state of the match on Razer hardware

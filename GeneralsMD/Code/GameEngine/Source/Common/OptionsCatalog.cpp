@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 // OptionsCatalog.cpp
 //
@@ -58,6 +59,7 @@ OPTION_BOOL_ACCESSORS( m_edgeScrollInWindowedMode )
 OPTION_BOOL_ACCESSORS( m_snapCameraRotateTo45 )
 OPTION_BOOL_ACCESSORS( m_zoomToCursor )
 OPTION_BOOL_ACCESSORS( m_isometricCamera )
+OPTION_BOOL_ACCESSORS( m_smoothMotion )
 OPTION_BOOL_ACCESSORS( m_formationDrag )
 OPTION_BOOL_ACCESSORS( m_showAllyCursors )
 OPTION_BOOL_ACCESSORS( m_chromaLighting )
@@ -234,6 +236,13 @@ const OptionDef TheOptionCatalog[] =
 	{ "IsometricCamera",					OPT_WND( "CheckIsometricCamera" ), "GUI:IsometricCamera",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_isometricCamera, set_m_isometricCamera },
+
+	// R1: models drawn between their last two logic states on every render frame, so motion is smooth
+	// on a panel faster than the 30 Hz logic.  The picture only, one logic tick behind; never the game.
+	// Its default is GlobalData's: on off Windows, off on Windows.  On Options > Display.
+	{ "SmoothMotion",							OPT_WND( "CheckSmoothMotion" ), "GUI:SmoothMotion",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_smoothMotion, set_m_smoothMotion },
 
 	// A right drag over the ground spreads the selection along the line drawn instead of sending
 	// everyone to one point.  On by default - the right button stopped scrolling, so the drag was

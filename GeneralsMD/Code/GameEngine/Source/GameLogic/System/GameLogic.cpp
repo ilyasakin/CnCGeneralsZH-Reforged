@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -579,6 +580,10 @@ static void placeNetworkBuildingsForPlayer(Int slotNum, const GameSlot *pSlot, P
 		return;
 
 	pPlayer->onStructureCreated(NULL, conYard);
+	// placeObjectAtPosition made it finished, so joining the team already counted its power, and
+	// onStructureConstructionComplete counts it again: a command center given EnergyProduction
+	// started every player at twice that, and the spare half stayed after it was sold
+	conYard->friend_adjustPowerForPlayer(FALSE);
 	pPlayer->onStructureConstructionComplete(NULL, conYard, FALSE);
 
 	//pos.x -= conYard->getGeometryInfo().getBoundingSphereRadius()/2;
@@ -1293,25 +1298,14 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	Bool isSkirmishOrSkirmishReplay = FALSE;
 	if (game)
 	{
+		// Random color, position and faction are drawn off the logical seed.  A restarted game puts
+		// the pre-draw values back so the same draws happen again (see GameInfo::handleOriginalSetups).
+		if (!loadingSaveGame)
+			game->handleOriginalSetups();
+
 		for (Int i=0; i<MAX_SLOTS; ++i)
 		{
 			GameSlot *slot = game->getSlot(i);
-			if (!loadingSaveGame) {
-				if (slot->hasSavedOriginalSetup())
-				{
-					DEBUG_ASSERTCRASH(m_gameMode == GAME_SKIRMISH, ("Expected GAME_SKIRMISH but got %d", m_gameMode));
-
-					// Random color, position and faction are drawn off the logical seed.  A restarted
-					// game puts the pre-draw values back so the same draws happen again.
-					slot->setColor(slot->getOriginalColor());
-					slot->setStartPos(slot->getOriginalStartPos());
-					slot->setPlayerTemplate(slot->getOriginalPlayerTemplate());
-				}
-				else
-				{
-					slot->saveOriginalSetup();
-				}
-			}
 			if (slot->isAI())
 			{
 				isSkirmishOrSkirmishReplay = TRUE;
@@ -1321,6 +1315,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	} else {
 		if (m_gameMode == GAME_SINGLE_PLAYER)	{
 			if (TheSkirmishGameInfo) {
+				if (TheGameInfo == TheSkirmishGameInfo)
+					TheGameInfo = NULL;	// or it is left pointing at freed memory
 				delete TheSkirmishGameInfo;
 				TheSkirmishGameInfo = NULL;
 			}
@@ -1534,9 +1530,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 				}
 			}
 
-			AsciiString slotNameAscii;
-			slotNameAscii.translate(slot->getName());
-			if (slot->isHuman() && game->getSlotNum(slotNameAscii) == game->getLocalSlotNum()) {
+			// by index: the name went through an ASCII translate and back, which no name with a
+			// letter outside Latin-1 survives, so such a player started with the host's camera
+			if (slot->isHuman() && i == game->getLocalSlotNum()) {
 				localSlot = i;
 			}
 			TheSidesList->addSide(&d);
@@ -2557,12 +2553,22 @@ void GameLogic::loadMapINI( AsciiString mapName )
 	*extension = 0;
 
 
+	//
+	// A map's rules file comes with the map, and a mod map with a block this game does not know
+	// (a DeleteKey, say) threw out of here and took the whole game down at the loading screen.
+	// Keep what parsed up to the bad line and play on: every machine in a match has the same file,
+	// the map CRC sees to that, so each stops at the same line and the rules still agree.
+	//
 	snprintf(fullFledgeFilename, _MAX_PATH, "%s\\map.ini", filename); fullFledgeFilename[_MAX_PATH-1] = 0;
 	if (TheFileSystem->doesFileExist(fullFledgeFilename)) {
 		DEBUG_LOG(("Loading map.ini\n"));
 		INI ini;
 		ini.setSkipUnknownFields( TRUE );
-		ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, NULL );
+		try {
+			ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, NULL );
+		} catch (...) {
+			DEBUG_LOG(("%s does not parse, the rest of it is ignored\n", fullFledgeFilename));
+		}
 	}
 
 	snprintf(fullFledgeFilename, _MAX_PATH, "%s\\solo.ini", filename); fullFledgeFilename[_MAX_PATH-1] = 0;
@@ -2570,9 +2576,20 @@ void GameLogic::loadMapINI( AsciiString mapName )
 		DEBUG_LOG(("Loading solo.ini\n"));
 		INI ini;
 		ini.setSkipUnknownFields( TRUE );
-		ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, NULL );
+		try {
+			ini.load( AsciiString(fullFledgeFilename), INI_LOAD_CREATE_OVERRIDES, NULL );
+		} catch (...) {
+			DEBUG_LOG(("%s does not parse, the rest of it is ignored\n", fullFledgeFilename));
+		}
 	}
-	
+
+	// A weapon's projectile and OCLs are names until the store's post-process pass turns them into
+	// pointers, and that pass ran once at startup, before any map. A weapon a map.ini made or edited
+	// kept the names only, and every unit carrying it refused to fire.
+	TheWeaponStore->postProcessLoad();
+	// the same for a command button's picture, which the bar looked up once at startup
+	TheControlBar->postProcessCommands();
+
 	// No error here. There could've just *not* been a map.ini file.
 
 	// now look for a string file
@@ -5382,7 +5399,10 @@ void GameLogic::initTimeOutValues( void )
 {
 	if (!TheNetwork)
 		return;
-	for(Int i = 0; i < TheNetwork->getNumPlayers(); ++i)
+	// every slot: these are indexed by slot, and counting players left a human in a slot past the
+	// head count at 0, timed out before his first progress message, so whoever loaded first could
+	// start the match without him
+	for(Int i = 0; i < MAX_SLOTS; ++i)
 	{
 		m_progressCompleteTimeout[i] = Clock_Milliseconds();
 	}

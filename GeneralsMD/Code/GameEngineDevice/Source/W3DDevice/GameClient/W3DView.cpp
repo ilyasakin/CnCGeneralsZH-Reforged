@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -86,6 +87,7 @@
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/GameClient/W3DView.h"
+#include "W3DDevice/GameClient/W3DSmoothMotion.h"
 #include "d3dx9math.h"
 #include "W3DDevice/GameClient/W3DShaderManager.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
@@ -677,51 +679,22 @@ void W3DView::stopDoingScriptedCamera( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-// Where a descending ray from the eye first meets the terrain, walked a cell at a time and then
-// halved down to a tenth of a unit.  Terrain never goes below zero, so a ray that gets there
-// without meeting it stops there.  The terrain's own Cast_Ray tests every triangle under the
-// ray's bounding rectangle, which for a shallow ray across the screen is thousands of them.
-static Vector3 groundUnderRay( const Vector3& eye, const Vector3& direction )
-{
-	const Real step = MAP_XY_FACTOR;
-	const Int halvings = 7;
-	Real below = 0.0f;
-	Real above = 0.0f;
-	for( ;; )
-	{
-		const Vector3 point = eye + direction * below;
-		if( point.Z <= 0.0f || point.Z <= TheTerrainLogic->getGroundHeight( point.X, point.Y ) )
-			break;
-		above = below;
-		below += step;
-	}
-	for( Int halving = 0; halving < halvings; ++halving )
-	{
-		const Real middle = ( above + below ) * 0.5f;
-		const Vector3 point = eye + direction * middle;
-		if( point.Z <= TheTerrainLogic->getGroundHeight( point.X, point.Y ) )
-			below = middle;
-		else
-			above = middle;
-	}
-	return eye + direction * below;
-}
-
-//-------------------------------------------------------------------------------------------------
 // The isometric camera's frame, fitted to what the perspective camera sees.  The perspective
-// frame's four corners, the middles of its four edges and its centre are cast onto the terrain,
-// and the isometric frame is the one that puts those nine points closest to the same places on
+// frame's four corners, the middles of its four edges and its centre are cast onto a flat plane at
+// the view's ground level, and the isometric frame is the one that puts those nine points closest to the same places on
 // its own screen, measured in world units.  An orthographic frame is a rectangle on the view plane
 // and the perspective one lands on the ground as a trapezoid, so the corners cannot all meet: the
 // fit leaves the perspective frame a little more at the far corners and the isometric one the
 // same amount more at the near corners, and neither camera reaches further than the other.  The
-// heading is the player's; the fit picks the look-at point, the width and the elevation.
+// heading is the player's; the fit picks the look-at point, the width and the elevation.  The
+// plane is flat on purpose: cast onto the terrain, a hill passing under the frame changed the
+// width and the elevation, and the picture jumped in and out while the player panned over it.
 class IsometricFrameFit
 {
 public:
 	enum { POINT_COUNT = 9 };
 
-	IsometricFrameFit( const Matrix3D& perspective, Real tanHalfWidth, Real heightOverWidth )
+	IsometricFrameFit( const Matrix3D& perspective, Real groundLevel, Real tanHalfWidth, Real heightOverWidth )
 		: m_heightOverWidth( heightOverWidth )
 	{
 		// a corner ray at the horizon would reach no ground at all
@@ -750,7 +723,7 @@ public:
 					flat.Normalize();
 					direction = flat * cos( shallowestRay ) + Vector3( 0.0f, 0.0f, -sin( shallowestRay ) );
 				}
-				const Vector3 ground = groundUnderRay( eye, direction );
+				const Vector3 ground = eye + direction * ( ( groundLevel - eye.Z ) / direction.Z );
 				m_screenX[ point ] = (Real)column;
 				m_screenY[ point ] = (Real)row;
 				m_acrossScreen[ point ] = Vector3::Dot_Product( ground, m_right );
@@ -940,7 +913,7 @@ void W3DView::setCameraTransform( void )
 		// the tallest thing standing on the frame's ground, above and below the depth it spans
 		const Real depthMargin = 1000.0f;
 
-		const IsometricFrameFit fit(cameraTransform, tan(perspectiveFov * 0.5f), (Real)getHeight() / (Real)getWidth());
+		const IsometricFrameFit fit(cameraTransform, m_groundLevel, tan(perspectiveFov * 0.5f), (Real)getHeight() / (Real)getWidth());
 		const Vector3 target = fit.getTarget();
 		const Real distance = fit.getHalfWidth() / tan(isometricFov * 0.5f);
 		const Real depthSpread = fit.getDepthSpread();
@@ -1511,7 +1484,13 @@ void W3DView::update(void)
 	{
 		followFactor = -1;
 	}
-	if (stepTime && cameraLock != INVALID_ID)
+	// R1, smooth motion: with it on, the lock follows on every render frame, towards the drawable's
+	// blended position, each per-step factor scaled to this frame's length (1-(1-f)^steps); with it off,
+	// 30 Hz steps and the factors as they were.
+	const Bool smoothLock = TheSmoothMotionActive;
+	const Real lockSteps = smoothLock ? (Real)waypointElapsedMs / (Real)TheW3DFrameLengthInMsec : 1.0f;
+	auto perStep = [smoothLock, lockSteps](Real f) -> Real { return smoothLock ? 1.0f - powf(1.0f - f, lockSteps) : f; };
+	if ((smoothLock ? lockSteps > 0.0f : (stepTime != 0)) && cameraLock != INVALID_ID)
 	{
 		m_doingMoveCameraOnWaypointPath = false;
 		m_CameraArrivedAtWaypointOnPathFlag = false;
@@ -1545,7 +1524,7 @@ void W3DView::update(void)
 			if (followFactor<0) {
 				followFactor = 0.05f;
 			} else {
-				followFactor += 0.05f;
+				followFactor += 0.05f * lockSteps;
 				if (followFactor>1.0f) followFactor = 1.0f;
 			}
 			if (getCameraLockDrawable() != NULL)
@@ -1564,6 +1543,14 @@ void W3DView::update(void)
 					// this method must ONLY be called from the client, NEVER From the logic, not even indirectly.
 					if (cameraLockDrawable->clientOnly_getFirstRenderObjInfo(&pos, &boundingSphereRadius, &transform))
 					{
+						Coord3D shown;
+						if (smoothLock && cameraLockDrawable->getSmoothMotionPosition(TheSmoothMotionAlpha, &shown))
+						{
+							const Coord3D *logicPos = cameraLockDrawable->getPosition();
+							pos.x += shown.x - logicPos->x;
+							pos.y += shown.y - logicPos->y;
+							pos.z += shown.z - logicPos->z;
+						}
 						Vector3 zaxis(0,0,1);
 
 						Vector3 objPos;
@@ -1581,7 +1568,7 @@ void W3DView::update(void)
 
 						Vector3 tranDiff = (camtran - prevCamTran);	//vector old position to new position.
 
-						camtran = prevCamTran + tranDiff * 0.1f;	//slowly move camera to new position.
+						camtran = prevCamTran + tranDiff * perStep(0.1f);	//slowly move camera to new position.
 
 						Matrix3D camXForm;
 						camXForm.Look_At(camtran,objPos,0);
@@ -1593,6 +1580,8 @@ void W3DView::update(void)
 			}
 			else
 			{	Coord3D objpos = *cameraLockObj->getPosition();
+				if (smoothLock && cameraLockObj->getDrawable() != NULL)
+					cameraLockObj->getDrawable()->getSmoothMotionPosition(TheSmoothMotionAlpha, &objpos);
 				Coord3D curpos = *getPosition();
 				// don't "snap" directly to the pos, but move there smoothly.
 				Real snapThreshSqr = sqr(TheGlobalData->m_partitionCellSize);
@@ -1616,13 +1605,13 @@ void W3DView::update(void)
 							Real ratio = 1.0f - snapThreshSqr/curDistSqr;
 							
 							// move halfway there.
-							curpos.x += dx*ratio*0.5f;
-							curpos.y += dy*ratio*0.5f;
+							curpos.x += dx*ratio*perStep(0.5f);
+							curpos.y += dy*ratio*perStep(0.5f);
 						}
 						else
 						{
 							// we're inside our 'play' tolerance.  Move slowly to the obj
-							Real ratio = 0.01f * m_lockDist;
+							Real ratio = perStep(0.01f * m_lockDist);
 							Real dx = objpos.x-curpos.x;
 							Real dy = objpos.y-curpos.y;
 							curpos.x += dx*ratio;
@@ -1631,8 +1620,8 @@ void W3DView::update(void)
 					}
 					else
 					{
-						curpos.x += dx*followFactor;
-						curpos.y += dy*followFactor;
+						curpos.x += dx*perStep(followFactor);
+						curpos.y += dy*perStep(followFactor);
 					}
 				}
 				if (!(TheScriptEngine->isTimeFrozenDebug() || TheScriptEngine->isTimeFrozenScript()) && !TheGameLogic->isGamePaused()) {
@@ -1659,7 +1648,7 @@ void W3DView::update(void)
 						}
 						else
 						{
-							m_angle += diff * 0.1f;
+							m_angle += diff * perStep(0.1f);
 						}
 						normAngle(m_angle);
 					}
@@ -1746,7 +1735,13 @@ void W3DView::update(void)
 	// highest of the five samples jumped, and the settle went the other way.  Zoomed in on uneven
 	// ground that never stopped, and the camera rocked forward and back.
 	//
-	m_terrainHeightUnderCamera = m_zoomAnchorValid ? m_zoomAnchorTerrainHeight : getHeightAroundPos(m_pos.x, m_pos.y);
+	// The isometric camera holds its height over the view's ground level instead, for the reason
+	// IsometricFrameFit gives: following the hills made the picture grow and shrink under the pan.
+	//
+	if (TheGlobalData->m_isometricCamera)
+		m_terrainHeightUnderCamera = m_groundLevel;
+	else
+		m_terrainHeightUnderCamera = m_zoomAnchorValid ? m_zoomAnchorTerrainHeight : getHeightAroundPos(m_pos.x, m_pos.y);
 	m_currentHeightAboveGround = m_cameraOffset.z * m_zoom - m_terrainHeightUnderCamera;
 	const Real zoomBeforeSettle = m_zoom;
 	//

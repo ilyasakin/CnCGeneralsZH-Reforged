@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -1336,8 +1337,9 @@ Int parseStats(char *args[], int num)
 {
 	if (TheWritableGlobalData && num > 1)
 	{
-		TheWritableGlobalData->m_dumpStatsAtInterval = TRUE;
 		TheWritableGlobalData->m_statsInterval  = atoi(args[1]);
+		// W3DDisplay takes the frame modulo this; -stats 0 or a word divided by zero
+		TheWritableGlobalData->m_dumpStatsAtInterval = TheWritableGlobalData->m_statsInterval > 0;
 	}
 	return 2;
 }

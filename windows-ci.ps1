@@ -1,3 +1,18 @@
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <#
 .SYNOPSIS
   The Windows check for a merge, in one command: build, the ctest suite, the GPU tests, and E1's replay CRCs.
@@ -181,12 +196,21 @@ if ($Bundle -ne "" -or $Ref -ne "") {
 if ($CheckedOut -ne "") { $summary += "checked out: $CheckedOut" }
 
 if (-not $SkipBuild) {
+	# The last build's exe goes first: a build that fails must leave nothing the desktop part could run.
+	Remove-Item (Join-Path $RunDir "generals.exe") -ErrorAction SilentlyContinue
 	Push-Location $Root
 	cmd /c "build.bat $Config < NUL" | Out-Host
 	$built = $LASTEXITCODE
 	Pop-Location
 	$summary += "build: " + $(if ($built -eq 0) { "ok" } else { $failed = $true; "FAILED (exit $built)" })
-	if ($built -ne 0) { $summary | ForEach-Object { Write-Host $_ }; exit 1 }
+	if ($built -ne 0) {
+		$summary += "ctest, GPU tests: not run (build failed)"
+		if ($DataDir -ne "") { $summary += "E1: not run (build failed)" }
+		Write-Host ""
+		$summary | ForEach-Object { Write-Host $_ }
+		Write-Host "WINDOWS CHECK FAILED"
+		exit 1
+	}
 }
 $tools = Get-CtestExe
 if ($DataDir -ne "") { & $tools.CMake -S (Join-Path $Root "GeneralsMD\Code") -B $Build "-DZH_GAME_DATA=$DataDir" | Out-Null }

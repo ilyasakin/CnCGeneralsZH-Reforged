@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -277,7 +278,9 @@ Bool GetLocalChatConnectionAddress(AsciiString serverName, UnsignedShort serverP
 	** Set up the bind list.
 	*/
 	bind_ptr->name.idLength = ARRAY_SIZE(mib_ii_name);
-	bind_ptr->name.ids = mib_ii_name;
+	// the heap copy, not the stack array: every GETNEXT frees the name it was handed and puts the
+	// next one in its place, and freeing mib_ii_name corrupted the heap on the way into the lobby
+	bind_ptr->name.ids = mib_ii_name_ptr;
 	bind_list_ptr->list = bind_ptr;
 	bind_list_ptr->len = 1;
 
@@ -399,9 +402,10 @@ Bool GetLocalChatConnectionAddress(AsciiString serverName, UnsignedShort serverP
 		}
 	}
 
+	// the name is the last one the query allocated; mib_ii_name_ptr went with the first GETNEXT
+	SnmpUtilMemFreePtr(bind_ptr->name.ids);
 	SnmpUtilMemFreePtr(bind_list_ptr);
 	SnmpUtilMemFreePtr(bind_ptr);
-	SnmpUtilMemFreePtr(mib_ii_name_ptr);
 
 	DEBUG_LOG(("Got %d connections in list, parsing...\n", connectionVector.size()));
 

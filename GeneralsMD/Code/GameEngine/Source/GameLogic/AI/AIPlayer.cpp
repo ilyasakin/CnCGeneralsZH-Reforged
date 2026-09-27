@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -51,6 +52,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/AIPlayer.h"
+#include "GameClient/Drawable.h"
 #include "GameLogic/SidesList.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
@@ -695,7 +697,9 @@ void AIPlayer::queueSupplyTruck( void )
 							{
 								// This thinks he is a gatherer, but doesn't have a preferred dock id.
 								Object *center = TheGameLogic->findObjectByID(info->getObjectID());
-								if (center) {
+								// a GLA building that died leaves a rebuild hole in its build list slot, and a
+								// hole is no dock: the gatherer drove to it and stood there
+								if (center && !center->isKindOf(KINDOF_REBUILD_HOLE)) {
 									info->setCurrentGatherers(info->getCurrentGatherers()+1);
 									// Note - although this is the ai, we are sending in CMD_FROM_PLAYER.
 									// This causes the dock object to stick in the docking interface.
@@ -1042,6 +1046,10 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 		bldgName.concat(" - Dozer unable to reach building.  Teleporting.");
 		TheScriptEngine->AppendDebugMessage(bldgName, false);
 		dozer->setPosition(&pos);
+		// R1, smooth motion: a teleport, not travel - the picture shows the new place at once.  A flag on the
+		// client's drawable, which nothing in the logic reads.
+		if (dozer->getDrawable() != NULL)
+			dozer->getDrawable()->markMotionDiscontinuity();
 	}
 
 	Object *bldg = TheBuildAssistant->buildObjectNow( dozer, 

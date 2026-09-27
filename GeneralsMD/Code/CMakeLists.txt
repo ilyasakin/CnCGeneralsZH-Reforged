@@ -262,6 +262,20 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   # signal's context, and on Linux it takes backtrace(), which unwinds by the .eh_frame -fexceptions
   # keeps, not by frame pointers.
   add_compile_options(-g)
+  # ZH_SANITIZE: a sanitizer build, for finding bugs, never for playing, timing or E1 evidence.  A list
+  # for -fsanitize= (address, thread, undefined, or e.g. address,undefined).  Empty by default, and then
+  # nothing here applies: a normal build's command lines are what they were.  Set, it adds the flags
+  # everywhere and defines ZH_SANITIZER_BUILD, under which GameMemory's global new and delete take
+  # zeroed blocks from calloc and give them to free, which the sanitizer intercepts, rather than from
+  # its own allocator (a system framework, Apple's Metal driver, otherwise mixes the two; GameMemory.cpp
+  # says why).  Not for MSVC.
+  set(ZH_SANITIZE "" CACHE STRING "-fsanitize= list for a sanitizer build (empty: a normal build)")
+  if(ZH_SANITIZE)
+    add_compile_options(-fsanitize=${ZH_SANITIZE} -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=${ZH_SANITIZE})
+    add_compile_definitions(ZH_SANITIZER_BUILD)
+    message(STATUS "ZH_SANITIZE=${ZH_SANITIZE}: a sanitizer build; GameMemory's global operators use calloc and free")
+  endif()
 else()
   message(FATAL_ERROR
     "No determinism flags are set for compiler '${CMAKE_CXX_COMPILER_ID}'.  The simulation must be "
@@ -2015,6 +2029,9 @@ target_include_directories(test_msvc_float_casts PRIVATE ${CMAKE_CURRENT_SOURCE_
 
 add_lib_test(test_wwmath wwmath wwlib wwsaveload wwdebug)
 target_include_directories(test_wwmath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW}/Wwutil)
+# R1, smooth motion: W3DSmoothMotion.h's blend and verdicts, header-only over WWMath.
+add_lib_test(test_smooth_motion wwmath wwlib wwsaveload wwdebug)
+target_include_directories(test_smooth_motion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include ${WW}/WWLib)
 
 add_lib_test(test_wwlib wwlib wwmath wwsaveload wwdebug)
 target_include_directories(test_wwlib PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWSaveLoad ${WW}/Wwutil)
@@ -2335,6 +2352,11 @@ target_compile_definitions(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameen
 set_target_properties(test_crash_reporting PROPERTIES CXX_STANDARD 17)
 target_link_libraries(test_crash_reporting PRIVATE wwlib wwdebug)
 add_test(NAME test_crash_reporting COMMAND test_crash_reporting)
+# It crashes on purpose (a null write, an abort, raised SIGFPE and SIGBUS) and checks the crash handler's report.  Under
+# ZH_SANITIZE the sanitizer's own SEGV handler reports and exits first, which proves nothing about ours.
+if(ZH_SANITIZE)
+  set_tests_properties(test_crash_reporting PROPERTIES DISABLED TRUE)
+endif()
 
 # The BIG archive reader on POSIX, against the real game data under rule 9 (C1 (f)): every path's
 # owning archive against an independent reading of the mount order, and the bytes of a sample against

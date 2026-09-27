@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -99,6 +100,9 @@ GameMessageDisposition HotKeyTranslator::translateGameMessage(const GameMessage 
 		// shift is allowed through: a shift-click on a build button queues a batch of units, and
 		// the label hotkey is meant to be that click's equal. Ctrl and alt still block the hotkey.
 		if(newModState & ~SHIFT)
+			return disp;
+		// Ctrl+F let go of Ctrl first ends on a bare F release; it is still Ctrl+F
+		if( keyState & KEY_STATE_PRESSED_WITH_CTRL_ALT )
 			return disp;
 		// NUL-terminate it: UnicodeString::set() runs wcslen over what it is given, and this used
 		// to hand it a single un-terminated WideChar on the stack.

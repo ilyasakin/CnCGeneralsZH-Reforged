@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -1606,6 +1607,28 @@ Bool GameEngine_mayStartAnotherCatchupTick( Int ticksSoFar, Int maxTicks, Real e
 	return elapsedMsInLoop < LOGIC_CATCHUP_BUDGET_MS;
 }
 
+/* R1, smooth motion: when the last logic tick finished and how long a tick lasts, so the renderer can
+	 show models between their last two logic states (W3DSmoothMotion.h).  Read, never written, by the
+	 client; nothing here reaches the logic. */
+static Int64 s_lastLogicTickTicks = 0;
+static Real s_msPerLogicTick = 0.0f;
+
+void GameEngine_noteLogicTickDone( Int logicFps, Bool fastMode )
+{
+	s_lastLogicTickTicks = Clock_Ticks();
+	// Fast mode runs one tick per pass however long it takes: there is no tick length to blend over.
+	s_msPerLogicTick = (logicFps > 0 && !fastMode) ? 1000.0f / (Real)logicFps : 0.0f;
+}
+
+Real GameEngine_logicTickFraction( void )
+{
+	if (s_msPerLogicTick <= 0.0f)
+		return 1.0f;
+	const Real ms = (Real)(Clock_Ticks() - s_lastLogicTickTicks) * 1000.0f / (Real)Clock_Ticks_Per_Second();
+	const Real fraction = ms / s_msPerLogicTick;
+	return fraction < 0.0f ? 0.0f : (fraction > 1.0f ? 1.0f : fraction);
+}
+
 Bool GameEngine_isLogicFrameDue( Real& accumMs, Real elapsedMs, Int logicFps )
 {
 	if (logicFps <= 0)
@@ -2694,6 +2717,7 @@ void GameEngine::update( void )
 				else if (!GameEngine_isLogicFrameDue(logicAccumMs, 0.0f, m_maxFPS))
 					break;
 			}
+			GameEngine_noteLogicTickDone( networkPaced ? TheGlobalData->m_framesPerSecondLimit : m_maxFPS, fastMode );
 #ifdef DEBUG_LOGGING
 			tLogicEnd = Clock_Ticks();
 			logicMS = engineElapsedMS( tLogicStart, tLogicEnd );

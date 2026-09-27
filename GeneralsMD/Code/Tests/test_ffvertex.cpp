@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 // The fixed-function vertex pipeline written out as HLSL.  What is checked here is the shape of
 // the program - which term is present, which register it reads, which case is refused - because
@@ -221,10 +222,23 @@ TEST(ffvertex_each_coordinate_generation_mode_produces_its_own_vector)
 	CHECK(VertexShader_Generate(description, VERTEX_SHADER_TARGET_D3D9, normal));
 	CHECK(contains(normal, "generated0 = float4(view_normal, 1.0)"));
 
+	// The reflection vector reads LOCALVIEWER: the vertex's own eye with it (D3D9's default, and every draw
+	// the engine makes), and without it the fixed eye E = (0, 0, -1), as Windows' own D3D9 draws it (a contributor's
+	// knownprobe, N14; 52b842ba).  reflect(I, N) = I - 2(N.I)N with I = -E = (0, 0, 1) is 2(N.E)N - E.
 	description.Stages[0].TextureCoordinateIndex = FF_TSS_TCI_CAMERASPACEREFLECTIONVECTOR;
+	description.LocalViewer = true;
 	std::string reflection;
 	CHECK(VertexShader_Generate(description, VERTEX_SHADER_TARGET_D3D9, reflection));
 	CHECK(contains(reflection, "reflect(normalize(view_position.xyz), view_normal)"));
+
+	description.LocalViewer = false;
+	std::string reflection_fixed_eye;
+	CHECK(VertexShader_Generate(description, VERTEX_SHADER_TARGET_D3D9, reflection_fixed_eye));
+	CHECK(contains(reflection_fixed_eye, "reflect(float3(0.0, 0.0, 1.0), view_normal)"));
+	CHECK(!contains(reflection_fixed_eye, "normalize(view_position.xyz)"));
+	const std::string fixed_eye_key = VertexShader_Key(description);
+	description.LocalViewer = true;
+	CHECK(fixed_eye_key != VertexShader_Key(description));	// the unlit program is keyed :E for the fixed eye
 }
 
 TEST(ffvertex_a_texture_matrix_is_applied_and_a_projected_one_divides)

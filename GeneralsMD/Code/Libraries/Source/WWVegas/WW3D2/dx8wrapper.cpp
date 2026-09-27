@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /***********************************************************************************************
  ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
@@ -3588,8 +3589,10 @@ IDirect3DSurface9 * DX8Wrapper::_Create_DX8_Surface(const char *filename_)
 			// else create a surface with missing texture in it
 			char compressed_name[200];
 			strncpy(compressed_name,filename_, 200);
-			char *ext = strstr(compressed_name, ".");
-			if ( (strlen(ext)==4) && 
+			compressed_name[199] = 0;
+			// the last dot: the first one turned "a.b.tga" into nothing, and a name without one was a strlen of NULL
+			char *ext = strrchr(compressed_name, '.');
+			if ( ext && (strlen(ext)==4) &&
 				  ( (ext[1] == 't') || (ext[1] == 'T') ) && 
 				  ( (ext[2] == 'g') || (ext[2] == 'G') ) && 
 				  ( (ext[3] == 'a') || (ext[3] == 'A') ) ) {

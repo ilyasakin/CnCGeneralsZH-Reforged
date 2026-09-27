@@ -154,6 +154,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckOrderLines",        "GUI:OrderLines"),
     (CHECK,  "CheckZoomToCursor",      "GUI:ZoomToCursor"),
     (CHECK,  "CheckIsometricCamera",   "GUI:IsometricCamera"),
+    (CHECK,  "CheckSmoothMotion",      "GUI:SmoothMotion"),
     (CHECK,  "CheckTreeSway",          "GUI:TreeSway"),
     (CHECK,  "CheckInfantryShadows",   "GUI:InfantryShadows"),
     (CHECK,  "CheckProjectileShadows", "GUI:ProjectileShadows"),
@@ -225,7 +226,8 @@ GROUP_LAYOUT = [
         setting("LabelWindowMode", "ComboBoxWindowMode"),
         ("check", "CheckVSync")]),
     ("PageDisplay",  1, "GUI:OptionsGroupPicture", [
-        setting("GammaLabel", "SliderGamma", "ValueGamma")]),
+        setting("GammaLabel", "SliderGamma", "ValueGamma"),
+        ("check", "CheckSmoothMotion")]),
 
     ("PageGraphics", 0, "GUI:OptionsGroupDetail", [
         ("check", "CheckClassicGraphics"),

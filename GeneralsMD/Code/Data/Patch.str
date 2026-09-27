@@ -710,6 +710,14 @@ TOOLTIP:IsometricCamera
 "The battlefield seen from far off, so a unit is the same size at the top of the screen as at the bottom. You still turn and zoom the camera."
 END
 
+GUI:SmoothMotion
+"Smooth Motion"
+END
+
+TOOLTIP:SmoothMotion
+"Units are drawn between the game's 30 steps a second, so they move smoothly on a fast display. The picture is one step (33 ms) behind; the game itself is unchanged."
+END
+
 GUI:EdgeScrollWindowed
 "Edge Scroll In A Window"
 END
@@ -1287,6 +1295,14 @@ END
 
 GUI:ScoreboardPerSecond
 "PER SEC"
+END
+
+GUI:ControlBarMoneyEarning
+"$ %d  +%d/s"
+END
+
+CONTROLBAR:MoneyDescription
+"The money you have, and what you earned a second over the last half minute"
 END
 
 GUI:ScoreboardKills

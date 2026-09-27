@@ -7942,7 +7942,7 @@ CONTROLBAR:Money
 END
 
 CONTROLBAR:MoneyDescription
-"Sahip olduğunuz para miktarı"
+"Sahip olduğunuz para ve son yarım dakikada saniyede kazandığınız"
 END
 
 UPGRADE:AmericaDroneARmor
@@ -15269,6 +15269,14 @@ TOOLTIP:IsometricCamera
 "Savaş alanı uzaktan görünür, bir birlik ekranın üstünde de altında da aynı boyda çizilir. Kamerayı yine sen döndürür ve yakınlaştırırsın."
 END
 
+GUI:SmoothMotion
+"Akıcı Hareket"
+END
+
+TOOLTIP:SmoothMotion
+"Birlikler oyunun saniyedeki 30 adımının arasında da çizilir, böylece hızlı bir ekranda akıcı hareket eder. Görüntü bir adım (33 ms) geriden gelir; oyunun kendisi değişmez."
+END
+
 GUI:EdgeScrollWindowed
 "Pencerede Kenardan Kaydır"
 END
@@ -15795,6 +15803,10 @@ END
 
 GUI:ScoreboardPerSecond
 "SANİYEDE"
+END
+
+GUI:ControlBarMoneyEarning
+"$ %d  +%d/sn"
 END
 
 GUI:ScoreboardKills

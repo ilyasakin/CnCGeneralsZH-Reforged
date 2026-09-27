@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -3312,7 +3313,14 @@ void MemoryPoolFactory::debugMemoryReport(Int flags, Int startCheckpoint, Int en
 	#pragma comment(linker, "/force:multiple")
 #endif
 
+#ifdef ZH_SANITIZER_BUILD
+// Atomic in a sanitizer build: every new and delete counts here, from every thread, and TSan reports the
+// plain int's increments as the races they are (harmless for a counter only initMemoryManager reads).
+#include <atomic>
+static std::atomic<int> theLinkTester(0);
+#else
 static int theLinkTester = 0;
+#endif
 
 //-----------------------------------------------------------------------------
 void* STLSpecialAlloc::allocate(size_t __n) 
@@ -3332,6 +3340,20 @@ void STLSpecialAlloc::deallocate(void* __p, size_t)
 	TheDynamicMemoryAllocator->freeBytes(__p); 
 }
 
+//-----------------------------------------------------------------------------
+/**
+	ZH_SANITIZER_BUILD (CMake's ZH_SANITIZE, sanitizer builds only): the global operators below take
+	their blocks from calloc and give them back to free, which the sanitizer's runtime intercepts, instead
+	of from TheDynamicMemoryAllocator.  The ones below keep a whole game consistent with itself, but not
+	with a system framework loaded beside a sanitizer: on macOS Apple's Metal driver got a block from this
+	operator new and freed it through ASan's operator delete.  A block from calloc is one any of the
+	runtime's frees accepts.  calloc, not malloc, because this operator new zeroes (allocateBytes), and the
+	engine reads members nothing else set: with the sanitizer's own unzeroed new the game crashed loading
+	its .big files.  The pools stay (MemoryPoolObject classes have operators of their own), and so do the
+	strings, which allocate from TheDynamicMemoryAllocator by name.  Without the define, as in every
+	normal build, this file is what it was.
+*/
+#ifndef ZH_SANITIZER_BUILD
 //-----------------------------------------------------------------------------
 /**
 	overload for global operator new; send requests to TheDynamicMemoryAllocator.
@@ -3483,6 +3505,37 @@ void operator delete[](void * p, const char *, int)
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != NULL, ("must init memory manager before calling global operator delete"));
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
+#else
+// A sanitizer build: every form from calloc, zeroed as allocateBytes zeroes, and back to free.  They count
+// in theLinkTester as the forms above do, so initMemoryManager's link test holds unchanged.
+static void *sanitizerAllocate(size_t size)
+{
+	++theLinkTester;
+	void *p = calloc(1, size != 0 ? size : 1);
+	if (p == NULL)
+		throw ERROR_OUT_OF_MEMORY;
+	return p;
+}
+static void sanitizerFree(void *p)
+{
+	++theLinkTester;
+	free(p);
+}
+void *operator new(size_t size) { return sanitizerAllocate(size); }
+void *operator new[](size_t size) { return sanitizerAllocate(size); }
+void operator delete(void *p) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
+void operator delete[](void *p) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
+void operator delete(void *p, size_t) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
+void operator delete[](void *p, size_t) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
+void *operator new(size_t size, const std::nothrow_t &) WW_NOEXCEPT_DELETE { return calloc(1, size != 0 ? size : 1); }
+void *operator new[](size_t size, const std::nothrow_t &) WW_NOEXCEPT_DELETE { return calloc(1, size != 0 ? size : 1); }
+void operator delete(void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE { free(p); }
+void operator delete[](void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE { free(p); }
+void* operator new(size_t size, const char *, int) { return sanitizerAllocate(size); }
+void operator delete(void * p, const char *, int) { sanitizerFree(p); }
+void* operator new[](size_t size, const char *, int) { return sanitizerAllocate(size); }
+void operator delete[](void * p, const char *, int) { sanitizerFree(p); }
+#endif // ZH_SANITIZER_BUILD
 
 //-----------------------------------------------------------------------------
 #ifdef MEMORYPOOL_OVERRIDE_MALLOC

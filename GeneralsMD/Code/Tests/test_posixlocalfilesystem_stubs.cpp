@@ -1,4 +1,21 @@
 /*
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/*
  * Link-time stand-ins for test_posixlocalfilesystem, which is built from the real GameMemory,
  * MemoryInit, LocalFile, File, RAMFile and PosixDevice sources rather than from gameengine, since
  * gameengine does not link on macOS yet.  Each name here is one those sources refer to and the test

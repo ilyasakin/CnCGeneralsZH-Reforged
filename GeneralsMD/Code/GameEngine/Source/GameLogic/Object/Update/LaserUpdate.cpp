@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -201,6 +202,15 @@ void LaserUpdate::clientUpdate( void )
 {
 	updateStartPos();
 	updateEndPos();
+
+	// The muzzle flare and the target burst were placed once, in initLaser, and never moved again,
+	// so on a moving Avenger or Laser Crusader they were left a frame behind the beam they belong to.
+	ParticleSystem *system = TheParticleSystemManager->findParticleSystem( m_particleSystemID );
+	if( system )
+		system->setPosition( &m_startPos );
+	system = TheParticleSystemManager->findParticleSystem( m_targetParticleSystemID );
+	if( system )
+		system->setPosition( &m_endPos );
 
 	if( m_decaying || m_widening )
 	{

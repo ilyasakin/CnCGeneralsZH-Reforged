@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -1138,6 +1139,14 @@ GlobalData::GlobalData()
 	m_snapCameraRotateTo45 = TRUE;
 	m_zoomToCursor = TRUE;
 	m_isometricCamera = FALSE;
+	// R1, smooth motion: the picture only, one logic tick behind, and never the game (W3DSmoothMotion.h).
+	// On by default off Windows, where 120 and 144 Hz panels are the common case; Windows keeps its
+	// picture as it was unless a player opts in.
+#if defined(_WIN32)
+	m_smoothMotion = FALSE;
+#else
+	m_smoothMotion = TRUE;
+#endif
 	// the right button no longer scrolls, so a right-drag is free to mean something
 	m_formationDrag = TRUE;
 	m_showAllyCursors = TRUE;
@@ -1401,6 +1410,24 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	// asks for a window still gets one, and let Options.ini and then the command line refine it.
 	TheWritableGlobalData->m_windowMode = TheWritableGlobalData->m_windowed
 			? WINDOW_MODE_WINDOWED : WINDOW_MODE_FULLSCREEN;
+
+	// These are loop bounds into fixed arrays, allocation sizes and divisors, and a mod's GameData
+	// can hold anything.  The road buffers index with 16 bits and allocate four past the maximum.
+	const Int maxRoadBufferSize = 65535 - 4;
+	GlobalData *data = TheWritableGlobalData;
+	data->m_numGlobalLights = clamp( 0, data->m_numGlobalLights, MAX_GLOBAL_LIGHTS );
+	data->m_maxVisibleTranslucentObjects = max( data->m_maxVisibleTranslucentObjects, 0 );
+	data->m_maxVisibleOccluderObjects = max( data->m_maxVisibleOccluderObjects, 0 );
+	data->m_maxVisibleOccludeeObjects = max( data->m_maxVisibleOccludeeObjects, 0 );
+	data->m_maxVisibleNonOccluderOrOccludeeObjects = max( data->m_maxVisibleNonOccluderOrOccludeeObjects, 0 );
+	data->m_maxLineBuildObjects = max( data->m_maxLineBuildObjects, 0 );
+	data->m_maxRoadSegments = max( data->m_maxRoadSegments, 0 );
+	data->m_maxRoadVertex = clamp( 0, data->m_maxRoadVertex, maxRoadBufferSize );
+	data->m_maxRoadIndex = clamp( 0, data->m_maxRoadIndex, maxRoadBufferSize );
+	data->m_maxRoadTypes = max( data->m_maxRoadTypes, 0 );
+	data->m_networkFPSHistoryLength = max( data->m_networkFPSHistoryLength, 1u );
+	data->m_networkLatencyHistoryLength = max( data->m_networkLatencyHistoryLength, 1u );
+	data->m_networkCushionHistoryLength = max( data->m_networkCushionHistoryLength, 1u );
 
 
 	// override INI values with user preferences

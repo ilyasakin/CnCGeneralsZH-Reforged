@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -197,7 +198,7 @@ public:
 						UnsignedInt decayFrames = DEF_DECAY_FRAMES, 
 						UnsignedInt sustainAtPeak = DEF_SUSTAIN_FRAMES ); // ask MLorenzen
 	void sustain(void) { m_envState = ENVELOPE_STATE_SUSTAIN; }
-	void release(void) { m_envState = ENVELOPE_STATE_DECAY; }
+	void release(void);
 	void rest(void)    { m_envState = ENVELOPE_STATE_REST; } // goes away now!
 	Bool isEffective() const { return m_affect; }
 	const Vector3* getColor() const { return &m_currentColor; }
@@ -319,6 +320,17 @@ public:
   void onLevelStart();                                                ///< run from GameLogic::startNewGame
 
 	Drawable *getNextDrawable( void ) const { return m_nextDrawable; }	///< return the next drawable in the global list
+
+	/** R1, smooth motion: the logic moved this drawable in one step it did not travel (a teleport, a
+		container's exit, a parachute rider placed): show the new place at once rather than blend to it. */
+	void markMotionDiscontinuity( void ) { m_motionDiscontinuity = TRUE; }
+	Bool isMotionDiscontinuous( void ) const { return m_motionDiscontinuity; }
+	void clearMotionDiscontinuity( void ) { m_motionDiscontinuity = FALSE; }
+	/** R1: the client's record of this drawable's position on its last two logic ticks, taken at the
+		start of a render pass, and the blend of them the picture shows (the camera's lock follows it).
+		FALSE, with the logic position, when there is nothing to blend. */
+	void smoothMotionCapturePosition( UnsignedInt clientFrame );
+	Bool getSmoothMotionPosition( Real alpha, Coord3D *pos ) const;
 	Drawable *getPrevDrawable( void ) const { return m_prevDrawable; }  ///< return the prev drawable in the global list
 	DrawableID getID( void ) const;																			///< return this drawable's unique ID
 
@@ -686,6 +698,11 @@ private:
 		
 	DrawableID m_id;						///< this drawable's unique ID
 	Drawable *m_nextDrawable; 
+	Coord3D m_smoothPrevPos;		///< R1: the position on the logic tick before m_smoothCurPos
+	Coord3D m_smoothCurPos;			///< R1: the position on the last logic tick the client saw
+	UnsignedInt m_smoothFrame;		///< R1: the client frame m_smoothCurPos was taken on
+	Bool m_smoothHavePrev;			///< R1: m_smoothPrevPos is the tick just before, and continuous with it
+	Bool m_motionDiscontinuity;		///< R1: markMotionDiscontinuity since the last capture
 	Drawable *m_prevDrawable;		///< list links
 
   DynamicAudioEventInfo *m_customSoundAmbientInfo; ///< If not NULL, info about the ambient sound to attach to this object

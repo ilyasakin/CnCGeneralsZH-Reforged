@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /***********************************************************************************************
  ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
@@ -290,8 +291,10 @@ ParticleEmitterDefClass::Set_Creation_Volume (Vector3Randomizer *randomizer)
 void							
 ParticleEmitterDefClass::Set_User_String (const char *pstring)		
 { 
-	SAFE_FREE (m_pUserString); 
-	m_pUserString = strdupAsWindows(pstring); 
+	// Copy first: pstring may be our own string (self-assignment).
+	char *copy = strdupAsWindows(pstring);
+	SAFE_FREE (m_pUserString);
+	m_pUserString = copy;
 	return ;
 }
 
@@ -303,8 +306,9 @@ ParticleEmitterDefClass::Set_User_String (const char *pstring)
 void							
 ParticleEmitterDefClass::Set_Name (const char *pname)			
 { 
-	SAFE_FREE (m_pName); 
-	m_pName = strdupAsWindows(pname); 
+	char *copy = strdupAsWindows(pname);
+	SAFE_FREE (m_pName);
+	m_pName = copy;
 	return ;
 }
 

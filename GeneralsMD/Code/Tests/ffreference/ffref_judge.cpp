@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@
  * side of the comparison must replay them the same way (the harness does, by that ruling).
  *
  *   ffref_judge <capture dir> [--gpu <dump dir>] [--only draw_NNNNN] [--mutate <bits>] [--shift-gpu] [--detail]
- *               [--lod-delta <levels>]
+ *               [--lod-delta <levels>] [--lod-sweep]
  *
  * For a disagreement it lists the outside pixels (up to 12): the GPU's colour, the reference's nominal
  * colour and its envelope; with --detail (best with --only) also FFReference's record of the pixel: the
@@ -54,6 +54,10 @@
  * wrote nothing on either side is counted as such ("empty"), never as evidence.
  * --lod-delta is a diagnostic, never a verdict: it widens one freedom (the LOD's, 0.6 by default), so
  * a disagreement that goes away under it is one of LOD alone.  The run says so on its first line.
+ * --lod-sweep, also a diagnostic: for each disagreeing capture, redraws it with every stage's
+ * MIPMAPLODBIAS at -4..+4 in eighths and gives each outside pixel the bias whose colour comes closest to
+ * the GPU's, with what is left, the pixel's LOD and its triangle's least height on screen.  A pixel some
+ * bias matches is one of LOD, by that much; one no bias matches is not.
  * Exit status: 0 no disagreement and nothing unreadable; 1 otherwise.
  */
 
@@ -62,6 +66,7 @@
 #include <dirent.h>
 #include <algorithm>
 #include <map>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -112,6 +117,80 @@ const char *primitiveName( uint32_t t )
 	return t < 7 ? names[t] : "?";
 }
 
+/// A triangle's least height on screen: twice its area over its longest edge (a sliver's is under a pixel)
+double leastHeight( const double c[3][2] )
+{
+	const double area2 = fabs( (c[1][0] - c[0][0]) * (c[2][1] - c[0][1]) - (c[2][0] - c[0][0]) * (c[1][1] - c[0][1]) );
+	double longest = 0;
+	for (int e = 0; e < 3; ++e)
+		longest = std::max( longest, hypot( c[(e + 1) % 3][0] - c[e][0], c[(e + 1) % 3][1] - c[e][1] ) );
+	return longest > 0 ? area2 / longest : 0;
+}
+
+/// --lod-sweep: see the file comment.  `target` is the unbiased draw, with detail; `gpu` is R, G, B, A.
+void sweepLod( const DrawState &state, const Header &h, const std::vector<Vertex> &vertices, const Capture &cap,
+	int count, const Target &target, const std::vector<uint8_t> &gpu, unsigned mutations )
+{
+	const double base = 2.0 / 255.0;
+	const int channels = target.hasAlpha ? 4 : 3;
+	std::vector<size_t> outside;
+	for (size_t i = 0; i < target.color.size(); ++i)
+	{
+		const uint8_t *g = &gpu[i * 4];
+		const Color &lo = target.lo[i], &hi = target.hi[i];
+		const double gv[4] = { g[0] / 255.0, g[1] / 255.0, g[2] / 255.0, g[3] / 255.0 };
+		const double los[4] = { lo.r, lo.g, lo.b, lo.a }, his[4] = { hi.r, hi.g, hi.b, hi.a };
+		bool out = false;
+		for (int k = 0; k < channels; ++k)
+			out = out || gv[k] < los[k] - base || gv[k] > his[k] + base;
+		if (out)
+			outside.push_back( i );
+	}
+	std::vector<double> bestBias( outside.size(), 0 ), bestLeft( outside.size(), 1e9 ), unbiased( outside.size(), 0 );
+	for (int step = -32; step <= 32; ++step)
+	{
+		const double bias = step / 8.0;
+		DrawState biased = state;
+		for (int st = 0; st < MAX_STAGES; ++st)
+			biased.samplerState[st][SAMP_MIPMAPLODBIAS] = floatBits( (float)bias );	// every captured bias is 0
+		Target t;
+		t.create( target.width, target.height, target.hasAlpha );
+		t.clear( colorFromD3D( 0xFF3F2F1Fu ), 1.0, 0 );
+		Report report;
+		if (!draw( biased, (int)h.primitiveType, vertices.empty() ? NULL : &vertices[0], (int)h.vertexCount,
+				h.indexCount ? &cap.indices[0] : NULL, count, t, &report, mutations ))
+			return;
+		for (size_t k = 0; k < outside.size(); ++k)
+		{
+			const size_t i = outside[k];
+			const uint8_t *g = &gpu[i * 4];
+			const Color &c = t.color[i];
+			const double cv[4] = { c.r, c.g, c.b, c.a };
+			double left = 0;
+			for (int ch = 0; ch < channels; ++ch)
+				left = std::max( left, fabs( g[ch] / 255.0 - cv[ch] ) * 255.0 );
+			if (step == 0)
+				unbiased[k] = left;
+			if (left < bestLeft[k] - 1e-9 || (fabs( left - bestLeft[k] ) <= 1e-9 && fabs( bias ) < fabs( bestBias[k] )))
+				bestLeft[k] = left, bestBias[k] = bias;
+		}
+	}
+	int matched = 0;
+	for (size_t k = 0; k < outside.size(); ++k)
+	{
+		const size_t i = outside[k];
+		const PixelDetail &d = target.detail[i];
+		const double a0 = hypot( d.axes[0][0], d.axes[0][1] ), a1 = hypot( d.axes[1][0], d.axes[1][1] );
+		const bool ok = bestLeft[k] <= 2.0;
+		matched += ok;
+		printf( "    sweep (%d, %d): lod %.2f, footprint %.2f x %.2f texels, triangle %d least height %.2f px;"
+			" unbiased off by %.0f, best bias %+.3f leaves %.0f/255%s\n", (int)(i % target.width), (int)(i / target.width),
+			d.lod[0], a0, a1, d.primitive, leastHeight( d.screen ), unbiased[k], bestBias[k], bestLeft[k],
+			ok ? "" : "  <- no bias matches" );
+	}
+	printf( "    sweep: %d of %d outside pixels matched within 2/255 by some LOD bias in -4..+4\n", matched, (int)outside.size() );
+}
+
 }  // namespace
 
 int main( int argc, char *argv[] )
@@ -124,7 +203,7 @@ int main( int argc, char *argv[] )
 	const std::string dir = argv[1];
 	std::string gpuDir, only;
 	unsigned mutations = 0;
-	bool shiftGpu = false, detail = false;
+	bool shiftGpu = false, detail = false, lodSweep = false;
 	Freedoms freedoms;
 	for (int i = 2; i < argc; ++i)
 	{
@@ -132,6 +211,8 @@ int main( int argc, char *argv[] )
 			shiftGpu = true;
 		else if (strcmp( argv[i], "--detail" ) == 0)
 			detail = true;
+		else if (strcmp( argv[i], "--lod-sweep" ) == 0)
+			lodSweep = detail = true;
 		else if (i + 1 < argc && strcmp( argv[i], "--gpu" ) == 0)
 			gpuDir = argv[++i];
 		else if (i + 1 < argc && strcmp( argv[i], "--only" ) == 0)
@@ -373,7 +454,7 @@ int main( int argc, char *argv[] )
 						printf( "    outside (%d, %d): gpu %d %d %d %d, nominal %.1f %.1f %.1f %.1f, envelope r %.1f-%.1f g %.1f-%.1f b %.1f-%.1f a %.1f-%.1f (x255)\n",
 							x, y, g[0], g[1], g[2], g[3], nom.r * 255, nom.g * 255, nom.b * 255, nom.a * 255,
 							lo.r * 255, hi.r * 255, lo.g * 255, hi.g * 255, lo.b * 255, hi.b * 255, lo.a * 255, hi.a * 255 );
-						if (detail && i < target.detail.size())
+						if (detail && !lodSweep && i < target.detail.size())
 						{
 							const PixelDetail &d = target.detail[i];
 							printf( "      triangle %d of %d layer(s); stage 0 uv (%.6f, %.6f) lod %.3f; stage 1 uv (%.6f, %.6f) lod %.3f;"
@@ -382,6 +463,8 @@ int main( int argc, char *argv[] )
 								d.screen[1][1], d.screen[2][0], d.screen[2][1] );
 						}
 					}
+				if (lodSweep)
+					sweepLod( state, h, vertices, cap, count, target, gpu, mutations );
 			}
 		}
 	}

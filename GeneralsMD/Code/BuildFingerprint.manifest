@@ -1401,6 +1401,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/W3DScene.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DShaderManager.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DShadow.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DShroud.h
+GameEngineDevice/Include/W3DDevice/GameClient/W3DSmoothMotion.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DSmudge.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DSnow.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DStatusCircle.h
@@ -2731,6 +2732,7 @@ Tests/test_sdl_platform.cpp
 Tests/test_sdl_program_cache.cpp
 Tests/test_selection_priority.inc
 Tests/test_shader_sdl.cpp
+Tests/test_smooth_motion.cpp
 Tests/test_stage_overlay_hud.sh
 Tests/test_supply_center_save.inc
 Tests/test_support.cpp
@@ -3542,6 +3544,7 @@ Tools/WorldBuilder/src/propedit.cpp
 Tools/WorldBuilder/src/teamsdialog.cpp
 Tools/WorldBuilder/src/wbview.cpp
 Tools/WorldBuilder/src/wbview3d.cpp
+Tools/asan-check.sh
 Tools/assetcull/assetcull.cpp
 Tools/assetcull/assetcull.dsp
 Tools/bigfile.py
@@ -3563,6 +3566,7 @@ Tools/gdi-font-metrics.ps1
 Tools/gentrigtables.py
 Tools/include_case_check.py
 Tools/install-guard.sh
+Tools/license-headers.py
 Tools/linux-check.sh
 Tools/linux-portable.sh
 Tools/lobbyroom_layout.py

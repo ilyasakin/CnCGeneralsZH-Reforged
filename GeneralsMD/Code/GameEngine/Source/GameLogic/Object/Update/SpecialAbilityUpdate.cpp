@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
@@ -2112,5 +2113,14 @@ void SpecialAbilityUpdate::loadPostProcess( void )
 
 	// extend base class
 	UpdateModule::loadPostProcess();
+
+	// the prep loop plays from startPreparation to endPreparation, the span the using-ability status
+	// marks; a save keeps the status but not the playing handle
+	if( m_active && getObject()->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) )
+	{
+		m_prepSoundLoop = getSpecialAbilityUpdateModuleData()->m_prepSoundLoop;
+		m_prepSoundLoop.setObjectID( getObject()->getID() );
+		m_prepSoundLoop.setPlayingHandle( TheAudio->addAudioEvent( &m_prepSoundLoop ) );
+	}
 
 }  // end loadPostProcess
