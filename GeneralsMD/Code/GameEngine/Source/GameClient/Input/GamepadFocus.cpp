@@ -186,12 +186,14 @@ GameWindow *byNameTail( const std::vector<GameWindow *> &widgets, const char *co
 	return NULL;
 }
 
-const char *const theBackNames[] = { ":ButtonBack", ":ButtonCancel", ":ButtonNo", ":ButtonReturn", NULL };
+const char *const theBackNames[] = { ":ButtonBack", ":ButtonCancel", ":ButtonNo", ":ButtonReturn", ":ButtonSingleBack",
+	":ButtonMultiBack", ":ButtonLoadReplayBack", ":ButtonDiffBack", NULL };		// the last four: the main menu's panes'
+const char *const theExitNames[] = { ":ButtonExit", NULL };
 const char *const theStartNames[] = { ":ButtonStart", ":ButtonStartGame", ":ButtonAccept", ":ButtonOk", ":ButtonPlay",
 	":ButtonLoad", ":ButtonContinue", ":ButtonResume", NULL };
-const char *const theModalDefaults[] = { ":ButtonNo", ":ButtonCancel", ":ButtonOk", ":ButtonYes", NULL };
-const char *const theScreenDefaults[] = { ":ButtonSinglePlayer", ":ButtonResume", ":ButtonStart", ":ButtonAccept", ":ButtonOk",
-	":ButtonContinue", ":ButtonPlay", ":ButtonLoad", NULL };
+const char *const theModalDefaults[] = { ":RadioButtonMedium", ":ButtonNo", ":ButtonCancel", ":ButtonOk", ":ButtonYes", NULL };
+const char *const theScreenDefaults[] = { ":ButtonSinglePlayer", ":ButtonMedium", ":RadioButtonMedium", ":ButtonResume",
+	":ButtonStart", ":ButtonAccept", ":ButtonOk", ":ButtonContinue", ":ButtonPlay", ":ButtonLoad", NULL };
 
 const char *const theXNames[] = { ":ButtonDelete", ":ButtonDeleteReplay", ":ButtonDirectConnect", NULL };
 const char *const theYNames[] = { ":ButtonDefaults", ":ButtonSave", ":ButtonCopyReplay", ":ButtonHost", NULL };
@@ -239,6 +241,11 @@ GameWindow *firstInReadingOrder( const std::vector<GameWindow *> &widgets )
 	return best;
 }
 
+Bool isMainMenu( const Screen &screen )
+{
+	return !screen.modal && endsWith( screen.key.c_str(), "MainMenu.wnd" );
+}
+
 /// The screens whose pages are the content, so each page starts on its first widget (skirmish setup's tabs only
 /// switch its info panel, and it starts on Start Game)
 const char *const thePagedScreens[] = { "OptionsMenu.wnd", NULL };
@@ -254,7 +261,8 @@ GameWindow *defaultFocus( const Screen &screen, const std::vector<GameWindow *> 
 			if (first != NULL)
 				return first;
 		}
-	GameWindow *named = byNameTail( widgets, screen.modal ? theModalDefaults : theScreenDefaults, GWS_PUSH_BUTTON );
+	GameWindow *named = byNameTail( widgets, screen.modal ? theModalDefaults : theScreenDefaults,
+		GWS_PUSH_BUTTON | GWS_RADIO_BUTTON );		// radios: the difficulty pickers start on Medium
 	return named != NULL ? named : firstInReadingOrder( widgets );
 }
 
@@ -470,7 +478,16 @@ Bool GamepadFocus::act( Action action )
 			const ICoord2D from = centreOf( focus );
 			const Int dx = action == NAV_LEFT ? -1 : action == NAV_RIGHT ? 1 : 0;
 			const Int dy = action == NAV_UP ? -1 : action == NAV_DOWN ? 1 : 0;
-			const Int next = pickNeighbour( &centres[0], (Int)centres.size(), from.x, from.y, dx, dy );
+			Int next = pickNeighbour( &centres[0], (Int)centres.size(), from.x, from.y, dx, dy );
+			if (next < 0 && vertical && isMainMenu( screen ))
+			{
+				// the main menu's column wraps: the far end of the same column
+				const Int COLUMN = 40;
+				for (size_t i = 0; i < centres.size(); ++i)
+					if (abs( centres[i].x - from.x ) < COLUMN && (next < 0 || (dy > 0 ? centres[i].y < centres[ next ].y
+							: centres[i].y > centres[ next ].y)))
+						next = (Int)i;
+			}
 			if (next >= 0)
 				setFocus( widgets[ next ] );
 			return TRUE;
@@ -502,8 +519,11 @@ Bool GamepadFocus::act( Action action )
 				return TRUE;
 			}
 			GameWindow *back = byNameTail( widgets, theBackNames, GWS_PUSH_BUTTON );
+			GameWindow *exitButton = back == NULL && isMainMenu( screen ) ? byNameTail( widgets, theExitNames, GWS_PUSH_BUTTON ) : NULL;
 			if (back != NULL)
 				press( back );
+			else if (exitButton != NULL)
+				setFocus( exitButton );		// the top of the main menu: B goes to Exit, and A on it is the player's own choice
 			else
 				tapKey( KEY_ESC );		// the shell's menus take Escape as back
 			return TRUE;

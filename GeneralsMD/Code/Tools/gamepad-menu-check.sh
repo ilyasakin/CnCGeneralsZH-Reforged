@@ -25,8 +25,9 @@
 # ("GAMEPAD FOCUS: <screen> <widget>"), and the walk must give exactly EXPECTED below:
 #   the main menu starts on Solo Play; down, down, down reaches Options; A opens it on its first widget;
 #   RB turns to the second page, on that page's first widget, and down moves within it; B cancels back
-#   to the main menu with Options still focused; up three times reaches Solo Play; A opens its pane on
-#   the first side; down four times reaches Skirmish; A opens skirmish setup on Start Game.
+#   to the main menu with Options still focused; B there goes to Exit, and down wraps to Solo Play; A opens
+#   its pane on the first side; A on it opens the difficulty pane on Medium; B twice backs out to the main
+#   menu; A and down four times reach Skirmish; A opens skirmish setup on Start Game.
 #
 # Rule 9: the install is only read, through a farm of links, and listed before and after
 # (install-guard.sh); the overlay is staged into the work folder; the user data folder is in it too.
@@ -104,11 +105,16 @@ tap() { echo "p$1 pad $2 down"; echo "p$(( $1 + 3 )) pad $2 up"; }
 	tap 1050 RightShoulder					# the second page, on its first widget
 	tap 1150 DPadDown					# the widget below it
 	tap 1250 East						# Cancel: the main menu, Options kept
-	tap 1400 DPadUp; tap 1480 DPadUp; tap 1560 DPadUp	# Load, Multiplayer, Solo Play
-	tap 1650 South						# the Solo Play pane, on its first side
-	tap 1750 DPadDown; tap 1830 DPadDown; tap 1910 DPadDown; tap 1990 DPadDown	# to Skirmish
-	tap 2100 South						# skirmish setup, on Start Game
-	echo "p2450 quit"
+	tap 1400 East						# B on the main menu's top level: Exit
+	tap 1480 DPadDown					# the column wraps: Solo Play
+	tap 1560 South						# the Solo Play pane, on its first side
+	tap 1700 South						# that side's difficulty pane, on Medium
+	tap 1850 East						# its Back: the Solo Play pane
+	tap 2000 East						# its Back: the main menu, on Solo Play
+	tap 2100 South						# the Solo Play pane again
+	tap 2200 DPadDown; tap 2280 DPadDown; tap 2360 DPadDown; tap 2440 DPadDown	# to Skirmish
+	tap 2550 South						# skirmish setup, on Start Game
+	echo "p2900 quit"
 } > "$WORK/walk.txt"
 
 EXPECTED="MainMenu.wnd MainMenu.wnd:ButtonSinglePlayer
