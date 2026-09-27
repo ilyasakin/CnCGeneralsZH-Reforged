@@ -909,6 +909,19 @@ void ThingTemplate::parseArmorTemplateSet( INI* ini, void *instance, void * /*st
 
 	ArmorTemplateSet ws;
 	ws.parseArmorTemplateSet(ini);
+	self->m_armorTemplateSetFinder.clear();
+	if (ini->getLoadType() == INI_LOAD_MULTIFILE)
+	{
+		// a patch file's set with conditions the template already has takes that set's place
+		for (ArmorTemplateSetVector::iterator it = self->m_armorTemplateSets.begin(); it != self->m_armorTemplateSets.end(); ++it)
+		{
+			if (it->getNthConditionsYes(0) == ws.getNthConditionsYes(0))
+			{
+				*it = ws;
+				return;
+			}
+		}
+	}
 #if defined(_DEBUG) || defined(_INTERNAL)
 	if (ini->getLoadType() != INI_LOAD_CREATE_OVERRIDES)
 	{
@@ -922,7 +935,6 @@ void ThingTemplate::parseArmorTemplateSet( INI* ini, void *instance, void * /*st
 	}
 #endif
 	self->m_armorTemplateSets.push_back(ws);
-	self->m_armorTemplateSetFinder.clear();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -937,6 +949,19 @@ void ThingTemplate::parseWeaponTemplateSet( INI* ini, void *instance, void * /*s
 
 	WeaponTemplateSet ws;
 	ws.parseWeaponTemplateSet(ini, self);
+	self->m_weaponTemplateSetFinder.clear();
+	if (ini->getLoadType() == INI_LOAD_MULTIFILE)
+	{
+		// a patch file's set with conditions the template already has takes that set's place
+		for (WeaponTemplateSetVector::iterator it = self->m_weaponTemplateSets.begin(); it != self->m_weaponTemplateSets.end(); ++it)
+		{
+			if (it->getNthConditionsYes(0) == ws.getNthConditionsYes(0))
+			{
+				*it = ws;
+				return;
+			}
+		}
+	}
 #if defined(_DEBUG) || defined(_INTERNAL)
 	if (ini->getLoadType() != INI_LOAD_CREATE_OVERRIDES)
 	{
@@ -950,7 +975,6 @@ void ThingTemplate::parseWeaponTemplateSet( INI* ini, void *instance, void * /*s
 	}
 #endif
 	self->m_weaponTemplateSets.push_back(ws);
-	self->m_weaponTemplateSetFinder.clear();
 }
 
 //-------------------------------------------------------------------------------------------------

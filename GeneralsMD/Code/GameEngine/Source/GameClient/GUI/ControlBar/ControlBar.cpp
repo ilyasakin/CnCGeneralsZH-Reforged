@@ -62,8 +62,6 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/SupplyTruckAIUpdate.h"
-
-static Bool builderIsFree( AIUpdateInterface *ai, DozerAIInterface *dozer );	// defined with findStandInBuilder
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/OCLUpdate.h"
 #include "GameLogic/Module/ContainModule.h"
@@ -1217,9 +1215,16 @@ void CommandSet::parseCommandButton( INI* ini, void *instance, void *store, cons
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-CommandSet::CommandSet(const AsciiString& name) : 
+CommandSet::CommandSet(const AsciiString& name) :
 	m_name(name),
 	m_next(NULL)
+{
+	friend_clearCommands();
+}
+
+//-------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+void CommandSet::friend_clearCommands()
 {
 	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 		m_command[ i ] = NULL;
@@ -1352,7 +1357,6 @@ ControlBar::ControlBar( void )
 	m_chordGroup = -1;
 	m_chordStartMs = 0;
 	m_chordDrawableID = INVALID_DRAWABLE_ID;
-	m_standInBuilderID = INVALID_DRAWABLE_ID;
 	m_upgradeSpreadFrame = 0;
 	m_upgradeSpreadEntries = 0;
 	for( i = 0; i < UPGRADE_SPREAD_MAX; i++ )
@@ -2624,6 +2628,9 @@ void ControlBar::init( void )
 	// load the command sets
 	ini.load( AsciiString( "Data\\INI\\CommandSet.ini" ), INI_LOAD_OVERWRITE, NULL );
 
+	// the fork's corrections to EA's buttons and sets, edited in place; GameEngine::init checksums it
+	ini.load( AsciiString( "Data\\INI\\CommandSetReforged.ini" ), INI_LOAD_MULTIFILE, NULL );
+
 	// post process step after loading the command buttons and command sets
 	postProcessCommands();
 
@@ -3280,22 +3287,6 @@ void ControlBar::update( void )
 		clearPurchaseScienceColumn();
 
 	//
-	// a stand-in builder is not selected, so no deselect event tells us when it dies or when a
-	// real selection arrives; re-evaluate ourselves before anything touches its drawable
-	//
-	if( m_standInBuilderID != INVALID_DRAWABLE_ID )
-	{
-		Drawable *standIn = TheGameClient->findDrawableByID( m_standInBuilderID );
-		Object *standInObj = standIn ? standIn->getObject() : NULL;
-		if( TheInGameUI->getSelectCount() > 0 || standInObj == NULL || standInObj->isEffectivelyDead() )
-		{
-			m_standInBuilderID = INVALID_DRAWABLE_ID;
-			m_currentSelectedDrawable = NULL;
-			markUIDirty();
-		}
-	}
-
-	//
 	// first, if the UI is dirty repopulate the UI with what the user should see for all the
 	// selected drawables
 	//
@@ -3559,23 +3550,6 @@ void ControlBar::evaluateContextUI( void )
 	// erase any current state of the GUI by switching out to the empty context
 	switchToContext( CB_CONTEXT_NONE, NULL );
 
-	//
-	// nothing selected: one of the player's builders stands in and its command bar shows, so
-	// a structure can be placed without selecting a dozer first - the logic then sends the
-	// idle builder nearest the site (MSG_DOZER_CONSTRUCT).  m_standInBuilderID is not cleared
-	// first: findStandInBuilder reads it to keep the builder it is already showing.
-	//
-	if( TheInGameUI->getSelectCount() == 0 )
-	{
-		Drawable *builder = findStandInBuilder( FALSE );
-		m_standInBuilderID = builder ? builder->getID() : INVALID_DRAWABLE_ID;
-		if( builder )
-			switchToContext( CB_CONTEXT_COMMAND, builder );
-		return;
-	}
-
-	m_standInBuilderID = INVALID_DRAWABLE_ID;
-
 	// get the list of drawable IDs from the in game UI
 	const DrawableList *selectedDrawables = TheInGameUI->getAllSelectedDrawables();
 
@@ -3836,6 +3810,11 @@ CommandButton *ControlBar::newCommandButtonOverride( CommandButton *buttonToOver
 			commandSet->markAsOverride();
 		}
 	}  // end if
+	else if( ini->getLoadType() == INI_LOAD_MULTIFILE )
+	{
+		// a patch file's set replaces the set whole, in place, so every pointer to it stays good
+		commandSet->friend_clearCommands();
+	}
 	else if( ini->getLoadType() != INI_LOAD_CREATE_OVERRIDES )
 	{
 		//Holy crap, this sucks to debug!!!
@@ -4094,83 +4073,6 @@ Bool ControlBar::cancelLastQueuedUnit( const ThingTemplate *thing )
 	return TRUE;
 
 }  // end cancelLastQueuedUnit
-
-//-------------------------------------------------------------------------------------------------
-/** The local player's builder that stands in for an empty selection: an idle one if there is
-	* one, else any live one.  (Player::iterateObjects callback + driver.) */
-//-------------------------------------------------------------------------------------------------
-struct StandInBuilderSearch
-{
-	Object *idle;
-	Object *any;
-};
-
-/** a builder is free for a job when it has no build/repair task and is not hauling supplies -
-	walking somewhere on a plain move order does not make it busy */
-static Bool builderIsFree( AIUpdateInterface *ai, DozerAIInterface *dozer )
-{
-	if( dozer->isAnyTaskPending() )
-		return FALSE;
-	const SupplyTruckAIInterface *supply = ai->getSupplyTruckAIInterface();
-	if( supply && supply->isCurrentlyFerryingSupplies() )
-		return FALSE;
-	return TRUE;
-}
-
-static void findStandInBuilderProc( Object *obj, void *userData )
-{
-	StandInBuilderSearch *s = (StandInBuilderSearch *)userData;
-	if( obj == NULL || obj->isEffectivelyDead() || obj->getDrawable() == NULL )
-		return;
-	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) )
-		return;
-	AIUpdateInterface *ai = obj->getAI();
-	DozerAIInterface *dozer = ai ? ai->getDozerAIInterface() : NULL;
-	if( dozer == NULL )
-		return;
-	if( s->any == NULL )
-		s->any = obj;
-	if( s->idle == NULL && builderIsFree( ai, dozer ) )
-		s->idle = obj;
-}
-
-Drawable *ControlBar::findStandInBuilder( Bool freeOnly )
-{
-	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
-	if( player == NULL )
-		return NULL;
-
-	//
-	// The builder already standing in keeps the bar for as long as it is still a builder.  The
-	// sweep below answers "the first idle one", and idleness changes on its own: a dozer somewhere
-	// across the base finishing a building goes idle and used to take the bar off the one you were
-	// working with.  That drops a half-typed chord and takes the structure off your cursor, in the
-	// middle of placing it, because something happened somewhere else.
-	//
-	if( m_standInBuilderID != INVALID_DRAWABLE_ID && TheGameClient )
-	{
-		Drawable *held = TheGameClient->findDrawableByID( m_standInBuilderID );
-		Object *obj = held ? held->getObject() : NULL;
-		if( obj && obj->getControllingPlayer() == player )
-		{
-			StandInBuilderSearch check;
-			check.idle = NULL;
-			check.any = NULL;
-			findStandInBuilderProc( obj, &check );
-			if( check.any && ( !freeOnly || check.idle ) )
-				return held;
-		}
-	}
-
-	StandInBuilderSearch s;
-	s.idle = NULL;
-	s.any = NULL;
-	player->iterateObjects( findStandInBuilderProc, &s );
-
-	Object *pick = s.idle ? s.idle : ( freeOnly ? NULL : s.any );
-	return pick ? pick->getDrawable() : NULL;
-
-}  // end findStandInBuilder
 
 //-------------------------------------------------------------------------------------------------
 /** Press the index'th general's power shortcut button, as a mouse click would */
