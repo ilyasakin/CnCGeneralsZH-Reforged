@@ -1530,9 +1530,14 @@ void GameEngine::reset( void )
 
 	WindowLayout *background = TheWindowManager->winCreateLayout("Menus/BlankWindow.wnd");
 	DEBUG_ASSERTCRASH(background,("We Couldn't Load Menus/BlankWindow.wnd"));
-	background->hide(FALSE);
-	background->bringForward();
-	background->getFirstWindow()->winClearStatus(WIN_STATUS_IMAGE);
+	// NULL when the file could not be read, which with the stock data means its drive has gone
+	// (GameDataGone normally ends the game first); the backdrop is cosmetic, so go on without it
+	if (background != NULL)
+	{
+		background->hide(FALSE);
+		background->bringForward();
+		background->getFirstWindow()->winClearStatus(WIN_STATUS_IMAGE);
+	}
 	Bool deleteNetwork = false;
 	if (TheGameLogic->isInMultiplayerGame())
 		deleteNetwork = true;
@@ -2793,6 +2798,8 @@ void GameEngine::execute( void )
 	while( !m_quitting )
 	{
 		Real thisFrameMS = 0.0f;		// how long this pass took, for the stutter report at the bottom
+
+		GameDataGoneCheck();		// the game's drive went away under another thread's read: stop here (Debug.h)
 
 		//if (TheGlobalData->m_vTune)
 		{

@@ -382,10 +382,15 @@ void GameLogic::prepareNewGame( Int gameMode, GameDifficulty diff, Int rankPoint
 	{
 		m_background = TheWindowManager->winCreateLayout("Menus/BlankWindow.wnd");
 		DEBUG_ASSERTCRASH(m_background,("We Couldn't Load Menus/BlankWindow.wnd"));
-		m_background->hide(FALSE);
-		m_background->bringForward();
+		// as GameEngine::reset: NULL when the file could not be read; the backdrop is cosmetic
+		if (m_background)
+		{
+			m_background->hide(FALSE);
+			m_background->bringForward();
+		}
 	}
-	m_background->getFirstWindow()->winClearStatus(WIN_STATUS_IMAGE);
+	if (m_background)
+		m_background->getFirstWindow()->winClearStatus(WIN_STATUS_IMAGE);
 	TheGameLogic->setGameMode( gameMode );
 	if (!TheGlobalData->m_pendingFile.isEmpty())
 	{

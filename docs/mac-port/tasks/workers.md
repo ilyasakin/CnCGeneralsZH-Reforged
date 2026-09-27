@@ -25,7 +25,7 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | Ninja 1.12.1 | `~/zhr-worker/bin/ninja` | `ninja-mac.zip` from github.com/ninja-build/ninja/releases (-47) | in the folder |
 | `zheavy`, the one-heavy-job lock | `~/zhr-worker/bin/zheavy`, lock file `~/zhr-worker/.heavy.lock` | written by -47 | in the folder |
 | the game data (the user's own install, 4.6 GB: `zerohour` and `generals`) | `~/zhr-worker/data` | `rsync -a` from this Mac's `/Volumes/External/Games/cnc` (-47) | in the folder |
-| the vendored sources git ignores (4,114 files, SDL3, freetype, GameSpy, …) | `~/zhr-worker/vendor` | `rsync --files-from` of the ignored files of the zhr2-B17 worktree (-47) | in the folder |
+| the vendored sources git ignores (4,114 files, SDL3, freetype, GameSpy, …) | `~/zhr-worker/vendor` | `rsync --files-from` of the ignored files of the zhr2-B17 worktree (-47); on 2026-09-27 `Tools/vendor.sh` at 681d6f9a, run in a scratch worktree over a clone of it, patched one file (SDL3's `src/gpu/metal/SDL_gpu_metal.m`, sdl3-metal-windowless.patch), copied back here and into wt-pm and wt-47 (-47, for the PM) | in the folder |
 | the art archives (`Reforged*.big`, 1.65 GB) | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
 | the repository | `~/zhr-worker/repo` (a clone of `feature/mac-port`), from `~/zhr-worker/zhr.bundle` | `git bundle` here, `scp` there, `git clone` (-47). Nothing was pushed to any public remote | in the folder |
 | worktree for -47 | `~/zhr-worker/wt-47`, branch `agent-47` | `git worktree add` (-47) | in the folder |
@@ -35,6 +35,10 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | a Metal / window-server probe | `~/zhr-worker/tools/gpuprobe.m` and its binary | written and compiled by -47 (it opens no window) | in the folder |
 | a tree hasher | `~/zhr-worker/bin/hashtree.py` (path, size and BLAKE2 per file) | written by -47, for the data check | in the folder |
 | the README | `~/zhr-worker/README` | written by -47 | in the folder |
+| worktree for -18 | `~/zhr-worker/wt-18`, branch `agent-18` (then `feature/mac-port-data-gone`), vendor and art cloned in, SDL3 patched by `Tools/vendor.sh`; the repo ref `refs/remotes/mac18/feature/mac-port` | `git worktree add` (-18) | in the folder |
+| build dir for -18 | `~/zhr-worker/build-18` (Release, `ZH_GAME_DATA=~/zhr-worker/data`), its logs `~/zhr-worker/build-18.*.log`, and `build-18/s18`: the sweep and lid-close scripts, APFS clones of the binary, their logs | `cmake`/`ninja` via `zheavy`, `scp` (-18) | in the folder |
+| -18's bundles | `~/zhr-worker/bundles/fmp18.bundle`, `dg18.bundle` | `scp` (-18) | in the folder |
+| disk images for the lid-close repro and `data_gone_check` | made in a temporary work folder under `build-18/s18` or `$TMPDIR`, attached, detached (by their own device) and deleted by the script that made them; none is left | `hdiutil create/attach/detach` (-18), no sudo | nothing left to undo; `hdiutil info` lists none |
 | -a9's offscreen probes (SDL3 GPU and raw Metal, no window) | `~/zhr-worker/probe-a9` | written and compiled by -a9 with clang against build-47's `libSDL3.a` | deleted by -a9, 2026-09-27, once `-offscreen` was validated there |
 | -a9's PERF1 folder: bundles, scripts, logs, captures, the install's hash list, a symlink farm of `data/zerohour` (510 links, real directories), and `tmo`, a perl stand-in for GNU `timeout`, which macOS lacks | `~/zhr-worker/perf-a9` | `scp` of bundles and scripts, then `setup.sh` and `matrix.sh` (-a9). Nothing was pushed anywhere | in the folder |
 | worktree for -a9 | `~/zhr-worker/wt-a9`, branch `perf1-finer-run`; the repository also holds `perf1-finer-nofix3` (fix 3 reverted, for the A/B). Vendor and art cloned in; its SDL3 patched by `vendor.sh` | `git worktree add` (-a9) | in the folder, and `git -C ~/zhr-worker/repo worktree prune` and `branch -D perf1-finer-run perf1-finer-nofix3` |
@@ -72,4 +76,34 @@ Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wid
     view (-a9).
   - The PM chose -a9's `-offscreen` mode (option 3). A GUI login for zhr (option 1) is with the user;
     running in finer's own session (option 2) was declined.
+
+## thinkerer (`ssh zhr@thinkerer`): the Linux build and test host
+
+Arch Linux (rolling, kernel 7.1.4), x86_64 i5-8350U with 4 cores and 8 threads, 62 GB, 247 GB free on
+btrfs at the start. It already had cmake 4.4.2, ninja, clang 22.1.8, gcc 16.2.1, python3, rsync and
+docker, and every development package the Linux check installs (X11, Wayland, ALSA, Pulse, Vulkan,
+spirv-tools, ...). One package was installed system-wide: `unifdef` (see the table). No firewall is active (iptables policy
+ACCEPT; firewalld and ufw inactive). It is on the Macs' LAN as `wlan0` 192.168.1.21, and has other
+interfaces (a wired 10.99.0.1, tailscale, a VPN tun0, docker bridges).
+
+The host's own services are not touched: vaultwarden, pihole (192.168.1.21:53 and 5053), dnscrypt,
+uptime-kuma and the tailscale-* sidecars.
+
+Everything is under `/home/zhr/zhr-worker` unless noted:
+
+| what | where | how it got there | undo |
+|:--|:--|:--|:--|
+| the worker folder | `~/zhr-worker` | `mkdir` (-47) | `rm -rf ~/zhr-worker` removes everything below |
+| `zheavy` and `hashtree.py` | `~/zhr-worker/bin/` | `scp`, the same files as finer's (-47) | in the folder |
+| the game data (4.6 GB) | `~/zhr-worker/data` | `rsync -a` from this Mac (-47) | in the folder |
+| the vendored sources git ignores | `~/zhr-worker/vendor` | `rsync --files-from` (-47) | in the folder |
+| the art archives | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
+| the repository | `~/zhr-worker/repo`, from `~/zhr-worker/bundles/fmp.bundle` (feature/mac-port 9d1c8895) | `git bundle` here, `scp`, `git clone` (-47) | in the folder |
+| worktree and build for -47 | `~/zhr-worker/wt-47` (branch `agent-47`, vendor copied in with `cp --reflink=auto`), `~/zhr-worker/build-47` | `git worktree add`, cmake/ninja via `zheavy` (-47) | in the folder |
+| `unifdef` 2.12-4 (system-wide, `/usr/bin/unifdef`), which widechar_check needs; it was not installed before | pacman | `sudo pacman -S --needed --noconfirm unifdef`, as the PM directed (-47, 2026-09-27) | `sudo pacman -Rs unifdef` |
+
+**The Windows VM is not -47's.** The user approved it (relayed by the PM), but this session's permission
+classifier refused its setup as "Unauthorized Persistence" (an auto-started SSH server keyed to this Mac
+inside the VM), and -47 created nothing for it. The user then started it themselves (container
+`zhr-windows`) and the PM handles its access and tools. Its revert entries belong to them, not to this table.
 

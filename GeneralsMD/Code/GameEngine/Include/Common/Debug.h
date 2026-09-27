@@ -222,6 +222,16 @@ class AsciiString;
 DEBUG_EXTERN_C void ReleaseCrash(const char* reason);
 DEBUG_EXTERN_C void ReleaseCrashLocalized(const AsciiString& p, const AsciiString& m);
 
+/** The game's data has gone away under it: the drive the install is on was disconnected, ejected or put
+	* to sleep while the game had its archives open.  The archive layer calls this when a read of an open
+	* archive fails that way (File::deviceGone).  Not a crash, and nothing is saved: on the main thread it logs,
+	* says so in a box (none under -headless) and ends the process at once with GAME_DATA_GONE_EXIT_STATUS.
+	* On any other thread (the audio's streaming reads) it only records the loss, and GameDataGoneCheck, which
+	* the main loop calls every frame, ends it there.  The first loss is the one reported. */
+DEBUG_EXTERN_C void GameDataGone(const char* what);
+DEBUG_EXTERN_C void GameDataGoneCheck(void);
+enum { GAME_DATA_GONE_EXIT_STATUS = 3 };		///< the process's exit status when the game's data went away
+
 #define RELEASE_CRASH(m)				do { ReleaseCrash(m); } while (0)
 #define RELEASE_CRASHLOCALIZED(p, m)		do { ReleaseCrashLocalized(p, m); } while (0)
 

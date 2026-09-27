@@ -93,6 +93,7 @@ class LocalFile : public File
 #else
 		int m_handle;											///< Local C file handle
 #endif
+		int m_lastError;									///< the error of the last failed read or seek (errno; on Windows _doserrno), 0 if none
 		
 	public:
 		
@@ -118,6 +119,7 @@ class LocalFile : public File
 		*/
 		virtual char* readEntireAndClose();
 		virtual File* convertToRAMFile();
+		virtual Bool	deviceGone( void ) const;														///< See File::deviceGone
 
 };
 
