@@ -61,7 +61,11 @@ CODE="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$GENERALS")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/gamepad-crc-check.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/gamepad-crc-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "gamepad-crc-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="gp$$_"

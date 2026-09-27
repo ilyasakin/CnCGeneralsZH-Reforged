@@ -161,7 +161,7 @@ Bool SdlInputScript_start( void )
 	FILE *file = fopen( path, "r" );
 	if (file == NULL)
 	{
-		DEBUG_LOG(( "INPUT SCRIPT: cannot read %s\n", path ));
+		fprintf( stderr, "generals: input script: cannot read %s\n", path );
 		return FALSE;
 	}
 	char line[ 256 ];
@@ -196,8 +196,9 @@ Bool SdlInputScript_start( void )
 			SDL_SetJoystickVirtualAxis( thePad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
 		}
 	}
-	DEBUG_LOG(( "INPUT SCRIPT: %d actions from %s%s\n", (int)theActions.size(), path,
-		padLines ? (thePad != NULL ? ", on a virtual pad" : ", but no virtual pad") : "" ));
+	// the window, and this with it, starts before the debug log is open: stderr says it
+	fprintf( stderr, "generals: input script: %d actions from %s%s\n", (int)theActions.size(), path,
+		padLines ? (thePad != NULL ? ", on a virtual pad" : ", but no virtual pad") : "" );
 	return !theActions.empty();
 }
 

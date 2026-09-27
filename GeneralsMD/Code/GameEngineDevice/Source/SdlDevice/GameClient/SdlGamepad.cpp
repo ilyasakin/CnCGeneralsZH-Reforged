@@ -623,7 +623,11 @@ Bool SdlGamepad_start( void )
 	{
 		theStarted = SDL_InitSubSystem( SDL_INIT_GAMEPAD );
 		if (!theStarted)
+		{
+			// before the debug log is open, so on stderr as well
+			fprintf( stderr, "generals: no gamepads: SDL's gamepad subsystem did not start: %s\n", SDL_GetError() );
 			DEBUG_LOG(( "SdlGamepad: no gamepads: %s\n", SDL_GetError() ));
+		}
 	}
 	return theStarted;
 }
