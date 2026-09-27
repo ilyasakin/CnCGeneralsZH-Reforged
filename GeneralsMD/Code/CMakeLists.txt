@@ -817,17 +817,20 @@ add_subdirectory(${LIBSRC}/litehtml ${CMAKE_CURRENT_BINARY_DIR}/litehtml)
 # They are built by default all the same, so that a break shows up in the build that caused it
 # rather than in the first task to link them.
 if(ZH_PLATFORM_POSIX)
-  # SDL3 static, and only the subsystems decision 3 uses.  On: video (window, events, message boxes)
-  # and GPU (the renderer - Metal on macOS, Vulkan on Linux).  Off: audio (miniaudio has that job),
-  # render (SDL's 2D renderer; D4 uses the GPU API directly), camera, joystick, haptic, hidapi,
-  # power, sensor, dialog and tray, and the OpenGL/GLES video drivers, which the GPU API does not
-  # use.  C3 turns joystick back on if it wants gamepads.  Tests, examples and install are off.
+  # SDL3 static, and only the subsystems decision 3 uses.  On: video (window, events, message boxes),
+  # GPU (the renderer - Metal on macOS, Vulkan on Linux) and dialog (the first launch's folder chooser,
+  # PosixMain.cpp: NSOpenPanel on macOS, the portal or zenity on Linux; with it off, SDL answers every
+  # dialog at once with "not built with dialog support", and the chooser quit before showing anything).
+  # Off: audio (miniaudio has that job), render (SDL's 2D renderer; D4 uses the GPU API directly),
+  # camera, joystick, haptic, hidapi, power, sensor and tray, and the OpenGL/GLES video drivers, which
+  # the GPU API does not use.  C3 turns joystick back on if it wants gamepads.  Tests, examples and
+  # install are off.
   foreach(_sdl_off SDL_SHARED SDL_TEST_LIBRARY SDL_TESTS SDL_EXAMPLES SDL_INSTALL SDL_UNINSTALL
                    SDL_AUDIO SDL_RENDER SDL_CAMERA SDL_JOYSTICK SDL_HAPTIC SDL_HIDAPI SDL_POWER
-                   SDL_SENSOR SDL_DIALOG SDL_TRAY SDL_OPENGL SDL_OPENGLES)
+                   SDL_SENSOR SDL_TRAY SDL_OPENGL SDL_OPENGLES)
     set(${_sdl_off} OFF CACHE BOOL "" FORCE)
   endforeach()
-  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU)
+  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU SDL_DIALOG)
     set(${_sdl_on} ON CACHE BOOL "" FORCE)
   endforeach()
   add_subdirectory(${LIBSRC}/SDL3 ${CMAKE_CURRENT_BINARY_DIR}/SDL3)

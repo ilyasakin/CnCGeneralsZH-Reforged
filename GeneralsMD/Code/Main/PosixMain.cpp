@@ -118,6 +118,7 @@ struct FolderAnswer
 	std::mutex lock;
 	std::atomic<int> state;		// 0 waiting, 1 chosen, 2 cancelled or failed
 	std::string path;
+	std::string failure;		// SDL's error when it failed; empty when the player cancelled
 };
 
 static void SDLCALL onFolderChosen( void *userdata, const char * const *filelist, int )
@@ -130,15 +131,53 @@ static void SDLCALL onFolderChosen( void *userdata, const char * const *filelist
 		answer->state = 1;
 	}
 	else
+	{
+		if (filelist == NULL)		// an error, not the player's cancel (an empty list)
+			answer->failure = SDL_GetError();
 		answer->state = 2;
+	}
 }
 
-/** PosixInstallChooser over SDL: the reason the last choice was refused, if any, in a message box, then
-	* the folder dialog.  FALSE when the player cancels. */
-static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, void * )
+#if defined(__APPLE__)
+/** Brings this app to the front.  The chooser runs before any window exists, and without one nothing
+	* activates the app (SDL does it when it shows a window, and not at launch on macOS 14 and later), so
+	* its message box and its folder panel - modal, owned by no window - would open behind whatever app
+	* was in front.  Through the Objective-C runtime, so this file stays C++: [NSApp activate] where it
+	* exists (macOS 14), and activateIgnoringOtherApps: before it.  The runtime's three functions are
+	* declared here rather than through <objc/runtime.h>, whose BOOL would clash with bittype.h's. */
+extern "C" void *objc_getClass( const char *name );
+extern "C" void *sel_registerName( const char *name );
+extern "C" void objc_msgSend( void );
+
+static void activateThisApp()
 {
+	void *applicationClass = objc_getClass( "NSApplication" );
+	if (applicationClass == NULL)
+		return;
+	void *application = ((void *(*)( void *, void * ))objc_msgSend)( applicationClass, sel_registerName( "sharedApplication" ) );
+	if (application == NULL)
+		return;
+	void *activate = sel_registerName( "activate" );
+	if (((bool (*)( void *, void *, void * ))objc_msgSend)( application, sel_registerName( "respondsToSelector:" ), activate ))
+		((void (*)( void *, void * ))objc_msgSend)( application, activate );
+	((void (*)( void *, void *, bool ))objc_msgSend)( application, sel_registerName( "activateIgnoringOtherApps:" ), true );
+}
+#else
+static void activateThisApp() {}
+#endif
+
+/** PosixInstallChooser over SDL: the reason the last choice was refused, if any, in a message box, then
+	* the folder dialog.  FALSE when the player cancels, or when the dialog cannot be shown; then the reason
+	* goes into the std::string the context points at, for the message the caller shows. */
+static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, void *context )
+{
+	std::string &failure = *(std::string *)context;
 	if (!SDL_InitSubSystem( SDL_INIT_VIDEO ))
+	{
+		failure = std::string( "The folder dialog could not be opened: " ) + SDL_GetError();
 		return false;
+	}
+	activateThisApp();
 	if (!why.empty())
 		SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_WARNING, "Zero Hour Reforged", why.c_str(), NULL );
 
@@ -160,6 +199,8 @@ static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, vo
 	SDL_QuitSubSystem( SDL_INIT_VIDEO );
 	std::lock_guard<std::mutex> guard( answer.lock );
 	chosen = answer.path;
+	if (!answer.failure.empty())
+		failure = "The folder dialog could not be shown: " + answer.failure;
 	return answer.state == 1;
 }
 
@@ -187,15 +228,22 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 		request.forbidden.push_back( request.executableDirectory + "/../.." );	// the bundle
 	request.forbidden.insert( request.forbidden.end(), overlays.begin(), overlays.end() );
 	request.registryFile = findRegistryFile( buffer, sizeof( buffer ) ) ? buffer : "";
+	std::string dialogFailure;
 	request.chooser = headless ? NULL : chooseFolderWithSdl;
-	request.chooserContext = NULL;
+	request.chooserContext = &dialogFailure;
 
 	PosixInstallChoice choice;
 	if (!PosixChooseInstallRoot( request, choice ))
 	{
-		fprintf( stderr, "generals: %s\n", choice.problem.c_str() );
+		// the dialog's own failure, when it failed, says more than "none was chosen"
+		const std::string problem = dialogFailure.empty() ? choice.problem
+			: dialogFailure + "\n\nStart the game with -root <folder> to name the Zero Hour folder instead.";
+		fprintf( stderr, "generals: %s\n", problem.c_str() );
 		if (request.insideAppBundle && !headless)
-			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Zero Hour Reforged", choice.problem.c_str(), NULL );
+		{
+			activateThisApp();
+			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Zero Hour Reforged", problem.c_str(), NULL );
+		}
 		return FALSE;
 	}
 	if (choice.writeInstallPath && !writeRegistryFile( registryFileKey( "", AsciiString::TheEmptyString,
