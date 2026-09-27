@@ -86,6 +86,7 @@
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/GameClient/W3DView.h"
+#include "W3DDevice/GameClient/W3DSmoothMotion.h"
 #include "d3dx9math.h"
 #include "W3DDevice/GameClient/W3DShaderManager.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
@@ -1482,7 +1483,13 @@ void W3DView::update(void)
 	{
 		followFactor = -1;
 	}
-	if (stepTime && cameraLock != INVALID_ID)
+	// R1, smooth motion: with it on, the lock follows on every render frame, towards the drawable's
+	// blended position, each per-step factor scaled to this frame's length (1-(1-f)^steps); with it off,
+	// 30 Hz steps and the factors as they were.
+	const Bool smoothLock = TheSmoothMotionActive;
+	const Real lockSteps = smoothLock ? (Real)waypointElapsedMs / (Real)TheW3DFrameLengthInMsec : 1.0f;
+	auto perStep = [smoothLock, lockSteps](Real f) -> Real { return smoothLock ? 1.0f - powf(1.0f - f, lockSteps) : f; };
+	if ((smoothLock ? lockSteps > 0.0f : (stepTime != 0)) && cameraLock != INVALID_ID)
 	{
 		m_doingMoveCameraOnWaypointPath = false;
 		m_CameraArrivedAtWaypointOnPathFlag = false;
@@ -1516,7 +1523,7 @@ void W3DView::update(void)
 			if (followFactor<0) {
 				followFactor = 0.05f;
 			} else {
-				followFactor += 0.05f;
+				followFactor += 0.05f * lockSteps;
 				if (followFactor>1.0f) followFactor = 1.0f;
 			}
 			if (getCameraLockDrawable() != NULL)
@@ -1535,6 +1542,14 @@ void W3DView::update(void)
 					// this method must ONLY be called from the client, NEVER From the logic, not even indirectly.
 					if (cameraLockDrawable->clientOnly_getFirstRenderObjInfo(&pos, &boundingSphereRadius, &transform))
 					{
+						Coord3D shown;
+						if (smoothLock && cameraLockDrawable->getSmoothMotionPosition(TheSmoothMotionAlpha, &shown))
+						{
+							const Coord3D *logicPos = cameraLockDrawable->getPosition();
+							pos.x += shown.x - logicPos->x;
+							pos.y += shown.y - logicPos->y;
+							pos.z += shown.z - logicPos->z;
+						}
 						Vector3 zaxis(0,0,1);
 
 						Vector3 objPos;
@@ -1552,7 +1567,7 @@ void W3DView::update(void)
 
 						Vector3 tranDiff = (camtran - prevCamTran);	//vector old position to new position.
 
-						camtran = prevCamTran + tranDiff * 0.1f;	//slowly move camera to new position.
+						camtran = prevCamTran + tranDiff * perStep(0.1f);	//slowly move camera to new position.
 
 						Matrix3D camXForm;
 						camXForm.Look_At(camtran,objPos,0);
@@ -1564,6 +1579,8 @@ void W3DView::update(void)
 			}
 			else
 			{	Coord3D objpos = *cameraLockObj->getPosition();
+				if (smoothLock && cameraLockObj->getDrawable() != NULL)
+					cameraLockObj->getDrawable()->getSmoothMotionPosition(TheSmoothMotionAlpha, &objpos);
 				Coord3D curpos = *getPosition();
 				// don't "snap" directly to the pos, but move there smoothly.
 				Real snapThreshSqr = sqr(TheGlobalData->m_partitionCellSize);
@@ -1587,13 +1604,13 @@ void W3DView::update(void)
 							Real ratio = 1.0f - snapThreshSqr/curDistSqr;
 							
 							// move halfway there.
-							curpos.x += dx*ratio*0.5f;
-							curpos.y += dy*ratio*0.5f;
+							curpos.x += dx*ratio*perStep(0.5f);
+							curpos.y += dy*ratio*perStep(0.5f);
 						}
 						else
 						{
 							// we're inside our 'play' tolerance.  Move slowly to the obj
-							Real ratio = 0.01f * m_lockDist;
+							Real ratio = perStep(0.01f * m_lockDist);
 							Real dx = objpos.x-curpos.x;
 							Real dy = objpos.y-curpos.y;
 							curpos.x += dx*ratio;
@@ -1602,8 +1619,8 @@ void W3DView::update(void)
 					}
 					else
 					{
-						curpos.x += dx*followFactor;
-						curpos.y += dy*followFactor;
+						curpos.x += dx*perStep(followFactor);
+						curpos.y += dy*perStep(followFactor);
 					}
 				}
 				if (!(TheScriptEngine->isTimeFrozenDebug() || TheScriptEngine->isTimeFrozenScript()) && !TheGameLogic->isGamePaused()) {
@@ -1630,7 +1647,7 @@ void W3DView::update(void)
 						}
 						else
 						{
-							m_angle += diff * 0.1f;
+							m_angle += diff * perStep(0.1f);
 						}
 						normAngle(m_angle);
 					}

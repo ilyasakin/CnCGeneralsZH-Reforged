@@ -137,10 +137,12 @@ int LCW_Uncomp(void const * source, void * dest, unsigned long )
 
 					dest_ptr += (count & 0xfffffffc);
 
+					// A word at a time up to the run's aligned end.  This wrote them in pairs, so when the
+					// aligned part was 4 mod 8 long the last pair wrote one word past the run: the next
+					// operation overwrote it, but after the last one it landed past the output (ASan under
+					// ZH_SANITIZE).  The bytes of the run itself are the same.
 					while (word_dest_ptr < (unsigned*) dest_ptr) {
-						*word_dest_ptr		= word_data;
-						*(word_dest_ptr + 1) = word_data;
-						word_dest_ptr += 2;
+						*word_dest_ptr++ = word_data;
 					}
 
 					copy_ptr = dest_ptr + (count & 0x3);

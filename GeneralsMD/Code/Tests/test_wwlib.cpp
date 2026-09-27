@@ -436,6 +436,21 @@ TEST(lcw_round_trip)
 	}
 }
 
+// A long run (0xFE) that ends the output exactly.  From an aligned start the run writes 4 bytes to reach
+// alignment and then its aligned part a word at a time; 16 bytes leave 12 for the words, which is 4 mod 8,
+// where the words used to go in pairs and the last pair wrote 4 bytes past the run - here past the output,
+// into the canaries.  No sanitizer needed: the canaries are the check.
+TEST(lcw_long_run_stays_inside_the_output)
+{
+	static const unsigned char stream[] = { 0xFE, 16, 0, 0x5A, 0x80 };
+	alignas(16) unsigned char out[32];
+	memset(out, 0xC3, sizeof(out));
+	int out_len = LCW_Uncomp(stream, out, 16);
+	CHECK_EQ(out_len, 16);
+	for (int i = 0; i < 16; ++i) CHECK_EQ((int)out[i], 0x5A);
+	for (int i = 16; i < 32; ++i) CHECK_EQ((int)out[i], 0xC3);
+}
+
 TEST(lcw_compresses_repetitive_data)
 {
 	unsigned char src[4096], packed[8192], back[4096];
