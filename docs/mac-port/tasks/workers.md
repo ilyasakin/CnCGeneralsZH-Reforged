@@ -45,6 +45,7 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | build dir for -a9 | `~/zhr-worker/build-a9` (Release, `ZH_GAME_DATA=~/zhr-worker/data`), with copies `generals-fix3` and `generals-nofix3` | `cmake`/`ninja` via `zheavy` (-a9) | in the folder |
 | -a9's further worktrees and builds on finer: `wt-a9-l2`/`build-a9-l2` (L2's branch, for a Mac binary); `wt-a9-san`/`build-a9-tsan`/`build-a9-asan` (PERF candidate 1 under the sanitizers); `wt-a9-lw`/`build-a9-lw` (lock-wait instrumented) | `~/zhr-worker/…` | `git worktree add`, `cmake`/`ninja` via `zheavy` (-a9) | in the folder, then `git -C ~/zhr-worker/repo worktree prune` |
 | -a9's branches in finer's repository | `a9-*` (base, candidates, proof and pixel-proof branches, `a9-l2`, `a9-lw-*`) | fetched from bundles (-a9) | `git -C ~/zhr-worker/repo branch -D` each `a9-*` |
+| the fleet gate's folder (`ci-matrix.sh`, E2): the worktree `ci/wt` (vendor and art cloned in), the build `ci/build`, the logs `ci/*.log`, the lock `ci/lock`; the repository ref `refs/ci/head`; `bundles/ci-host.sh` | `~/zhr-worker/ci` | `ci-matrix.sh` (-18) | `git -C ~/zhr-worker/repo worktree remove --force ~/zhr-worker/ci/wt; git -C ~/zhr-worker/repo update-ref -d refs/ci/head; rm -rf ~/zhr-worker/ci ~/zhr-worker/bundles/ci-host.sh` |
 
 Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wide.
 
@@ -141,11 +142,17 @@ deleted. The data copy's hash was unchanged. Undo: `Remove-Item -Recurse C:\zhr-
 | replays copied into the user's Replays folder | `Documents\Command and Conquer Generals Zero Hour Data\Replays\w1a.rep`, `w1b.rep`, and the harness's `determinism*.rep` | `Copy-Item`, `replay-check.ps1` (-18) | delete them |
 | one-off scheduled tasks `zhr18desk`, `zhr18desk2`…`zhr18desk5`, and windows-ci.ps1's `zh-windows-ci-*` | Task Scheduler | `schtasks /create /it` (-18, windows-ci.ps1) | deleted after each run |
 | the PM's worktree for windows-ci.ps1 | `C:\zhr-worker\wt-pm-win` (a detached `git worktree` of `C:\zhr-worker\repo`, its own `build64`, `build.local.bat` copied), `C:\zhr-worker\bundles\`, and the check's work folder `C:\zhr-worker\ci-pm` (farm, logs, results) | `git worktree add` (-18) | `git -C C:\zhr-worker\repo worktree remove --force C:\zhr-worker\wt-pm-win`; delete the two folders |
+| a Windows Defender exclusion for the work folder, so real-time scanning cannot hold a test's file open (the PM's call, for a `test_wwlib` flake seen once at -j4) | Defender's settings: `(Get-MpPreference).ExclusionPath` lists `C:\zhr-worker` | `Add-MpPreference -ExclusionPath C:\zhr-worker` (-18, 2026-09-27) | `Remove-MpPreference -ExclusionPath C:\zhr-worker` |
+| ci-matrix.sh's part on the VM | `C:\zhr-worker\bundles\ci-host.ps1`, and each run's `ci-matrix-*.bundle` there until the run removes it | `scp` from `ci-matrix.sh` (-18) | in the folder |
 
 On thinkerer, for W2: `~/zhr-worker/tmp18` (hash listings, the VM's host key in a known-hosts file of its
 own, a copy of build-47's `generals`, `playwin.sh`, the Windows replay, the bundles). Undo: `rm -rf ~/zhr-worker/tmp18`.
 Also on thinkerer, for #32's armed control and the final W2 check (turns agreed with -47): the worktree
 `~/zhr-worker/wt-18` (vendor and art copied in with `cp --reflink=auto`) and the build `~/zhr-worker/build-18`,
 with its logs `~/zhr-worker/build-18.*.log`. Undo: `git -C ~/zhr-worker/repo worktree remove --force
-~/zhr-worker/wt-18; rm -rf ~/zhr-worker/build-18 ~/zhr-worker/build-18.*.log`. The one core dump it made (the
+~/zhr-worker/wt-18; rm -rf ~/zhr-worker/build-18 ~/zhr-worker/build-18.*.log`.
+The fleet gate's folder on thinkerer is as on finer: `~/zhr-worker/ci` (worktree `ci/wt` with vendor and art copied in
+with `cp --reflink=auto`, build `ci/build`, logs, lock), the ref `refs/ci/head` and `bundles/ci-host.sh`, made by `ci-matrix.sh`
+(-18). Undo: `git -C ~/zhr-worker/repo worktree remove --force ~/zhr-worker/ci/wt; git -C ~/zhr-worker/repo update-ref -d
+refs/ci/head; rm -rf ~/zhr-worker/ci ~/zhr-worker/bundles/ci-host.sh`. The one core dump it made (the
 #32 mutant's SIGSEGV, pid 3917314) was removed from `/var/lib/systemd/coredump` with `sudo rm` straight after.
