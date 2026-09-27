@@ -644,7 +644,9 @@ static void scenarios_cascade(Harness &h)
 	h.begin(0xFF000000);
 	h.rs(D3DRS_SPECULARENABLE, 1);
 	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE, D3DPT_TRIANGLELIST, screen_quad(4, 4, 60, 60, CORNERS));
-	h.check("specular add, no vertex specular (N7)", false, "F7: an absent specular (N7)");
+	// F7, settled by Windows' own D3D9 (WARP, HAL and REF, -47): an absent vertex specular reads as
+	// 0x00000000, so SPECULARENABLE adds nothing.  FFReference's N7 says so now; an ordinary check again.
+	h.check("specular add, no vertex specular (N7)");
 }
 
 static void scenarios_lighting(Harness &h)
