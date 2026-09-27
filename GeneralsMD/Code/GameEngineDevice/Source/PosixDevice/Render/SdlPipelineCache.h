@@ -37,6 +37,7 @@
 #include "Platform/D3D9Posix.h"
 
 #include <stdint.h>
+#include <string.h>
 #include <string>
 #include <unordered_map>
 
@@ -131,8 +132,22 @@ public:
 	const std::string &Refusal() const { return LastRefusal; }
 
 private:
+	/// A stage's 14 sampler states, compared and hashed by their bytes: PERF1 found the std::string key
+	/// this replaced (56 bytes, past the string's inline buffer) allocating on every lookup, 8 slots a draw.
+	struct Key
+	{
+		RenderUInt32 States[14];
+		bool operator==(const Key &other) const { return memcmp(States, other.States, sizeof(States)) == 0; }
+	};
+	struct KeyHash
+	{
+		size_t operator()(const Key &key) const;
+	};
 	SDL_GPUDevice *Device;
-	std::unordered_map<std::string, SDL_GPUSampler *> Samplers;	///< by the state row's bytes
+	std::unordered_map<Key, SDL_GPUSampler *, KeyHash> Samplers;
+	Key LastKey;						///< the last lookup's, for a draw that samples as the one before did
+	SDL_GPUSampler *LastSampler;
+	bool HaveLast;
 	std::string LastRefusal;
 };
 
