@@ -157,6 +157,16 @@ failed, 46 ANISOTROPIC replayed as LINEAR. They agree on every capture but one:
 - This judge takes the captured tokens literally and refuses them.
 - So it's a difference in what was replayed, not in pixels. -a9 will describe the stub's layout in words, so
   that this judge can read the text out itself.
+- **Settled.** -a9 described the layout in words: word 0 the version token; word 1 a comment token of N words;
+  word 2 the tag "ZHSR"; word 3 the text's byte count L; the text, zero-padded; then END, with no
+  instructions.
+  - ffref_judge now recognises exactly that shape. It checks N >= 2, that L fits the comment, and that the
+    comment fits the stream; anything else is taken as real tokens.
+  - It reads the text out itself and assembles it with FFReference's assembler.
+  - draw_00019 then agrees exactly: 665 pixels written on both sides, all 480000 exact. Three mutations catch
+    it (65, 41 and 665 outside).
+  - **The set's verdict is now 38 agree, 11 empty, 0 refused, 0 disagree, 0 unreadable.** That matches -a9's
+    49 compared, 11 drawing nothing.
 
 **Armed controls on the same set, so an "agree" is a comparison that can fail:**
 - **Each capture against the next capture's GPU picture:** 37 disagree, and 8 can't be compared because
