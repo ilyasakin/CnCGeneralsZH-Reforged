@@ -1735,6 +1735,21 @@ hunting a crash or corruption that only one platform shows, look here first.**
 - **An erase of a `std::find` result that only an assert checks (not fixed).** `InGameUI.cpp:7188`
   erases from `m_selectedDrawables` what `std::find` returned, and a release build would `erase(end())`
   if the selection bookkeeping were already out of sync. Found by #32's erase sweep.
+- **Every `new` is zero-filled, and the engine relies on it (a contract, not a bug).** GameMemory's
+  global `operator new` hands out `DynamicMemoryAllocator::allocateBytes` blocks, which it `memset`s to
+  0, so a member no constructor sets reads 0. The engine depends on that: when ZH_SANITIZE's first
+  design left the sanitizer's own unzeroed `new`, the game crashed loading its `.big` files
+  (`ArchiveFile::attachFile`). Any change to the global allocator must keep the zero-fill. ZH_SANITIZE
+  keeps it with `calloc`. A normal build's `std::` containers and plain `new` get it through the same
+  operator.
+- **A special-power timer cleared after its erase (`Player::init`) - fixed.** EA's reset loop took a
+  pointer to each `SpecialPowerReadyTimerType` in its `std::list`, erased it, and then called `clear()`
+  through the pointer: a write into the freed node, after every match. The shipped allocator made it
+  harmless. GameMemory keeps a freed block's links in its header (`m_nextBlock`), so the write landed in
+  dead user data, and the next allocation of that block is zero-filled. No other allocator promises
+  that. ASan found it on ZH_SANITIZE's first full run (headless and offscreen alike, at the reset). The
+  dead write is gone; the erases, their frees and their order stay, and E1's CRCs are unchanged (all 12
+  lines of replay_check and net_check, on finer).
 
 ### "ctest is green" was not what it looked like
 
