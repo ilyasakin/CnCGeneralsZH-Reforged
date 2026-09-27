@@ -211,9 +211,13 @@ void SdlGameEngine::createWindow( void )
 
 /* -offscreen (PosixMain.cpp): SDL's video runs, because SDL3 makes no GPU device without it, but no window
 	 is made, and the device draws every frame into its own target.  The display's own video driver first;
-	 where it has no display to add (no window server: a worker over ssh, CI), SDL's dummy driver, with
-	 ZH_SDL_GPU_METAL_WINDOWLESS for the Metal backend, which otherwise wants a view the dummy driver cannot
-	 make (Libraries/Source/sdl3-metal-windowless.patch).  The hint ZH_OFFSCREEN_FRAMES tells the device (a
+	 where it has no display to add (no window server: a worker over ssh, CI), a driver with no display:
+	   - on Apple, SDL's dummy driver, with ZH_SDL_GPU_METAL_WINDOWLESS for the Metal backend, which otherwise
+	     wants a view the dummy driver cannot make (Libraries/Source/sdl3-metal-windowless.patch);
+	   - elsewhere, SDL's offscreen driver, which gives Vulkan a headless surface (VK_EXT_headless_surface)
+	     with no patch.  The dummy driver has no Vulkan surface, and SDL's Vulkan backend refuses it (-47's
+	     L2 recon, docs/mac-port/tasks/L2-vulkan-recon.md).
+	 The hint ZH_OFFSCREEN_FRAMES tells the device (a
 	 hint, not ZH_OFFSCREEN itself: the device must not act on the variable when -headless starts no video).
 	 Monitors.h keeps its no-display answers, as
 	 -headless has them, so a run sizes itself from -xres/-yres and Options.ini alone, whatever the host. */
@@ -223,17 +227,22 @@ void SdlGameEngine::startOffscreen( void )
 	SDL_SetHint( "ZH_SDL_GPU_METAL_WINDOWLESS", "1" );
 	// With a window server, the cocoa driver would make the process a Dock application with no window.
 	SDL_SetHint( SDL_HINT_MAC_BACKGROUND_APP, "1" );
+#if defined(__APPLE__)
+	static const char *const NO_DISPLAY_DRIVER = "dummy";
+#else
+	static const char *const NO_DISPLAY_DRIVER = "offscreen";
+#endif
 	const char *driver = "the display's";
 	if (!SDL_Init( SDL_INIT_VIDEO ))
 	{
 		const AsciiString first = SDL_GetError();
-		SDL_SetHint( SDL_HINT_VIDEO_DRIVER, "dummy" );
-		driver = "dummy";
+		SDL_SetHint( SDL_HINT_VIDEO_DRIVER, NO_DISPLAY_DRIVER );
+		driver = NO_DISPLAY_DRIVER;
 		if (!SDL_Init( SDL_INIT_VIDEO ))
 		{
 			char why[ 512 ];
 			snprintf( why, sizeof( why ), "SDL could not start its video subsystem for -offscreen: %s (then, with the "
-				"dummy driver: %s)", first.str(), SDL_GetError() );
+				"%s driver: %s)", first.str(), NO_DISPLAY_DRIVER, SDL_GetError() );
 			RELEASE_CRASH( why );
 			return;
 		}
