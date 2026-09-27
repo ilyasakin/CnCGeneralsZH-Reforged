@@ -51,6 +51,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/AIPlayer.h"
+#include "GameClient/Drawable.h"
 #include "GameLogic/SidesList.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
@@ -1042,6 +1043,10 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 		bldgName.concat(" - Dozer unable to reach building.  Teleporting.");
 		TheScriptEngine->AppendDebugMessage(bldgName, false);
 		dozer->setPosition(&pos);
+		// R1, smooth motion: a teleport, not travel - the picture shows the new place at once.  A flag on the
+		// client's drawable, which nothing in the logic reads.
+		if (dozer->getDrawable() != NULL)
+			dozer->getDrawable()->markMotionDiscontinuity();
 	}
 
 	Object *bldg = TheBuildAssistant->buildObjectNow( dozer, 
