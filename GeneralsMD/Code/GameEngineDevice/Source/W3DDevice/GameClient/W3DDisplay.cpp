@@ -69,6 +69,7 @@ static void drawFramerateBar(void);
 
 #include "GameClient/Drawable.h"
 #include "W3DDevice/GameClient/W3DSmoothMotion.h"
+#include "GameLogic/Object.h"
 #include "GameClient/Keyboard.h"		// TheKeyboard; on Windows WinMain.h brought it too
 #include "Platform/SleepMilliseconds.h"
 #if !defined(_WIN32)
@@ -478,6 +479,9 @@ W3DDisplay::~W3DDisplay()
 				fprintf(stderr, " %s %llu;", SmoothMotion_SnapName((SmoothMotionSnap)i), counts[i]);
 			fprintf(stderr, "\n");
 		}
+		if (s_aircraftLeadCount > 0 && getenv("ZH_SMOOTH_MOTION_STATS") != NULL)
+			fprintf(stderr, "smooth motion: aircraft lead (logic position ahead of the drawn one): %llu samples, mean %.2f, max %.2f world units; the largest aircraft's bounding radius %.2f\n",
+				s_aircraftLeadCount, s_aircraftLeadSum / (double)s_aircraftLeadCount, s_aircraftLeadMax, s_aircraftRadiusMax);
 	}
 
 	// a -video run that ended before its range did, on -maxframes or a decided match, still gets its movie
@@ -2146,6 +2150,10 @@ float TheSmoothMotionAlpha = 1.0f;
 static UnsignedInt s_smoothPositionFrame = 0xFFFFFFFFu;
 static UnsignedInt s_smoothModelFrame = 0xFFFFFFFFu;
 static Bool s_smoothApplied = FALSE;
+static double s_aircraftLeadSum = 0.0;
+static unsigned long long s_aircraftLeadCount = 0;
+static Real s_aircraftLeadMax = 0.0f;
+static Real s_aircraftRadiusMax = 0.0f;
 
 static void smoothMotionBegin()
 {
@@ -2189,6 +2197,24 @@ static void smoothMotionApply()
 		}
 		for (DrawModule **dm = modules; *dm; ++dm)
 			(*dm)->smoothMotionApply(TheSmoothMotionAlpha);
+		// With ZH_SMOOTH_MOTION_STATS, how far an aircraft's logic position - where its exhaust and its health
+		// bar are, which stay on the ticks - leads the place it is drawn (the PM's question about fast units).
+		static const Bool stats = getenv("ZH_SMOOTH_MOTION_STATS") != NULL;
+		Coord3D shown;
+		if (stats && draw->getObject() != NULL && draw->getObject()->isKindOf(KINDOF_AIRCRAFT)
+			&& draw->getSmoothMotionPosition(TheSmoothMotionAlpha, &shown))
+		{
+			const Coord3D *logic = draw->getPosition();
+			const Real dx = logic->x - shown.x, dy = logic->y - shown.y, dz = logic->z - shown.z;
+			const Real lead = sqrtf(dx * dx + dy * dy + dz * dz);
+			s_aircraftLeadSum += lead;
+			++s_aircraftLeadCount;
+			if (lead > s_aircraftLeadMax)
+				s_aircraftLeadMax = lead;
+			const Real radius = draw->getObject()->getGeometryInfo().getBoundingSphereRadius();
+			if (radius > s_aircraftRadiusMax)
+				s_aircraftRadiusMax = radius;
+		}
 	}
 	s_smoothApplied = TRUE;
 }
