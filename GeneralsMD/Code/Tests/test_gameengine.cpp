@@ -2742,7 +2742,9 @@ TEST(statemachine_outlives_the_owner_that_lets_go_of_it_mid_update)
 	machine->Release_Ref();
 	CHECK(s_witnessMachineDestroyed);
 
-	/* and deleteInstance() still tolerates a NULL machine, the way the pool one did */
+	/* and deleteInstance() still tolerates a NULL machine, the way the pool one did.  The engine calls
+	   deleteInstance() on NULL everywhere; this line is the tripwire for -fno-delete-null-pointer-checks
+	   (CMakeLists.txt), without which an optimizing GCC removes the `if (this)` guard and this crashes. */
 	machine = NULL;
 	machine->deleteInstance();
 }
