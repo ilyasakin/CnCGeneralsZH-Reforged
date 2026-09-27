@@ -292,6 +292,11 @@ static bool load_texture(PosixDevice9 *device, const std::string &path, IDirect3
 		D3DLOCKED_RECT locked;
 		texture->LockRect(level, &locked, NULL, 0);
 		memcpy(locked.pBits, &bytes[at], size);
+		if (level == 0 && size > 0 && getenv("FFREF_FLIP_TEXEL") != NULL) {
+			// The pixel proof's armed control (PERF): one byte of what the device is given, in each texture's
+			// first level; the reference keeps the true bytes.  A dump compared with this on must differ.
+			static_cast<uint8_t *>(locked.pBits)[size / 2] ^= 0xFF;
+		}
 		texture->UnlockRect(level);
 		at += size;
 
