@@ -156,6 +156,11 @@ void PosixDevice9::Timing_Report()
 	if (!state.Asked || state.Reported) {
 		return;
 	}
+	if (state.FirstPresent == 0) {
+		// A device made and replaced before any frame (the engine does that at some sizes, e.g. 3024x1964
+		// offscreen on finer) has nothing to report, and must not use up the one report.
+		return;
+	}
 	state.Reported = true;
 	fprintf(stderr, "PosixDevice9 timing: %zu frames from %.0f s after the first Present%s%s\n", state.Frame.size(),
 		state.Delay, state.Frame.size() < state.Count ? " (the run ended before the window filled)" : "",
