@@ -62,6 +62,10 @@ void ControlBar::parseCommandButtonDefinition( INI *ini )
 			button->markAsOverride();
 		}
 	}  // end if
+	else if( ini->getLoadType() == INI_LOAD_MULTIFILE )
+	{
+		// a patch file's button edits EA's in place and names only what changes
+	}
 	else if( ini->getLoadType() != INI_LOAD_CREATE_OVERRIDES )
 	{
 		DEBUG_CRASH(( "[LINE: %d in '%s'] Duplicate commandbutton %s found!", ini->getLineNum(), ini->getFilename().str(), name.str() ));

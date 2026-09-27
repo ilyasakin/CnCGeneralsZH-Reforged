@@ -699,6 +699,8 @@ public:
 	
 	/// All of our units are new spied upon; they sight for the given enemy
 	void setUnitsVisionSpied( Bool setting, KindOfMaskType whichUnits, PlayerIndex byWhom );
+	/// Put a unit joining (or leaving) this player under (or out of) every spy vision now on against it
+	void applyVisionSpies( Object *obj, Bool setting ) const;
 
 	/// Destroy all of the teams for this player, causing him to DIE.
 	void killPlayer(void);
@@ -944,6 +946,14 @@ private:
 	Bool									m_unitsShouldHunt;
 
 	Bool									m_attackedBy[MAX_PLAYER_COUNT];	///< For each player, have they attacked me?
+
+	struct VisionSpy
+	{
+		KindOfMaskType	kinds;
+		PlayerIndex			byWhom;
+	};
+	typedef std::vector<VisionSpy> VisionSpyList;
+	VisionSpyList					m_visionSpies;	///< Spy visions on against this player, one entry per switch-on, so a unit made later is spied too
 	UnsignedInt						m_attackedFrame;	///< Last frame attacked.
 	
 	Real									m_cashBountyPercent;

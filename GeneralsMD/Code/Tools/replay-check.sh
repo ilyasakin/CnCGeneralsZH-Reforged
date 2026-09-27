@@ -26,7 +26,7 @@
 #
 # Usage: replay-check.sh --generals <path> | --app <.app> [--data <dir>] [--seeds "0 1"] [--players 2]
 #          [--aidiff brutal] [--maxframes 12000] [--cells <n>] [--extra "<args>"]
-#          [--control] [--extended] [--keep]
+#          [--control] [--extended] [--keep] [--log-lines <regex>]
 #   --data            a folder holding zerohour/ (with the base game in zerohour/ZH_Generals, as the
 #                     install has it); default $ZH_DATA_DIR
 #   --cells           playable cells a side of the generated map.  Default: none given, so the
@@ -42,6 +42,8 @@
 #   --extended        the wider backstop, not in ctest: seeds 2 to 5, each at 2 and at 4 players (eight
 #                     matches), at --maxframes (default 12000).  --seeds and --players are ignored
 #   --keep            leave the temporary folder and the logs, and say where
+#   --log-lines <re>  print each live run's log lines matching the extended regex, as "  log: <line>",
+#                     before the log is removed (Tests/run_locomotor_check.sh reads defect #33's check)
 #   --app <.app>      E1 on the bundle itself, "tests what ships" (P1 step 5): its Contents/MacOS/generals
 #                     runs with NO -root and NO -overlay, so the bundle's own discovery finds both - its
 #                     overlay in Contents/Resources, and the install through Registry.ini's InstallPath,
@@ -70,6 +72,7 @@ EXTRA=""
 CONTROL=0
 EXTENDED=0
 KEEP=0
+LOG_LINES=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
@@ -84,6 +87,7 @@ while [ $# -gt 0 ]; do
 		--control) CONTROL=1; shift;;
 		--extended) EXTENDED=1; shift;;
 		--keep) KEEP=1; shift;;
+		--log-lines) LOG_LINES="$2"; shift 2;;
 		*) echo "replay-check: unknown argument $1" >&2; exit 2;;
 	esac
 done
@@ -170,8 +174,9 @@ fi
 
 # ---- a run ---------------------------------------------------------------------------------------
 # Sets RUN_CRC and RUN_FRAME from the run's last HEADLESS CRC line, RUN_RESULT from its HEADLESS
-# RESULT line, and RUN_BUILT to the number of structures the AI put up after frame 0; empty when the
-# run wrote none.
+# RESULT line, RUN_BUILT to the number of structures the AI put up after frame 0, and RUN_BUILT_NAMES
+# to their distinct template names, sorted (defect #33's check reads the Supply Centers there); empty
+# when the run wrote none.
 run_game() {	# run_game <log prefix> <switches...>
 	local prefix="$TAG$1"; shift
 	local log="$EXEDIR/${prefix}DebugLogFile.txt"
@@ -188,7 +193,7 @@ run_game() {	# run_game <log prefix> <switches...>
 			> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
 	fi
 	RUN_STATUS=$?
-	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0; RUN_STATS=""
+	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0; RUN_BUILT_NAMES=""; RUN_STATS=""
 	# --app: the bundle must have found its own overlay (PosixMain says so on stderr); a run that did not
 	# is reported as having no result
 	if [ -n "$APP" ] && ! grep -q -F "generals: overlay $APP/Contents/Resources/Overlay, searched before the install" "$WORK/${prefix}.err"; then
@@ -202,6 +207,9 @@ run_game() {	# run_game <log prefix> <switches...>
 	RUN_FRAME="$(printf '%s' "$line" | sed -n 's/.*HEADLESS CRC: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\2/p')"
 	RUN_RESULT="$(grep -a 'HEADLESS RESULT: ' "$log" | tail -1 | sed 's/.*HEADLESS RESULT: //')"
 	RUN_BUILT="$(grep -a -c 'AI BUILT frame [1-9]' "$log")"
+	RUN_BUILT_NAMES="$(grep -a 'AI BUILT frame [1-9]' "$log" | sed -n "s/.*player [0-9]* '\([^']*\)'.*/\1/p" | sort -u | paste -sd ' ' -)"
+	RUN_LOG_LINES=""
+	if [ -n "$LOG_LINES" ]; then RUN_LOG_LINES="$(grep -a -E -- "$LOG_LINES" "$log" | tr -d '\r' | sed 's/^/  log: /')"; fi
 	# each player's fight: units built, units lost, kills, peak units, buildings built, buildings lost
 	RUN_STATS="$(grep -a 'HEADLESS PLAYER' "$log" | sed -E 's/.*units ([0-9]+) built ([0-9]+) lost ([0-9]+) killed peak ([0-9]+) \| buildings ([0-9]+) built ([0-9]+) lost.*/units \1 lost \2 kills \3 peak \4 buildings \5 lost \6/' | paste -sd ';' - | sed 's/;/; /g')"
 }
@@ -224,7 +232,8 @@ for match in $MATCHES; do
 	# -observer, so every side is AI and the command stream is the AI's own decisions
 	run_game "${name}_live" -randommap "$seed" "$players" $CELLS -autoskirmish "$players" \
 		-aidiff "$AIDIFF" -seed "$seed" -observer
-	LIVE_CRC="$RUN_CRC"; LIVE_FRAME="$RUN_FRAME"; LIVE_BUILT="$RUN_BUILT"; LIVE_STATS="$RUN_STATS"
+	LIVE_CRC="$RUN_CRC"; LIVE_FRAME="$RUN_FRAME"; LIVE_BUILT="$RUN_BUILT"; LIVE_STATS="$RUN_STATS"; LIVE_BUILT_NAMES="$RUN_BUILT_NAMES"
+	if [ -n "$RUN_LOG_LINES" ]; then printf '\n%s\n' "$RUN_LOG_LINES"; fi
 	if [ -z "$LIVE_CRC" ]; then echo "no result from the live run (exit $RUN_STATUS)"; failures=$((failures + 1)); continue; fi
 	if [ ! -f "$REPLAYS/00000000.rep" ]; then echo "the live run wrote no replay"; failures=$((failures + 1)); continue; fi
 	# out of the way of the next recording, and under a name -replay can be given
@@ -260,6 +269,7 @@ for match in $MATCHES; do
 		echo "the playback and the second run agree at frame $LIVE_FRAME"
 		echo "  seed $seed, $players players: HEADLESS CRC $LIVE_CRC at frame $LIVE_FRAME"
 		echo "    the fight, per player: $LIVE_STATS"
+		echo "    built: ${LIVE_BUILT_NAMES:-nothing}"
 	else
 		echo "FAILED, live $LIVE_CRC at frame $LIVE_FRAME:$bad"
 		failures=$((failures + 1))
