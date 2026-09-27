@@ -122,9 +122,18 @@ of Metal.
 *First slice REACHED 2026-09-26 (C2, `feature/mac-port-C2-w3d`):* `generals -headless` on macOS arm64,
 rooted at a read-only symlink farm of the install (rule 9), mounted every archive, generated a random
 map, played a two-slot skirmish to 600 frames at 9.5x real time, wrote a replay and exited 0. A second
-run with the same seed gave the same HEADLESS CRC (0x78BEA937). Still open for M2: E1's harness,
-which checks record/playback, and any comparison with a Windows-recorded replay, which needs a Windows
-build (E4).
+run with the same seed gave the same HEADLESS CRC (0x78BEA937).
+
+*M2 REACHED 2026-09-27:* the headless game's replay CRCs match the Windows build's on the same seeds.
+- The fork's first MSVC build (W2, -18: MSVC 19.44 x64 Release, in the Windows 11 VM on thinkerer)
+  gives, pinned to 8373eea5 plus W2's build fixes (none touches the simulation):
+  - seed 0 @12000 = 0xE896DEF3;
+  - seed 1 @12000 = 0x7C7DBA69;
+  - seed 0 @1200 = 0x0177BEF6.
+- These equal macOS arm64 (clang/libc++), macOS x86_64 (Rosetta) and Linux x86_64 (gcc/libstdc++).
+  The E1 harness checks record/playback on each.
+- W1's two-host match (macOS against Linux) agrees on 0x341D0C61 @3000 on both hosts.
+- Still owed: cross-playing those replays on Windows (in progress).
 `-headless`, and its replay checksum matches the Windows build's on the same seed. Playable by a
 machine, not by a person.
 → C1 C2 C5
