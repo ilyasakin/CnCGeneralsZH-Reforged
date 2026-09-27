@@ -212,7 +212,7 @@ About 11% of the main thread in the profile: `MemoryPool::allocateBlock` 3.7%,
 `DynamicMemoryAllocator::freeBytes` 3.4%, `allocateBytes` 3.1%, `operator delete` 1.1%. That is up to
 about 0.9 ms a frame. Held by the PM. One constraint for whoever takes it: the engine's lock is a
 CRITICAL_SECTION on Windows, which is recursive; `os_unfair_lock` is not, so it is no drop-in
-replacement.
+replacement. Taken since, as candidate 1 below, with an owner and a depth around the unfair lock.
 
 ### Fix 3: the per-draw copies and clears
 
@@ -469,3 +469,110 @@ there were no sleeps.
   captures settle it. The base binary gave 48, 48, 50 and 50; the candidate 50, 50 and 50. The base
   binary itself shows both counts, so those two are what a 600-frame run happens to reach, not the
   candidate.
+
+### Candidate 1: the allocator's lock is an unfair lock with an owner on Apple (9fec1f19, 665df643)
+
+Fix 2 above, taken now. On Apple the `CriticalSection` behind the allocator's four locks is an
+`os_unfair_lock` with an owner and a depth (`RecursiveUnfairLock`, CriticalSection.h). Before, it was
+libc++'s `std::recursive_mutex`, a recursive pthread mutex. Recursion is kept exactly: the owner
+re-entering counts up, and the lock is released at zero. The allocator's code doesn't change, so on one
+thread the same calls get the same blocks in the same order. Which thread wins a contended lock was never
+ordered (neither CRITICAL_SECTION nor a pthread mutex is FIFO).
+
+An exit by a thread that doesn't hold the lock traps, in every build (-18's second read). Windows and
+Linux keep `std::recursive_mutex`.
+
+Both builds are at the older base, a9-base-sampler (before 9f17c203), per the PM's same-side rule.
+
+| finer, medians of six runs, base / candidate | Work p50 (ms) | Device draw p50 (ms) | Work p99 (ms) |
+|---|---|---|---|
+| skirmish, 1920x1080 | 4.412 / 4.330 | 2.010 / 1.847 | 7.527 / 6.878 |
+| mobstress, 1920x1080 | 10.601 / 8.871 | 4.281 / 3.397 | 13.815 / 12.669 |
+
+- Under mobstress the candidate is faster by 16% of work and 21% of device draw. The device allocates
+  under these locks too.
+- The six candidate runs span 3.386 to 3.400 ms of device draw; the six base runs span 4.201 to 4.302.
+- Every thermal reading was Nominal, and there were no sleeps.
+
+**The same result:**
+- the suite, 84 of 84;
+- the FFReference replay: 48 compared, 0 failed;
+- the E1 CRCs, base and candidate compared at the older base: identical, all 10 lines of replay_check and
+  net_check (seed 0 at 1200 frames 0x0177BEF6, seed 1 at 12000 0x7C7DBA69, the net check's two copies);
+- merged with feature/mac-port (9f17c203's CRCs): the suite, 86 of 86, with seed 0 at 1200 frames 0x0177BEF6
+  and seed 1 at 12000 0x830467DB;
+- signatures: the candidate's first capture had 48, the base's 50 and 50. Seven captures settle it: the
+  base binary gave 50, 50, 48 and 50, and the candidate 48, 50 and 50. The same two signatures come and go
+  in both binaries, so it's timing, as it was for candidate 5.
+
+**The locks under the sanitizers.** The standard here is B8's and B11's: a harness around the real
+header, and a control proving the sanitizer can go red. The harness compiles candidate 1's actual
+`CriticalSection.h` (sha256 4cfcca66…) with a shim for `PerfTimer.h`. It checks three things:
+- **Recursion:** the owner re-enters three deep, and another thread gets the lock only after the last exit.
+- **Contention:** 8 threads each make 20,000 increments of a plain int, every other one inside a nested
+  enter.
+- **The trap:** a thread that doesn't hold the lock exits it, and the child process must die of SIGTRAP.
+
+Results on finer, AppleClang 21:
+- Plain, TSan, and ASan+UBSan: all pass. The counter is 160,000 of 160,000, with 0 races, 0 ASan and 0
+  UBSan reports.
+- The trap check ran in the plain and ASan builds, and the child died of signal 5. TSan doesn't support
+  fork with threads, so it doesn't run there.
+- The controls:
+  - The contention with no lock, under TSan, reports a data race, and the counter lands on 60,000.
+  - A planted heap overflow, under ASan, is reported.
+
+The whole game couldn't run under either sanitizer at first, with any lock. TSan aborted before main.
+GameMemory replaced the unsized global operators but not the sized deletes or the nothrow forms, which
+the sanitizer runtime then supplied. That was fixed separately (feature/mac-port-sized-delete, merged). A
+sanitizer build of the whole game, GPU included, is ZH_SANITIZE's (feature/mac-port-sanitize).
+
+**The lock-wait tails** answer the PM's fairness rule: no thread's worst wait may grow past what it
+tolerates (audio, one buffer period; workers, a frame).
+- The setup: a measurement build (`ZH_LOCK_WAIT_MEASURE`: wall time around each `enter`, per thread,
+  printed at exit), and mobstress offscreen at 1920x1080, 6000 frames, base, candidate, candidate, base.
+- The audio thread runs: the null backend with `ZH_ALLOW_AUDIO=1`, silent. CoreAudio's log showed no
+  line from the game in any of the four runs, and the silent afplay control after each run showed up in
+  that same log.
+- The results, base / candidate:
+  - The busiest thread after main, about 14,300 acquires: worst wait 0.255 and 0.277 ms / 0.014 and
+    0.007 ms.
+  - Every other thread: at most 0.075 / 0.030 ms.
+  - Main: at most 0.074 / 0.030 ms. Its total time inside `enter` fell from 26.2 s to 22.9 s over about
+    2.4 billion acquires.
+  - No wait over 1 ms, in any thread or run.
+- The candidate's worst waits are lower than the base's on every thread. Both are orders of magnitude
+  below a buffer period or a frame.
+- Only the main thread is named in the output. The verdict doesn't need the others' names, because every
+  thread is far inside the smaller of the two tolerances.
+
+x86_64 macOS: the CRC check there is owed. It needs Rosetta on finer, which is the user's call.
+
+### Candidate 3: the constant blocks reused, measured and not taken (feature/mac-port-perf-constants)
+
+Each draw rebuilt its constant blocks: the matrices, the material, the lights and the states they're built
+from. The candidate snapshotted those inputs and reused the previous draw's blocks when the snapshot's bytes
+matched.
+
+It gave the same result:
+- the suite passed, 84 of 84;
+- the guard is armed: with the fog colour left out of the snapshot, the self-check fails ("step 15, a render
+  state it reads"), and restored, it passes;
+- the signatures were 50, 50 and 50;
+- the FFReference replay compared 50 captures and 0 failed;
+- the pixel proof found 50 of 50 dumps byte-identical, and the armed control reports 3.
+
+It wasn't faster:
+
+| finer, medians of six runs, base / candidate | Work p50 (ms) | Device draw p50 (ms) | Work p99 (ms) |
+|---|---|---|---|
+| skirmish, 1920x1080 | 4.402 / 4.377 | 2.013 / 2.052 | 7.319 / 7.744 |
+| mobstress, 1920x1080 | 10.517 / 10.558 | 4.288 / 4.226 | 13.974 / 13.849 |
+
+- Under mobstress the device draw was 1.4% lower, but the per-run ranges overlap (base 4.219 to 4.314,
+  candidate 4.211 to 4.245), and work went the other way.
+- In the skirmish the difference is noise.
+- All thermal readings were Nominal. Each ABBA block held the machine alone.
+
+**Not taken** (the PM, 2026-09-27). A cache that can go stale is a risk, and with no measurable gain it isn't
+an improvement. The branch stays unmerged, for reference.
