@@ -20,6 +20,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/GameEngine.h"
 #include "GameClient/GamepadMap.h"
 #include "SdlDevice/GameClient/SdlInput.h"
 #include "SdlDevice/GameClient/SdlInputScript.h"
@@ -97,6 +98,11 @@ Bool play( const char *line )
 	char kind[ 16 ] = "", a[ 64 ] = "", b[ 64 ] = "";
 	int x = 0, y = 0;
 	const int fields = sscanf( line, "%*s %15s %63s %63s %d %d", kind, a, b, &x, &y );
+	if (strcmp( kind, "quit" ) == 0 && TheGameEngine != NULL)
+	{
+		TheGameEngine->setQuitting( TRUE );
+		return TRUE;
+	}
 	if (strcmp( kind, "pad" ) == 0 && thePad != NULL)
 	{
 		if (strcmp( a, "axis" ) == 0 && fields >= 4)

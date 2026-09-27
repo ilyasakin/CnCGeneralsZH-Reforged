@@ -239,17 +239,20 @@ GameWindow *firstInReadingOrder( const std::vector<GameWindow *> &widgets )
 	return best;
 }
 
-/// The screen's first focus: a tabbed screen's page's first widget, else the primary action by name, else the first
+/// The screens whose pages are the content, so each page starts on its first widget (skirmish setup's tabs only
+/// switch its info panel, and it starts on Start Game)
+const char *const thePagedScreens[] = { "OptionsMenu.wnd", NULL };
+
+/// The screen's first focus: a paged screen's page's first widget, else the primary action by name, else the first
 /// widget in reading order
 GameWindow *defaultFocus( const Screen &screen, const std::vector<GameWindow *> &widgets )
 {
-	for (size_t i = 0; i < widgets.size() && !screen.modal; ++i)
-		if (isTab( widgets[i] ))
+	for (const char *const *paged = thePagedScreens; *paged != NULL && !screen.modal; ++paged)
+		if (screen.key.compare( 0, strlen( *paged ), *paged ) == 0)
 		{
 			GameWindow *first = firstInReadingOrder( widgets );
 			if (first != NULL)
 				return first;
-			break;
 		}
 	GameWindow *named = byNameTail( widgets, screen.modal ? theModalDefaults : theScreenDefaults, GWS_PUSH_BUTTON );
 	return named != NULL ? named : firstInReadingOrder( widgets );
@@ -280,7 +283,15 @@ void pointAt( GameWindow *window )
 
 void setFocus( GameWindow *window )
 {
+	static Int loggedId = 0;
+	static std::string loggedScreen;
 	theFocusId = window != NULL ? window->winGetWindowId() : 0;
+	if (theFocusId != loggedId || theScreenKey != loggedScreen)
+	{
+		loggedId = theFocusId;
+		loggedScreen = theScreenKey;
+		DEBUG_LOG(( "GAMEPAD FOCUS: %s %s\n", theScreenKey.c_str(), window != NULL ? nameOf( window ) : "(none)" ));
+	}
 	if (!theScreenKey.empty())
 		theLastFocus[ theScreenKey ] = theFocusId;
 	pointAt( window );

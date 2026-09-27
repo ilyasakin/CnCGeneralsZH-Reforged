@@ -33,6 +33,7 @@
 //   <frame> mouse move <x> <y>                              the game's pixels
 //   <frame> mouse <left|middle|right> down|up <x> <y>
 //   <frame> key <SDL's scancode name, _ for a space: Left_Ctrl> down|up
+//   <frame> quit                                            ends the run, as a menu's run has no -maxframes
 //
 // Each action goes to the debug log as it is played ("INPUT SCRIPT: frame F: ..."), so two runs show they
 // played the same script on the same frames.

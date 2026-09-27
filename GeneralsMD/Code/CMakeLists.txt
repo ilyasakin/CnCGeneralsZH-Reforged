@@ -1871,6 +1871,14 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(gamepad_crc_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # G1's menus: a virtual pad walks the shell's screens and the focus must land where
+  # docs/mac-port/tasks/G1-gamepad-screens.md says, every step (Tools/gamepad-menu-check.sh).
+  add_test(NAME gamepad_menu_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-menu-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(gamepad_menu_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(gamepad_menu_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # P1 step 3: the staged overlay, <build>/overlay - what the app bundle will copy verbatim and what the
   # harnesses pass with -overlay - and <build>/overlay-dev, the -scenario and -cinema folders that never
   # ship.  Tools/stage-overlay.sh is the one place the list lives.  Small (10 MB; the art is linked).
