@@ -129,7 +129,9 @@ Int  WideCharToUpper ( Int c );
 	 **The contract is MSVC's `_vsnwprintf`, on both platforms, on purpose.**  At most `outCount`
 	 code units are written, the terminator counted among them.  On success the return is the
 	 number written not counting the terminator, and `out` is terminated.  **On truncation the
-	 return is negative.**  All five call sites branch on that sign - two throw
+	 return is negative,** and, as MSVC does it (measured on Windows by W2's first Windows ctest),
+	 all `outCount` units are written and none of them is a terminator: every call site passes one
+	 less than its buffer and terminates the last unit itself, or throws.  All five call sites branch on that sign - two throw
 	 ERROR_OUT_OF_MEMORY and three log and truncate - so a bare POSIX `vswprintf`, which returns
 	 the would-be length instead, would silently turn a truncated chat line into a success on the
 	 Mac and nobody would notice until a long player name reached the UI.
@@ -137,9 +139,9 @@ Int  WideCharToUpper ( Int c );
 	 One deliberate difference from MSVC, in the single case where MSVC is already wrong: an
 	 output of exactly `outCount` code units.  MSVC writes them, does NOT terminate, and returns
 	 `outCount`; UnicodeString::format_va then calls set() on an unterminated buffer and reads
-	 past its end.  Off Windows that case reports truncation instead, which is what the call
-	 sites are written for.  It costs one character of the longest possible message and removes a
-	 buffer overread.
+	 past its end.  Off Windows the same units are written and the return is negative, which is
+	 what the call sites are written for: the sign alone differs, and it removes a buffer
+	 overread.
 
 	 The format's meaning is MSVC's LEGACY wide printf, on both platforms: %s, %ls and %ws are
 	 WideChar strings and %c a WideChar; %S and %hs are narrow strings and %C/%hc a narrow char.
