@@ -36,6 +36,7 @@
 
 .EXAMPLE
   .\record-dx11-shaders.ps1 -DataDir C:\work\data
+  .\record-dx11-shaders.ps1 -DataDir C:\work\data -Maps "Bitter Winter","Lights Out" -Missions MD_USA01
 #>
 param(
 	# a folder holding zerohour\ (a Zero Hour install, with ZH_Generals\ in it or the base game findable)
@@ -48,6 +49,10 @@ param(
 	[string] $UserData = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "Command and Conquer Generals Zero Hour Data"),
 	[string] $WorkDir = (Join-Path $env:TEMP "zh-record-dx11-shaders"),
 	[int[]] $Seeds = @(0, 1, 2),
+	# named skirmish maps played the same way, for the lighting the random maps do not have (night, snow)
+	[string[]] $Maps = @(),
+	# campaign maps, started as the shell would (-mission): their scripts and cinematics draw their own things
+	[string[]] $Missions = @(),
 	[int] $Frames = 2400,
 	[int] $TimeoutMinutes = 30,
 	# leave the shipped file in the farm: a check that a run with it compiles nothing it holds
@@ -76,6 +81,18 @@ foreach ($seed in $Seeds) {
 		"-autoskirmish", 2, "-aidiff", "brutal", "-seed", $seed, "-observer")
 	$runs += , @{ Name = "seed$seed"; Args = $match; Minutes = $TimeoutMinutes }
 	$runs += , @{ Name = "seed$seed-nopost"; Args = $match + @("-dx11post", "off"); Minutes = $TimeoutMinutes }
+}
+foreach ($map in $Maps) {
+	# quoted by hand: Start-Process joins its arguments with spaces and the names have them
+	$named = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-map", "`"Maps\$map\$map.map`"",
+		"-autoskirmish", 2, "-aidiff", "brutal", "-seed", 0, "-observer")
+	$tag = $map -replace '[^A-Za-z0-9]', ''
+	$runs += , @{ Name = "map-$tag"; Args = $named; Minutes = $TimeoutMinutes }
+	$runs += , @{ Name = "map-$tag-nopost"; Args = $named + @("-dx11post", "off"); Minutes = $TimeoutMinutes }
+}
+foreach ($mission in $Missions) {
+	$runs += , @{ Name = "mission-$mission"; Args = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit",
+		"-mission", $mission); Minutes = $TimeoutMinutes }
 }
 # The main menu's shell map, the first thing a player sees: the intro movies, then the menu, which runs until
 # it is killed.  The cache is written while the game runs, so the kill loses nothing.
