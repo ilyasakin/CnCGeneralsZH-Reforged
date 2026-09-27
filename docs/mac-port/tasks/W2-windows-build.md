@@ -154,3 +154,57 @@ fix is identical on Windows or test-only.
     - a `Start-Process` argument split on the spaces in the map name, so the match never started;
     - the detach poller read a stale log and detached before the game began.
   - This run made each step a separate call and deleted the old log first.
+
+## The Windows check in one command: `windows-ci.ps1`
+
+This is finer's post-merge run, for Windows. `windows-ci.ps1` sits at the repository root, beside
+`replay-check.ps1`:
+
+```
+.\windows-ci.ps1 -DataDir C:\zhr-worker\data -Runs "0@1200","1@12000" -ExpectCrc "0@1200:0x0177BEF6","1@12000:0x830467DB"
+.\windows-ci.ps1 -Bundle C:\zhr-worker\bundles\fmp.bundle -Ref feature/mac-port -DataDir C:\zhr-worker\data ...
+```
+
+These pins are for feature/mac-port from 9f17c203, upstream's merge, which moved seed 1 at 12000 from
+0x7C7DBA69 to 0x830467DB. Seed 0 runs at 1200 frames there until defect #34's fix: at 12000 upstream's data
+crashes it on every platform. Before 9f17c203 the pins were seed 0 at 12000 0xE896DEF3 and seed 1
+0x7C7DBA69. `-Bundle`/`-Ref` checks a merge from another machine: make a bundle there, copy it into
+`C:\zhr-worker\bundles\`, and run in `C:\zhr-worker\wt-pm-win`, the PM's own worktree.
+
+**What it does:**
+1. `build.bat` (unless `-SkipBuild`), with `ZH_GAME_DATA` set on the build tree.
+2. ctest, minus the audio and video tests (no sound on a worker). In session 0 it also leaves out the GPU
+   tests.
+3. The GPU tests and E1, in the logged-on user's desktop session:
+   - through a one-off `schtasks /it` task when it was started from ssh. The task runs a one-line `.cmd`,
+     because `/tr` takes at most 261 characters, and is deleted afterwards;
+   - directly when it was started on the desktop.
+4. E1 runs on a rule-9 farm in its work folder. Every file of the data folder is hashed (SHA-256) before
+   and after, and a difference fails the check.
+5. `-ExpectCrc "seed@frames:0x..."` compares each run's CRC with a pinned number (`-Runs` gives each seed its
+   own length). Pin it to the commit the numbers were made on, since upstream gameplay data moves them.
+
+It prints one summary and exits 0 or 1.
+
+**Measured on the VM from ssh:** `-SkipBuild -Seeds 0 -MaxFrames 1200 -ExpectCrc "0:0x0177BEF6"` gave
+ctest 47/47, the GPU tests passed in the desktop session, E1 as expected, the data unchanged: "WINDOWS
+CHECK PASSED", exit 0. **Armed:** with `-ExpectCrc "0:0xDEADBEEF"` it reported "EXPECTED 0xDEADBEEF, got
+0x0177BEF6", "WINDOWS CHECK FAILED", exit 1.
+
+**Two lessons are built in:**
+- Windows PowerShell 5.1 turns a native command's stderr, under `2>&1`, into a terminating error when
+  `$ErrorActionPreference` is `Stop`, so the script counts failures by exit status instead.
+- `Out-File` creates its file at the start of the pipeline, so the desktop part writes its result under
+  another name and renames it when done.
+
+**Driving it from another machine, and what that needed:**
+- With `-Bundle`/`-Ref`, the process that checks out keeps running the version PowerShell parsed at start.
+  The first try ran the old logic against new arguments. So it now hands over to the checked-out script
+  (same arguments, `-Bundle`/`-Ref` dropped) and exits with its status.
+- **Measured on 9f17c203 (upstream's merge), from ssh:** ctest 47/47, the GPU tests passed, seed 0 at 1200
+  0x0177BEF6 and seed 1 at 12000 0x830467DB, both as expected, the data unchanged: "WINDOWS CHECK PASSED".
+  - Seed 0 at 12000 crashed there before, as it does on every platform (defect #34).
+- **One unexplained red:** in one run test_wwlib failed at `-j4` (its file-system tests' `Open` calls), and
+  it did not come back in three full `-j4` runs or five alone. Windows Defender holding a freshly written
+  file is a guess, not a finding. The script now keeps ctest's and E1's full output (`ctest.log`, `e1.log`
+  in its work folder), so the next one can be read.
