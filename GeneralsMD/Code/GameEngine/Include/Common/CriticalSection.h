@@ -36,7 +36,6 @@
 #include <mutex>
 
 #if defined(__APPLE__)
-#include <assert.h>
 #include <os/lock.h>
 #include <pthread.h>
 #include <atomic>
@@ -97,8 +96,11 @@ extern PerfGather TheCritSecPerfGather;
 	    get the same blocks in the same order.  Between threads, which one wins a contended lock was
 	    never ordered (neither a CRITICAL_SECTION nor a pthread mutex is FIFO), so nothing that
 	    replays the same could depend on it, and this lock stays inside that same freedom.
-	An exit by a thread that does not hold the lock is a programming error on every platform.
-	os_unfair_lock itself stops the process on it; debug builds assert first, with a clearer name.
+	An exit by a thread that does not hold the lock is a programming error on every platform, and here
+	it stops the process in every build: one relaxed load and a compare per exit (-18's second read).
+	Without it a non-owner exit at depth above one would quietly count down someone else's depth.  A
+	thread that ends while holding the lock is a bug on every platform too; here a later thread given
+	the same pthread_t would find itself the owner.
 	Windows and Linux keep std::recursive_mutex: Linux's glibc mutex is to be measured before it is
 	replaced, and Windows is not ours to measure.
 */
@@ -129,7 +131,8 @@ public:
 
 	void unlock()
 	{
-		assert( m_owner.load( std::memory_order_relaxed ) == self() && "CriticalSection::exit by a thread that does not hold it" );
+		if (m_owner.load( std::memory_order_relaxed ) != self())
+			__builtin_trap();		// CriticalSection::exit by a thread that does not hold it
 		if (--m_depth == 0)
 		{
 			m_owner.store( 0, std::memory_order_relaxed );
