@@ -81,6 +81,24 @@ function Install-Lzhl {
   Step "LZH-Light 1.0 -> Libraries\Source\Compression\LZHCompress"
 }
 
+# --- The fork's one change to LZH-Light, Libraries\Source\lzhl-clear-history.patch: LZBuffer's history
+# starts cleared (vendor.sh says why).  Windows compiles LZH-Light too, so it gets the same patch, and a
+# copy fetched before the patch existed gets it on the next build.
+function Install-LzhlPatch {
+  $destination = Join-Path $libraries 'Source\Compression\LZHCompress\CompLibHeader'
+  $header = Join-Path $destination '_lz.h'
+  if (Select-String -LiteralPath $header -Pattern 'Zero Hour Reforged: altered' -SimpleMatch -Quiet) { return }
+  $patch = Join-Path $libraries 'Source\lzhl-clear-history.patch'
+  # without the ceiling git finds this checkout around the folder and skips the patch as outside it
+  $env:GIT_CEILING_DIRECTORIES = Join-Path $libraries 'Source'
+  try { git -C $destination -c core.autocrlf=false apply $patch }
+  finally { Remove-Item Env:GIT_CEILING_DIRECTORIES }
+  if (-not (Select-String -LiteralPath $header -Pattern 'Zero Hour Reforged: altered' -SimpleMatch -Quiet)) {
+    throw "lzhl-clear-history.patch did not apply to Libraries\Source\Compression\LZHCompress"
+  }
+  Step "lzhl-clear-history.patch -> Libraries\Source\Compression\LZHCompress"
+}
+
 # --- DirectX 8 headers and import libraries. extra\ is not wholesale-copyable: basetsd.h, d3d.h,
 # ddraw.h and dsound.h there shadow the modern Windows SDK and break winnt.h. Three files from it
 # are needed, because ww3d2\pointgr.cpp includes D3DXMath.h.
@@ -262,6 +280,7 @@ function Install-Art {
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 Install-Zlib
 Install-Lzhl
+Install-LzhlPatch
 Install-DirectX
 Install-GameSpy
 Install-Litehtml
