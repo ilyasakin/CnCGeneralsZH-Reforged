@@ -166,6 +166,7 @@ NEW_CONTROLS = [
     (LABEL,  "LabelInputScheme",       "GUI:InputScheme"),
     (COMBO,  "ComboBoxInputScheme",    None),
     (CHECK,  "CheckWasdCamera",        "GUI:WasdCamera"),
+    (CHECK,  "CheckGamepad",           "GUI:Gamepad"),
     (CHECK,  "CheckChromaLighting",    "GUI:ChromaLighting"),
 ]
 
@@ -272,6 +273,7 @@ GROUP_LAYOUT = [
     ("PageControls", 2, "GUI:OptionsGroupInput", [
         setting("LabelInputScheme", "ComboBoxInputScheme"),
         ("check", "CheckWasdCamera"),
+        ("check", "CheckGamepad"),
         ("check", "CheckChromaLighting")]),
 
     ("PageGameplay", 0, "GUI:OptionsGroupBattlefield", [

@@ -77,6 +77,7 @@ OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_INT_ACCESSORS( m_inputScheme )
 OPTION_BOOL_ACCESSORS( m_wasdCamera )
+OPTION_BOOL_ACCESSORS( m_gamepadEnabled )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
 OPTION_BOOL_ACCESSORS( m_shadowsForProjectiles )
@@ -371,6 +372,12 @@ const OptionDef TheOptionCatalog[] =
 	{ "WasdCamera",								OPT_WND( "CheckWasdCamera" ), "GUI:WasdCamera",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_wasdCamera, set_m_wasdCamera },
+
+	// A connected controller plays (G1, SdlGamepad.h); off, every controller is ignored and whatever one
+	// holds is let go.  Only what the pad presses changes, never what a press does, so it is purely local.
+	{ "Gamepad",									OPT_WND( "CheckGamepad" ), "GUI:Gamepad",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_gamepadEnabled, set_m_gamepadEnabled },
 
 	// Which language the words are in.  English is the string table the game shipped with, and every
 	// other entry is a translation laid over it, so a line the translation lacks stays English.  The

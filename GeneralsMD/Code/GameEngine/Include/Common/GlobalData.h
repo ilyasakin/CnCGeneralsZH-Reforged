@@ -323,6 +323,7 @@ public:
 	Bool isLegacyInput( void ) const { return m_inputScheme == INPUT_SCHEME_LEGACY; }
 	Bool m_wasdCamera;						///< W A S D scroll the camera and the unit keys move to F G H J K; Modern input only (client only)
 	Bool isWasdCamera( void ) const { return m_wasdCamera && !isLegacyInput(); }
+	Bool m_gamepadEnabled;				///< G1: a connected controller plays; off, every controller is ignored (client only)
 	Bool m_showOrderLines;				///< draw a line from each selected unit to where it is going, and its queue (client only)
 	Bool m_scriptDebug;						///< Should we attempt to load the script debugger window (.DLL)
 	Bool m_particleEdit;					///< Should we attempt to load the particle editor (.DLL)

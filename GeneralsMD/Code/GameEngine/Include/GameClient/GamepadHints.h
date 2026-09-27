@@ -22,7 +22,8 @@
 // pad's buttons instead of the keys:
 //   - the command bar's corner letters: in command-bar mode South's glyph on the button under the
 //     pointer, outside it North's glyph on the bar's first button, and no letters (keys a pad has not);
-//   - a message box's answers: South's glyph beside OK or Yes, East's beside Cancel or No.
+//   - a message box's answers: South's glyph beside OK or Yes, East's beside Cancel or No;
+//   - in command-bar mode, South's glyph in the corner of the build card the hovered button shows.
 // Keyboard and mouse input hides them all again, and the letters come back.
 //
 // The glyphs are Kenney's "Input Prompts" 1.5A (CC0), the plain glyph fonts of four pad families, which
@@ -86,6 +87,9 @@ public:
 
 	/// What window shows now, with the glyph's font and character for HINT_INSTEAD and HINT_BESIDE
 	static Hint hintFor( GameWindow *window, Int pointSize, GameFont *&font, UnicodeString &glyph );
+
+	/// In command-bar mode, South's glyph in the bottom right corner of the build card's box (InGameUI)
+	static void drawTooltipCorner( const IRegion2D &box );
 
 	/// A family's name for a button's glyph (Kenney's), or NULL: for the test
 	static const char *glyphName( GamepadGlyphSet set, Int button );

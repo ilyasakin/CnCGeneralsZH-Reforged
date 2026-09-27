@@ -23,7 +23,11 @@
 #include "Common/file.h"
 #include "Common/FileSystem.h"
 #include "Common/NameKeyGenerator.h"
+#include "GameClient/Color.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/Display.h"
+#include "GameClient/DisplayString.h"
+#include "GameClient/DisplayStringManager.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/GameWindow.h"
@@ -312,4 +316,29 @@ GamepadHints::Hint GamepadHints::hintFor( GameWindow *window, Int pointSize, Gam
 	if (commandSlotOf( id ) == firstShownSlot() && glyphFor( theShown, GAMEPAD_BUTTON_NORTH, pointSize, font, glyph ))
 		return HINT_INSTEAD;
 	return HINT_HIDE;
+}
+
+void GamepadHints::drawTooltipCorner( const IRegion2D &box )
+{
+	if (theShown == GAMEPAD_GLYPHS_NONE || !theCommandBarMode || TheDisplay == NULL || TheDisplayStringManager == NULL)
+		return;
+	GameFont *font = NULL;
+	UnicodeString glyph;
+	const Int pointSize = TheDisplay->getHeight() / 40 > 12 ? TheDisplay->getHeight() / 40 : 12;
+	if (!glyphFor( theShown, GAMEPAD_BUTTON_SOUTH, pointSize, font, glyph ))
+		return;
+	// one string, handed a new glyph only when the pad's family changes: a display string keeps the texture
+	// its text was built into (W3DPushButton.cpp's badgeString says why that matters)
+	static DisplayString *theCorner = NULL;
+	if (theCorner == NULL)
+		theCorner = TheDisplayStringManager->newDisplayString();
+	if (theCorner == NULL)
+		return;
+	if (theCorner->getFont() != font)
+		theCorner->setFont( font );
+	if (theCorner->getText() != glyph)
+		theCorner->setText( glyph );
+	Int width = 0, height = 0;
+	theCorner->getSize( &width, &height );
+	theCorner->draw( box.hi.x - width - 4, box.hi.y - height - 2, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
 }

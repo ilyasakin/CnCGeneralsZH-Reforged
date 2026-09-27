@@ -20,6 +20,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/GlobalData.h"
 #include "Common/NameKeyGenerator.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
@@ -610,6 +611,12 @@ void padUsed( const Pad &pad, UnsignedInt time )
 	}
 }
 
+/// Options > Controls > Controller: off, every pad is ignored (the tests have no GlobalData: on)
+Bool padsWanted( void )
+{
+	return TheGlobalData == NULL || TheGlobalData->m_gamepadEnabled;
+}
+
 Real triggerPull( Real value )
 {
 	return value <= TRIGGER_DEAD_ZONE ? 0.0f : (value - TRIGGER_DEAD_ZONE) / (1.0f - TRIGGER_DEAD_ZONE);
@@ -736,6 +743,8 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 		case SDL_EVENT_GAMEPAD_BUTTON_UP:
 		{
+			if (!padsWanted())
+				return TRUE;		// the option is off: taken, and nothing done with it
 			Pad *pad = findPad( event.gbutton.which );
 			if (pad == NULL || event.gbutton.button >= GAMEPAD_BUTTON_COUNT)
 				return TRUE;
@@ -751,6 +760,8 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 
 		case SDL_EVENT_GAMEPAD_AXIS_MOTION:
 		{
+			if (!padsWanted())
+				return TRUE;
 			Pad *pad = findPad( event.gaxis.which );
 			if (pad != NULL && event.gaxis.axis < SDL_GAMEPAD_AXIS_COUNT)
 			{
@@ -778,6 +789,19 @@ void SdlGamepad_update( UnsignedInt nowMs )
 		seconds = seconds < 0.0f ? 0.0f : 0.1f;		// a stall is not a long zoom
 	theUpdated = TRUE;
 	theLastUpdate = nowMs;
+
+	// the option turned off while a pad held something: let it all go, and the hints with it
+	if (!padsWanted())
+	{
+		if (theLastUsed || theCommandBarMode)
+		{
+			SdlGamepad_releaseAll();
+			theCommandBarMode = FALSE;
+			SdlGamepad_noteHand();
+		}
+		GamepadHints::setCommandBarMode( FALSE );
+		return;
+	}
 
 	// a warp that never comes back: this platform cannot warp the pointer (a Wayland without pointer
 	// warping, perhaps gamescope): the moves go to SdlMouse from here on, and the log says why

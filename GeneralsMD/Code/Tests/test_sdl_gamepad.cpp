@@ -833,6 +833,31 @@ TEST(the_hints_follow_the_device_in_use_live)
 	clear();
 }
 
+TEST(the_controller_option_off_ignores_the_pad_and_lets_go_of_what_it_held)
+{
+	CHECK( start() );
+	pushMotion( 150, 450 );
+	clear();
+	Output pad, hand;
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, true );		// Ctrl held by the pad
+	frame( pad );
+	TheWritableGlobalData->m_gamepadEnabled = FALSE;				// Options > Controls > Controller, unticked
+	SdlGamepad_update( 60000 );															// lets go of the Ctrl
+	padButton( SDL_GAMEPAD_BUTTON_SOUTH, true );						// ignored
+	padButton( SDL_GAMEPAD_BUTTON_SOUTH, false );
+	frame( pad );
+	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_NONE );
+	TheWritableGlobalData->m_gamepadEnabled = TRUE;
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, false );	// its release, from before: nothing held now
+	frame( pad );
+	pushKey( SDL_SCANCODE_LCTRL, true );
+	frame( hand );
+	pushKey( SDL_SCANCODE_LCTRL, false );
+	frame( hand );
+	frame( hand );
+	CHECK( same( pad, hand ) );
+}
+
 TEST(a_pad_pulled_out_mid_press_lets_go_of_all_it_held)
 {
 	CHECK( start() );

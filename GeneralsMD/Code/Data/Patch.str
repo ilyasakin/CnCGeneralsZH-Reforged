@@ -850,6 +850,14 @@ TOOLTIP:WasdCamera
 "W A S D move the camera. F attacks, G stops, H attack-moves, J guards and K holds position, and the command bar's top row reads Q E R T Y U I. Modern input only."
 END
 
+GUI:Gamepad
+"Controller"
+END
+
+TOOLTIP:Gamepad
+"Play with a controller: the left stick moves the pointer, the bottom face button clicks, and the top one takes you to the command bar. Off, a connected controller is ignored."
+END
+
 GUI:ChromaLighting
 "Razer Chroma Lighting"
 END
