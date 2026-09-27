@@ -1673,6 +1673,28 @@ if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
   add_dependencies(test_d3d12_slice zh_d3d12)
   add_test(NAME test_d3d12_slice COMMAND test_d3d12_slice $<TARGET_FILE:zh_d3d12>)
   set_tests_properties(test_d3d12_slice PROPERTIES SKIP_RETURN_CODE 77)
+
+  # FFReference against the -d3d12 device: A3b's scenarios and the replay of captures, the same sources as
+  # off Windows, built with the device's settings.  The capture replay needs
+  # captures written by this build (ZH_FFREF_CAPTURE_DIR): DrawCapture.h is the writing build's structures.
+  # FFReference itself is built with the POSIX tests; here it is the same sources, self-contained.
+  add_library(ffreference_d3d12 STATIC ${CMAKE_CURRENT_SOURCE_DIR}/Tests/ffreference/ffreference.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/ffreference/ffprogram.cpp ${CMAKE_CURRENT_SOURCE_DIR}/Tests/ffreference/ffcapture.cpp)
+  set_target_properties(ffreference_d3d12 PROPERTIES CXX_STANDARD 17)
+  target_include_directories(ffreference_d3d12 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
+  foreach(ffref ffref_gpu ffref_capture)
+    add_executable(${ffref}_d3d12 ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_${ffref}.cpp)
+    set_target_properties(${ffref}_d3d12 PROPERTIES CXX_STANDARD 17)
+    target_include_directories(${ffref}_d3d12 PRIVATE ${ZH_POSIX_D3D9_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
+      ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render ${WW}/WW3D2)
+    target_compile_definitions(${ffref}_d3d12 PRIVATE ${ZH_D3D12_DEVICE_DEFINES})
+    target_compile_options(${ffref}_d3d12 PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
+    target_link_libraries(${ffref}_d3d12 PRIVATE posixd3d9 d3dx9posix_d3d12 ffreference_d3d12 SDL3::SDL3-static)
+    add_test(NAME ${ffref}_d3d12 COMMAND ${ffref}_d3d12)
+    # A folder of its own to capture into, as every test has off Windows (the loop at the end of this file).
+    set_tests_properties(${ffref}_d3d12 PROPERTIES SKIP_RETURN_CODE 77
+      ENVIRONMENT "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data/${ffref}_d3d12")
+  endforeach()
 endif()
 
 # ===========================================================================
