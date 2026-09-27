@@ -101,7 +101,7 @@ found="$(hud_check_files "$BUILD/overlay")"
 # ---- what generals needs of the system ---------------------------------------------------------------------
 needs="$(in_sdk "readelf -d '$GENERALS' | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'; echo '--'; objdump -T '$GENERALS'")" \
 	|| fail "cannot read generals' dynamic section"
-libs="$(printf '%s\n' "$needs" | sed '/^--$/q' | grep -v '^--$')"
+libs="$(sed '/^--$/q' <<< "$needs" | grep -v '^--$')"
 glibc="$(printf '%s\n' "$needs" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)"
 [ -n "$glibc" ] || fail "cannot read generals' glibc symbols"
 [ "$(printf '%s\n%s\n' "$glibc" GLIBC_2.31 | sort -V | tail -1)" = GLIBC_2.31 ] || fail "refused: generals needs $glibc, newer than GLIBC_2.31"
