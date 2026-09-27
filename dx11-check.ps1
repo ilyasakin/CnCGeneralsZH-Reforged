@@ -56,6 +56,7 @@
 # and after is a pair of pictures.
 param([double]$Margin = 1.0, [double]$MeanMargin = 1.0, [string]$Map = '',
   [switch]$BackendNoise, [switch]$CountRule, [string[]]$Extra = @(), [ValidateSet('dx11','d3d12')][string]$Backend = 'dx11')
+$env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 $backendSwitch = if ($Backend -eq 'd3d12') { @('-d3d12') } else { @() }
 
 Add-Type -AssemblyName System.Drawing
