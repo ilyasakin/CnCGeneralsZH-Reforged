@@ -26,6 +26,8 @@
 // Either way it enters where the platform's input enters, and everything after is the game's own code.
 //
 //   # a comment
+//   p<n> <action...>                                      at engine pass n instead: the shell's menus,
+//                                                         where the logic frame stands still
 //   <frame> pad <South|East|...|DPadUp|...> down|up         GamepadMap's button names
 //   <frame> pad axis <LeftX|LeftY|RightX|RightY|LeftTrigger|RightTrigger> <-32768..32767>
 //   <frame> mouse move <x> <y>                              the game's pixels

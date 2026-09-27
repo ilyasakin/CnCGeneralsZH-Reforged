@@ -37,12 +37,14 @@ namespace {
 
 struct Action
 {
-	UnsignedInt frame;
+	UnsignedInt frame;		///< the logic frame it waits for, or with byPass the engine pass
+	Bool byPass;					///< "p<n>": in the shell the logic frame stands still, so passes count there
 	std::string line;
 };
 
 std::vector<Action> theActions;
 size_t theNext = 0;
+UnsignedInt thePasses = 0;		///< SdlInputScript_play's calls: one an engine pass
 SDL_Joystick *thePad = NULL;
 
 const char *const theAxisNames[] = { "LeftX", "LeftY", "RightX", "RightY", "LeftTrigger", "RightTrigger", NULL };
@@ -94,7 +96,7 @@ Bool play( const char *line )
 {
 	char kind[ 16 ] = "", a[ 64 ] = "", b[ 64 ] = "";
 	int x = 0, y = 0;
-	const int fields = sscanf( line, "%*u %15s %63s %63s %d %d", kind, a, b, &x, &y );
+	const int fields = sscanf( line, "%*s %15s %63s %63s %d %d", kind, a, b, &x, &y );
 	if (strcmp( kind, "pad" ) == 0 && thePad != NULL)
 	{
 		if (strcmp( a, "axis" ) == 0 && fields >= 4)
@@ -116,7 +118,7 @@ Bool play( const char *line )
 	}
 	if (strcmp( kind, "mouse" ) == 0)
 	{
-		if (strcmp( a, "move" ) == 0 && sscanf( line, "%*u %*s %*s %d %d", &x, &y ) == 2)
+		if (strcmp( a, "move" ) == 0 && sscanf( line, "%*s %*s %*s %d %d", &x, &y ) == 2)
 		{
 			pushMouse( SDL_EVENT_MOUSE_MOTION, x, y, 0, false );
 			return TRUE;
@@ -171,10 +173,12 @@ Bool SdlInputScript_start( void )
 		line[ strcspn( line, "\r\n" ) ] = 0;
 		unsigned int frame = 0;
 		char kind[ 16 ] = "";
-		if (line[0] == '#' || sscanf( line, "%u %15s", &frame, kind ) != 2)
+		const Bool byPass = line[0] == 'p';
+		if (line[0] == '#' || sscanf( byPass ? line + 1 : line, "%u %15s", &frame, kind ) != 2)
 			continue;
 		Action action;
 		action.frame = frame;
+		action.byPass = byPass;
 		action.line = line;
 		theActions.push_back( action );
 		padLines = padLines || strcmp( kind, "pad" ) == 0;
@@ -204,7 +208,9 @@ Bool SdlInputScript_start( void )
 
 void SdlInputScript_play( UnsignedInt logicFrame )
 {
-	while (theNext < theActions.size() && theActions[ theNext ].frame <= logicFrame)
+	++thePasses;
+	while (theNext < theActions.size()
+			&& theActions[ theNext ].frame <= (theActions[ theNext ].byPass ? thePasses : logicFrame))
 	{
 		const Action &action = theActions[ theNext++ ];
 		const Bool known = play( action.line.c_str() );
