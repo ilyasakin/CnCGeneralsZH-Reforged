@@ -199,10 +199,15 @@ if (-not $SkipBuild) {
 	# The last build's exe goes first: a build that fails must leave nothing the desktop part could run.
 	Remove-Item (Join-Path $RunDir "generals.exe") -ErrorAction SilentlyContinue
 	Push-Location $Root
-	cmd /c "build.bat $Config < NUL" | Out-Host
+	# not $phase: PowerShell names ignore case, and that would be this script's -Phase, a [string]
+	$phaseStart = Get-Date
+	cmd /c "build.bat $Config < NUL" | Tee-Object -Variable buildOut | Out-Host
 	$built = $LASTEXITCODE
 	Pop-Location
-	$summary += "build: " + $(if ($built -eq 0) { "ok" } else { $failed = $true; "FAILED (exit $built)" })
+	# how much it rebuilt: MSBuild names each source it compiles on a line of its own
+	$compiled = @($buildOut | Where-Object { "$_" -match '^\s+[\w\.\-]+\.(cpp|c|cc|cxx)$' }).Count
+	$took = "$([int]((Get-Date) - $phaseStart).TotalSeconds) s, $compiled source(s) compiled"
+	$summary += "build: " + $(if ($built -eq 0) { "ok ($took)" } else { $failed = $true; "FAILED (exit $built; $took)" })
 	if ($built -ne 0) {
 		$summary += "ctest, GPU tests: not run (build failed)"
 		if ($DataDir -ne "") { $summary += "E1: not run (build failed)" }
@@ -218,15 +223,18 @@ if ($DataDir -ne "") { & $tools.CMake -S (Join-Path $Root "GeneralsMD\Code") -B 
 $session0 = (Get-Process -Id $PID).SessionId -eq 0
 Push-Location $Build
 $exclude = if ($session0) { "$NoSound|dx9_smoke|dx9_smoke_msaa|test_dx11device" } else { $NoSound }
+$phaseStart = Get-Date
 $ctestOut = & $tools.CTest -C $Config -j4 --timeout 900 --output-on-failure -E $exclude 2>&1
+$ctestTook = "$([int]((Get-Date) - $phaseStart).TotalSeconds) s"
 $ctestExit = $LASTEXITCODE
 Pop-Location
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
 $ctestOut | ForEach-Object { "$_" } | Out-File -Encoding utf8 (Join-Path $WorkDir "ctest.log")		# the failing tests' own output
-$summary += "ctest: " + $(if ($ctestExit -eq 0) { "passed" } else { $failed = $true; "FAILED (the output: $(Join-Path $WorkDir 'ctest.log'))" })
+$summary += "ctest: " + $(if ($ctestExit -eq 0) { "passed ($ctestTook)" } else { $failed = $true; "FAILED ($ctestTook; the output: $(Join-Path $WorkDir 'ctest.log'))" })
 $ctestOut | Select-String -Pattern 'tests passed|\*\*\*' | ForEach-Object { $summary += "  " + $_.Line.Trim() }
 
 # the desktop part: here, or in the interactive session through a one-off task
+$phaseStart = Get-Date
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
 $resultFile = Join-Path $WorkDir "desktop-result.json"
 Remove-Item $resultFile, "$resultFile.partial" -ErrorAction SilentlyContinue
@@ -248,9 +256,11 @@ if ($session0) {
 } else {
 	& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Phase desktop -ResultFile $resultFile -Config $Config -MaxFrames $MaxFrames -WorkDir $WorkDir -Runs ($Runs -join ',') -DataDir $DataDir
 }
+$desktopTook = "$([int]((Get-Date) - $phaseStart).TotalSeconds) s"
 if (-not (Test-Path $resultFile)) {
-	$summary += "desktop part: NO RESULT (it did not finish)"; $failed = $true
+	$summary += "desktop part: NO RESULT (it did not finish, $desktopTook)"; $failed = $true
 } else {
+	$summary += "desktop part (GPU tests and E1): $desktopTook"
 	$d = Get-Content -Raw $resultFile | ConvertFrom-Json
 	$summary += "GPU tests (desktop session): $($d.Gpu)"; if ($d.Gpu -ne "passed") { $failed = $true }
 	if ($DataDir -ne "") {
