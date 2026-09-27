@@ -2725,6 +2725,13 @@ TEST(statemachine_outlives_the_owner_that_lets_go_of_it_mid_update)
 {
 	CHECK(bootOnce());
 
+	/* A Debug build (STATE_MACHINE_DEBUG) asks TheGlobalData, from internalClear(), whether to log each
+	   clear.  The engine always has one; this harness has one only while a test makes it, and run on
+	   its own this test read through a NULL TheGlobalData. */
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if (savedGlobals == NULL)
+		TheWritableGlobalData = NEW GlobalData;
+
 	s_witnessMachineDestroyed = FALSE;
 	StateMachine *machine = newInstance(WitnessStateMachine);
 	CHECK_EQ(machine->Num_Refs(), 1);
@@ -2747,6 +2754,12 @@ TEST(statemachine_outlives_the_owner_that_lets_go_of_it_mid_update)
 	   (CMakeLists.txt), without which an optimizing GCC removes the `if (this)` guard and this crashes. */
 	machine = NULL;
 	machine->deleteInstance();
+
+	if (savedGlobals == NULL)
+	{
+		delete TheWritableGlobalData;
+		TheWritableGlobalData = NULL;
+	}
 }
 
 
