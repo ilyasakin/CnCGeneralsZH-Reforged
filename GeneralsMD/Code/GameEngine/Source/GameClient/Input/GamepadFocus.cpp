@@ -54,9 +54,12 @@ std::map<std::string, Int> theLastFocus;	///< per screen, the focus it had when 
 const UnsignedInt FOCUSABLE = GWS_PUSH_BUTTON | GWS_CHECK_BOX | GWS_RADIO_BUTTON | GWS_COMBO_BOX | GWS_HORZ_SLIDER
 	| GWS_VERT_SLIDER | GWS_SCROLL_LISTBOX | GWS_ENTRY_FIELD;
 
-/// The popups a match can show above the world without the modal stack, by their layouts' names
-const char *const theMatchScreens[] = { "QuitMenu.wnd", "Diplomacy.wnd", "GeneralsExpPoints.wnd", "PopupSaveLoad.wnd",
-	"SaveLoad.wnd", "OptionsMenu.wnd", "InGameChat.wnd", "ReplayControl.wnd", NULL };
+/// The layouts shown above the shell's stack or a match without the modal stack, by their layouts' names: the
+/// shell makes Options and the save and load popups beside its stack, and a menu makes its map and difficulty pickers
+const char *const thePopupScreens[] = { "QuitMenu.wnd", "QuitNoSave.wnd", "Diplomacy.wnd", "GeneralsExpPoints.wnd",
+	"PopupSaveLoad.wnd", "SaveLoad.wnd", "PopupReplay.wnd", "OptionsMenu.wnd", "InGameChat.wnd", "InGamePopupMessage.wnd",
+	"ReplayControl.wnd", "DifficultySelect.wnd", "SkirmishMapSelectMenu.wnd", "LanMapSelectMenu.wnd", "DownloadMenu.wnd",
+	NULL };
 
 struct Screen
 {
@@ -77,7 +80,17 @@ Bool endsWith( const char *text, const char *tail )
 	return a >= b && strcmp( text + a - b, tail ) == 0;
 }
 
-/// The screen the pad drives now: the top modal window, else the shell's top layout, else a match's popup
+/// The popup a top-level window belongs to, NULL for none
+const char *popupOf( GameWindow *window )
+{
+	for (const char *const *name = thePopupScreens; *name != NULL; ++name)
+		if (strncmp( nameOf( window ), *name, strlen( *name ) ) == 0)
+			return *name;
+	return NULL;
+}
+
+/// The screen the pad drives now: the top modal window, else the topmost shown popup (the window list runs from the
+/// top of the drawing order down, and a match can show the quit menu under Options), else the shell's top layout
 Bool screenNow( Screen &screen )
 {
 	screen.roots.clear();
@@ -93,6 +106,22 @@ Bool screenNow( Screen &screen )
 		screen.modal = TRUE;
 		return TRUE;
 	}
+	const char *popup = NULL;
+	for (GameWindow *window = TheWindowManager->winGetWindowList(); window != NULL; window = window->winGetNext())
+	{
+		if (window->winIsHidden())
+			continue;
+		const char *name = popupOf( window );
+		if (name == NULL || (popup != NULL && name != popup))
+			continue;
+		popup = name;
+		screen.roots.push_back( window );
+	}
+	if (popup != NULL)
+	{
+		screen.key = popup;
+		return TRUE;
+	}
 	if (TheShell != NULL && TheShell->isShellActive() && TheShell->top() != NULL && !TheShell->top()->isHidden())
 	{
 		for (GameWindow *window = TheShell->top()->getFirstWindow(); window != NULL; window = window->winGetNextInLayout())
@@ -101,18 +130,7 @@ Bool screenNow( Screen &screen )
 		screen.key = TheShell->top()->getFilename().str();
 		return !screen.roots.empty();
 	}
-	for (GameWindow *window = TheWindowManager->winGetWindowList(); window != NULL; window = window->winGetNext())
-	{
-		if (window->winIsHidden())
-			continue;
-		for (const char *const *name = theMatchScreens; *name != NULL; ++name)
-			if (strncmp( nameOf( window ), *name, strlen( *name ) ) == 0)
-			{
-				screen.roots.push_back( window );
-				screen.key = *name;
-			}
-	}
-	return !screen.roots.empty();
+	return FALSE;
 }
 
 /// The focusable widgets under window, itself included; gadgets' own parts are not descended into
