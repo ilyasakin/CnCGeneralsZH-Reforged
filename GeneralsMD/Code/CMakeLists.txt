@@ -1207,6 +1207,14 @@ foreach(name test_premain_strings test_premain_unicode)
   add_test(NAME ${name} COMMAND ${name})
 endforeach()
 target_compile_definitions(test_premain_unicode PRIVATE ZH_PREMAIN_UNICODE_FIRST)
+# GCC's eager vtables name ~AudioEventRTS from these three; they link the real memory manager and strings,
+# so only the audio event is stubbed (Tests/gcc_eager_vtable_stubs.cpp).  POSIX only: MSVC names none of it.
+if(ZH_PLATFORM_POSIX)
+  foreach(name gametext_csf test_premain_strings test_premain_unicode)
+    target_sources(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests/gcc_eager_vtable_stubs.cpp)
+    target_compile_definitions(${name} PRIVATE ZH_EAGER_VTABLE_STUB_NO_POOL)
+  endforeach()
+endif()
 set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
 if(ZH_GAME_DATA)
   set_tests_properties(gametext_csf PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
@@ -1713,7 +1721,10 @@ if(ZH_PLATFORM_POSIX)
   set_target_properties(generals PROPERTIES CXX_STANDARD 17)
   target_link_libraries(generals PRIVATE sdldevice installroot)
   # C2's SDL side of Monitors.h and MessageBoxWrapper, on SDL's offscreen video driver.
-  add_executable(test_sdl_platform ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_platform.cpp)
+  # test_gameengine_stubs.cpp: the names the executable supplies, which GCC's larger pull from sdldevice
+  # reaches (ld.lld, L1b); clang's does not, and they cost nothing there.
+  add_executable(test_sdl_platform ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_platform.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gameengine_stubs.cpp)
   target_include_directories(test_sdl_platform PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
   target_compile_definitions(test_sdl_platform PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
   set_target_properties(test_sdl_platform PROPERTIES CXX_STANDARD 17)
@@ -2170,8 +2181,9 @@ target_include_directories(test_posixpath PRIVATE ${WW}/WWLib ${WW}/WWDebug)
 # PosixLocalFileSystem through the engine's own interface (C1): built from the real memory manager,
 # LocalFile, File and PosixDevice sources with gameengine's include paths and definitions, because
 # gameengine does not link on macOS yet.  The few names those sources reach and the test does not are
-# in its _stubs.cpp, which says why each one is there.  Not on Linux yet, for fpucontrol_selfcheck's
-# reason (BaseType.h's min/max against libstdc++); registered DISABLED there.
+# in its _stubs.cpp, which says why each one is there.  Under GCC they also name ~AudioEventRTS and
+# UnicodeString::releaseBuffer (eager vtables): UnicodeString.cpp is the real one, and the destructor
+# is stubbed by Tests/gcc_eager_vtable_stubs.cpp (L1b; they were DISABLED on Linux until then).
 set(ZH_POSIXLFS_SOURCES_NO_MAIN
   ${GE}/Source/Common/System/GameMemory.cpp ${GE}/Source/Common/System/MemoryInit.cpp
   ${GE}/Source/Common/System/CriticalSection.cpp ${GE}/Source/Common/System/JobSystem.cpp
@@ -2180,6 +2192,7 @@ set(ZH_POSIXLFS_SOURCES_NO_MAIN
   ${GE}/Source/Common/System/WideCharFns.cpp ${GE}/Source/Common/System/File.cpp
   ${GE}/Source/Common/System/LocalFile.cpp ${GE}/Source/Common/System/LocalFileSystem.cpp
   ${GE}/Source/Common/System/RAMFile.cpp ${GE}/Source/Common/System/registry.cpp
+  ${GE}/Source/Common/System/UnicodeString.cpp ${CMAKE_CURRENT_SOURCE_DIR}/Tests/gcc_eager_vtable_stubs.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFileSystem.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Common/PosixLocalFile.cpp)
 # The same list with the test's own two files, as test_registryfile and test_wwdownload_registry take it.
@@ -2188,14 +2201,11 @@ set(ZH_POSIXLFS_SOURCES
 add_executable(test_posixlocalfilesystem ${ZH_POSIXLFS_SOURCES})
 target_include_directories(test_posixlocalfilesystem PRIVATE
   $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
-target_compile_definitions(test_posixlocalfilesystem PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+target_compile_definitions(test_posixlocalfilesystem PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+  ZH_EAGER_VTABLE_STUB_NO_POOL)
 set_target_properties(test_posixlocalfilesystem PROPERTIES CXX_STANDARD 17)
 target_link_libraries(test_posixlocalfilesystem PRIVATE test_harness wwlib wwdebug)
 add_test(NAME test_posixlocalfilesystem COMMAND test_posixlocalfilesystem)
-if(ZH_PLATFORM_LINUX)
-  set_target_properties(test_posixlocalfilesystem PROPERTIES EXCLUDE_FROM_ALL TRUE)
-  set_tests_properties(test_posixlocalfilesystem PROPERTIES DISABLED TRUE)
-endif()
 
 # Registry.ini's reader and writer (Common/RegistryFile.h, registry.cpp's POSIX half), from the same
 # engine sources as test_posixlocalfilesystem, for the same reason, and not on Linux for the same one.
@@ -2205,14 +2215,11 @@ list(APPEND ZH_REGISTRYFILE_SOURCES ${TESTS}/test_registryfile.cpp)
 add_executable(test_registryfile ${ZH_REGISTRYFILE_SOURCES})
 target_include_directories(test_registryfile PRIVATE
   $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
-target_compile_definitions(test_registryfile PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+target_compile_definitions(test_registryfile PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+  ZH_EAGER_VTABLE_STUB_NO_POOL)
 set_target_properties(test_registryfile PROPERTIES CXX_STANDARD 17)
 target_link_libraries(test_registryfile PRIVATE test_harness wwlib wwdebug)
 add_test(NAME test_registryfile COMMAND test_registryfile)
-if(ZH_PLATFORM_LINUX)
-  set_target_properties(test_registryfile PROPERTIES EXCLUDE_FROM_ALL TRUE)
-  set_tests_properties(test_registryfile PROPERTIES DISABLED TRUE)
-endif()
 
 # WWDownload's registry functions and FormatURLFromRegistry off Windows (WWDownloadRegistryPosix.cpp)
 # over this user's Registry.ini, read back through registry.cpp's own getters too (B6).  Writes only
@@ -2225,14 +2232,11 @@ if(ZH_PLATFORM_POSIX)
   add_executable(test_wwdownload_registry ${ZH_WWDOWNLOAD_REGISTRY_SOURCES})
   target_include_directories(test_wwdownload_registry PRIVATE
     $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
-  target_compile_definitions(test_wwdownload_registry PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+  target_compile_definitions(test_wwdownload_registry PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+    ZH_EAGER_VTABLE_STUB_NO_POOL)
   set_target_properties(test_wwdownload_registry PROPERTIES CXX_STANDARD 17)
   target_link_libraries(test_wwdownload_registry PRIVATE test_harness wwlib wwdebug)
   add_test(NAME test_wwdownload_registry COMMAND test_wwdownload_registry)
-  if(ZH_PLATFORM_LINUX)
-    set_target_properties(test_wwdownload_registry PROPERTIES EXCLUDE_FROM_ALL TRUE)
-    set_tests_properties(test_wwdownload_registry PROPERTIES DISABLED TRUE)
-  endif()
 endif()
 
 # The user's folders off Windows (C1 (e)): the user data directory and the Desktop, EarlyOptions.h's
@@ -2246,9 +2250,10 @@ add_test(NAME test_userfolders COMMAND test_userfolders)
 
 # EarlyCommandLine.h off Windows: the options read before the parser exists, from the process's own
 # argv, before main and after (C2).  The arguments are the test's input; see the test file.
-add_executable(test_early_command_line ${TESTS}/test_early_command_line.cpp)
+add_executable(test_early_command_line ${TESTS}/test_early_command_line.cpp ${TESTS}/gcc_eager_vtable_stubs.cpp)
 target_include_directories(test_early_command_line PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
-target_compile_definitions(test_early_command_line PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+target_compile_definitions(test_early_command_line PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+  ZH_EAGER_VTABLE_STUB_STRINGS)	# GCC's eager vtables; see Tests/gcc_eager_vtable_stubs.cpp
 set_target_properties(test_early_command_line PROPERTIES CXX_STANDARD 17)
 target_link_libraries(test_early_command_line PRIVATE test_harness wwlib wwdebug)
 # test_harness takes the first argument as its name filter; the options follow it.
@@ -2257,9 +2262,11 @@ add_test(NAME test_early_command_line COMMAND test_early_command_line early_comm
 
 # C5: the crash handler from the real CrashHandlerPosix.cpp, in a child process per way of crashing;
 # the report, the exit signal, and two armed controls.  See the test file.
-add_executable(test_crash_reporting ${TESTS}/test_crash_reporting.cpp ${GE}/Source/Common/System/CrashHandlerPosix.cpp)
+add_executable(test_crash_reporting ${TESTS}/test_crash_reporting.cpp ${GE}/Source/Common/System/CrashHandlerPosix.cpp
+  ${TESTS}/gcc_eager_vtable_stubs.cpp)
 target_include_directories(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
-target_compile_definitions(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+target_compile_definitions(test_crash_reporting PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+  ZH_EAGER_VTABLE_STUB_STRINGS)	# GCC's eager vtables; see Tests/gcc_eager_vtable_stubs.cpp
 set_target_properties(test_crash_reporting PROPERTIES CXX_STANDARD 17)
 target_link_libraries(test_crash_reporting PRIVATE wwlib wwdebug)
 add_test(NAME test_crash_reporting COMMAND test_crash_reporting)
@@ -2276,17 +2283,14 @@ add_executable(test_bigfilesystem ${TESTS}/test_bigfilesystem.cpp ${TESTS}/test_
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/Win32Device/Common/Win32BIGFileSystem.cpp)
 target_include_directories(test_bigfilesystem PRIVATE
   $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES> ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
-target_compile_definitions(test_bigfilesystem PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
+target_compile_definitions(test_bigfilesystem PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+  ZH_EAGER_VTABLE_STUB_NO_POOL)
 set_target_properties(test_bigfilesystem PROPERTIES CXX_STANDARD 17)
 target_link_libraries(test_bigfilesystem PRIVATE test_harness wwlib wwdebug)
 add_test(NAME test_bigfilesystem COMMAND test_bigfilesystem)
 set_tests_properties(test_bigfilesystem PROPERTIES SKIP_RETURN_CODE 77)
 if(ZH_GAME_DATA)
   set_tests_properties(test_bigfilesystem PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
-endif()
-if(ZH_PLATFORM_LINUX)
-  set_target_properties(test_bigfilesystem PROPERTIES EXCLUDE_FROM_ALL TRUE)
-  set_tests_properties(test_bigfilesystem PROPERTIES DISABLED TRUE)
 endif()
 
 # The POSIX half of the Wine listing oracle (Tests/fs_oracle.cpp; its Windows half is built with
@@ -2540,13 +2544,22 @@ if(ZH_PLATFORM_POSIX)
 
   # The SDL3 GPU selfchecks draw offscreen only.  On Apple they take SDL's dummy video driver and the
   # windowless Metal hint (decision 10), so a host with no window server (a worker over ssh) runs them
-  # where it used to skip them, and every Mac takes the one path.  Linux keeps its own video driver: the
-  # patch is Metal's.
+  # where it used to skip them, and every Mac takes the one path.  On Linux they take SDL's offscreen
+  # video driver, which gives Vulkan a VK_EXT_headless_surface and needs no patch: without a display they
+  # skipped ("SDL_Init: No available video device"), and with it all six pass on Mesa's ANV (L1b,
+  # measured on the Linux x86_64 host).  Not dummy there: it has no Vulkan_CreateSurface, so SDL finds no GPU backend.
   if(APPLE)
     foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
                      posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck)
       if(TEST ${_zh_test})
         set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=dummy" "ZH_SDL_GPU_METAL_WINDOWLESS=1")
+      endif()
+    endforeach()
+  elseif(ZH_PLATFORM_LINUX)
+    foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
+                     posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck)
+      if(TEST ${_zh_test})
+        set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
       endif()
     endforeach()
   endif()

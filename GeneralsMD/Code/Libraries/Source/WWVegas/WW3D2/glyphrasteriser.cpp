@@ -19,6 +19,7 @@
 // GlyphRasteriserClass on FreeType: see glyphrasteriser.h for what each answer is meant to match.
 
 #include "glyphrasteriser.h"
+#include "gdifontmetrics.h"
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -101,18 +102,19 @@ struct Substitution
 	const char *macRegular;
 	const char *macBold;			// NULL: synthesise bold from the regular file, as GDI would
 	const char *linuxFamily;
+	const char *gdiMetrics;		// the Windows face whose GDI line metrics a Linux substitute takes (gdifontmetrics.h); NULL: none
 };
 
 const Substitution theSubstitutions[] =
 {
-	{ "Arial",								"Arial.ttf",						"Arial Bold.ttf",						"Liberation Sans" },
-	{ "Times New Roman",			"Times New Roman.ttf",	"Times New Roman Bold.ttf",	"Liberation Serif" },
-	{ "Courier New",					"Courier New.ttf",			"Courier New Bold.ttf",			"Liberation Mono" },
-	{ "Courier",							"Courier New.ttf",			"Courier New Bold.ttf",			"Liberation Mono" },
-	{ "FixedSys",							"Courier New.ttf",			"Courier New Bold.ttf",			"Liberation Mono" },
-	{ "Arial Unicode MS",			"Arial Unicode.ttf",		NULL,												"DejaVu Sans" },
-	{ "Placard MT Condensed",	"Arial.ttf",						"Arial Bold.ttf",						"Liberation Sans" },
-	{ "Abadi MT Bold",				"Arial.ttf",						"Arial Bold.ttf",						"Liberation Sans" },
+	{ "Arial",								"Arial.ttf",						"Arial Bold.ttf",						"Liberation Sans",	"Arial" },
+	{ "Times New Roman",			"Times New Roman.ttf",	"Times New Roman Bold.ttf",	"Liberation Serif",	"Times New Roman" },
+	{ "Courier New",					"Courier New.ttf",			"Courier New Bold.ttf",			"Liberation Mono",	"Courier New" },
+	{ "Courier",							"Courier New.ttf",			"Courier New Bold.ttf",			"Liberation Mono",	"Courier New" },
+	{ "FixedSys",							"Courier New.ttf",			"Courier New Bold.ttf",			"Liberation Mono",	"Courier New" },
+	{ "Arial Unicode MS",			"Arial Unicode.ttf",		NULL,												"DejaVu Sans",			NULL },
+	{ "Placard MT Condensed",	"Arial.ttf",						"Arial Bold.ttf",						"Liberation Sans",	"Arial" },
+	{ "Abadi MT Bold",				"Arial.ttf",						"Arial Bold.ttf",						"Liberation Sans",	"Arial" },
 };
 const Substitution &theFallback = theSubstitutions[0];
 
@@ -181,9 +183,29 @@ bool fontconfigFile( const char *family, bool bold, std::string &path, bool &isB
 }
 #endif
 
-/// The file for a face, and whether that file is itself bold (if not and bold was asked, synthesise)
-bool resolve( const char *face, bool bold, std::string &path, bool &fileIsBold )
+/* The GDI line metrics of a Windows face at a pixel height, from gdifontmetrics.h: false outside the
+	 table's faces and sizes. */
+bool gdiMetrics( const char *face, bool bold, int ppem, int &ascent, int &descent )
 {
+	if (face == NULL || ppem < GDI_METRICS_FIRST_PPEM || ppem > GDI_METRICS_LAST_PPEM)
+		return false;
+	for (size_t i = 0; i < sizeof( theGdiFontMetrics ) / sizeof( theGdiFontMetrics[0] ); ++i)
+		if (theGdiFontMetrics[i].bold == bold && strcmp( theGdiFontMetrics[i].face, face ) == 0)
+		{
+			ascent = theGdiFontMetrics[i].ascent[ppem - GDI_METRICS_FIRST_PPEM];
+			descent = theGdiFontMetrics[i].descent[ppem - GDI_METRICS_FIRST_PPEM];
+			return true;
+		}
+	return false;
+}
+
+/* The file for a face, and whether that file is itself bold (if not and bold was asked, synthesise).
+	 metricsFace: the Windows face whose GDI line metrics apply, where the file is a metric-compatible
+	 substitute found through fontconfig (Liberation for Arial, Times New Roman, Courier New); NULL for a
+	 registered file, macOS's own fonts (their VDMX gives GDI's numbers already) and DejaVu Sans. */
+bool resolve( const char *face, bool bold, std::string &path, bool &fileIsBold, const char *&metricsFace )
+{
+	metricsFace = NULL;
 	// a registered file first, bold matched where there is a choice
 	const std::vector<RegisteredFont> &fonts = theRegisteredFonts();
 	const RegisteredFont *any = NULL;
@@ -207,6 +229,7 @@ bool resolve( const char *face, bool bold, std::string &path, bool &fileIsBold )
 
 	const Substitution &s = substitutionFor( face );
 #if defined(ZH_GLYPHS_FONTCONFIG)
+	metricsFace = s.gdiMetrics;
 	return fontconfigFile( s.linuxFamily, bold, path, fileIsBold );
 #else
 	const char *directory = "/System/Library/Fonts/Supplemental/";
@@ -296,7 +319,9 @@ bool GlyphRasteriserClass::Create_Font( const char *face, int pixel_height, int 
 	FT_Library library = theLibrary();
 	std::string path;
 	bool fileIsBold = false;
-	if (library == NULL || face == NULL || pixel_height <= 0 || box_size <= 0 || !resolve( face, bold, path, fileIsBold ))
+	const char *metricsFace = NULL;
+	if (library == NULL || face == NULL || pixel_height <= 0 || box_size <= 0
+			|| !resolve( face, bold, path, fileIsBold, metricsFace ))
 		return false;
 	FT_Face ftFace = NULL;
 	if (FT_New_Face( library, path.c_str(), 0, &ftFace ) != 0)
@@ -326,9 +351,11 @@ bool GlyphRasteriserClass::Create_Font( const char *face, int pixel_height, int 
 	State->gaspBilevel = gasp != FT_GASP_NO_TABLE && (gasp & FT_GASP_DO_GRAY) == 0;
 	Bilevel = State->gaspBilevel && theAntialiasMode == ANTIALIAS_AS_GASP_SAYS;
 
-	// Heights: VDMX, as GDI; the rounded Windows ascent and descent without it
+	/* Heights: GDI's own for the face a Linux substitute stands in for (gdifontmetrics.h: Liberation has no
+		 VDMX, and 30 to 38 of 43 sizes came out 1 or 2 pixels short); else VDMX, as GDI reads it; else the
+		 rounded Windows ascent and descent. */
 	int ascent = 0, descent = 0;
-	if (!vdmxHeights( ftFace, pixel_height, ascent, descent ))
+	if (!gdiMetrics( metricsFace, bold, pixel_height, ascent, descent ) && !vdmxHeights( ftFace, pixel_height, ascent, descent ))
 	{
 		const double scale = (double)pixel_height / ftFace->units_per_EM;
 		ascent = (int)floor( (os2 != NULL ? os2->usWinAscent : ftFace->ascender) * scale + 0.5 );
@@ -468,10 +495,11 @@ bool GlyphRasteriserClass::Find_Font_File( const char *face, bool bold, char *pa
 {
 	std::string found;
 	bool isBold = false;
+	const char *metricsFace = NULL;
 	if (path_size <= 0)
 		return false;
 	path[0] = 0;
-	if (face == NULL || !resolve( face, bold, found, isBold ) || (int)found.size() + 1 > path_size)
+	if (face == NULL || !resolve( face, bold, found, isBold, metricsFace ) || (int)found.size() + 1 > path_size)
 		return false;
 	strcpy( path, found.c_str() );
 	return true;
