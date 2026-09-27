@@ -2544,13 +2544,22 @@ if(ZH_PLATFORM_POSIX)
 
   # The SDL3 GPU selfchecks draw offscreen only.  On Apple they take SDL's dummy video driver and the
   # windowless Metal hint (decision 10), so a host with no window server (a worker over ssh) runs them
-  # where it used to skip them, and every Mac takes the one path.  Linux keeps its own video driver: the
-  # patch is Metal's.
+  # where it used to skip them, and every Mac takes the one path.  On Linux they take SDL's offscreen
+  # video driver, which gives Vulkan a VK_EXT_headless_surface and needs no patch: without a display they
+  # skipped ("SDL_Init: No available video device"), and with it all six pass on Mesa's ANV (L1b,
+  # measured on the Linux x86_64 host).  Not dummy there: it has no Vulkan_CreateSurface, so SDL finds no GPU backend.
   if(APPLE)
     foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
                      posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck)
       if(TEST ${_zh_test})
         set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=dummy" "ZH_SDL_GPU_METAL_WINDOWLESS=1")
+      endif()
+    endforeach()
+  elseif(ZH_PLATFORM_LINUX)
+    foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
+                     posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck)
+      if(TEST ${_zh_test})
+        set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
       endif()
     endforeach()
   endif()
