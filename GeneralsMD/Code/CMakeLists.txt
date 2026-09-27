@@ -261,15 +261,16 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   # ZH_SANITIZE: a sanitizer build, for finding bugs, never for playing, timing or E1 evidence.  A list
   # for -fsanitize= (address, thread, undefined, or e.g. address,undefined).  Empty by default, and then
   # nothing here applies: a normal build's command lines are what they were.  Set, it adds the flags
-  # everywhere and defines ZH_SANITIZER_BUILD, which takes GameMemory's global new and delete out so
-  # the sanitizer's own are the only ones (a system framework, Apple's Metal driver, otherwise mixes
-  # the two; GameMemory.cpp says why).  Not for MSVC.
+  # everywhere and defines ZH_SANITIZER_BUILD, under which GameMemory's global new and delete take
+  # zeroed blocks from calloc and give them to free, which the sanitizer intercepts, rather than from
+  # its own allocator (a system framework, Apple's Metal driver, otherwise mixes the two; GameMemory.cpp
+  # says why).  Not for MSVC.
   set(ZH_SANITIZE "" CACHE STRING "-fsanitize= list for a sanitizer build (empty: a normal build)")
   if(ZH_SANITIZE)
     add_compile_options(-fsanitize=${ZH_SANITIZE} -fno-omit-frame-pointer)
     add_link_options(-fsanitize=${ZH_SANITIZE})
     add_compile_definitions(ZH_SANITIZER_BUILD)
-    message(STATUS "ZH_SANITIZE=${ZH_SANITIZE}: a sanitizer build; GameMemory's global operators are off")
+    message(STATUS "ZH_SANITIZE=${ZH_SANITIZE}: a sanitizer build; GameMemory's global operators use calloc and free")
   endif()
 else()
   message(FATAL_ERROR
