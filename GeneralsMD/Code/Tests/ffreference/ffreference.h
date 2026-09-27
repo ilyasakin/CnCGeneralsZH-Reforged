@@ -56,8 +56,10 @@
  *       spot = 1 if rho > cos(theta/2), 0 if rho <= cos(phi/2), else
  *       ((rho - cos(phi/2)) / (cos(theta/2) - cos(phi/2)))^falloff, rho = norm(Ldir_light).norm(V - Lp);
  *       fog linear (end - d)/(end - start), exp e^-(d*density), exp2 e^-(d*density)^2, clamped 0..1.
- *   N3  N.Ldir and N.H are clamped at 0 before use (a negative base has no real power).  Specular is
- *       not gated by N.Ldir: the page's formula has no gate.  pow(0, 0) = 1.
+ *   N3  N.Ldir and N.H are clamped at 0 before use (a negative base has no real power).  pow(0, 0) = 1.
+ *       Specular is gated by N.Ldir: a light with N.Ldir <= 0 adds no specular - MEASURED, not read (the
+ *       page's formula has no gate): WARP and REF give 0 where N.H is .531 and N.Ldir -.436 (knownprobe
+ *       N3a, docs/mac-port/tasks/L2-vulkan-recon.md, "The known list measured").
  *   N4  Per-light ambient (Atten * Spot * La) is included, as "Ambient Lighting" writes it.
  *   N5  With LIGHTING, the lit diffuse's alpha is the diffuse source's alpha and the lit specular's is
  *       the specular source's alpha; lit colours are clamped to 0..1 after summing all lights.
@@ -124,8 +126,10 @@
  *       0..1 are discarded, and the pixels are limited to the viewport like any other.
  *   N26 D3DTOP_PREMODULATE: stage n outputs ARG1; if stage n+1 has a texture, every D3DTA_CURRENT that
  *       stage n+1 reads is first multiplied by stage n+1's texture colour (the page's wording).
- *   N27 The halfway vector without LOCALVIEWER is norm((0,0,1) + Ldir), as "Specular Lighting" writes it
- *       (with it, norm(norm(-Vcamera) + Ldir)).
+ *   N27 The halfway vector without LOCALVIEWER is norm((0,0,-1) + Ldir): the viewer toward -z, where a
+ *       camera looking down +z is - MEASURED, not read: "Specular Lighting" writes (0,0,1), but WARP and
+ *       REF give N.H = .949 for Ldir (0,-.6,-.8) and N (0,0,-1), which (0,0,1) would make 0 (knownprobe
+ *       F2a0/F2c0).  With LOCALVIEWER, norm(norm(-Vcamera) + Ldir), as written and as measured (F2a1).
  *   N28 A stage whose TEXCOORDINDEX names a coordinate set the vertices lack reads u, v = (0, 0)
  *       (D3DTSS_TEXCOORDINDEX: "the system defaults to the u and v coordinates (0,0)"); the page names
  *       no third or fourth component, so the set is padded as any 2-component set is (N13).

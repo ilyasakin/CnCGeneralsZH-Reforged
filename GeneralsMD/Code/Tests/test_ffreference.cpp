@@ -13,6 +13,7 @@
 
 #include "ffreference/ffreference.h"
 
+#include <algorithm>
 #include <math.h>
 #include <vector>
 
@@ -211,22 +212,28 @@ TEST(ffref_lighting_specular_halfway)
 	s.renderState[RS_SPECULARENABLE] = 1;
 	s.renderState[RS_LOCALVIEWER] = 0;
 	const double r2 = sqrt( 0.5 );
-	s.lights[0] = directional( -r2, 0, -r2 );		// Ldir = (r2, 0, r2)
+	s.lights[0] = directional( -r2, 0, r2 );		// Ldir = (r2, 0, -r2)
 	s.lights[0].specular = rgba( 1, 1, 1, 1 );
 	s.material.specular = rgba( 0.5, 0.5, 0.5, 1 );
 	s.material.power = 2;
-	const double P[3] = { 0, 0, 10 }, up[3] = { 0, 0, 1 }, down[3] = { 0, 0, -1 };
-	// non-local: H = norm((0,0,1) + Ldir), N.H = cos(22.5 deg); .5 * cos^2 = .5 * .853553...
+	const double P[3] = { 0, 0, 10 }, down[3] = { 0, 0, -1 };
+	// non-local: H = norm((0,0,-1) + Ldir) (N27, measured) = (.38268, 0, -.92388); N = (0,0,-1):
+	// N.H = cos(22.5 deg); .5 * cos^2 = .5 * .853553...
 	const double c = cos( M_PI / 8 );
-	CHECK_NEAR( light( s, P, up, true, rgba( 1, 1, 1, 1 ), rgba( 1, 1, 1, 1 ) ).specular.r, 0.5 * c * c, EPS );
-	// local: E = norm(-P) = (0,0,-1), H = norm(E + Ldir) = (.92388, 0, -.38268); N = (0,0,-1): N.H = sin(22.5)
-	// and not gated by N.L (which is negative here), N3
+	CHECK_NEAR( light( s, P, down, true, rgba( 1, 1, 1, 1 ), rgba( 1, 1, 1, 1 ) ).specular.r, 0.5 * c * c, EPS );
+	// local: E = norm(-P) = (0,0,-1), the same here, so the same value
 	s.renderState[RS_LOCALVIEWER] = 1;
-	const double sn = sin( M_PI / 8 );
-	const LitVertex local = light( s, P, down, true, rgba( 1, 1, 1, 1 ), rgba( 1, 1, 1, 1 ) );
-	CHECK_NEAR( local.specular.r, 0.5 * sn * sn, EPS );
-	CHECK_NEAR( local.diffuse.r, 0.0, EPS );
+	CHECK_NEAR( light( s, P, down, true, rgba( 1, 1, 1, 1 ), rgba( 1, 1, 1, 1 ) ).specular.r, 0.5 * c * c, EPS );
+	// the light behind the surface: Ldir = (r2, 0, r2), N.L = -r2 < 0, while N.H = sin(22.5) > 0.  Gated: 0
+	// (N3, measured; the page's formula alone would give .5 * sin^2)
+	s.lights[0] = directional( -r2, 0, -r2 );
+	s.lights[0].specular = rgba( 1, 1, 1, 1 );
+	const LitVertex behind = light( s, P, down, true, rgba( 1, 1, 1, 1 ), rgba( 1, 1, 1, 1 ) );
+	CHECK_NEAR( behind.specular.r, 0.0, EPS );
+	CHECK_NEAR( behind.diffuse.r, 0.0, EPS );
 	// SPECULARENABLE off: no specular lighting (N6)
+	s.lights[0] = directional( -r2, 0, r2 );
+	s.lights[0].specular = rgba( 1, 1, 1, 1 );
 	s.renderState[RS_SPECULARENABLE] = 0;
 	CHECK_NEAR( light( s, P, down, true, rgba( 1, 1, 1, 1 ), rgba( 1, 1, 1, 1 ) ).specular.r, 0.0, EPS );
 }
@@ -292,6 +299,308 @@ TEST(ffref_absent_vertex_colours_as_windows_measures_them)
 	fill( s, t, 0.5, rgba( 0, 0, 0, 0 ) );
 	CHECK_NEAR( at( t, 1, 1 ).r, 1.0, EPS );
 	CHECK_NEAR( at( t, 1, 1 ).b, 1.0, EPS );
+}
+
+// ---- the device's known list, measured on Windows' own Direct3D 9 --------------------------------
+// Each value below is what Tests/ffreference/knownprobe_windows.cpp read back on the Microsoft Basic
+// Render Driver (WARP) as a HAL device and on the reference rasteriser (d3dref9.dll) as REF, 2026-09-27
+// (docs/mac-port/tasks/L2-vulkan-recon.md, "The known list measured").  The probe's scene is rebuilt here
+// draw for draw: a 64x64 A8R8G8B8 target cleared to 0xFF3F2F1F, identity transforms, lighting off,
+// stage 0 SELECTARG1 DIFFUSE for colour and alpha.  Values are bytes; a tolerance of 1 covers the
+// 8-bit rounding where WARP and REF themselves differ by one.
+
+namespace {
+
+DrawState probeState( bool pretransformed )
+{
+	DrawState s;
+	s.setDefaults( 64, 64 );
+	s.pretransformed = pretransformed;
+	s.hasDiffuse = pretransformed;
+	s.hasSpecular = pretransformed;
+	s.renderState[RS_CULLMODE] = CULL_NONE;
+	s.renderState[RS_ZENABLE] = 0;
+	s.renderState[RS_LIGHTING] = 0;
+	s.stageState[0][TSS_COLOROP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_COLORARG1] = TA_DIFFUSE;
+	s.stageState[0][TSS_ALPHAOP] = TOP_SELECTARG1;
+	s.stageState[0][TSS_ALPHAARG1] = TA_DIFFUSE;
+	return s;
+}
+
+Target probeTarget()
+{
+	Target t;
+	t.create( 64, 64 );
+	t.colorBits = 8;
+	t.hasAlpha = true;
+	t.clear( colorFromD3D( 0xFF3F2F1F ) );
+	return t;
+}
+
+/// The probe's pretransformed vertex: pixel corner (x, y), as it placed them (x - .5)
+Vertex tl( double x, double y, uint32_t diffuse, uint32_t specular = 0xFF000000 )
+{
+	Vertex v = screenVertex( x - 0.5, y - 0.5, 0.5, 1, colorFromD3D( diffuse ) );
+	v.specular = colorFromD3D( specular );
+	return v;
+}
+
+/// The probe's lit quad: clip-space corners at z .5, normal (0,0,-1), as a strip
+void litQuad( const DrawState &s, Target &t )
+{
+	Vertex v[4] = { worldVertex( -1, 1, 0.5, rgba( 0, 0, 0, 0 ) ), worldVertex( 1, 1, 0.5, rgba( 0, 0, 0, 0 ) ),
+		worldVertex( -1, -1, 0.5, rgba( 0, 0, 0, 0 ) ), worldVertex( 1, -1, 0.5, rgba( 0, 0, 0, 0 ) ) };
+	for (int i = 0; i < 4; ++i)
+		v[i].normal[2] = -1;
+	CHECK( draw( s, PT_TRIANGLESTRIP, v, 4, 0, 4, t ) );
+}
+
+DrawState probeLit()
+{
+	DrawState s = probeState( false );
+	s.hasNormal = true;
+	s.renderState[RS_LIGHTING] = 1;
+	s.renderState[RS_COLORVERTEX] = 0;
+	s.renderState[RS_AMBIENT] = 0;
+	memset( &s.material, 0, sizeof( s.material ) );
+	return s;
+}
+
+/// Every channel of pixel (x, y) within tol of the measured 0xAARRGGBB
+void measured( const Target &t, int x, int y, uint32_t argb, int tol )
+{
+	const Color c = at( t, x, y ), m = colorFromD3D( argb );
+	CHECK_NEAR( c.a * 255.0, m.a * 255.0, tol + 1e-6 );
+	CHECK_NEAR( c.r * 255.0, m.r * 255.0, tol + 1e-6 );
+	CHECK_NEAR( c.g * 255.0, m.g * 255.0, tol + 1e-6 );
+	CHECK_NEAR( c.b * 255.0, m.b * 255.0, tol + 1e-6 );
+}
+
+}  // namespace
+
+TEST(ffref_flat_shading_as_windows_measures_it)
+{
+	const uint32_t red = 0xFFFF0000, green = 0xFF00FF00, blue = 0xFF0000FF, white = 0xFFFFFFFF;
+	DrawState s = probeState( true );
+	s.renderState[RS_SHADEMODE] = SHADE_FLAT;
+	// F8a: a list takes its first vertex's colour
+	{
+		const Vertex v[3] = { tl( 0, 0, red ), tl( 64, 0, green ), tl( 0, 64, blue ) };
+		Target t = probeTarget();
+		CHECK( draw( s, PT_TRIANGLELIST, v, 3, 0, 3, t ) );
+		measured( t, 10, 10, 0xFFFF0000, 0 );
+		measured( t, 30, 20, 0xFFFF0000, 0 );
+	}
+	// F8b: a strip's triangle i takes vertex i
+	{
+		const Vertex v[4] = { tl( 0, 0, red ), tl( 64, 0, green ), tl( 0, 64, blue ), tl( 64, 64, white ) };
+		Target t = probeTarget();
+		CHECK( draw( s, PT_TRIANGLESTRIP, v, 4, 0, 4, t ) );
+		measured( t, 10, 10, 0xFFFF0000, 0 );
+		measured( t, 54, 54, 0xFF00FF00, 0 );
+	}
+	// F8c: a fan's triangle i takes vertex i + 1
+	{
+		const Vertex v[4] = { tl( 0, 0, red ), tl( 64, 0, green ), tl( 64, 64, blue ), tl( 0, 64, white ) };
+		Target t = probeTarget();
+		CHECK( draw( s, PT_TRIANGLEFAN, v, 4, 0, 4, t ) );
+		measured( t, 54, 10, 0xFF00FF00, 0 );
+		measured( t, 10, 54, 0xFF0000FF, 0 );
+	}
+	// F8d: indexed, the first index's vertex
+	{
+		const Vertex v[3] = { tl( 0, 0, red ), tl( 64, 0, green ), tl( 0, 64, blue ) };
+		const uint32_t idx[3] = { 2, 0, 1 };
+		Target t = probeTarget();
+		CHECK( draw( s, PT_TRIANGLELIST, v, 3, idx, 3, t ) );
+		measured( t, 10, 10, 0xFF0000FF, 0 );
+	}
+	// F8e: alpha is flat too
+	{
+		const Vertex v[3] = { tl( 0, 0, 0x00FFFFFF ), tl( 64, 0, 0x80FFFFFF ), tl( 0, 64, 0xFFFFFFFF ) };
+		Target t = probeTarget();
+		CHECK( draw( s, PT_TRIANGLELIST, v, 3, 0, 3, t ) );
+		measured( t, 10, 10, 0x00FFFFFF, 0 );
+		measured( t, 30, 20, 0x00FFFFFF, 0 );
+	}
+	// F8f: the specular is flat on REF (WARP interpolates it: 0xFFAB2A2A and 0xFF347A52, its Gouraud values)
+	{
+		DrawState f = s;
+		f.renderState[RS_SPECULARENABLE] = 1;
+		const Vertex v[3] = { tl( 0, 0, 0xFF000000, red ), tl( 64, 0, 0xFF000000, green ), tl( 0, 64, 0xFF000000, blue ) };
+		Target t = probeTarget();
+		CHECK( draw( f, PT_TRIANGLELIST, v, 3, 0, 3, t ) );
+		measured( t, 10, 10, 0xFFFF0000, 0 );
+		measured( t, 30, 20, 0xFFFF0000, 0 );
+		// F8g, the control: the same Gouraud, where WARP and REF agree
+		f.renderState[RS_SHADEMODE] = SHADE_GOURAUD;
+		t = probeTarget();
+		CHECK( draw( f, PT_TRIANGLELIST, v, 3, 0, 3, t ) );
+		measured( t, 10, 10, 0xFFAB2A2A, 1 );
+		measured( t, 30, 20, 0xFF347A52, 1 );
+	}
+}
+
+TEST(ffref_known_list_lighting_as_windows_measures_it)
+{
+	// F6: an unlit vertex specular is added under SPECULARENABLE
+	{
+		DrawState s = probeState( true );
+		s.renderState[RS_SPECULARENABLE] = 1;
+		const Vertex v[4] = { tl( 0, 0, 0xFFFF0000, 0xFF00FF00 ), tl( 64, 0, 0xFFFF0000, 0xFF00FF00 ),
+			tl( 0, 64, 0xFFFF0000, 0xFF00FF00 ), tl( 64, 64, 0xFFFF0000, 0xFF00FF00 ) };
+		Target t = probeTarget();
+		CHECK( draw( s, PT_TRIANGLESTRIP, v, 4, 0, 4, t ) );
+		measured( t, 32, 32, 0xFFFFFF00, 0 );
+		s.renderState[RS_SPECULARENABLE] = 0;
+		t = probeTarget();
+		CHECK( draw( s, PT_TRIANGLESTRIP, v, 4, 0, 4, t ) );
+		measured( t, 32, 32, 0xFFFF0000, 0 );
+	}
+	// F1: per-light ambient, attenuated, and none out of range (material ambient white, the rest 0)
+	{
+		DrawState s = probeLit();
+		s.material.ambient = rgba( 1, 1, 1, 1 );
+		s.lights[0] = directional( 0, 0, 1 );
+		s.lights[0].ambient = rgba( 0.4, 0.2, 0, 1 );
+		Target t = probeTarget();
+		litQuad( s, t );
+		measured( t, 32, 32, 0x00663300, 0 );
+		Light p;
+		memset( &p, 0, sizeof( p ) );
+		p.enabled = true;
+		p.type = LIGHT_POINT;
+		p.position[2] = -1;
+		p.range = 1000;
+		p.attenuation0 = 2;
+		p.ambient = rgba( 0.8, 0, 0.4, 1 );
+		s.lights[0] = p;
+		t = probeTarget();
+		litQuad( s, t );
+		measured( t, 32, 32, 0x00660033, 0 );
+		s.lights[0].range = 0.1;
+		t = probeTarget();
+		litQuad( s, t );
+		measured( t, 32, 32, 0x00000000, 0 );
+	}
+	// F2, N27, N3: specular white, power 1, normal (0,0,-1); LOCALVIEWER on and off
+	{
+		struct Case { double d[3]; int localViewer; uint32_t centre, corner11, corner6262; };
+		const Case cases[] = {
+			{ { 0, 0.6, 0.8 }, 1, 0x00BDBDBD, 0x009F9F9F, 0x00DADADA },
+			{ { 0, 0.6, 0.8 }, 0, 0x00F2F2F2, 0x00F2F2F2, 0x00F2F2F2 },
+			{ { 0, -0.9, -0.4359 }, 1, 0, 0, 0 },
+			{ { 0, -0.9, -0.4359 }, 0, 0, 0, 0 },		// N3's gate: N.H would be .531
+			{ { 0.6, 0, 0.8 }, 1, 0x00BDBDBD, 0x00DBDBDB, 0x00A0A0A0 },
+			{ { 0.6, 0, 0.8 }, 0, 0x00F2F2F2, 0x00F2F2F2, 0x00F2F2F2 },
+		};
+		for (const Case &c : cases)
+		{
+			DrawState s = probeLit();
+			s.renderState[RS_SPECULARENABLE] = 1;
+			s.renderState[RS_LOCALVIEWER] = c.localViewer;
+			s.material.specular = rgba( 1, 1, 1, 1 );
+			s.material.power = 1;
+			s.lights[0] = directional( c.d[0], c.d[1], c.d[2] );
+			s.lights[0].specular = rgba( 1, 1, 1, 1 );
+			Target t = probeTarget();
+			litQuad( s, t );
+			measured( t, 32, 32, c.centre, 1 );
+			measured( t, 1, 1, c.corner11, 1 );
+			measured( t, 62, 62, c.corner6262, 1 );
+		}
+	}
+}
+
+TEST(ffref_known_list_stages_as_windows_measures_them)
+{
+	// F3, N17: DOTPRODUCT3 of DIFFUSE and TFACTOR, signed, replicated into alpha
+	{
+		const uint32_t cases[3][3] = { { 0x40FF8080, 0xFFFF8080, 0xFFFFFFFF }, { 0x40C08080, 0xFFC08080, 0x41414141 },
+			{ 0x40A0A0A0, 0xFFA0A0A0, 0x32323232 } };
+		for (int c = 0; c < 3; ++c)
+		{
+			DrawState s = probeState( true );
+			s.renderState[RS_TEXTUREFACTOR] = cases[c][1];
+			s.stageState[0][TSS_COLOROP] = TOP_DOTPRODUCT3;
+			s.stageState[0][TSS_COLORARG2] = TA_TFACTOR;
+			const Vertex v[4] = { tl( 0, 0, cases[c][0] ), tl( 64, 0, cases[c][0] ), tl( 0, 64, cases[c][0] ), tl( 64, 64, cases[c][0] ) };
+			Target t = probeTarget();
+			CHECK( draw( s, PT_TRIANGLESTRIP, v, 4, 0, 4, t ) );
+			measured( t, 32, 32, cases[c][2], 0 );
+		}
+	}
+	// F4, N13: under TTFF_COUNT2, (u, v) is padded (u, v, 1, 0), so _31/_32 move it and _41/_42 do not.
+	// 4x4 texture, texel (i, j) = R 64i G 64j, POINT, uv (.1, .1)
+	{
+		Texture tex;
+		tex.type = TEXTURE_2D;
+		TextureLevel level;
+		level.width = level.height = 4;
+		for (int j = 0; j < 4; ++j)
+			for (int i = 0; i < 4; ++i)
+				level.texels.push_back( rgba( 64 * i / 255.0, 64 * j / 255.0, 0, 1 ) );
+		tex.levels.push_back( level );
+		const uint32_t expect[3] = { 0xFF000000, 0xFF804000, 0xFF000000 };
+		for (int c = 0; c < 3; ++c)
+		{
+			DrawState s = probeState( false );
+			s.texCoordSets = 1;
+			s.texCoordSize[0] = 2;
+			s.textures[0] = &tex;
+			s.stageState[0][TSS_COLORARG1] = TA_TEXTURE;
+			if (c == 1) { s.textureTransform[0].m[2][0] = 0.5; s.textureTransform[0].m[2][1] = 0.25; }
+			if (c == 2) { s.textureTransform[0].m[3][0] = 0.5; s.textureTransform[0].m[3][1] = 0.25; }
+			if (c > 0)
+				s.stageState[0][TSS_TEXTURETRANSFORMFLAGS] = TTFF_COUNT2;
+			Vertex v[4] = { worldVertex( -1, 1, 0.5, rgba( 0, 0, 0, 0 ) ), worldVertex( 1, 1, 0.5, rgba( 0, 0, 0, 0 ) ),
+				worldVertex( -1, -1, 0.5, rgba( 0, 0, 0, 0 ) ), worldVertex( 1, -1, 0.5, rgba( 0, 0, 0, 0 ) ) };
+			for (int i = 0; i < 4; ++i) { v[i].tex[0][0] = 0.1; v[i].tex[0][1] = 0.1; }
+			Target t = probeTarget();
+			CHECK( draw( s, PT_TRIANGLESTRIP, v, 4, 0, 4, t ) );
+			measured( t, 32, 32, expect[c], 0 );
+		}
+	}
+	// F11, N15: the LOD.  256x256, 9 levels, level L = R 28L, LINEAR everywhere: R = 28 lambda.  WARP and
+	// REF both follow the L2 length of the longer axis (the rotated cases rule out L-infinity and L1);
+	// where they differ by one, FFReference's exact lambda lies between
+	{
+		Texture tex;
+		tex.type = TEXTURE_2D;
+		for (int l = 0; l < 9; ++l)
+		{
+			TextureLevel level;
+			level.width = level.height = 256 >> l;
+			level.texels.assign( (size_t)level.width * level.height, rgba( 28 * l / 255.0, 0, 0, 1 ) );
+			tex.levels.push_back( level );
+		}
+		struct Case { double d[4]; int warp, ref; };
+		const Case cases[4] = { { { 3, 0, 0, 3 }, 44, 45 }, { { 2, -2, 2, 2 }, 42, 42 }, { { 4, 0, 0, 1 }, 56, 56 },
+			{ { 2.5, 1.5, -1.5, 2.5 }, 42, 43 } };
+		for (const Case &c : cases)
+		{
+			DrawState s = probeState( true );
+			s.hasDiffuse = s.hasSpecular = false;
+			s.texCoordSets = 1;
+			s.texCoordSize[0] = 2;
+			s.textures[0] = &tex;
+			s.stageState[0][TSS_COLORARG1] = TA_TEXTURE;
+			s.samplerState[0][SAMP_MINFILTER] = s.samplerState[0][SAMP_MAGFILTER] = s.samplerState[0][SAMP_MIPFILTER] = TEXF_LINEAR;
+			Vertex v[4];
+			const double xy[4][2] = { { 0, 0 }, { 64, 0 }, { 0, 64 }, { 64, 64 } };
+			for (int i = 0; i < 4; ++i)
+			{
+				v[i] = screenVertex( xy[i][0] - 0.5, xy[i][1] - 0.5, 0.5, 1, rgba( 1, 1, 1, 1 ) );
+				v[i].tex[0][0] = (c.d[0] * xy[i][0] + c.d[2] * xy[i][1]) / 256.0;
+				v[i].tex[0][1] = (c.d[1] * xy[i][0] + c.d[3] * xy[i][1]) / 256.0;
+			}
+			Target t = probeTarget();
+			CHECK( draw( s, PT_TRIANGLESTRIP, v, 4, 0, 4, t ) );
+			const double r = at( t, 32, 32 ).r * 255.0;
+			CHECK( r >= std::min( c.warp, c.ref ) - 1e-6 && r <= std::max( c.warp, c.ref ) + 1e-6 );
+		}
+	}
 }
 
 TEST(ffref_normals_by_the_inverse_transpose)
