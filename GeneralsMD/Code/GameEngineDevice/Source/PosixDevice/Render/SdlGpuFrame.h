@@ -89,6 +89,16 @@ struct SdlRecordedDraw
 class SdlGpuFrame
 {
 public:
+	/// A byte the batch's arenas grow by without clearing it: whatever is staged is written in full at
+	/// once, so std::vector<uint8_t>'s value-initialising resize cleared every byte only for it to be
+	/// overwritten (PERF1 measured the memset at about 1% of the main thread).  Alignment gaps between
+	/// allocations keep what they held; they are uploaded and never read.
+	struct ArenaByte
+	{
+		uint8_t Value;
+		ArenaByte() {}
+	};
+
 	/// The device, with the window claimed when there is one.  A null window makes an offscreen frame,
 	/// which is what the tests use: Present then needs a target of the caller's (Present_To).  Null, with
 	/// the reason, when SDL has no GPU device to give.
@@ -258,9 +268,9 @@ private:
 	std::vector<ScratchDepth> ScratchDepths;
 	uint32_t Target_Index();
 	std::vector<SdlRecordedDraw> Draws;
-	std::vector<uint8_t> StreamBytes;
-	std::vector<uint8_t> UploadBytes;
-	std::vector<uint8_t> ConstantBytes;
+	std::vector<ArenaByte> StreamBytes;
+	std::vector<ArenaByte> UploadBytes;
+	std::vector<ArenaByte> ConstantBytes;
 	uint32_t LastConstants[2], LastConstantsSize[2];
 	std::vector<Upload> Uploads;
 	std::vector<SDL_GPUTexture *> DeadTextures;

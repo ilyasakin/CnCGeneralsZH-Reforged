@@ -19,6 +19,7 @@
 // Pipelines and samplers on SDL3 GPU (decision 7, phase A3c).  See SdlPipelineCache.h.
 
 #include "SdlPipelineCache.h"
+#include "SdlCreationLog.h"
 
 #include <SDL3/SDL.h>
 
@@ -390,7 +391,14 @@ SDL_GPUGraphicsPipeline *SdlPipelineCache::Pipeline(const SdlPipelineKey &key)
 		info.target_info.num_color_targets = 1;
 		info.target_info.has_depth_stencil_target = key.DepthFormat != 0;
 		info.target_info.depth_stencil_format = (SDL_GPUTextureFormat)key.DepthFormat;
+		const double started = Sdl_Creation_Log_Asked() ? Sdl_Now_Ms() : 0.0;
 		pipeline = SDL_CreateGPUGraphicsPipeline(Device, &info);
+		if (Sdl_Creation_Log_Asked()) {
+			char detail[96];
+			snprintf(detail, sizeof(detail), "#%u, %u attributes, blend %u, depth %u/%u", Built + 1, layout.AttributeCount,
+				(unsigned)key.BlendEnable, (unsigned)key.DepthTest, (unsigned)key.DepthWrite);
+			Sdl_Creation_Log("pipeline", started, Sdl_Now_Ms() - started, detail);
+		}
 		if (pipeline == NULL) {
 			refusal = std::string("the device: ") + SDL_GetError();
 		}
@@ -484,7 +492,11 @@ SDL_GPUSampler *SdlSamplerCache::Sampler(const RenderUInt32 sampler_states[14])
 	std::string refusal;
 	SDL_GPUSampler *sampler = NULL;
 	if (Sdl_Sampler_Description(sampler_states, &info, refusal)) {
+		const double started = Sdl_Creation_Log_Asked() ? Sdl_Now_Ms() : 0.0;
 		sampler = SDL_CreateGPUSampler(Device, &info);
+		if (Sdl_Creation_Log_Asked()) {
+			Sdl_Creation_Log("sampler", started, Sdl_Now_Ms() - started, "");
+		}
 		if (sampler == NULL) {
 			refusal = std::string("the device: ") + SDL_GetError();
 		}

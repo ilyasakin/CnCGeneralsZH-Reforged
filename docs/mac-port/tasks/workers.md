@@ -39,6 +39,10 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | build dir for -18 | `~/zhr-worker/build-18` (Release, `ZH_GAME_DATA=~/zhr-worker/data`), its logs `~/zhr-worker/build-18.*.log`, and `build-18/s18`: the sweep and lid-close scripts, APFS clones of the binary, their logs | `cmake`/`ninja` via `zheavy`, `scp` (-18) | in the folder |
 | -18's bundles | `~/zhr-worker/bundles/fmp18.bundle`, `dg18.bundle` | `scp` (-18) | in the folder |
 | disk images for the lid-close repro and `data_gone_check` | made in a temporary work folder under `build-18/s18` or `$TMPDIR`, attached, detached (by their own device) and deleted by the script that made them; none is left | `hdiutil create/attach/detach` (-18), no sudo | nothing left to undo; `hdiutil info` lists none |
+| -a9's offscreen probes (SDL3 GPU and raw Metal, no window) | `~/zhr-worker/probe-a9` | written and compiled by -a9 with clang against build-47's `libSDL3.a` | deleted by -a9, 2026-09-27, once `-offscreen` was validated there |
+| -a9's PERF1 folder: bundles, scripts, logs, captures, the install's hash list, a symlink farm of `data/zerohour` (510 links, real directories), and `tmo`, a perl stand-in for GNU `timeout`, which macOS lacks | `~/zhr-worker/perf-a9` | `scp` of bundles and scripts, then `setup.sh` and `matrix.sh` (-a9). Nothing was pushed anywhere | in the folder |
+| worktree for -a9 | `~/zhr-worker/wt-a9`, branch `perf1-finer-run`; the repository also holds `perf1-finer-nofix3` (fix 3 reverted, for the A/B). Vendor and art cloned in; its SDL3 patched by `vendor.sh` | `git worktree add` (-a9) | in the folder, and `git -C ~/zhr-worker/repo worktree prune` and `branch -D perf1-finer-run perf1-finer-nofix3` |
+| build dir for -a9 | `~/zhr-worker/build-a9` (Release, `ZH_GAME_DATA=~/zhr-worker/data`), with copies `generals-fix3` and `generals-nofix3` | `cmake`/`ninja` via `zheavy` (-a9) | in the folder |
 
 Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wide.
 

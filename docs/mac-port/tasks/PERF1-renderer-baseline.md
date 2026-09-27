@@ -2,8 +2,17 @@
 
 - **Milestone:** M4
 - **Depends on:** A3e
-- **Status:** in review: measured and profiled; the three largest costs and their fixes are proposed to the PM, and nothing is changed yet
+- **Status:** in review. Fix 1 made (the device's recording halved). Fix 3 kept by the PM's decision (proven identical; no measurable gain). Fix 2 measured and deferred. The long frames were this shared Mac's memory compressor under load, and are absent on a quiet second machine (finer). An engine profile and a ranked list of same-result speed-ups are next.
 - **Owner:** -a9
+
+> **Void: every timing taken on finer before 02:32 local, 2026-09-27.** finer, a MacBook Pro with its
+> lid closed, was cycling between DarkWake (about 45 s) and Maintenance Sleep (5 to 7 s): 103 sleeps that
+> day before `pmset -a disablesleep 1` (the user's approval, on the workers' revert list). One run showed
+> a 21,414 ms engine frame that the device's clock saw as 333 ms. Pass or fail results and signatures
+> from that time stand; its frame and work times do not. So does the first per-run-locked matrix
+> (02:51 to 03:10): each run took the machine's lock alone, in the same order every time, and the
+> no-fix-3 runs drifted from 1.35 to 2.07 ms of device draw as finer warmed. It was stopped for the
+> ABBA A/B below.
 
 ## Why
 
@@ -79,10 +88,9 @@ load average is recorded before and after every run, and every configuration is 
   Even serialised, it is not the limit.
 - **The device's recording is over half of the work:** 2.3 to 2.9 ms for 1,200 to 1,800 draws, which is
   1.6 to 1.9 microseconds a draw. Record+submit adds 0.5 to 1.0 ms. The engine's own CPU is 1.4 to 1.8 ms.
-- **Long frames:** three of the twelve skirmish runs had a single frame of 0.5 to 0.65 s. It fell at a
-  different logic frame each time (246, 290, 747), which isn't something the seeded game does. The load
-  reached 20 to 30 in those minutes, so it is most likely the shared machine. Not explained, and not
-  pursued.
+- **Long frames:** three of the twelve skirmish runs had a single frame of 0.5 to 0.65 s, at a different
+  logic frame each time (246, 290, 747), which isn't something the seeded game does. Traced later: see
+  "The long frames" below.
 
 ## Profile
 
@@ -166,3 +174,231 @@ nearest caller in the game's own binary:
 - **Resolution:** the cost does not grow with the pixels.
 
 **Kept:** the sample output and the matrix logs, a few MB in scratch. No xctrace trace was recorded.
+
+## After the PM's decisions (2026-09-26)
+
+The PM's calls: fix 1 go; fix 3 go after it, as its own commit; fix 2 held; and the long frames chased
+before the fixes are called done.
+
+### Fix 1: programs found by their description's bytes (46f95c30)
+
+`SdlProgramCache` finds a program by the description's own bytes: a last-used fast path by `memcmp`, then
+an FNV-hashed table capped at 16,384 entries. The key string is built only on a miss, and kept on the
+program, where the capture signature reads it.
+
+Before (6c334876) and after (46f95c30), the same six configurations, three runs each, the load 9 to 55.
+The medians over the three runs:
+
+| Configuration | Work p50 | Work p99 | Device draw p50 | Device draw mean | Record+submit mean |
+|---|---|---|---|---|---|
+| skirmish, 800x600 | 5.15 → 3.42 | 7.39 → 5.20 | 2.93 → 1.38 | 2.94 → 1.38 | 0.59 → 0.55 |
+| skirmish, 1920x1080 | 4.51 → 3.07 | 5.52 → 4.72 | 2.57 → 1.21 | 2.58 → 1.22 | 0.49 → 0.47 |
+| skirmish, 2560x1440 | 4.56 → 3.39 | 7.27 → 6.61 | 2.60 → 1.25 | 2.60 → 1.26 | 0.49 → 0.54 |
+| shell, 800x600 | 5.25 → 4.20 | 8.54 → 8.28 | 2.60 → 1.43 | 2.83 → 1.59 | 1.00 → 1.05 |
+| shell, 1920x1080 | 4.35 → 3.19 | 6.36 → 4.65 | 2.28 → 1.15 | 2.26 → 1.15 | 0.60 → 0.61 |
+| shell, 2560x1440 | 4.67 → 3.38 | 6.91 → 5.44 | 2.46 → 1.21 | 2.44 → 1.21 | 0.64 → 0.65 |
+
+- **The device's recording halved:** 1.2 to 1.4 ms at p50, from 2.3 to 2.9. The work fell by 1.1 to
+  1.7 ms, as proposed.
+- **Signatures:** a capture run before and after: the same 50 signatures. 29 files are byte-identical;
+  the rest differ in their matrices only (plus one vertex set and one texture name), which is the camera
+  at the moment of capture, not the draw.
+- **The replay:** 50 of 50 against FFReference, with the known C1.
+- **The suites:** ctest 22 of 22 in the subsets run.
+
+### Fix 2: the engine allocator's mutex, measured and deferred
+
+About 11% of the main thread in the profile: `MemoryPool::allocateBlock` 3.7%,
+`DynamicMemoryAllocator::freeBytes` 3.4%, `allocateBytes` 3.1%, `operator delete` 1.1%. That is up to
+about 0.9 ms a frame. Held by the PM. One constraint for whoever takes it: the engine's lock is a
+CRITICAL_SECTION on Windows, which is recursive; `os_unfair_lock` is not, so it is no drop-in
+replacement.
+
+### Fix 3: the per-draw copies and clears
+
+- **Done (04495837), kept by the PM's decision: no measurable gain at this resolution, <0.1 ms, below what six runs resolve.** It is proven identical in result and does strictly less work, so under the user's rule (a safe improvement is taken when its result is the same, guaranteed) it stays. The batch's three arenas (stream, upload, constants) grow without
+  zero-filling: `std::vector<ArenaByte>`, a byte with an empty constructor, in place of
+  `std::vector<uint8_t>`. What is staged is written in full at once; alignment gaps keep what they held,
+  and are uploaded but never read. The profile put the fill at about 1% of the main thread.
+- **Signatures:** fix 3 off and on, both on 8d3bef8e: the same 50 signatures. 29 byte-identical, the
+  other 21 in matrices only (one each also in vertices, a texture name, render states), as with fix 1.
+- **The A/B, on finer** (2026-09-27, 03:13 to 04:21; the machine awake, its lock held for the whole
+  batch). ABBA, BAAB, ABBA; skirmish and shell at 1920x1080 with the overlay; `-offscreen`,
+  `ZH_OFFSCREEN_HZ=120`, `-noaudio`; six runs of each binary a configuration, 60 s idle before each run.
+  All 72 thermal readings were Nominal, the P-cluster between 0.7 GHz (idle) and 3.8 GHz; the load 1.5
+  to 2.5; no sleeps. Medians over the six runs of each run's p50, without fix 3 / with it:
+
+  | Configuration | Work p50 (ms) | Device draw p50 (ms) | Record+submit mean (ms) | Work p99 (ms) |
+  |---|---|---|---|---|
+  | shell, 1920x1080 | 4.359 / 4.361 | 1.808 / 1.702 | 1.050 / 1.138 | 7.816 / 7.469 |
+  | skirmish, 1920x1080 | 4.361 / 4.465 | 2.050 / 2.013 | 0.590 / 0.653 | 7.531 / 7.492 |
+
+  The differences change sign between mean and median and between the scenes, and stay within about
+  0.1 ms: below what six runs resolve on this machine. The expected gain was about 1% of the main thread,
+  some 0.05 ms. The code does strictly less: the disassembly of `SdlGpuFrame::Stage` on finer has no
+  `bzero` with fix 3 (66 instructions against 72). By position in the block, device draw was flat in the
+  shell (1.766, 1.769, 1.741, 1.756) and lower first in the skirmish (1.829, 2.088, 2.072, 2.019), which
+  the ABBA order balances.
+- **The same result, proven:** signatures on finer with the overlay, 50 of 50 in common (29
+  byte-identical, 18 matrices only, 2 matrices and vertices, 1 render states and matrices); the
+  FFReference replay of the fix-3 capture, 50 compared, 0 failed, the three known C1/C5 findings; the
+  suites, 83 of 83.
+- **Not done, and why:**
+  - *Staged bytes written straight into the mapped transfer buffer:* the memmove is 3.4%, but mapping
+    the transfer buffer across a batch changes when it is cycled and when it is safe to write, which is
+    exactly the hazard class the PM listed as suspect 1. Not worth it before the A/B shows what is left.
+  - *Constants rebuilt only when dirty:* `Build_Constants` is 1.2%, about 0.1 ms. A dirty flag has to be
+    set by every Set* path that feeds the blocks, and one missed path is a stale colour. The gain does not
+    carry that risk yet.
+
+### The long frames: the shared machine's memory pressure
+
+**Instruments** (all off unless asked, committed on this branch):
+- `ZH_GPU_TIMING`'s long-frame line: every frame over 50 ms, split into the device's draw, its flushes,
+  its present and swapchain wait, and the engine's own rest.
+- `ZH_GPU_CREATION_LOG`: every program, pipeline, sampler, texture, retexture, buffer and rebuffer, with
+  its time and duration; a draw over 20 ms with its phases, the GPU copies split into textures, samplers
+  and buffers; a mirror-lock wait over 5 ms; a texture call over 5 ms. Kept in memory and written once a
+  present (8d3bef8e), so the log no longer stalls the draws it times; a write over 5 ms says so.
+- `ZH_GPU_CREATION_TRACE=WxH`: the caller of every 500th texture of that size.
+- `ZH_LOAD_TIMING`: every file open and read over 20 ms, and every W3D model and texture load over 20 ms,
+  split into reading and building, with the thread.
+- `vm_stat 1` beside each run, and the load and `kern.num_files` before it.
+
+**What was found**, hidden skirmishes at 2560x1440, 19 runs in 4 batches:
+- **No loading:** no file open or read, and no model or texture load, over 20 ms in the match.
+- **No device cause:** in every slow draw, the flushes, the staging, the constants, the samplers and the
+  buffers were 0.00 ms, and no mirror-lock wait reached 5 ms. That rules out the PM's suspects 1 to 3: a
+  buffer reused while the GPU reads it, a ring growing or waiting for a fence, and the mirror's lock held
+  by another thread.
+- **Every device-side long frame coincided with a blocked write under measured memory pressure.** Each
+  slow draw's time was one `SdlResourceMirrors::Texture` or `Buffer` call, and inside it the creation
+  log's own unbuffered writes to stderr: 8 to 12 ms (runs A1, A2), 264 and 27 ms (G2), 551.46 ms of a
+  551.70 ms draw (G3, the size of the 577 ms first seen), each to within 0.1 ms. One G2 call of 348 ms
+  held a timed write of 269 ms; the other 79 ms came after it, where the only work left was the log's
+  second, untimed line (its own report of the slow write).
+- **None was seen in the unlogged runs** (B1, B2, C1, C2: device draw 1 to 5 ms in every long frame).
+- **The engine-side stalls in C2 coincided with free pages at 15 MB:** 15 long frames in the match,
+  1,096 and 950 ms among them, device draw 1 to 5 ms, logic at most 106 ms, so the engine's client and
+  render work. `vm_stat` at the same second: 975 free pages, 150,000 decompressions and 247,000
+  compressions. B1 had four frames of 120 to 225 ms at 3 to 4 s into the match, the worst a 222 ms
+  logic tick, with free pages around 60 MB.
+- **The machine:** 36 GB, shared by several agent sessions each running copies of the game (about 0.9 GB
+  each), OrbStack (1.8 GB) and the user's own applications; about 2.1 million pages (34 GB) in the
+  compressor; the load 15 to 64 during these runs. The game itself was about 0.4 GB.
+- **Fix 3 neither causes nor hides it:** the G runs were on fix 1 and the instruments only.
+- **Excluded:** runs A3, B3 and F1 to F3 (22:25 to 22:31), when two other harnesses had filled the
+  machine's file table. They were rerun as G1 to G3 and C1 to C2.
+- **What this could not see, until finer:** there was no run on an unloaded machine. On finer (below),
+  24 runs had no long frame in steady state. Free pages there fell as low as here, about 60 MB, but the
+  compressor was idle: at most 110 decompressions and no compressions a second, against this Mac's
+  151,000 and 247,000 at C2's stall. What stalls this Mac is the compressor's churn under the shared
+  load, not the free-page count alone.
+
+**The load-time frames**, measured, with no action:
+- **The shell build:** one frame of 655 to 839 ms at 0.3 s after the first present, all the engine's own.
+- **First use:** one frame of 88 to 123 ms at about 2 s (299 ms once, at load 62): the first-use
+  program compiles (29 to 66 ms of device draw) and the engine's own rest.
+
+### Observations
+
+- **Text textures, made anew every frame.** About 3,500 64x64 A4R4G4B4 textures a match, two most frames:
+  `PosixDevice9::CreateTexture <- D3DX9Posix_Create_Texture <- DX8Wrapper::_Create_DX8_Texture <-
+  TextureClass::TextureClass <- Render2DSentenceClass::Build_Textures <- Render2DSentenceClass::Render <-
+  W3DDisplayString::draw`, called from `Drawable::drawConstructPercent`, `Drawable::drawHealthBar` and
+  the HUD overlay's `litehtml::el_text::draw`. Text that changes gets new textures. On Windows the driver
+  absorbs it; here each creation costs a mirror texture and an upload. A candidate for a glyph or
+  text-texture cache only if a profile shows the cost.
+- **A crash after the Mac slept:** a run's present blocked through a 17-minute clamshell sleep, and the
+  process crashed one second after waking, in `WindowLayout::hide` (null) from
+  `GameLogic::clearGameData` on the -maxframes exit. Handed to -18 as a player question: does closing a
+  MacBook's lid mid-game crash it?
+
+### A second machine: finer (2026-09-27)
+
+**The machine.** A MacBook Pro 14-inch (Mac15,6): M3 Pro, 5 performance and 6 efficiency cores (as this
+Mac), 36 GB, macOS 26.5.2. The lid is closed, it's on AC, and `pmset -a disablesleep 1` is set (the
+user's approval; it's on the workers' revert list). There's no display and no window server for zhr, so
+every run is `-offscreen` (decision 10). "Native resolution" is the panel's specification, 3024x1964,
+because no display was attached for zhr. Low power mode is off.
+
+**The runs.** The fix-3 build (`perf1-finer-run`: this branch with `-offscreen` merged in, plus the
+FFmpeg fix), from `ssh zhr@finer.local`:
+- `-offscreen`, `ZH_OFFSCREEN_HZ=120` (frames paced at 120 a second in place of vsync), `-noaudio`,
+  `-overlay <build>/overlay`, the HUD on;
+- the same scenes, frames and timing windows as this Mac's matrix, three runs a configuration;
+- `zheavy` held for each whole batch;
+- 60 s idle before every run;
+- the load, `vm_stat 1`, and the thermal pressure and cluster frequencies (`powermetrics`) before, 40 s
+  in and after each run.
+
+Every thermal reading was Nominal, the load was 1.2 to 2.1, and there were no sleeps.
+
+| Scene, resolution | Frame p50 / p99 / worst (ms) | Work p50 / p95 / p99 (ms) | Draws | Device draw p50 | Record+submit mean | Engine CPU mean | Engine match p99 / worst | Long frames in steady state |
+|---|---|---|---|---|---|---|---|---|
+| skirmish, 800x600 | 8.33 / 8.46–8.60 / 16.31–16.67 | 4.61–4.68 / 5.71–5.75 / 7.00–7.34 | 1786 | 2.20–2.23 | 0.71–0.72 | 1.79–1.83 | 9.25 / 16.53–16.71 | 0, 0, 0 |
+| skirmish, 1920x1080 | 8.33 / 8.35–8.74 / 16.66 | 4.31–4.67 / 5.25–5.58 / 6.86–7.53 | 1570 | 1.97–2.22 | 0.64–0.68 | 1.74–1.85 | 9.25–9.50 / 17.21–18.58 | 0, 0, 0 |
+| skirmish, 3024x1964 | 8.33 / 8.34–8.83 / 8.84–16.67 | 3.40–3.90 / 4.64–4.92 / 6.23–7.38 | 919 | 1.40–1.57 | 0.47–0.52 | 1.67–1.82 | 9.25–9.50 / 23.77–24.55 | 0, 0, 0 |
+| shell, 800x600 | 8.33 / 8.50–8.79 / 16.67–25.00 | 4.49–4.65 / 5.88–6.02 / 7.25–8.32 | 1336 | 1.73–1.79 | 1.42–1.48 | 1.46–1.51 | — | 0, 0, 0 |
+| shell, 1920x1080 | 8.33 / 8.33–8.50 / 16.67 | 4.29–4.51 / 5.58–5.84 / 6.06–6.99 | 1187 | 1.69–1.77 | 1.07–1.16 | 1.48–1.68 | — | 0, 0, 0 |
+| shell, 3024x1964 | 8.33 / 8.34 / 16.67 | 3.22–3.39 / 4.22–4.45 / 4.76–5.09 | 1034 | 1.48–1.56 | 0.62–0.65 | 1.20–1.27 | — | 0, 0, 0 |
+
+- **Record+submit** here is the present less the offscreen wait: the gamma pass into a texture of its
+  own, with no swapchain.
+- **Long frames in steady state** means frames over 50 ms after 10 s into a skirmish (the match
+  under way), or after 120 s in the shell. The shell has a burst of about 9 frames a second between 71
+  and 76 s, before its measured window; it isn't counted.
+- **The 3024x1964 rows are reruns,** on the same build with one fix to the timing aid (60506d38). The
+  engine makes a device and replaces it before the first frame at that size, and the replaced device's
+  teardown used up the one report, so the first six 3024 runs reported "0 frames". The fix touches
+  only the report. The skirmish draws only 919 a frame at this size, against 1,570 at 1920x1080. That
+  is noted, not explained.
+
+**The hitch is absent on the quiet machine.** No steady-state long frame appeared in any of the 24
+runs, and the engine's own worst match frame was 16 to 25 ms.
+- Free pages fell to about 3,600 (roughly 60 MB) in some of these runs too, with no stall. So low
+  free memory alone is not what stalled this Mac. The compressor churning was.
+- Per second at most, measured by `vm_stat 1`:
+
+  | Machine and run | Decompressions | Compressions | Page-ins |
+  |---|---|---|---|
+  | finer, all runs | 110 | 0 | 1,902 |
+  | this Mac, B2 (a clean run) | 24,658 | 43,911 | 17,159 |
+  | this Mac, C2 (the 842 ms stall) | 150,674 | 246,572 | 39,493 |
+
+**The content, bridged.** This Mac's baseline had the overlay's loose files copied into its farm, but not
+its three art archives (ReforgedNormals, ReforgedTerrain and ReforgedTextures.big). The archive lists in
+the debug logs show it. So this Mac's baseline equals "the overlay minus the three art archives". A
+run with no overlay at all can't start ("could not open 'Data\INI\FXListReforged.ini'"); three such
+bridge runs failed at once and are discarded. The bridge that was run instead uses the overlay's 40
+loose files without the archives: skirmish 1920x1080, three runs.
+
+| skirmish, 1920x1080 | Work p50 / p95 / p99 | Device draw p50 | Record+submit | Engine CPU | Engine match worst |
+|---|---|---|---|---|---|
+| the full overlay | 4.31–4.67 / 5.25–5.58 / 6.86–7.53 | 1.97–2.22 | 0.64–0.68 | 1.74–1.85 | 17.21–18.58 |
+| without the three archives | 4.37–4.67 / 5.33–5.75 / 7.26–8.45 | 2.00–2.21 | 0.64–0.67 | 1.76–1.86 | 17.31–17.70 |
+
+The archives cost nothing measurable.
+
+**finer against this Mac: the machine, not the present path.** finer's work is higher than this Mac's
+after fix 1: 4.3 to 4.7 ms at p50 against 3.1 to 3.4, with device draw at 2.0 to 2.2 ms against 1.2 to
+1.4. It is the same chip and core layout, low power mode is off, the thermals were Nominal, and the
+bridge rules out the content. To separate the present path from the machine, finer's own binary
+(`generals-fix3b`) was run on this Mac twice. The PM approved this as the one exception to "no work on
+this Mac": the seed-1234 skirmish at 1920x1080, silent, off-peak (load 5.1 to 5.6), the farm's content
+(the overlay minus the archives, which the bridge showed to be equivalent).
+
+| This Mac, the same binary | Work p50 / p95 / p99 (ms) | Device draw p50 (ms) | Draws p50 | Engine match worst (ms) |
+|---|---|---|---|---|
+| `-hiddenwindow` (vsync) | 3.26 / 3.91 / 4.52 | 1.28 | 1580 | 33.7 |
+| `-offscreen`, `ZH_OFFSCREEN_HZ=120` | 3.06 / 3.77 / 5.01 | 1.23 | 1547 | 25.6 |
+| finer, `-offscreen` (the matrix, three runs) | 4.31–4.67 / 5.25–5.58 / 6.86–7.53 | 1.97–2.22 | 1570 | 17.2–18.6 |
+
+The present path makes no measurable difference, so finer's extra 1.2 ms of work, 0.8 ms of it in the
+device's recording, belongs to the machine or its OS: macOS 26.5.2 against 27.0, or the clocks of a
+lid-closed laptop in a closet, whose P-cluster read 2.4 to 3.8 GHz 40 s into runs. Those two are not
+separated. finer's numbers are right for comparing builds on finer, not for comparing with this Mac.
+
+**Installed or created on finer:** listed, with how to undo each, in `docs/mac-port/tasks/workers.md`
+(probe-a9, since deleted; perf-a9 with its farm, bundles, scripts and logs; wt-a9 and its two run
+branches; build-a9).

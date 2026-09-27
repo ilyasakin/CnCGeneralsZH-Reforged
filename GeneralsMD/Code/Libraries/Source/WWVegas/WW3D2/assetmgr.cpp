@@ -78,6 +78,9 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "assetmgr.h"
+#if !defined(_WIN32)
+#include "Platform/LoadTiming.h"
+#endif
 #include <assert.h>
 
 #include "bittype.h"
@@ -633,6 +636,24 @@ void WW3DAssetManager::Create_Asset_List(DynamicVectorClass<StringClass> & model
 bool WW3DAssetManager::Load_3D_Assets( const char * filename )
 {
 	bool result = false;
+#if !defined(_WIN32)
+	// PERF1's hitch hunt (Platform/LoadTiming.h): a model load's time, and how much of it was reading.
+	struct LoadTimer
+	{
+		const char *Name;
+		double Start, ReadStart;
+		explicit LoadTimer(const char *name) : Name(name), Start(zhLoadTimingAsked() ? zhLoadNowMs() : 0.0),
+			ReadStart(zhLoadReadMs()) {}
+		~LoadTimer()
+		{
+			if (!zhLoadTimingAsked()) return;
+			const double took = zhLoadNowMs() - Start, read = zhLoadReadMs() - ReadStart;
+			if (took > ZH_LOAD_TIMING_REPORT_MS)
+				fprintf(stderr, "LOAD w3d   t %10.1f ms  %7.1f ms  %s thread  read %.1f ms, parse and build %.1f ms  %s\n",
+					Start, took, zhLoadThread(), read, took - read, Name);
+		}
+	} timer(filename);
+#endif
 
 	FileClass * file = _TheFileFactory->Get_File( filename );
 	if ( file ) {
