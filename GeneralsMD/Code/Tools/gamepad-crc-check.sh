@@ -18,8 +18,9 @@
 # G1's test 2 (docs/mac-port/tasks/G1-gamepad.md, §5): the same skirmish, driven once by a pad and once
 # by hand, must end on the same CRC, and both must differ from the match left alone.
 #
-# Three runs of one fixed-seed skirmish, each in a window that is never shown (-hiddenwindow; a pad needs
-# a window, SdlGamepad.h) with no sound (-noaudio), timed out and killed with its process group:
+# Three runs of one fixed-seed skirmish, each with no window at all (-offscreen, which starts SDL's gamepads
+# only for ZH_INPUT_SCRIPT, so a worker's own pad cannot join) and no sound (-noaudio), timed out and
+# killed with their process group:
 #   pad   - ZH_INPUT_SCRIPT plays a virtual pad: select all (a back button, Ctrl+A through the command
 #           map), a move order (East, the right button), make group 1 (right shoulder + D-pad up, Ctrl+1),
 #           a second move order, and stop (West, S);
@@ -31,7 +32,7 @@
 # (install-guard.sh); the overlay is staged into the work folder; the user data folder is in it too.
 #
 # Usage: gamepad-crc-check.sh --generals <path> [--data <dir>] [--maxframes 600] [--keep]
-#   --data defaults to ZH_DATA_DIR, a folder holding zerohour/.  Exit 77 without it, or without a display.
+#   --data defaults to ZH_DATA_DIR, a folder holding zerohour/.  Exit 77 without it.
 set -u
 
 GENERALS=""; DATA="${ZH_DATA_DIR:-}"; MAXFRAMES=600; KEEP=0; TIMEOUT="${GAMEPAD_CRC_TIMEOUT:-300}"
@@ -50,10 +51,6 @@ if [ -z "$GENERALS" ] || [ ! -x "$GENERALS" ]; then
 fi
 if [ -z "$DATA" ] || [ ! -d "$DATA/zerohour" ]; then
 	echo "skip: no game data (--data or ZH_DATA_DIR, a folder holding zerohour/)"
-	exit 77
-fi
-if [ "$(uname)" != "Darwin" ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
-	echo "skip: no display for the hidden window a pad needs"
 	exit 77
 fi
 
@@ -142,7 +139,7 @@ run_game() {	# run_game <name> [script]: sets RUN_CRC, RUN_FRAME, RUN_PLAYED, RU
 	rm -f -- "$log"
 	( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_INPUT_SCRIPT="$script" \
 		perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
-		"$GENERALS" -hiddenwindow -noaudio -win -xres 1024 -yres 768 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
+		"$GENERALS" -offscreen -noaudio -win -xres 1024 -yres 768 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
 		-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" \
 		-randommap 0 2 -autoskirmish 2 -aidiff brutal -seed 0 \
 		> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )

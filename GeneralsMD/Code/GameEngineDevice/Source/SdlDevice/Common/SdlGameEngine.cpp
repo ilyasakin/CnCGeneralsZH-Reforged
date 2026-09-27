@@ -267,6 +267,11 @@ void SdlGameEngine::startOffscreen( void )
 	}
 	m_sdlVideoStarted = TRUE;
 	DEBUG_LOG(( "SdlGameEngine: offscreen, no window; SDL video driver %s (%s)\n", SDL_GetCurrentVideoDriver(), driver ));
+	// No pads here: a worker's harness must not take a real pad's input.  G1's test 2 is the exception - it
+	// plays its own virtual pad, and a host reached over ssh has no display for a window to hold one.
+	const char *script = getenv( "ZH_INPUT_SCRIPT" );
+	if (script != NULL && *script != 0 && SdlGamepad_start())
+		SdlInputScript_start();
 }
 
 void SdlGameEngine_releaseWindow( void )
