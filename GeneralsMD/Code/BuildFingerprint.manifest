@@ -3579,6 +3579,7 @@ Tools/fingerprint-check.sh
 Tools/fingerprint-manifest.sh
 Tools/fingerprint/build_fingerprint.cpp
 Tools/gamepad-crc-check.sh
+Tools/gamepad-menu-check.sh
 Tools/gametext.py
 Tools/gdi-font-metrics-header.py
 Tools/gdi-font-metrics.ps1
