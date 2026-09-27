@@ -28,6 +28,7 @@
 #include "SdlDevice/Common/SdlGameEngine.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
 #include "SdlDevice/GameClient/SdlInput.h"
+#include "SdlDevice/GameClient/SdlMouse.h"
 #include "W3DDevice/GameClient/W3DGameClient.h"
 #include "PosixDevice/Common/PosixFileResolutionDump.h"
 #include "MilesAudioDevice/MilesAudioManager.h"
@@ -271,6 +272,7 @@ void SdlGameEngine::destroyWindow( void )
 	if (m_sdlVideoStarted)
 	{
 		ThePlatformDisplays = NULL;
+		SdlMouse_releaseCursors();		// before SDL_QuitMouse walks its list: SdlMouse.h says why
 		SDL_QuitSubSystem( SDL_INIT_VIDEO );
 		m_sdlVideoStarted = FALSE;
 	}
