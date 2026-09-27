@@ -641,7 +641,11 @@ void LocomotorStore::reset()
 		Overridable *locoTemp = it->second->deleteOverrides();
 		if (!locoTemp)
 		{
-			m_locomotorTemplates.erase(it);
+			// Defect #32: erase(it) left it dangling, and the loop went on from the freed node.  A locomotor
+			// defined only by a map's map.ini (the shipped test map Hovercraft; any custom map, whose map.ini
+			// travels with a map transfer) is itself an override, so it lands here, and the game hung at
+			// the end of the match.  Step past the node before it goes.
+			m_locomotorTemplates.erase(it++);
 		}
 		else
 		{

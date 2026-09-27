@@ -1313,8 +1313,9 @@ Linux - fixed.**
 
 - **Where:** `part_emt.cpp`'s copy constructor did `UserString(::strdup(src.UserString))`. The main
   constructor sets `UserString(NULL)` (`:107`), and it stays NULL until a user string is set.
-- **Windows:** strdup is the UCRT's `_strdup`, which returns NULL for a NULL argument. This is -18's reading
-  of the UCRT, not measured here. So a Windows clone copies the NULL.
+- **Windows:** strdup is the UCRT's `_strdup`, which returns NULL for a NULL argument. That was -18's reading
+  of the UCRT, and is now measured on Windows 11 (W2: `test_msvc_float_casts` calls `_strdup(NULL)` through
+  `strdupAsWindows` and passes). So a Windows clone copies the NULL.
 - **Darwin and glibc:** strdup reads through the pointer and faults.
 - **Where it bites:** the fog of war clones every render object it ghosts. The stack from the game's crash
   log is:
@@ -1330,6 +1331,43 @@ Linux - fixed.**
   `strdupAsWindows` (`Libraries/Include/Platform/StrdupAsWindows.h`, the one spelling). On Windows that is
   `_strdup` itself, so nothing changes there. The per-site classification is in
   `docs/mac-port/tasks/strdup-sweep.md`.
+
+**32. An erase in LocomotorStore::reset leaves its iterator dangling; a map that defines a new locomotor
+crashes (Windows) or hangs (Mac and Linux) the game at the end of the match - fixed.**
+- **Where:** `LocomotorStore::reset` (`Locomotor.cpp`) cleans up map overrides at the end of every game.
+  For a locomotor that is itself an override, `deleteOverrides()` deletes it and returns NULL, and the
+  loop called `m_locomotorTemplates.erase(it)` and went on with `it`. That is undefined behaviour on
+  every platform: the next pass reads the freed node, deletes the freed template again and erases again.
+- **When:** a locomotor defined only by a map's `map.ini`. Of the shipped maps, only the ZH test map
+  `Maps\Hovercraft` defines new ones (SpeedBoatDemoLocomotor, BattleshipDemoLocomotor). The other 18
+  shipped `map.ini` files only override existing locomotors, so they never reach the erase. A custom
+  map's `map.ini` travels with a map transfer (`FileTransfer.cpp`), so REMOTE data reaches it.
+- **Seen:** -18's 86-map `-mission` sweep, on finer. Hovercraft never finished: `sample` showed the main
+  thread in `GameLogic::clearGameData` → `GameEngine::reset` → `LocomotorStore::reset`, freeing in a
+  loop at 86% CPU. The Mac and Linux (libc++, the engine's allocator) hang there.
+- **Windows (measured on the W2 VM):** the same mission on the shipping-equivalent MSVC build crashes at the
+  end of the match with "Pure virtual function called". The loop's second pass calls into the freed
+  template, and EA's debug library shows its "Game crash" box and exits. With the fix applied to that build
+  it exits 0 at frame 600 (CRC 0xF4096AF7). So a transferred custom map that defines a new locomotor
+  crashes every Windows player at the end of the match.
+- **Fixed:** `erase(it++)`, which steps past the node before it goes. Where no locomotor is map-only,
+  nothing changes on any platform.
+- **Tested:** `mission_check` plays Hovercraft and expects it to end and exit. Armed: with the old loop
+  the run hangs until the alarm.
+- **The same idiom elsewhere (swept, 2026-09-27):**
+  - About 30 bare `erase(it)` calls in GameEngine and GameEngineDevice are safe: each is followed by
+    return or break, a reassigned iterator, or a next saved before the erase.
+  - About 70 `it = erase(it)` and `erase(it++)` calls have no extra `++it`.
+  - One more instance, fixed with this one: `ScriptEngine::reset` threw away the iterator
+    `cleanupSequentialScript` returns (the vector erase's), where every other caller takes it. Release
+    builds walked on by accident, since a vector iterator is a pointer and the next script moves into the
+    erased slot. A checked-iterator build (MSVC Debug) would assert at the end of a map that ends with a
+    sequential script pending. It now takes the returned iterator, which is the same position wherever the
+    old code worked.
+  - Two neighbours, not this bug and not fixed:
+    - `SubsystemInterface.cpp:149` (DUMP_PERF_STATS, _DEBUG and _INTERNAL only) walks one vector against
+      the other's end.
+    - `InGameUI.cpp:7188` erases a `std::find` result that only a DEBUG_ASSERTCRASH checks.
 
 **Latent, not numbered: a bind that fails leaks its socket - every platform, environment-triggered; fixed.**
 - **Where:** `UDP::Bind` made a new socket on every call and never closed one whose bind failed.
@@ -1577,6 +1615,12 @@ hunting a crash or corruption that only one platform shows, look here first.**
 - **A vertex format and its structure disagree.** `dx8fvf.h`'s `DX8_FVF_XYZNUV2DMAP` declares three
   texture sets (one, four and two floats, 52 bytes a vertex) and `VertexFormatXYZNUV2DMAP` holds only
   the last two (48). Nothing sizes a buffer by either; `dx8fvf.cpp` only prints the format's name.
+- **An iterator walked against another container's end (not fixed; _DEBUG and _INTERNAL only).**
+  `SubsystemInterface.cpp:149` (DUMP_PERF_STATS) walks `m_allSubsystems` until `m_subsystems.end()`, and
+  runs off it for a subsystem not in the first vector. Found by #32's erase sweep.
+- **An erase of a `std::find` result that only an assert checks (not fixed).** `InGameUI.cpp:7188`
+  erases from `m_selectedDrawables` what `std::find` returned, and a release build would `erase(end())`
+  if the selection bookkeeping were already out of sync. Found by #32's erase sweep.
 
 ### "ctest is green" was not what it looked like
 
