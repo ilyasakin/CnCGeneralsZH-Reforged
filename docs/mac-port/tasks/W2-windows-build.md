@@ -208,3 +208,6 @@ CHECK PASSED", exit 0. **Armed:** with `-ExpectCrc "0:0xDEADBEEF"` it reported "
   it did not come back in three full `-j4` runs or five alone. Windows Defender holding a freshly written
   file is a guess, not a finding. The script now keeps ctest's and E1's full output (`ctest.log`, `e1.log`
   in its work folder), so the next one can be read.
+  - The PM then had Windows Defender exclude `C:\zhr-worker` (workers.md has the undo). With the exclusion,
+    test_wwlib passed in all four Windows ctest runs of the gate so far (b3ebcb5a, d40ddbb0, f04a948d,
+    6d5d69a6).
