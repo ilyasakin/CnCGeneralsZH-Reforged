@@ -1741,7 +1741,8 @@ hunting a crash or corruption that only one platform shows, look here first.**
   harmless. GameMemory keeps a freed block's links in its header (`m_nextBlock`), so the write landed in
   dead user data, and the next allocation of that block is zero-filled. No other allocator promises
   that. ASan found it on ZH_SANITIZE's first full run (headless and offscreen alike, at the reset). The
-  dead write is gone; the erases, their frees and their order stay.
+  dead write is gone; the erases, their frees and their order stay, and E1's CRCs are unchanged (all 12
+  lines of replay_check and net_check, on finer).
 
 ### "ctest is green" was not what it looked like
 
