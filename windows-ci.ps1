@@ -181,12 +181,21 @@ if ($Bundle -ne "" -or $Ref -ne "") {
 if ($CheckedOut -ne "") { $summary += "checked out: $CheckedOut" }
 
 if (-not $SkipBuild) {
+	# The last build's exe goes first: a build that fails must leave nothing the desktop part could run.
+	Remove-Item (Join-Path $RunDir "generals.exe") -ErrorAction SilentlyContinue
 	Push-Location $Root
 	cmd /c "build.bat $Config < NUL" | Out-Host
 	$built = $LASTEXITCODE
 	Pop-Location
 	$summary += "build: " + $(if ($built -eq 0) { "ok" } else { $failed = $true; "FAILED (exit $built)" })
-	if ($built -ne 0) { $summary | ForEach-Object { Write-Host $_ }; exit 1 }
+	if ($built -ne 0) {
+		$summary += "ctest, GPU tests: not run (build failed)"
+		if ($DataDir -ne "") { $summary += "E1: not run (build failed)" }
+		Write-Host ""
+		$summary | ForEach-Object { Write-Host $_ }
+		Write-Host "WINDOWS CHECK FAILED"
+		exit 1
+	}
 }
 $tools = Get-CtestExe
 if ($DataDir -ne "") { & $tools.CMake -S (Join-Path $Root "GeneralsMD\Code") -B $Build "-DZH_GAME_DATA=$DataDir" | Out-Null }
