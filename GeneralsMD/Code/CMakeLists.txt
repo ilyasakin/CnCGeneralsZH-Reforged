@@ -1869,6 +1869,14 @@ set(FFMPEG_RUNTIME
 add_custom_command(TARGET generals POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
           ${FFMPEG_RUNTIME} ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+# The Direct3D 11 programs that ship with the game, compiled by Microsoft's d3dcompiler_47 when they were
+# recorded (Tools/record-dx11-shaders.ps1): next to the exe, where the backend reads them before compiling
+# anything.  Without them a first start compiles every program, and under Wine that took minutes (X2).
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Data/dx11shaders.shipped)
+  add_custom_command(TARGET generals POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/Data/dx11shaders.shipped ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+endif()
 endif()  # ZH_PLATFORM_WINDOWS - GameEngineDevice, the backends and generals.exe
 
 # ===========================================================================

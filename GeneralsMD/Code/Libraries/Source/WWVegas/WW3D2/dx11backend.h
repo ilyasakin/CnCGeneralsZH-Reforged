@@ -135,10 +135,21 @@ public:
 	// description is a key, and the key is not the code.
 	void Set_Dump_Directory(const char * directory);
 
-	// Keep every compiled program in this file across runs: read now, written at Shutdown when a
-	// program was compiled that the file did not hold.  A program compiled mid-match costs 25 to
-	// 60ms on the frame that first needs it, which is the stutter a new explosion brought.
+	// Keep every compiled program in this file across runs: read now, written while the game runs
+	// (Save_Shader_Cache_If_Due) and at Shutdown when a program was compiled that the file did not
+	// hold.  A program compiled mid-match costs 25 to 60ms on the frame that first needs it, which is
+	// the stutter a new explosion brought.
 	void Set_Shader_Cache_Path(const char * path);
+	// The programs that ship with the game, compiled by Microsoft's d3dcompiler_47 when the file was
+	// recorded (Tools/record-dx11-shaders.ps1): read after the user's cache, so for the same source a
+	// shipped program wins.  A first start then compiles only what the recording never met.  Under
+	// Wine, whose d3dcompiler is vkd3d-shader, a single compile took minutes (a contributor, X2).
+	void Load_Shipped_Programs(const char * path);
+	unsigned Shipped_Program_Count() const { return ShippedPrograms; }
+	// Writes the cache if a program was compiled since the last write and the last write is at least
+	// SHADER_CACHE_SAVE_INTERVAL_MS old: called once a frame, so a run that dies before Shutdown, or
+	// is killed, keeps what it compiled.
+	void Save_Shader_Cache_If_Due();
 	unsigned Compiled_Program_Count() const { return static_cast<unsigned>(CompiledPrograms.size()); }
 
 	// Binds the swap chain's back buffer and depth buffer and sets the viewport over the whole of
@@ -612,6 +623,8 @@ private:
 	std::map<unsigned long long, std::vector<unsigned char> > CompiledPrograms;
 	std::string ShaderCachePath;
 	bool ShaderCacheChanged;
+	unsigned ShippedPrograms;
+	unsigned long LastShaderCacheSave;
 
 	unsigned long long RefusedNoBuffer;
 	unsigned long long RefusedNoStage;

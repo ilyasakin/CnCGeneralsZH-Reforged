@@ -100,6 +100,7 @@ Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/LanGameOptionsMenu.wnd
 Data/Window/Menus/OptionsMenu.wnd
 Data/Window/Menus/SkirmishGameOptionsMenu.wnd
+Data/dx11shaders.shipped
 GameEngine/GameEngine.dsp
 GameEngine/Include/Common/AcademyStats.h
 GameEngine/Include/Common/ActionManager.h
@@ -3713,6 +3714,7 @@ Tools/package-common.sh
 Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
 Tools/pink_laser.py
+Tools/record-dx11-shaders.ps1
 Tools/replay-check.sh
 Tools/root-readonly-check.sh
 Tools/signal_marks.py
