@@ -125,8 +125,11 @@ OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
 OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxDetail
 MainMenu.wnd MainMenu.wnd:ButtonOptions
-MainMenu.wnd MainMenu.wnd:ButtonLoadReplay
-MainMenu.wnd MainMenu.wnd:ButtonMultiplayer
+MainMenu.wnd MainMenu.wnd:ButtonExit
+MainMenu.wnd MainMenu.wnd:ButtonSinglePlayer
+MainMenu.wnd MainMenu.wnd:ButtonUSA
+MainMenu.wnd MainMenu.wnd:ButtonMedium
+MainMenu.wnd MainMenu.wnd:ButtonUSA
 MainMenu.wnd MainMenu.wnd:ButtonSinglePlayer
 MainMenu.wnd MainMenu.wnd:ButtonUSA
 MainMenu.wnd MainMenu.wnd:ButtonGLA

@@ -31,6 +31,7 @@
 #include "GameClient/GameText.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/GameWindowTransitions.h"
 #include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/KeyDefs.h"
@@ -314,13 +315,16 @@ GameWindow *currentFocus( const Screen &screen, const std::vector<GameWindow *> 
 		std::map<std::string, Int>::const_iterator last = theLastFocus.find( screen.key );
 		theFocusId = last != theLastFocus.end() ? last->second : 0;
 		GameWindow *restored = byId( widgets, theFocusId );
-		setFocus( restored != NULL ? restored : defaultFocus( screen, widgets ) );
+		if (restored != NULL)
+			setFocus( restored );
 	}
 	GameWindow *focus = byId( widgets, theFocusId );
 	if (focus == NULL)
 	{
+		// a pane still moving in shows its buttons one by one: its default is shown, and kept once it has arrived
 		focus = defaultFocus( screen, widgets );
-		setFocus( focus );
+		if (TheTransitionHandler == NULL || TheTransitionHandler->isFinished())
+			setFocus( focus );
 	}
 	return focus;
 }
