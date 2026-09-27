@@ -2578,6 +2578,7 @@ Libraries/Source/gamespy-strlwr-c-only.patch
 Libraries/Source/glslang/.gitignore
 Libraries/Source/litehtml-parsed-css.patch
 Libraries/Source/litehtml/.gitignore
+Libraries/Source/lzhl-clear-history.patch
 Libraries/Source/max4sdk/.gitignore
 Libraries/Source/miniaudio/.gitignore
 Libraries/Source/nanosvg/.gitignore

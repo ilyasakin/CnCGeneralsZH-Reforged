@@ -161,6 +161,15 @@ if(APPLE)
   endif()
 endif()
 
+# LZH-Light's one patch (Libraries/Source/lzhl-clear-history.patch), on every platform: vendor.sh and
+# vendor.ps1 both apply it.  A tree fetched before it builds without it and compresses from whatever the
+# allocator left in the history buffer, so it is said here instead.
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/Compression/LZHCompress/CompLibHeader/_lz.h _zh_lzhl_patched
+     REGEX "Zero Hour Reforged: altered")
+if(NOT _zh_lzhl_patched)
+  message(FATAL_ERROR "LZH-Light lacks lzhl-clear-history.patch. ${VENDOR_HINT}")
+endif()
+
 # The _CRT_ pair only tells MSVC's own headers to stop deprecating the C library this code is
 # written against.  They mean nothing to any other compiler and cost nothing there, so they stay
 # unconditional.  WIN32 and _WINDOWS are statements about the operating system, and most of the
