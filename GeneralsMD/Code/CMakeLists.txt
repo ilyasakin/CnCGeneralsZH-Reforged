@@ -565,8 +565,10 @@ if(ZH_PLATFORM_WINDOWS)
 # The D3DX9 entry points the renderer binds at run time, in a library of their own
 # because GameEngine needs the math half without the renderer: BezierSegment carries
 # D3DXMATRIX and DumbProjectileBehavior steers a shell with it.
+# d3dx9portable.cpp is D3DX's arithmetic, which Windows on ARM64 binds in place of the DLL it does not have.
+# On x64 nothing references it and the linker leaves it out of every program but its oracle test.
 add_library(d3dx9runtime STATIC
-  ${WW}/WW3D2/d3dx9runtime.cpp ${WW}/WW3D2/d3d8shadertranslate.cpp)
+  ${WW}/WW3D2/d3dx9runtime.cpp ${WW}/WW3D2/d3d8shadertranslate.cpp ${WW}/WW3D2/d3dx9portable.cpp)
 set_target_properties(d3dx9runtime PROPERTIES CXX_STANDARD 17)
 target_include_directories(d3dx9runtime PUBLIC ${WW}/WW3D2)
 target_link_libraries(d3dx9runtime PUBLIC d3d9)
@@ -714,6 +716,14 @@ target_link_libraries(dx9_smoke PRIVATE d3dx9runtime user32)
 # Tests/ for d3dx_golden.h: dx9_smoke prints what this machine's d3dx9_43.dll computes for
 # B17's golden rows, and which of its CPU-dispatched bodies ran.
 target_include_directories(dx9_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
+
+# d3dx9portable.cpp against d3dx9_43.dll itself (W-ARM64): what ARM64, macOS and Linux use in the DLL's place,
+# compared with the DLL where it binds (x64).  Where it does not (ARM64), there is nothing to compare, and the
+# test exits 77, which ctest reports as skipped rather than passed.
+add_executable(test_d3dx9portable_oracle ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_d3dx9portable_oracle.cpp)
+target_link_libraries(test_d3dx9portable_oracle PRIVATE d3dx9runtime)
+add_test(NAME test_d3dx9portable_oracle COMMAND test_d3dx9portable_oracle)
+set_tests_properties(test_d3dx9portable_oracle PROPERTIES SKIP_RETURN_CODE 77)
 endif()  # ZH_PLATFORM_WINDOWS - renderer, Direct3D 9/11 backends, dx9_smoke
 
 # ===========================================================================
@@ -1318,7 +1328,8 @@ if(ZH_PLATFORM_POSIX)
   # ---- d3dx9runtime: the same library name as Windows's, with d3dx9posix.cpp's bodies ---------------
   # d3dx9posix_texture.cpp is A2's (a contributor's), d3dx9posix.cpp the rest (a contributor's).
   add_library(d3dx9runtime STATIC
-    ${WW}/WW3D2/d3dx9posix.cpp ${WW}/WW3D2/d3dx9posix_texture.cpp ${WW}/WW3D2/d3d8shadertranslate.cpp)
+    ${WW}/WW3D2/d3dx9posix.cpp ${WW}/WW3D2/d3dx9posix_texture.cpp ${WW}/WW3D2/d3d8shadertranslate.cpp
+    ${WW}/WW3D2/d3dx9portable.cpp)
   set_target_properties(d3dx9runtime PROPERTIES CXX_STANDARD 17)
   target_include_directories(d3dx9runtime PUBLIC ${WW}/WW3D2 ${ZH_POSIX_D3D9_INCLUDE}
     # The texture helpers are CPU work over the device's own images (a contributor's PosixImageOps), so they see

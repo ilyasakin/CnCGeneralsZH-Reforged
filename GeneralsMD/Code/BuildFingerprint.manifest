@@ -1733,6 +1733,8 @@ Libraries/Source/WWVegas/WW3D2/composite.h
 Libraries/Source/WWVegas/WW3D2/d3d8shadertranslate.cpp
 Libraries/Source/WWVegas/WW3D2/d3d8shadertranslate.h
 Libraries/Source/WWVegas/WW3D2/d3dx9math.h
+Libraries/Source/WWVegas/WW3D2/d3dx9portable.cpp
+Libraries/Source/WWVegas/WW3D2/d3dx9portable.h
 Libraries/Source/WWVegas/WW3D2/d3dx9posix.cpp
 Libraries/Source/WWVegas/WW3D2/d3dx9posix.h
 Libraries/Source/WWVegas/WW3D2/d3dx9posix_texture.cpp
@@ -2667,6 +2669,7 @@ Tests/test_clock.cpp
 Tests/test_compression.cpp
 Tests/test_crash_reporting.cpp
 Tests/test_d3d9device.h
+Tests/test_d3dx9portable_oracle.cpp
 Tests/test_d3dx9posix.cpp
 Tests/test_d3dx_assemble_stub.cpp
 Tests/test_d3dxportable.cpp
