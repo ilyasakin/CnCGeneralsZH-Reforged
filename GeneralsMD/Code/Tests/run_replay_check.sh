@@ -17,6 +17,11 @@
 #      - it makes the Chinook that crashed every platform - and its Humvees fight; the Infantry General
 #      fields the ECM tank and the Nuke Cannon when its AI chooses to, which no log shows (their
 #      locomotors are locomotor_check's to prove).  Before #33's fix this run crashed.
+#   8. Defect #34 and the W2-era baseline: seed 0 at full length (12000 frames).  Seed 0 draws the
+#      Demolition General, whose AI recruits the reskinned Technicals that upstream's data had left with no
+#      AI module; before #34's fix this run crashed near frame 6600.  The run must agree with itself and
+#      show Demolition structures built, so the seed still draws that general.  (One run serves both: a
+#      separate -side run would add three more 12000-frame games, and the recruiting cannot be forced.)
 #
 # WHAT THIS PROVES: same-machine determinism only, on this machine and this build.  Nothing about
 # agreement with a Windows build, which needs a replay recorded on Windows; none exists yet.
@@ -64,6 +69,13 @@ status=$?
 printf '%s\n' "$out"
 check '[ $status -eq 0 ]' "seed 0, Infantry against Laser, agrees with itself at 12000 frames (exit $status)"
 check 'printf "%s" "$out" | grep -q "built: .*Lazr_AmericaSupplyCenter"' "the Laser General's Supply Center stood, so its Chinook was made (#33)"
+
+# 8: seed 0 at full length, the Demolition General among its sides (#34).
+out="$(bash "$HARNESS" --generals "$GENERALS" --seeds "0" --maxframes 12000 2>&1)"
+status=$?
+printf '%s\n' "$out"
+check '[ $status -eq 0 ]' "seed 0 agrees with itself at 12000 frames (exit $status)"
+check 'printf "%s" "$out" | grep -q "built: .*Demo_GLA"' "the Demolition General played it, so its reskinned Technicals were in the match (#34)"
 
 # 5. The install check's control: with its snapshot spoiled (the install itself untouched), the harness
 #    must report the install changed and exit 99.

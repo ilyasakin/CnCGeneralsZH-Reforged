@@ -570,6 +570,16 @@ void ThingTemplate::parseModuleName(INI* ini, void *instance, void* store, const
 			throw INI_INVALID_DATA;
 		}
 	}
+	else if (self->m_moduleParsingMode == MODULEPARSE_ADD_REMOVE_REPLACE)
+	{
+		/* #34: a module inside ReplaceModule or AddModule in a normal load.  The block names exactly what it
+			 replaces, as it does in an override file (above), so it clears nothing else.  The clearing below is
+			 for an object that restates its own modules: run here, it erased every copied module sharing an
+			 interface with the new one, and upstream's fbe8dc6f, replacing the death module of two ObjectReskins
+			 (Demo_GLAVehicleTechnicalChassisTwo, Three), left live Technicals with no AI, physics, contain or
+			 die modules - and the first AI that recruited one crashed, every platform.  EA's own INIs use no
+			 ReplaceModule or AddModule, so their loading is unchanged. */
+	}
 	else
 	{
 
