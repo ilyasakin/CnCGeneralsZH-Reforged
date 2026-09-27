@@ -23,7 +23,7 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | the worker folder | `~/zhr-worker` | `mkdir` (-47) | `rm -rf ~/zhr-worker` removes everything below |
 | CMake 3.31.6 | `~/zhr-worker/tools/cmake-3.31.6-macos-universal`, linked from `bin/cmake` and `bin/ctest` | Kitware's release tarball, `curl` from github.com/Kitware/CMake/releases (-47) | in the folder |
 | Ninja 1.12.1 | `~/zhr-worker/bin/ninja` | `ninja-mac.zip` from github.com/ninja-build/ninja/releases (-47) | in the folder |
-| `zheavy`, the one-heavy-job lock | `~/zhr-worker/bin/zheavy`, lock file `~/zhr-worker/.heavy.lock` | written by -47 | in the folder |
+| `zheavy`, the heavy-job queue: first come first served; two default jobs at once (builds capped at -j5), or one `--exclusive` job alone | `~/zhr-worker/bin/zheavy`, from `docs/mac-port/tasks/workers/zheavy` (its test beside it); the machine lock `~/zhr-worker/.heavy.lock` and the queue `~/zhr-worker/.heavy/` | written by -47; the queue and the two classes on 2026-09-27, at the PM's request | in the folder |
 | the game data (the user's own install, 4.6 GB: `zerohour` and `generals`) | `~/zhr-worker/data` | `rsync -a` from this Mac's `/Volumes/External/Games/cnc` (-47) | in the folder |
 | the vendored sources git ignores (4,114 files, SDL3, freetype, GameSpy, …) | `~/zhr-worker/vendor` | `rsync --files-from` of the ignored files of the zhr2-B17 worktree (-47); on 2026-09-27 `Tools/vendor.sh` at 681d6f9a, run in a scratch worktree over a clone of it, patched one file (SDL3's `src/gpu/metal/SDL_gpu_metal.m`, sdl3-metal-windowless.patch), copied back here and into wt-pm and wt-47 (-47, for the PM) | in the folder |
 | the art archives (`Reforged*.big`, 1.65 GB) | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
@@ -96,7 +96,7 @@ Everything is under `/home/zhr/zhr-worker` unless noted:
 | what | where | how it got there | undo |
 |:--|:--|:--|:--|
 | the worker folder | `~/zhr-worker` | `mkdir` (-47) | `rm -rf ~/zhr-worker` removes everything below |
-| `zheavy` and `hashtree.py` | `~/zhr-worker/bin/` | `scp`, the same files as finer's (-47) | in the folder |
+| `zheavy` (the queue, as finer's, from `docs/mac-port/tasks/workers/zheavy`) and `hashtree.py` | `~/zhr-worker/bin/`; the queue in `~/zhr-worker/.heavy/` | `scp` (-47) | in the folder |
 | the game data (4.6 GB) | `~/zhr-worker/data` | `rsync -a` from this Mac (-47) | in the folder |
 | the vendored sources git ignores | `~/zhr-worker/vendor` | `rsync --files-from` (-47) | in the folder |
 | the art archives | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
@@ -119,6 +119,11 @@ holds `gdi-font-metrics.ps1` (the repository's Tools/ script) and its two output
 `fonts.txt`. It only read `C:\Windows\Fonts` and installed nothing. Undo: `Remove-Item -Recurse
 C:\zhr-worker\fontmetrics`. -47 reached it with a known-hosts file in its scratch folder, which kept nothing:
 no host key of it was left on the Mac (`~/.ssh/known_hosts` has none).
+A second use, for #33's Windows side (2026-09-27, -18 told before and after): `C:\zhr-worker\w47` holds -47's
+own clone of the integration branch (from -18's repository's objects and a bundle, `core.autocrlf true`), its
+`build64` from `build.bat Release`, a rule-9 farm (`w47\farm`: links to the data copy, the build's Run over
+it) and the scripts. A one-off interactive task `zhr47desk` ran the game in the desktop session and was
+deleted. The data copy's hash was unchanged. Undo: `Remove-Item -Recurse C:\zhr-worker\w47`.
 
 
 ### The Windows VM: what -18 created and installed for W2 (2026-09-27)
@@ -127,7 +132,7 @@ no host key of it was left on the Mac (`~/.ssh/known_hosts` has none).
 |---|---|---|---|
 | the work folder | `C:\zhr-worker` | `New-Item` (-18) | `Remove-Item -Recurse -Force C:\zhr-worker` removes everything below |
 | the repository | `C:\zhr-worker\repo` (`core.autocrlf true`), from `fmp.bundle` and `w2.bundle`; its `build64` and the ignored `build.local.bat` naming VS's CMake 3.31.6 | `scp`, `git clone`, `build.bat` (-18) | in the folder |
-| the game data and art copies | `C:\zhr-worker\data\zerohour` (2.9 GB), `C:\zhr-worker\art` (1.6 GB), hash-verified against thinkerer's | `scp -3` through the Mac (-18) | in the folder |
+| the game data and art copies | `C:\zhr-worker\data\zerohour` (2.9 GB), `C:\zhr-worker\data\generals` (1.7 GB), `C:\zhr-worker\art` (1.6 GB), hash-verified against thinkerer's; `build64` configured with `ZH_GAME_DATA=C:/zhr-worker/data` | `scp -3` through the Mac (-18) | in the folder |
 | the farm | `C:\zhr-worker\farm`: symbolic links to the data and the Run folder, copies of the exe and DLLs | `farm.ps1` (-18) | in the folder |
 | scripts, logs, bundles, hash listings | `C:\zhr-worker\*.ps1`, `*.log`, `*.txt`, `*.bundle`, `hashtree.py`, `C:\Users\zhr\recon18.ps1` | `scp` (-18) | in the folder; `recon18.ps1` by hand |
 | ATL for VS 2022 Build Tools | component `Microsoft.VisualStudio.Component.VC.ATL` | `setup.exe modify --add` (-18) | `setup.exe modify --installPath "<BuildTools>" --remove Microsoft.VisualStudio.Component.VC.ATL --quiet` |
@@ -137,4 +142,9 @@ no host key of it was left on the Mac (`~/.ssh/known_hosts` has none).
 | one-off scheduled tasks `zhr18desk`, `zhr18desk2` | Task Scheduler | `schtasks /create /it` (-18) | already deleted after each run |
 
 On thinkerer, for W2: `~/zhr-worker/tmp18` (hash listings, the VM's host key in a known-hosts file of its
-own, a copy of build-47's `generals`, `playwin.sh`, the Windows replay). Undo: `rm -rf ~/zhr-worker/tmp18`.
+own, a copy of build-47's `generals`, `playwin.sh`, the Windows replay, the bundles). Undo: `rm -rf ~/zhr-worker/tmp18`.
+Also on thinkerer, for #32's armed control and the final W2 check (turns agreed with -47): the worktree
+`~/zhr-worker/wt-18` (vendor and art copied in with `cp --reflink=auto`) and the build `~/zhr-worker/build-18`,
+with its logs `~/zhr-worker/build-18.*.log`. Undo: `git -C ~/zhr-worker/repo worktree remove --force
+~/zhr-worker/wt-18; rm -rf ~/zhr-worker/build-18 ~/zhr-worker/build-18.*.log`. The one core dump it made (the
+#32 mutant's SIGSEGV, pid 3917314) was removed from `/var/lib/systemd/coredump` with `sudo rm` straight after.

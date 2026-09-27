@@ -190,8 +190,8 @@ static int closeFile(int handle) { return ::close(handle); }
 	 the game's data disconnected, ejected, or put to sleep (the lid-close crash, README's latent list).
 	 Off Windows the call fails with EIO (measured on macOS 26, HFS+ and exFAT disk images detached under an
 	 open file); ENXIO and ENODEV are the same loss on other devices and systems.  On Windows the CRT's
-	 _read and _lseek leave the system's error in _doserrno; the codes below are the device-gone ones, not
-	 yet measured on Windows. */
+	 _read and _lseek leave the system's error in _doserrno; the codes below are the device-gone ones.  On
+	 Windows 11 an exFAT VHD detached under the running game gave one of them (W2: exit status 3). */
 #if defined(_WIN32)
 static inline int lastFileError(void) { return (int)_doserrno; }
 static Bool errorMeansDeviceGone(int error)

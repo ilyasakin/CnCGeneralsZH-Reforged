@@ -659,7 +659,7 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 
 				//Calculate next scorch mark frame.
 				Real nextFactor = (Real)m_scorchMarksMade / (Real)data->m_totalScorchMarks;
-				m_nextScorchMarkFrame = orbitalBirthFrame + nextFactor * (orbitalDeathFrame - orbitalBirthFrame);
+				m_nextScorchMarkFrame = floatToUnsignedAsMsvc(orbitalBirthFrame + nextFactor * (orbitalDeathFrame - orbitalBirthFrame));	// S8: zero scorch marks make it 0/0
 
 				//Generate iteration of fxlist for beam hitting ground.
 				if( data->m_groundHitFX )
@@ -718,7 +718,7 @@ UpdateSleepTime ParticleUplinkCannonUpdate::update()
 
 				//Calculate next damage pulse frame.
 				Real nextFactor = (Real)m_damagePulsesMade / (Real)data->m_totalDamagePulses;
-				m_nextDamagePulseFrame = orbitalBirthFrame + nextFactor * (orbitalDeathFrame - orbitalBirthFrame);
+				m_nextDamagePulseFrame = floatToUnsignedAsMsvc(orbitalBirthFrame + nextFactor * (orbitalDeathFrame - orbitalBirthFrame));	// S8: zero pulses make it 0/0
 			}
 		}
 		

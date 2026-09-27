@@ -309,7 +309,7 @@ StateReturnType UnpackingState::onEnter()
 	
 	Real variationFactor = ai->getPackUnpackVariationFactor();
 	Real variation = GameLogicRandomValueReal( 1.0f - variationFactor, 1.0f + variationFactor );
-	m_framesRemaining = ai->getUnpackTime() * variation; //In frames
+	m_framesRemaining = floatToUnsignedAsMsvc(ai->getUnpackTime() * variation); //In frames (S8: a variation factor over 1 can make it negative)
 	owner->getDrawable()->setAnimationLoopDuration( m_framesRemaining );
 
 	return STATE_CONTINUE;
@@ -397,7 +397,7 @@ StateReturnType PackingState::onEnter()
 	
 	Real variationFactor = ai->getPackUnpackVariationFactor();
 	Real variation = GameLogicRandomValueReal( 1.0f - variationFactor, 1.0f + variationFactor );
-	m_framesRemaining = ai->getPackTime() * variation; //In frames
+	m_framesRemaining = floatToUnsignedAsMsvc(ai->getPackTime() * variation); //In frames (S8)
 	owner->getDrawable()->setAnimationLoopDuration( m_framesRemaining );
 	return STATE_CONTINUE;
 }
