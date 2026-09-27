@@ -15,6 +15,7 @@
 #include "test_harness.h"
 
 #include <atomic>	/* the B14 thread tests below share flags between threads */
+#include <chrono>	/* mutexclass_timed_acquire_gives_up_and_says_so times its wait finer than Clock_Milliseconds_Coarse */
 
 #include "global.h"       /* UINT4 / PROTO_LIST, which md5.h assumes */
 #include "realcrc.h"
@@ -1806,12 +1807,17 @@ TEST(mutexclass_timed_acquire_gives_up_and_says_so)
 	worker.Execute();
 	while (!worker.Held) { ThreadClass::Sleep_Ms(1); }
 
-	unsigned start = Clock_Milliseconds_Coarse();
+	/* Timed with steady_clock (QueryPerformanceCounter on MSVC), not Clock_Milliseconds_Coarse: on Windows that
+	   is GetTickCount, in 15.625 ms ticks at the default timer resolution, and a 60 ms wait reads as 46.9 ms
+	   whenever only three tick boundaries fall inside it.  It failed the integration gate once (2026-09-27);
+	   on the VM, 200 such waits read as low as 47 ms by GetTickCount and never under 61 ms by steady_clock.
+	   The other coarse-clock bounds in this file allow 50 ms or more. */
+	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 	{
 		MutexClass::LockClass timed(m, 60);
 		CHECK(timed.Failed());
 	}
-	CHECK((Clock_Milliseconds_Coarse() - start) >= 50);
+	CHECK(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() >= 50);
 
 	worker.Stop(1000);
 }

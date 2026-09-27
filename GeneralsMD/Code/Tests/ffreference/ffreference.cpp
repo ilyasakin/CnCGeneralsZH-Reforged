@@ -270,8 +270,8 @@ VOut processVertex( const Context &ctx, const Vertex &v )
 				break;
 			case TSS_TCI_CAMERASPACEREFLECTIONVECTOR:
 			{
-				// N14: R = 2(E.N)N - E
-				double e[3] = { 0, 0, 1 };
+				// N14: R = 2(E.N)N - E, the infinite viewer at (0,0,-1) as N27's
+				double e[3] = { 0, 0, -1 };
 				if (rs[RS_LOCALVIEWER])
 				{
 					e[0] = -cam[0]; e[1] = -cam[1]; e[2] = -cam[2];
@@ -1638,11 +1638,11 @@ LitVertex light( const DrawState &s, const double P[3], const double N[3], bool 
 		}
 		else
 		{
-			h[0] = ldir[0]; h[1] = ldir[1]; h[2] = ldir[2] + 1.0;		// N27
+			h[0] = ldir[0]; h[1] = ldir[1]; h[2] = ldir[2] - 1.0;		// N27: the viewer at (0,0,-1)
 		}
 		normalise3( h );
 		const double nh = hasNormal ? std::max( 0.0, dot3( N, h ) ) : 0.0;
-		const double sp = rs[RS_SPECULARENABLE] ? pow( nh, m.power ) * k : 0.0;		// N6
+		const double sp = rs[RS_SPECULARENABLE] && nl > 0.0 ? pow( nh, m.power ) * k : 0.0;		// N6, N3's gate
 		specular[0] += L.specular.r * sp; specular[1] += L.specular.g * sp; specular[2] += L.specular.b * sp;
 	}
 	LitVertex out;

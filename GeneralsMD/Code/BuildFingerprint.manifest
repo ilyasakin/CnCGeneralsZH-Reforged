@@ -2637,6 +2637,7 @@ Tests/ffreference/ffprogram.h
 Tests/ffreference/ffref_judge.cpp
 Tests/ffreference/ffreference.cpp
 Tests/ffreference/ffreference.h
+Tests/ffreference/knownprobe_windows.cpp
 Tests/ffshader_dump.cpp
 Tests/fs_oracle.cpp
 Tests/gcc_eager_vtable_stubs.cpp
@@ -3539,6 +3540,7 @@ Tools/WorldBuilder/src/propedit.cpp
 Tools/WorldBuilder/src/teamsdialog.cpp
 Tools/WorldBuilder/src/wbview.cpp
 Tools/WorldBuilder/src/wbview3d.cpp
+Tools/asan-check.sh
 Tools/assetcull/assetcull.cpp
 Tools/assetcull/assetcull.dsp
 Tools/bigfile.py
