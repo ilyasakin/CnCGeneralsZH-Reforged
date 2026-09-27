@@ -19,8 +19,17 @@ The PM's per-merge gate, run by hand until now, is one command on this Mac. It b
 - It bundles the branch and sends it to the three workers at once: finer (macOS arm64, clang), thinkerer
   (Linux x86_64, GCC) and the Windows VM (MSVC x64, reached through thinkerer).
 - finer and thinkerer check it out into `~/zhr-worker/ci` (worktree `ci/wt`, build `ci/build`, logs
-  `ci/*.log`), build, run ctest and each E1 run through `replay-check.sh`. Every heavy step goes through
-  `zheavy`, so the gate queues behind other agents' jobs rather than competing with them.
+  `ci/*.log`), build, run ctest and each E1 run through `replay-check.sh`. Configure, build, ctest and
+  every E1 run are one `zheavy` job there, so the gate queues once behind other agents' jobs and does not
+  compete with them. Each host's summary says how long it queued.
+  - It was one job per step at first. On finer each step then re-entered the back of the queue. In the
+    first run, E1 waited behind an exclusive timing batch and four jobs that had arrived meanwhile: 35 of
+    its 61 minutes. The second run's E1 waited again, behind an exclusive A/B block taken while its ctest
+    ran.
+  - -a9 now takes one exclusive ticket per tail run, and one per ABBA block (about 25 minutes) for timed
+    A/Bs, so the longest wait behind an exclusive job is one block.
+  - Nothing inside the job may call `zheavy` itself: a nested call takes a second ticket and waits behind
+    the first.
 - The VM runs `windows-ci.ps1` from `C:\zhr-worker\wt-pm-win`: build, ctest, the GPU tests in the desktop
   session, and E1 on a farm of the data.
 - Two gates never share a host. The POSIX hosts hold `~/zhr-worker/ci/lock` (an flock) for the whole run,
@@ -45,7 +54,7 @@ The PM's per-merge gate, run by hand until now, is one command on this Mac. It b
 
 What it is not: the hosted CI planned below. It runs when the PM runs it, on machines the user lent for the
 port, and `docs/mac-port/tasks/workers.md` lists what it leaves on them (`~/zhr-worker/ci` on the two POSIX
-hosts; the bundles and `ci-host.ps1` in `C:\zhr-worker\bundles` on the VM). It arms nothing: a fix is still
+hosts; each run's bundle and host script in `bundles/`, which the run deletes). It arms nothing: a fix is still
 proven by putting its bug back (the "Do not" below).
 
 ## Why
