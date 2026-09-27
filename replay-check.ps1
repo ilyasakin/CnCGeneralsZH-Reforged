@@ -44,7 +44,11 @@ param(
 	# switches to add to both halves of every seed. A switch that reaches the match has to be on for
 	# the recording and the playback alike: turning it on for one of them is a divergence the script
 	# would report as a broken build. -ExtraArgs -unitlimit is the unit limit's determinism check
-	[string[]] $ExtraArgs = @()
+	[string[]] $ExtraArgs = @(),
+	# minutes before a run is killed rather than waited on forever, as ai-batch.ps1 does. -headless
+	# does not stop every dialog (a missing base game still puts up a message box), and no unattended
+	# run may wait on a person; the killed run reports no result, which counts as a failure
+	[int] $TimeoutMinutes = 60
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,7 +70,12 @@ function Invoke-Run([string[]] $extra, [string] $prefix)
 						"-maxframes", $MaxFrames, "-logPrefix", $prefix) + $extra + $ExtraArgs
 	$proc = Start-Process -FilePath $exePath -ArgumentList $args -WorkingDirectory $RunDir -PassThru
 	$proc.PriorityClass = 'AboveNormal'
-	$proc.WaitForExit()
+	if (-not $proc.WaitForExit($TimeoutMinutes * 60 * 1000)) {
+		$proc.Kill()
+		$proc.WaitForExit()
+		Write-Host ("KILLED ({0} wedged past {1} min) " -f $prefix, $TimeoutMinutes) -NoNewline
+		return $null
+	}
 	$log = Join-Path $RunDir "$($prefix)DebugLogFile.txt"
 	if (-not (Test-Path $log)) { return $null }
 	$crcLine = Select-String -Path $log -Pattern "HEADLESS CRC: (0x[0-9A-F]+) at frame (\d+)" | Select-Object -Last 1
