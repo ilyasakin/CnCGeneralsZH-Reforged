@@ -60,16 +60,20 @@ if(ZH_PLATFORM_POSIX AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-fno-delete-null-pointer-checks)
 endif()
 
-# Linux links with LLD when it is there.  The engine's static libraries reference each other in cycles
-# (gameengine, ww3d2, wwsaveload, w3ddevice ...), which GNU ld resolves only in link order, so generals
-# failed to link with hundreds of undefined references; Apple's linker, and LLD, resolve archives in
-# any order.  Without LLD, GNU ld is left as it was and the cycles still need resolving (W1 records it).
+# Linux links with LLD when it is there, else mold.  The engine's static libraries reference each other in
+# cycles (gameengine, ww3d2, wwsaveload, w3ddevice ...), which GNU ld resolves only in link order, so
+# generals failed to link with hundreds of undefined references; Apple's linker, LLD and mold resolve
+# archives in any order.  mold is for the Steam Runtime's SDK (P3's portable build), which has it and no
+# LLD.  With neither, GNU ld is left as it was and the cycles still need resolving (W1 records it).
 if(ZH_PLATFORM_LINUX)
   find_program(ZH_LLD NAMES ld.lld)
+  find_program(ZH_MOLD NAMES ld.mold mold)
   if(ZH_LLD)
     add_link_options(-fuse-ld=lld)
+  elseif(ZH_MOLD)
+    add_link_options(-fuse-ld=mold)
   else()
-    message(WARNING "No ld.lld: GNU ld cannot resolve the engine's circular static libraries in link order")
+    message(WARNING "No ld.lld or mold: GNU ld cannot resolve the engine's circular static libraries in link order")
   endif()
 endif()
 
