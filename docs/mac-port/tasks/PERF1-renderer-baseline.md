@@ -5,6 +5,15 @@
 - **Status:** in progress: fix 1 made and measured; the long frames traced to the shared machine's memory pressure; fix 2 measured and deferred; fix 3 and the second-machine matrix to be measured on finer (see "After the PM's decisions")
 - **Owner:** -a9
 
+> **Void: every timing taken on finer before 02:32 local, 2026-09-27.** finer, a MacBook Pro with its
+> lid closed, was cycling between DarkWake (about 45 s) and Maintenance Sleep (5 to 7 s): 103 sleeps that
+> day before `pmset -a disablesleep 1` (the user's approval, on the workers' revert list). One run showed
+> a 21,414 ms engine frame that the device's clock saw as 333 ms. Pass or fail results and signatures
+> from that time stand; its frame and work times do not. So does the first per-run-locked matrix
+> (02:51 to 03:10): each run took the machine's lock alone, in the same order every time, and the
+> no-fix-3 runs drifted from 1.35 to 2.07 ms of device draw as finer warmed. It was stopped for the
+> ABBA A/B below.
+
 ## Why
 
 The game now opens at the monitor's native size, and the device draws through SDL3 GPU from a CPU-side
@@ -207,14 +216,33 @@ replacement.
 
 ### Fix 3: the per-draw copies and clears
 
-- **Done, not yet measured:** the batch's three arenas (stream, upload, constants) grow without
+- **Done (04495837), kept by the PM's decision: no measurable gain at this resolution, <0.1 ms, below what six runs resolve.** It is proven identical in result and does strictly less work, so under the user's rule (a safe improvement is taken when its result is the same, guaranteed) it stays. The batch's three arenas (stream, upload, constants) grow without
   zero-filling: `std::vector<ArenaByte>`, a byte with an empty constructor, in place of
   `std::vector<uint8_t>`. What is staged is written in full at once; alignment gaps keep what they held,
   and are uploaded but never read. The profile put the fill at about 1% of the main thread.
 - **Signatures:** fix 3 off and on, both on 8d3bef8e: the same 50 signatures. 29 byte-identical, the
   other 21 in matrices only (one each also in vertices, a texture name, render states), as with fix 1.
-- **The A/B** is to run on finer, a quiet second machine: the user asked for no more work on the shared
-  Mac, whose load made the three-run ranges wide anyway.
+- **The A/B, on finer** (2026-09-27, 03:13 to 04:21; the machine awake, its lock held for the whole
+  batch). ABBA, BAAB, ABBA; skirmish and shell at 1920x1080 with the overlay; `-offscreen`,
+  `ZH_OFFSCREEN_HZ=120`, `-noaudio`; six runs of each binary a configuration, 60 s idle before each run.
+  All 72 thermal readings were Nominal, the P-cluster between 0.7 GHz (idle) and 3.8 GHz; the load 1.5
+  to 2.5; no sleeps. Medians over the six runs of each run's p50, without fix 3 / with it:
+
+  | Configuration | Work p50 (ms) | Device draw p50 (ms) | Record+submit mean (ms) | Work p99 (ms) |
+  |---|---|---|---|---|
+  | shell, 1920x1080 | 4.359 / 4.361 | 1.808 / 1.702 | 1.050 / 1.138 | 7.816 / 7.469 |
+  | skirmish, 1920x1080 | 4.361 / 4.465 | 2.050 / 2.013 | 0.590 / 0.653 | 7.531 / 7.492 |
+
+  The differences change sign between mean and median and between the scenes, and stay within about
+  0.1 ms: below what six runs resolve on this machine. The expected gain was about 1% of the main thread,
+  some 0.05 ms. The code does strictly less: the disassembly of `SdlGpuFrame::Stage` on finer has no
+  `bzero` with fix 3 (66 instructions against 72). By position in the block, device draw was flat in the
+  shell (1.766, 1.769, 1.741, 1.756) and lower first in the skirmish (1.829, 2.088, 2.072, 2.019), which
+  the ABBA order balances.
+- **The same result, proven:** signatures on finer with the overlay, 50 of 50 in common (29
+  byte-identical, 18 matrices only, 2 matrices and vertices, 1 render states and matrices); the
+  FFReference replay of the fix-3 capture, 50 compared, 0 failed, the three known C1/C5 findings; the
+  suites, 83 of 83.
 - **Not done, and why:**
   - *Staged bytes written straight into the mapped transfer buffer:* the memmove is 3.4%, but mapping
     the transfer buffer across a batch changes when it is cycled and when it is safe to write, which is
