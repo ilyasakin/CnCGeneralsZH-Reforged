@@ -1138,6 +1138,14 @@ GlobalData::GlobalData()
 	m_snapCameraRotateTo45 = TRUE;
 	m_zoomToCursor = TRUE;
 	m_isometricCamera = FALSE;
+	// R1, smooth motion: the picture only, one logic tick behind, and never the game (W3DSmoothMotion.h).
+	// On by default off Windows, where 120 and 144 Hz panels are the common case; Windows keeps its
+	// picture as it was unless a player opts in.
+#if defined(_WIN32)
+	m_smoothMotion = FALSE;
+#else
+	m_smoothMotion = TRUE;
+#endif
 	// the right button no longer scrolls, so a right-drag is free to mean something
 	m_formationDrag = TRUE;
 	m_showAllyCursors = TRUE;

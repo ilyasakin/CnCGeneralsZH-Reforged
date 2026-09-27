@@ -68,6 +68,7 @@ static void drawFramerateBar(void);
 #include "GameLogic/Module/PhysicsUpdate.h"
 
 #include "GameClient/Drawable.h"
+#include "W3DDevice/GameClient/W3DSmoothMotion.h"
 #include "GameClient/Keyboard.h"		// TheKeyboard; on Windows WinMain.h brought it too
 #include "Platform/SleepMilliseconds.h"
 #if !defined(_WIN32)
@@ -464,6 +465,21 @@ static void finishVideo(void);
 //=============================================================================
 W3DDisplay::~W3DDisplay()
 {
+	// R1: how each captured model was treated per tick, for the snap rules' tuning.
+	{
+		const unsigned long long *counts = SmoothMotion_Counts();
+		unsigned long long total = 0;
+		for (Int i = 0; i < SMOOTH_SNAP_COUNT; ++i)
+			total += counts[i];
+		if (total > 0 && getenv("ZH_SMOOTH_MOTION_STATS") != NULL)
+		{
+			fprintf(stderr, "smooth motion: %llu model ticks:", total);
+			for (Int i = 0; i < SMOOTH_SNAP_COUNT; ++i)
+				fprintf(stderr, " %s %llu;", SmoothMotion_SnapName((SmoothMotionSnap)i), counts[i]);
+			fprintf(stderr, "\n");
+		}
+	}
+
 	// a -video run that ended before its range did, on -maxframes or a decided match, still gets its movie
 	finishVideo();
 
@@ -2117,6 +2133,81 @@ extern Real TheSceneDrawMS;
 extern Real TheUIDrawMS;
 extern Real TheParticleUpdateMS;
 
+//=============================================================================
+// R1, smooth motion (W3DSmoothMotion.h).  Three steps around the scene's render, and only the picture:
+//   smoothMotionBegin    before updateViews: the blend's alpha, and on a new tick each drawable's position
+//                        (the camera's lock follows the blended one)
+//   smoothMotionApply    after the particles, before the render targets and the scene: on a new tick each
+//                        model's transform is captured, then every model is shown blended
+//   smoothMotionRestore  after the render loop: the logic transforms go back before picking and the logic
+//=============================================================================
+bool TheSmoothMotionActive = false;
+float TheSmoothMotionAlpha = 1.0f;
+static UnsignedInt s_smoothPositionFrame = 0xFFFFFFFFu;
+static UnsignedInt s_smoothModelFrame = 0xFFFFFFFFu;
+static Bool s_smoothApplied = FALSE;
+
+static void smoothMotionBegin()
+{
+	TheSmoothMotionActive = TheGlobalData->m_smoothMotion && !TheGlobalData->m_headless;
+	TheSmoothMotionAlpha = TheSmoothMotionActive ? GameEngine_logicTickFraction() : 1.0f;
+	if (!TheSmoothMotionActive)
+		return;
+	const UnsignedInt frame = TheGameClient->getFrame();
+	if (frame == s_smoothPositionFrame)
+		return;
+	s_smoothPositionFrame = frame;
+	for (Drawable *draw = TheGameClient->firstDrawable(); draw != NULL; draw = draw->getNextDrawable())
+		draw->smoothMotionCapturePosition(frame);
+}
+
+static void smoothMotionApply()
+{
+	if (!TheSmoothMotionActive)
+		return;
+	const UnsignedInt frame = TheGameClient->getFrame();
+	const Bool newTick = frame != s_smoothModelFrame;
+	s_smoothModelFrame = frame;
+	for (Drawable *draw = TheGameClient->firstDrawable(); draw != NULL; draw = draw->getNextDrawable())
+	{
+		DrawModule **modules = draw->getDrawModules();
+		if (modules == NULL)
+			continue;
+		if (newTick)
+		{
+			const Bool marked = draw->isMotionDiscontinuous();
+			for (DrawModule **dm = modules; *dm; ++dm)
+				(*dm)->smoothMotionCapture(frame, marked);
+			draw->clearMotionDiscontinuity();
+			// The armed control of R1's proof, and nothing else: ZH_R1_LEAK=1 writes the blended position back
+			// into the Object - exactly what smooth motion must never do - so a run with it has to end on a
+			// different CRC than one without.  Never set outside that test.
+			static const Bool leak = getenv("ZH_R1_LEAK") != NULL;
+			Coord3D shown;
+			if (leak && draw->getObject() != NULL && draw->getSmoothMotionPosition(0.5f, &shown))
+				draw->getObject()->setPosition(&shown);
+		}
+		for (DrawModule **dm = modules; *dm; ++dm)
+			(*dm)->smoothMotionApply(TheSmoothMotionAlpha);
+	}
+	s_smoothApplied = TRUE;
+}
+
+static void smoothMotionRestore()
+{
+	if (!s_smoothApplied)
+		return;
+	s_smoothApplied = FALSE;
+	for (Drawable *draw = TheGameClient->firstDrawable(); draw != NULL; draw = draw->getNextDrawable())
+	{
+		DrawModule **modules = draw->getDrawModules();
+		if (modules == NULL)
+			continue;
+		for (DrawModule **dm = modules; *dm; ++dm)
+			(*dm)->smoothMotionRestore();
+	}
+}
+
 static Real w3dElapsedMS( const Int64 &from, const Int64 &to )
 {
 	Int64 freq;
@@ -2349,6 +2440,7 @@ AGAIN:
 		if (DX8Wrapper::_Get_D3D_Device() && (DX8Wrapper::_Get_D3D_Device()->TestCooperativeLevel()) == D3D_OK)
 		{	//Checking if we have the device before updating views because the heightmap crashes otherwise while
 			//trying to refresh the visible terrain geometry.
+			smoothMotionBegin();
 //			if(TheGlobalData->m_loadScreenRender != TRUE)
 				updateViews();
 #ifdef DEBUG_LOGGING
@@ -2368,6 +2460,9 @@ AGAIN:
 			tParticleEnd = Clock_Ticks();
 			TheParticleUpdateMS = w3dElapsedMS( tParticleStart, tParticleEnd );
 #endif
+
+			// R1: after the particles read the logic bones (Lorenzen's note above), before anything renders.
+			smoothMotionApply();
 
 			if (TheWaterRenderObj)
 				TheWaterRenderObj->updateRenderTargetTextures(primaryW3DView->get3DCamera());	//do a render into each texture
@@ -2604,6 +2699,9 @@ AGAIN:
 			TheGameEngine->serviceWindowsOS();
 
 	} while (loopForCameraMovement && !TheTacticalView->isCameraMovementFinished());
+
+	// R1: the logic transforms back on every model, before picking (the message stream) and the logic.
+	smoothMotionRestore();
 
 #ifdef EXTENDED_STATS
 	if (DX8Wrapper::stats.m_disableOverhead) {

@@ -91,6 +91,14 @@ public:
 	virtual Bool isVisible() const { return true; }	///< for limiting tree sway, etc to visible objects
 
 	virtual void reactToTransformChange(const Matrix3D* oldMtx, const Coord3D* oldPos, Real oldAngle) = 0;
+
+	/** R1, smooth motion (W3DSmoothMotion.h), the client's render pass only: take the transform this
+		module's render object holds after a new logic tick, show a blend of the last two before the scene
+		renders, and put the logic transform back straight after.  A module with no render object of its
+		own does nothing. */
+	virtual void smoothMotionCapture(UnsignedInt clientFrame, Bool marked) { }
+	virtual void smoothMotionApply(Real alpha) { }
+	virtual void smoothMotionRestore() { }
 	virtual void reactToGeometryChange() = 0;
 	
 	virtual Bool isLaser() const { return false; }
