@@ -681,6 +681,17 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	std::vector<uint8_t> bgra, split_picture;
 	SdlGpuFrame *gpu = device->Get_Gpu();
 	const bool read = gpu->Read_Back(gpu->Back_Buffer(), width, height, bgra);
+	if (read && !bgra.empty()) {
+		if (const char *dump = getenv("FFREF_GPU_DUMP")) {
+			// The GPU's pixels for each capture, raw BGRA rows: a device change's proof (PERF), since two
+			// builds replaying one capture set draw exactly the same draws, whatever the game's timing did.
+			const std::string path = std::string(dump) + "/" + file + ".bgra";
+			if (FILE *out = fopen(path.c_str(), "wb")) {
+				fwrite(&bgra[0], 1, bgra.size(), out);
+				fclose(out);
+			}
+		}
+	}
 	if (read && indices != NULL && header.Primitive == D3DPT_TRIANGLELIST && getenv("FFREF_SPLIT") != NULL) {
 		// C1's question, on the device alone: the same triangles as one call per triangle, into the same
 		// clear, against the one call above.  The reference draws the same either way (a contributor's measurement),
