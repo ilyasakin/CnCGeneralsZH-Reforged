@@ -421,6 +421,7 @@ void Player::init(const PlayerTemplate* pt)
 		m_battlePlanBonuses->deleteInstance();
 		m_battlePlanBonuses = NULL;
 	}
+	m_visionSpies.clear();
 
 	deleteUpgradeList();
 
@@ -1158,10 +1159,14 @@ void Player::becomingTeamMember(Object *obj, Bool yes)
 		else
 		{
 			//We are leaving a team with active battle plans so remove them now.
-			removeBattlePlanBonusesForObject( obj ); 
+			removeBattlePlanBonusesForObject( obj );
 		}
 	}
-	
+
+	// A new object is not ready here yet; Object::initObject marks it. One being destroyed is gone.
+	if( obj->areModulesReady() && !obj->isDestroyed() )
+		applyVisionSpies( obj, yes );
+
 
 	if (obj->isKindOf(KINDOF_DOZER) 
 			&& obj->getAIUpdateInterface() 
@@ -4417,6 +4422,39 @@ void Player::setUnitsVisionSpied( Bool setting, KindOfMaskType whichUnits, Playe
 	data.byWhom = byWhom;
 	// Being spied is now a property of the unit, not us, since we can spy only a portion of the enemy.
 	iterateObjects( iterator_setUnitsVisionSpied, &data );
+
+	// EA only marked the units standing when the power went on, so a Command Center built under a
+	// Satellite Hack stayed dark. The list lets becomingTeamMember mark what joins later.
+	if( setting )
+	{
+		VisionSpy spy;
+		spy.kinds = whichUnits;
+		spy.byWhom = byWhom;
+		m_visionSpies.push_back( spy );
+		return;
+	}
+	for( VisionSpyList::iterator it = m_visionSpies.begin(); it != m_visionSpies.end(); ++it )
+	{
+		if( it->byWhom == byWhom && it->kinds == whichUnits )
+		{
+			m_visionSpies.erase( it );
+			return;
+		}
+	}
+}
+
+// ------------------------------------------------------------------------------------------------
+void Player::applyVisionSpies( Object *obj, Bool setting ) const
+{
+	// A loading object already carries its saved spied count and is only moved back to its team
+	if( TheGameState->isInLoadGame() )
+		return;
+
+	for( VisionSpyList::const_iterator it = m_visionSpies.begin(); it != m_visionSpies.end(); ++it )
+	{
+		if( obj->isAnyKindOf( it->kinds ) )
+			obj->setVisionSpied( setting, it->byWhom );
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -4489,7 +4527,7 @@ void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 9;
+	const XferVersion currentVersion = 10;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5030,6 +5068,21 @@ void Player::xfer( Xfer *xfer )
 		m_orderQueue.xfer( xfer );
 	else
 		m_orderQueue.reset();
+
+	UnsignedShort visionSpyCount = (UnsignedShort)m_visionSpies.size();
+	if( version >= 10 )
+		xfer->xferUnsignedShort( &visionSpyCount );
+	else
+		visionSpyCount = 0;
+	if( xfer->getXferMode() == XFER_LOAD )
+		m_visionSpies.resize( visionSpyCount );
+	for( UnsignedShort i = 0; i < visionSpyCount; ++i )
+	{
+		m_visionSpies[ i ].kinds.xfer( xfer );
+		Int byWhom = m_visionSpies[ i ].byWhom;
+		xfer->xferInt( &byWhom );
+		m_visionSpies[ i ].byWhom = byWhom;
+	}
 
 }  // end xfer
 
