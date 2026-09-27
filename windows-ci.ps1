@@ -101,6 +101,18 @@ function Get-CtestExe {
 	return @{ CMake = $cmake; CTest = (Join-Path (Split-Path $cmake) "ctest.exe") }
 }
 
+# Build outputs dated more than five minutes ahead of the clock, deleted, and how many.  A VM whose clock
+# ran fast (7 h, until RealTimeIsUniversal) stamped its outputs in the future; once the clock was put right,
+# MSBuild took them for newer than any edited source and rebuilt nothing, and a Debug round tested a stale
+# generals.exe.  Deleting them makes the build redo exactly those.
+function Remove-FutureOutputs([string[]] $dirs) {
+	$limit = (Get-Date).AddMinutes(5)
+	$future = @($dirs | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object {
+		Get-ChildItem -LiteralPath $_ -Recurse -File -Force -ErrorAction SilentlyContinue } | Where-Object { $_.LastWriteTime -gt $limit })
+	$future | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+	return $future.Count
+}
+
 # every file of a folder: its relative path, size and SHA-256, sorted - equal listings mean an equal folder
 function Get-TreeListing([string] $dir) {
 	Get-ChildItem -LiteralPath $dir -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
@@ -196,6 +208,8 @@ if ($Bundle -ne "" -or $Ref -ne "") {
 if ($CheckedOut -ne "") { $summary += "checked out: $CheckedOut" }
 
 if (-not $SkipBuild) {
+	$futureOutputs = Remove-FutureOutputs @($Build, $RunDir)
+	if ($futureOutputs -gt 0) { $summary += "build: deleted $futureOutputs output(s) dated in the future (a clock that ran fast); they are rebuilt" }
 	# The last build's exe goes first: a build that fails must leave nothing the desktop part could run.
 	Remove-Item (Join-Path $RunDir "generals.exe") -ErrorAction SilentlyContinue
 	Push-Location $Root
