@@ -144,8 +144,9 @@ VOut processVertex( const Context &ctx, const Vertex &v )
 	const DrawState &s = ctx.state;
 	const uint32_t *rs = ctx.rs;
 	const Color white = { 1, 1, 1, 1 };
-	const Color vDiffuse = s.hasDiffuse ? v.diffuse : white;		// N7
-	const Color vSpecular = s.hasSpecular ? v.specular : white;
+	const Color none = { 0, 0, 0, 0 };
+	const Color vDiffuse = s.hasDiffuse ? v.diffuse : white;		// N7: an absent diffuse is 0xFFFFFFFF,
+	const Color vSpecular = s.hasSpecular ? v.specular : none;		// an absent specular 0x00000000 (measured)
 	VOut o;
 	memset( &o, 0, sizeof( o ) );
 
