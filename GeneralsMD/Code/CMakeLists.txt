@@ -2103,13 +2103,14 @@ endif()  # ZH_PLATFORM_WINDOWS - Windows-only support library tests
 # file-and-line operator new, the stack dumper, ...), and these tests link no engine.  One stub file gives
 # each what it lacks; outside _DEBUG it compiles to nothing, so a Release link is unchanged.
 if(MSVC)
-  foreach(name test_wwlib test_wwmath wwmath_selfcheck test_wwsaveload test_wwutil test_ww3d2
-               gametext_csf test_premain_strings test_premain_unicode)
+  foreach(name test_wwlib test_wwmath test_smooth_motion wwmath_selfcheck test_wwsaveload test_wwutil
+               test_ww3d2 gametext_csf test_premain_strings test_premain_unicode)
     if(TARGET ${name})
       target_sources(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests/debug_build_stubs.cpp)
     endif()
   endforeach()
-  foreach(name test_wwlib test_wwmath wwmath_selfcheck test_wwsaveload test_wwutil test_ww3d2)
+  foreach(name test_wwlib test_wwmath test_smooth_motion wwmath_selfcheck test_wwsaveload test_wwutil
+               test_ww3d2)
     if(TARGET ${name})
       target_compile_definitions(${name} PRIVATE ZH_DEBUG_STUBS_WWVEGAS)
     endif()
