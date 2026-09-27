@@ -546,7 +546,10 @@ tolerates (audio, one buffer period; workers, a frame).
 - Only the main thread is named in the output. The verdict doesn't need the others' names, because every
   thread is far inside the smaller of the two tolerances.
 
-x86_64 macOS: the CRC check there is owed. It needs Rosetta on finer, which is the user's call.
+x86_64 macOS (Rosetta, installed by the user 2026-09-27): feature/mac-port 1f4229c3, which has the lock,
+built with `-DCMAKE_OSX_ARCHITECTURES=x86_64` and nothing else. replay_check under Rosetta gives the pins:
+0@1200 0x0177BEF6, 0@12000 0x5273770F, 1@12000 0x830467DB, the same as arm64. So the lock is proven on both
+Mac architectures.
 
 ### Candidate 3: the constant blocks reused, measured and not taken (feature/mac-port-perf-constants)
 
