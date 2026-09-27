@@ -106,8 +106,9 @@ function Get-CtestExe {
 # MSBuild took them for newer than any edited source and rebuilt nothing, and a Debug round tested a stale
 # generals.exe.  Deleting them makes the build redo exactly those.
 # Files git tracks are never touched: a checkout made while the clock ran fast dates them in the future too,
-# and Run\ holds some (BrowserEngine.dll, which dx8webbrowser.cpp #imports; a sweep of Run\ on winarm
-# deleted it and the next build failed).  If git cannot list them, nothing is deleted and -1 comes back.
+# and Run\ holds some (BrowserEngine.dll, which dx8webbrowser.cpp #imports; a sweep of Run\ on a Windows
+# ARM64 VM deleted it and the next build failed).  If git cannot list them, nothing is deleted and -1 comes
+# back.
 function Remove-FutureOutputs([string] $root, [string[]] $dirs) {
 	$limit = (Get-Date).AddMinutes(5)
 	$present = @($dirs | Where-Object { Test-Path -LiteralPath $_ })
