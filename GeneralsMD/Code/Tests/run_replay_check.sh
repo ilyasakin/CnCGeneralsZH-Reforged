@@ -11,6 +11,12 @@
 #   4. Defect #20: seed 1 at full length (12000 frames), a real fight.  The playback takes a checkpoint
 #      (a full save) every 900 frames and the recording takes none, so the two agree only if a save
 #      leaves the world as it found it.  Before the fix the playback parted at frame 8260.
+#   7. Defect #33: seed 0 with the generals pinned (-side), the Infantry General against the Laser
+#      General, 12000 frames.  The seeds above never draw the generals whose units upstream's data had
+#      left without locomotors, so E1 never made one.  Here the Laser General's Supply Center must stand
+#      - it makes the Chinook that crashed every platform - and its Humvees fight; the Infantry General
+#      fields the ECM tank and the Nuke Cannon when its AI chooses to, which no log shows (their
+#      locomotors are locomotor_check's to prove).  Before #33's fix this run crashed.
 #
 # WHAT THIS PROVES: same-machine determinism only, on this machine and this build.  Nothing about
 # agreement with a Windows build, which needs a replay recorded on Windows; none exists yet.
@@ -50,6 +56,14 @@ out="$(bash "$HARNESS" --generals "$GENERALS" --seeds "1" --maxframes 12000 2>&1
 status=$?
 printf '%s\n' "$out"
 check '[ $status -eq 0 ]' "seed 1 at 12000 frames: fourteen checkpoint saves leave the playback on the recording's world (exit $status)"
+
+# 7 (run here, before the install controls): #33's generals, pinned.
+out="$(bash "$HARNESS" --generals "$GENERALS" --seeds "0" --maxframes 12000 \
+	--extra "-side 0 FactionChinaInfantryGeneral -side 1 FactionAmericaLaserGeneral" 2>&1)"
+status=$?
+printf '%s\n' "$out"
+check '[ $status -eq 0 ]' "seed 0, Infantry against Laser, agrees with itself at 12000 frames (exit $status)"
+check 'printf "%s" "$out" | grep -q "built: .*Lazr_AmericaSupplyCenter"' "the Laser General's Supply Center stood, so its Chinook was made (#33)"
 
 # 5. The install check's control: with its snapshot spoiled (the install itself untouched), the harness
 #    must report the install changed and exit 99.

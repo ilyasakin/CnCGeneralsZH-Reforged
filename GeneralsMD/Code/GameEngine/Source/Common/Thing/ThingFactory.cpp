@@ -44,6 +44,7 @@
 #include "Common/PlayerList.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/CreateModule.h"
+#include "GameLogic/Module/AIUpdate.h"
 #include "Common/ProductionPrerequisite.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/Drawable.h"
@@ -534,6 +535,38 @@ void reportMissingNameInTemplate( AsciiString templateName )
 #endif
 
 //-------------------------------------------------------------------------------------------------
+/* #33: an override that replaced a thing's AI module and left it with no SET_NORMAL locomotor.  An
+	 object's "Locomotor = SET_..." lines are stored in its AI module's data (ThingTemplate's "Locomotor"
+	 field parses into AIUpdateModuleData), so a ReplaceModule of that module discards them unless the
+	 block re-states them: upstream's fbe8dc6f and 179e1f65 did it to three Chinooks, three Humvees, three
+	 ECM tanks and three Nuke Cannons, and the first Chinook a Supply Center made crashed every platform.
+	 parseReplaceModule counts what the replacement discarded; this reports each thing that got none back,
+	 "LocomotorCheck: <name> lost ...", whichever build, for Tests/run_locomotor_check.sh to read, and is a
+	 DEBUG_CRASH in a debug build.  A thing EA made with no locomotor (a structure, a rider, a bomb) is
+	 not one: 118 have an AI module and no SET_NORMAL in the shipped data, measured. */
+//-------------------------------------------------------------------------------------------------
+static void checkLocomotors( ThingTemplate *first )
+{
+	Int replaced = 0, lost = 0;
+	for( ThingTemplate *t = first; t; t = t->friend_getNextTemplate() )
+	{
+		const Int setsLost = t->friend_getLocomotorSetsLostToReplace();
+		if( setsLost == 0 )
+			continue;
+		++replaced;
+		AIUpdateModuleData *ai = t->friend_getAIModuleInfo();
+		const LocomotorTemplateVector *normal = ai ? ai->findLocomotorTemplateVector( LOCOMOTORSET_NORMAL ) : NULL;
+		if( normal != NULL && !normal->empty() )
+			continue;
+		++lost;
+		DEBUG_LOG(( "LocomotorCheck: %s lost its %d locomotor set(s) to a ReplaceModule of its AI module, and has no SET_NORMAL\n",
+			t->getName().str(), setsLost ));
+		DEBUG_CRASH(( "%s lost its locomotors to a ReplaceModule of its AI module (#33): re-state its Locomotor lines", t->getName().str() ));
+	}
+	DEBUG_LOG(( "LocomotorCheck: %d things had an AI module with locomotors replaced, %d of them left without a SET_NORMAL\n", replaced, lost ));
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Post process phase after loading the database files */
 //-------------------------------------------------------------------------------------------------
 void ThingFactory::postProcessLoad()
@@ -567,6 +600,8 @@ void ThingFactory::postProcessLoad()
 #endif
 
 	}  // end for 
+
+	checkLocomotors( m_firstTemplate );
 
 #ifdef CHECK_THING_NAMES
 	dumpMissingStringNames();

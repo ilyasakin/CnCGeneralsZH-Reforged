@@ -434,6 +434,7 @@ public:
 	
 	// This function is only for use by the AIUpdateModuleData::parseLocomotorSet function.
 	AIUpdateModuleData *friend_getAIModuleInfo(void);
+	Int friend_getLocomotorSetsLostToReplace(void) const { return m_locomotorSetsLostToReplace; }
 
 	ShadowType getShadowType() const { return (ShadowType)m_shadowType; }
 	Real getShadowSizeX() const { return m_shadowSizeX; }
@@ -785,6 +786,7 @@ private:
 	Byte					m_structureRubbleHeight;
 	Byte					m_shadowType;								///< settings which determine the type of shadow rendered
 	Byte					m_moduleParsingMode;
+	Byte					m_locomotorSetsLostToReplace;	///< #33: locomotor sets a ReplaceModule of the AI module discarded (0: none); see ThingFactory's checkLocomotors
 	UnsignedByte	m_crusherLevel;							///< crusher > crushable level to actually crush
 	UnsignedByte	m_crushableLevel;						///< Specifies the level of crushability (must be hit by a crusher greater than this to crush me).
 
