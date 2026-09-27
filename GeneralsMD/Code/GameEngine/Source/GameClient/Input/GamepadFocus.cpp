@@ -31,7 +31,6 @@
 #include "GameClient/GameText.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
-#include "GameClient/GameWindowTransitions.h"
 #include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/KeyDefs.h"
@@ -306,6 +305,23 @@ void setFocus( GameWindow *window )
 	pointAt( window );
 }
 
+/// TRUE once the focusable widgets have been the same ones for SETTLE_MS (a screen is not still arriving)
+Bool hasSettled( const std::vector<GameWindow *> &widgets )
+{
+	const UnsignedInt SETTLE_MS = 250;
+	static UnsignedInt lastSignature = 0, sameSince = 0;
+	UnsignedInt signature = 2166136261u;		// FNV-1a over the widgets' ids, in order
+	for (size_t i = 0; i < widgets.size(); ++i)
+		signature = (signature ^ (UnsignedInt)widgets[i]->winGetWindowId()) * 16777619u;
+	const UnsignedInt now = timeGetTime();
+	if (signature != lastSignature)
+	{
+		lastSignature = signature;
+		sameSince = now;
+	}
+	return now - sameSince >= SETTLE_MS;
+}
+
 /// The focus on this screen: kept, restored from the last visit, or the default
 GameWindow *currentFocus( const Screen &screen, const std::vector<GameWindow *> &widgets )
 {
@@ -321,9 +337,10 @@ GameWindow *currentFocus( const Screen &screen, const std::vector<GameWindow *> 
 	GameWindow *focus = byId( widgets, theFocusId );
 	if (focus == NULL)
 	{
-		// a pane still moving in shows its buttons one by one: its default is shown, and kept once it has arrived
+		// a pane moving in shows its buttons one by one, and some panes' transitions never report finished: the
+		// default is shown at once, and kept once the screen's widgets have stood still for a moment
 		focus = defaultFocus( screen, widgets );
-		if (TheTransitionHandler == NULL || TheTransitionHandler->isFinished())
+		if (hasSettled( widgets ))
 			setFocus( focus );
 	}
 	return focus;
