@@ -47,6 +47,8 @@
 #   --package <folder>  the same for a Linux package (P3, Tools/linux-portable.sh): its launcher
 #                     zero-hour-reforged runs with no -root and no -overlay; the overlay it must report is
 #                     <folder>/share/zero-hour-reforged/overlay, the install is found through Registry.ini
+#   --appimage <file>  the same for the package as one AppImage: the file itself runs, mounted through FUSE; the
+#                     overlay it must report is under its own mount point, which is new every run
 #   REPLAY_CHECK_RUNNER  (environment) a command every run is started through, e.g. a script that runs
 #                     its arguments inside a container (P3's clean-environment E1); unset, none
 #   --app <.app>      E1 on the bundle itself, "tests what ships" (P1 step 5): its Contents/MacOS/generals
@@ -85,6 +87,7 @@ while [ $# -gt 0 ]; do
 		--generals) GENERALS="$2"; shift 2;;
 		--app) APP="$(cd "$2" && pwd)"; GENERALS="$APP/Contents/MacOS/generals"; PACKAGED_OVERLAY="$APP/Contents/Resources/Overlay"; shift 2;;
 		--package) APP="$(cd "$2" && pwd -P)"; GENERALS="$APP/zero-hour-reforged"; PACKAGED_OVERLAY="$APP/share/zero-hour-reforged/overlay"; shift 2;;
+		--appimage) APP="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"; GENERALS="$APP"; PACKAGED_OVERLAY="*/share/zero-hour-reforged/overlay"; shift 2;;
 		--data) DATA="$2"; shift 2;;
 		--seeds) SEEDS="$2"; shift 2;;
 		--players) PLAYERS="$2"; shift 2;;
@@ -204,7 +207,9 @@ run_game() {	# run_game <log prefix> <switches...>
 	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0; RUN_BUILT_NAMES=""; RUN_STATS=""
 	# --app, --package: the bundle or package must have found its own overlay (PosixMain says so on stderr);
 	# a run that did not is reported as having no result
-	if [ -n "$APP" ] && ! grep -q -F "generals: overlay $PACKAGED_OVERLAY, searched before the install" "$WORK/${prefix}.err"; then
+	if [ -n "$APP" ] && ! grep -a "^generals: overlay .*, searched before the install" "$WORK/${prefix}.err" \
+			| sed 's/^generals: overlay \(.*\), searched before the install$/\1/' \
+			| { while IFS= read -r o; do case "$o" in $PACKAGED_OVERLAY) exit 0;; esac; done; exit 1; }; then
 		echo "(the bundle or package did not report its own overlay in $WORK/${prefix}.err) "
 		return
 	fi

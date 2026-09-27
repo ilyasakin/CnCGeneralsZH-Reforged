@@ -10,6 +10,8 @@
 #   <out>/share/applications/, share/icons/       a .desktop file and the icon (Main/Generals.ico's 48 px)
 #   <out>/VERSION, <out>/README.txt               which build this is; how to install it and point it at Zero Hour
 #   <out>.tar.zst                                 the folder, packed (not with --no-tar)
+#   <out>.AppImage                                the same folder as one AppImage (with --appimage): AppRun is the
+#                                                 launcher, the .desktop file and icon at its root, a type-2 runtime
 #
 # THE BUILD runs inside Valve's Steam Runtime 3 "sniper" SDK container (Debian 11, glibc 2.31, g++-14, mold),
 # as the user running this, with the repository, the build folder and CMake mounted at their own paths.
@@ -24,6 +26,7 @@
 #
 # Usage: linux-portable.sh --build <folder> --out <folder> --cmake <cmake>
 #          [--image <sdk image>] [--jobs <n>] [--no-art] [--no-tar] [--no-build]
+#          [--appimage <appimagetool> --runtime <type-2 runtime>]
 #   --build     the build folder (made if missing); kept between runs, so a second build is incremental
 #   --out       the folder to make; its name is the package's (e.g. .../ZeroHourReforged-linux-x86_64)
 #   --cmake     a Linux CMake of 3.29 or later that runs inside the container: the SDK's own 3.25 cannot
@@ -33,12 +36,17 @@
 #   --jobs      the build's parallelism (default: ZHEAVY_JOBS, else the CPU count)
 #   --no-art    leaves the 1.6 GB of Reforged*.big art out (the game then looks as ClassicGraphics does)
 #   --no-build  stages from what <build> already holds
+#   --appimage  also makes <out>.AppImage with that appimagetool (its extracted AppRun is fine), from a copy of
+#               the folder made of hard links; --runtime names the type-2 runtime file it embeds, so the build
+#               fetches nothing.  The AppImage mounts through the host's FUSE (fusermount3), or runs from
+#               --appimage-extract-and-run where there is none
 # Needs docker (the user in its group), python3, rsync, and GNU tar with zstd for the archive.
 # Exit status: 0 made and checked; 1 refused or failed (the partial folder is removed).
 
 set -u
 
 BUILD="" OUT="" CMAKE="" IMAGE="registry.gitlab.steamos.cloud/steamrt/sniper/sdk:latest" JOBS="" ART=1 TAR=1 DOBUILD=1
+APPIMAGETOOL="" RUNTIME=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--build) BUILD="$2"; shift 2;;
@@ -49,6 +57,8 @@ while [ $# -gt 0 ]; do
 		--no-art) ART=0; shift;;
 		--no-tar) TAR=0; shift;;
 		--no-build) DOBUILD=0; shift;;
+		--appimage) APPIMAGETOOL="$2"; shift 2;;
+		--runtime) RUNTIME="$2"; shift 2;;
 		*) echo "linux-portable: unknown argument $1" >&2; exit 2;;
 	esac
 done
@@ -250,5 +260,20 @@ size="$(du -sh "$OUT" | cut -f1)"
 if [ "$TAR" -eq 1 ]; then
 	tar -C "$(dirname "$OUT")" -I 'zstd -T0 -10' -cf "$OUT.tar.zst" "$(basename "$OUT")" || fail "cannot pack $OUT.tar.zst"
 fi
+if [ -n "$APPIMAGETOOL" ]; then
+	[ -x "$APPIMAGETOOL" ] && [ -f "$RUNTIME" ] || fail "--appimage needs an appimagetool and --runtime a type-2 runtime file"
+	A="$OUT.AppDir"
+	rm -rf -- "$A" "$OUT.AppImage"
+	cp -al "$OUT" "$A" 2>/dev/null || cp -R "$OUT" "$A" || fail "cannot make $A"
+	cp "$OUT/zero-hour-reforged" "$A/AppRun" && cp "$OUT/share/applications/zero-hour-reforged.desktop" "$A/" \
+		&& cp "$OUT/share/icons/hicolor/48x48/apps/zero-hour-reforged.png" "$A/zero-hour-reforged.png" \
+		&& ln -s zero-hour-reforged.png "$A/.DirIcon" || fail "cannot complete $A"
+	ARCH=x86_64 "$APPIMAGETOOL" --no-appstream --runtime-file "$RUNTIME" "$A" "$OUT.AppImage" > "$OUT.appimagetool.log" 2>&1 \
+		|| { tail -5 "$OUT.appimagetool.log" >&2; rm -rf -- "$A"; fail "appimagetool failed"; }
+	rm -rf -- "$A"
+	# a type-2 runtime answers --appimage-offset with where its squashfs starts, without mounting anything
+	offset="$("$OUT.AppImage" --appimage-offset 2>/dev/null)"
+	case "$offset" in ''|*[!0-9]*) fail "the AppImage does not answer --appimage-offset: its runtime is not a type-2 runtime";; esac
+fi
 STARTED=""
-echo "linux-portable: $OUT ($size$( [ "$TAR" -eq 1 ] && echo ", packed $(du -sh "$OUT.tar.zst" | cut -f1)")): commit $commit, needs $glibc, $(printf '%s\n' $ENTRIES | wc -l) licence entries for $(printf '%s\n' $linked | wc -l) linked libraries, art $( [ "$ART" -eq 1 ] && echo included || echo left out)"
+echo "linux-portable: $OUT ($size$( [ "$TAR" -eq 1 ] && echo ", packed $(du -sh "$OUT.tar.zst" | cut -f1)")$( [ -n "$APPIMAGETOOL" ] && echo ", AppImage $(du -sh "$OUT.AppImage" | cut -f1)")): commit $commit, needs $glibc, $(printf '%s\n' $ENTRIES | wc -l) licence entries for $(printf '%s\n' $linked | wc -l) linked libraries, art $( [ "$ART" -eq 1 ] && echo included || echo left out)"
