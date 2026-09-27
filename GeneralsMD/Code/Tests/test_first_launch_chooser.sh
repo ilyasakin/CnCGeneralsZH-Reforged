@@ -15,11 +15,16 @@
 # the user data folder a scratch one.  Skipped (77) without ZH_DATA_DIR.  What it cannot see: the SDL panel
 # itself, which the user saw in front on the MacBook Air on 2026-09-27; this is everything around it.
 #
-# Usage: test_first_launch_chooser.sh <generals>
+# Each start plays a seeded two-player AI skirmish to 30 frames (so -maxframes ends it), with the build's staged
+# overlay as a package carries it, under a 300 s alarm: nothing can wait on a person.
+#
+# Usage: test_first_launch_chooser.sh <generals> <staged overlay>
 
 set -u
 GENERALS="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 [ -n "${ZH_DATA_DIR:-}" ] && [ -d "$ZH_DATA_DIR/zerohour" ] || { echo "skip: ZH_DATA_DIR names no zerohour/"; exit 77; }
+[ -d "${2:-}" ] || { echo "skip: no staged overlay at ${2:-} (build zh_overlay)"; exit 77; }
+OVERLAY="$(cd "$2" && pwd)"
 DATA="$(cd "$ZH_DATA_DIR" && pwd -P)"
 EXEDIR="$(dirname "$GENERALS")"
 failures=0
@@ -40,8 +45,9 @@ echo readme > "$T/notzh/readme.txt"
 : > "$T/nobase/INIZH.big"
 
 start() {	# start <label> <user data> <answers file>: a headless start through the stand-in; sets STATUS
-	( cd "$T" && HOME="$T/home" ZH_USER_DATA_DIR="$2/" ZH_TEST_CHOOSER_ANSWERS="$3" "$GENERALS" -headless -quickstart \
-		-noshellmap -multiInstance -noFPSLimit -maxframes 30 -logPrefix "$TAG$1" > "$T/$1.out" 2> "$T/$1.err" )
+	( cd "$T" && HOME="$T/home" ZH_USER_DATA_DIR="$2/" ZH_TEST_CHOOSER_ANSWERS="$3" perl -e 'alarm shift; exec @ARGV' 300 \
+		"$GENERALS" -headless -overlay "$OVERLAY" -quickstart -noshellmap -multiInstance -noFPSLimit -maxframes 30 \
+		-randommap 0 2 -autoskirmish 2 -aidiff brutal -seed 0 -observer -logPrefix "$TAG$1" > "$T/$1.out" 2> "$T/$1.err" )
 	STATUS=$?
 }
 installPath() { sed -n 's/^InstallPath *= *//p' "$1/Registry.ini" 2>/dev/null; }

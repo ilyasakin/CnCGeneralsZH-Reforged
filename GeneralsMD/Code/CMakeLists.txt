@@ -1899,7 +1899,7 @@ if(ZH_PLATFORM_POSIX)
   # through PosixMain's test stand-in for the dialog (ZH_TEST_CHOOSER_ANSWERS) - refusals and their reasons,
   # asking again, accepting and remembering, cancelling, and the second start asking nothing.  Needs ZH_GAME_DATA.
   add_test(NAME first_launch_chooser_check
-           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_first_launch_chooser.sh $<TARGET_FILE:generals>)
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_first_launch_chooser.sh $<TARGET_FILE:generals> ${CMAKE_BINARY_DIR}/overlay)
   set_tests_properties(first_launch_chooser_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
   if(ZH_GAME_DATA)
     set_tests_properties(first_launch_chooser_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
