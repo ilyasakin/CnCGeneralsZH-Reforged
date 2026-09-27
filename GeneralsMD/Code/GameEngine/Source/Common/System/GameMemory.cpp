@@ -3334,13 +3334,16 @@ void STLSpecialAlloc::deallocate(void* __p, size_t)
 
 //-----------------------------------------------------------------------------
 /**
-	ZH_SANITIZER_BUILD (CMake's ZH_SANITIZE, sanitizer builds only): none of the global operators below
-	is replaced, so every plain new and delete is the sanitizer runtime's.  The ones below keep a whole
-	game consistent with itself, but not with a system framework loaded beside a sanitizer: on macOS
-	Apple's Metal driver got a block from this operator new and freed it through ASan's operator delete.
-	The pools stay (MemoryPoolObject classes have operators of their own), and so do the strings, which
-	allocate from TheDynamicMemoryAllocator by name.  Without the define, as in every normal build, this
-	file is what it was.
+	ZH_SANITIZER_BUILD (CMake's ZH_SANITIZE, sanitizer builds only): the global operators below take
+	their blocks from calloc and give them back to free, which the sanitizer's runtime intercepts, instead
+	of from TheDynamicMemoryAllocator.  The ones below keep a whole game consistent with itself, but not
+	with a system framework loaded beside a sanitizer: on macOS Apple's Metal driver got a block from this
+	operator new and freed it through ASan's operator delete.  A block from calloc is one any of the
+	runtime's frees accepts.  calloc, not malloc, because this operator new zeroes (allocateBytes), and the
+	engine reads members nothing else set: with the sanitizer's own unzeroed new the game crashed loading
+	its .big files.  The pools stay (MemoryPoolObject classes have operators of their own), and so do the
+	strings, which allocate from TheDynamicMemoryAllocator by name.  Without the define, as in every
+	normal build, this file is what it was.
 */
 #ifndef ZH_SANITIZER_BUILD
 //-----------------------------------------------------------------------------
@@ -3495,12 +3498,35 @@ void operator delete[](void * p, const char *, int)
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
 #else
-// A sanitizer build: the MFC-style forms (NEW and MSGNEW in a debug build) go where a plain new would,
-// so a block from new(__FILE__, __LINE__) and its plain delete meet in the same allocator.
-void* operator new(size_t size, const char *, int) { return ::operator new(size); }
-void operator delete(void * p, const char *, int) { ::operator delete(p); }
-void* operator new[](size_t size, const char *, int) { return ::operator new[](size); }
-void operator delete[](void * p, const char *, int) { ::operator delete[](p); }
+// A sanitizer build: every form from calloc, zeroed as allocateBytes zeroes, and back to free.  They count
+// in theLinkTester as the forms above do, so initMemoryManager's link test holds unchanged.
+static void *sanitizerAllocate(size_t size)
+{
+	++theLinkTester;
+	void *p = calloc(1, size != 0 ? size : 1);
+	if (p == NULL)
+		throw ERROR_OUT_OF_MEMORY;
+	return p;
+}
+static void sanitizerFree(void *p)
+{
+	++theLinkTester;
+	free(p);
+}
+void *operator new(size_t size) { return sanitizerAllocate(size); }
+void *operator new[](size_t size) { return sanitizerAllocate(size); }
+void operator delete(void *p) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
+void operator delete[](void *p) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
+void operator delete(void *p, size_t) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
+void operator delete[](void *p, size_t) WW_NOEXCEPT_DELETE { sanitizerFree(p); }
+void *operator new(size_t size, const std::nothrow_t &) WW_NOEXCEPT_DELETE { return calloc(1, size != 0 ? size : 1); }
+void *operator new[](size_t size, const std::nothrow_t &) WW_NOEXCEPT_DELETE { return calloc(1, size != 0 ? size : 1); }
+void operator delete(void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE { free(p); }
+void operator delete[](void *p, const std::nothrow_t &) WW_NOEXCEPT_DELETE { free(p); }
+void* operator new(size_t size, const char *, int) { return sanitizerAllocate(size); }
+void operator delete(void * p, const char *, int) { sanitizerFree(p); }
+void* operator new[](size_t size, const char *, int) { return sanitizerAllocate(size); }
+void operator delete[](void * p, const char *, int) { sanitizerFree(p); }
 #endif // ZH_SANITIZER_BUILD
 
 //-----------------------------------------------------------------------------
@@ -3601,9 +3627,7 @@ void initMemoryManager()
 	free(linktest);
 #endif
 
-#if defined(ZH_SANITIZER_BUILD)
-	if (theLinkTester != 0)		// the sanitizer's operators are linked, on purpose, so ours count nothing
-#elif defined(MEMORYPOOL_OVERRIDE_MALLOC)
+#ifdef MEMORYPOOL_OVERRIDE_MALLOC
 	if (theLinkTester != 10)
 #else
 	if (theLinkTester != 6)
