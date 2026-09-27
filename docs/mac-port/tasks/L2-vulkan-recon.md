@@ -243,3 +243,56 @@ DepthBound = 0.
   - one with a spot light alone.
 - One capture is the scenario of known finding F7 (N7, specular add with no vertex specular). Replaying it
   outside the live test shows F7 as a failure; the live test counts it as known.
+
+### The verdicts on set2 and set3 (-47, ffref_judge, blind)
+
+GPU pictures came from -a9's harness (build-a9 at 06c60545 for set2, cc51c0c0 for set3), run by -47 on
+frozen copies, on both ANV (Intel UHD 620) and lavapipe. Every file matched the description.
+
+| set | captures | ANV | lavapipe |
+|:--|:--|:--|:--|
+| set2 mobstress | 35 | 29 agree, 6 empty, 0 disagree | 29 agree, 6 empty, 0 disagree |
+| set2 shellmap | 215 | 182 agree, 33 empty, 0 disagree | 181 agree, 33 empty, **1 disagree (LVP1)** |
+| set2 skirmish | 93 | 63 agree, 30 empty, 0 disagree | 63 agree, 30 empty, 0 disagree |
+| set3 (synthetic) | 7 | 6 agree, **1 disagree (F7)** | 6 agree, **1 disagree (F7)** |
+
+- **Substitutions and refusals:** ANISOTROPIC was replayed as LINEAR on 32, 207 and 89 draws. Three water
+  stubs were judged from their carried text. No refusals.
+- **set3** agrees exactly on both drivers, pixel for pixel:
+  - DepthBound = 0 (draw_00002), so the starting-state rule for a draw with no depth-stencil matches the
+    device;
+  - specular unlit (draw_00031), lit with a directional light (00036, 00038 with local viewer) and lit with
+    a spot light (00037);
+  - a spot light alone (00035).
+- **F7, known:** draw_00032, specular with no specular in the FVF, disagrees on all 3136 pixels, with the
+  same count on both drivers. The device adds 0 for the absent specular. FFReference's N7 follows the
+  D3DTA page's 0xFFFFFFFF. That's the known finding F7 (Metal, ANV and lavapipe agree on it), a question
+  between the device and the pages, not a driver effect.
+- **LVP1, a lavapipe finding, new:**
+  - The capture: shellmap draw_00002, a full-screen quad textured 1:1 from a 1024x1024 X8R8G8B8 texture
+    (MODULATE, LINEAR, no mips).
+  - On lavapipe, 2 of 480000 pixels are outside, at (363, 326) and (359, 329), 5 and 10/255 past the
+    envelope. On ANV all 480000 are exact.
+  - The reference samples both exactly at texel centres on a sharp bright-to-dark texture edge.
+    Bilinear-sampling the texture by hand, lavapipe's colours are reproduced (to 0.3-0.6/255) by a sample
+    shifted by about (-0.05 to -0.06, -0.078) texels: 1/16 to 1/13 of a texel. D3D9's documented bilinear
+    precision (FFReference's freedom) is 1/128 of a texel.
+  - Every other high-contrast texel of that draw is exact, so this is a local texture-coordinate precision
+    quirk of lavapipe (llvmpipe), not the device's or the reference's. The envelope is not widened for it.
+  - **The driver-versus-device answer for these sets:** the one driver difference is lavapipe's. ANV,
+    running the same device code, agrees everywhere.
+
+**Controls on set2 (ANV):**
+| scene | shifted GPU pictures | pixel centres | screen-linear | texel corners | blend swap | no attenuation |
+|:--|:--|:--|:--|:--|:--|:--|
+| mobstress | 32 disagree | 23 | 3 | 21 | 12 | 0 |
+| shellmap | 173 | 181 | 15 | 150 | 45 | **67** |
+| skirmish | 59 | 66 | 2 | 39 | 16 | **4** |
+- The point lights from explosions make the attenuation mutation count for the first time.
+- No specular add, reversed fog, swapped LERP arguments and the top-left rule catch 0 on every scene. That
+  matches -a9's census: fog, LERP and scissor are unreachable by source; specular, spot lights and
+  DepthBound = 0 are only absent from these scenes, and set3 covers those.
+
+**What this cannot see:** fog, LERP and scissor, which this game never draws (per -a9's reading of the
+source), so they are not judged; hardware other than Intel UHD 620 (ANV) and lavapipe; and a draw's
+dependence on the previous draw's depth, since every capture starts cleared.
