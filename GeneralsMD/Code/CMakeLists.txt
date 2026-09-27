@@ -2188,6 +2188,8 @@ if(ZH_PLATFORM_WINDOWS)
 # for the screen filters.
 add_test(NAME dx9_smoke COMMAND dx9_smoke)
 add_test(NAME dx9_smoke_msaa COMMAND dx9_smoke -msaa 4)
+# 77 is ARM64's: no d3dx9_43.dll exists for it, and dx9_smoke says so rather than failing.
+set_tests_properties(dx9_smoke dx9_smoke_msaa PROPERTIES SKIP_RETURN_CODE 77)
 
 # bink_smoke decodes a real .bik with the player this build links and compares what comes out
 # against the values read straight from the file's own header, so a wrong field offset or a wrong
