@@ -2573,6 +2573,7 @@ if(RELEASE_DEBUG_LOGGING)
     # under DEBUG_LOGGING (ScriptEngine's timing fields) has to be laid out alike in every TU that uses it.
     target_compile_definitions(posixdevice PRIVATE RELEASE_DEBUG_LOGGING)
     target_compile_definitions(sdldevice PRIVATE RELEASE_DEBUG_LOGGING)
+    target_compile_definitions(sdlinput PRIVATE RELEASE_DEBUG_LOGGING)	# the SDL layer's input half: SdlGamepad's lines
     target_compile_definitions(w3ddevice PRIVATE RELEASE_DEBUG_LOGGING)	# gameenginedevice's W3D half
     target_compile_definitions(generals PRIVATE RELEASE_DEBUG_LOGGING)
   endif()

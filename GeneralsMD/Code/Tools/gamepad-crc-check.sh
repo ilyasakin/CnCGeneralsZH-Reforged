@@ -158,12 +158,12 @@ run_game hand "$WORK/hand.txt"; HAND_CRC="$RUN_CRC"; HAND_FRAME="$RUN_FRAME"; HA
 run_game none "";               NONE_CRC="$RUN_CRC"; NONE_FRAME="$RUN_FRAME"
 
 echo "pad:  CRC ${PAD_CRC:-none} at frame ${PAD_FRAME:-none}, $PAD_PLAYED of 14 actions played (exit $PAD_STATUS)"
-echo "hand: CRC ${HAND_CRC:-none} at frame ${HAND_FRAME:-none}, $HAND_PLAYED of 15 actions played (exit $HAND_STATUS)"
+echo "hand: CRC ${HAND_CRC:-none} at frame ${HAND_FRAME:-none}, $HAND_PLAYED of 16 actions played (exit $HAND_STATUS)"
 echo "none: CRC ${NONE_CRC:-none} at frame ${NONE_FRAME:-none}"
 status=0
 if [ -z "$PAD_CRC" ] || [ -z "$HAND_CRC" ] || [ -z "$NONE_CRC" ]; then
 	echo "FAIL: a run gave no result"; status=1
-elif [ "$PAD_PLAYED" != "14" ] || [ "$HAND_PLAYED" != "15" ]; then
+elif [ "$PAD_PLAYED" != "14" ] || [ "$HAND_PLAYED" != "16" ]; then
 	echo "FAIL: the scripts were not played whole"; status=1
 elif [ "$PAD_CRC" != "$HAND_CRC" ] || [ "$PAD_FRAME" != "$HAND_FRAME" ]; then
 	echo "FAIL: the pad and the hand disagree"; status=1
