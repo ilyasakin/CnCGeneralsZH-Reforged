@@ -2290,6 +2290,7 @@ Libraries/Source/WWVegas/WWLib/tgatodxt.cpp
 Libraries/Source/WWVegas/WWLib/tgatodxt.h
 Libraries/Source/WWVegas/WWLib/thread.cpp
 Libraries/Source/WWVegas/WWLib/thread.h
+Libraries/Source/WWVegas/WWLib/threadwake.h
 Libraries/Source/WWVegas/WWLib/timer.h
 Libraries/Source/WWVegas/WWLib/trackwin.h
 Libraries/Source/WWVegas/WWLib/trackxy.h
