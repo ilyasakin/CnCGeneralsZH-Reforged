@@ -87,8 +87,8 @@ Before L1b these six were "Skipped" on Linux with `SDL_Init: No available video 
 
 ## What this cannot see
 
-- The game drawing a frame on Vulkan (`-offscreen` in the game itself): not run. It is the device's
-  territory.
+- The game drawing a frame on Vulkan (`-offscreen` in the game itself): not run at the time. Done since
+  (feature/mac-port-l2); see "The denser set" below.
 - Any hardware Vulkan other than Mesa ANV on Kaby Lake: no AMD, no NVIDIA. Lavapipe is the one other implementation measured.
 - Presentation to a real window (X11 or Wayland) on Linux.
 - Whether FFReference judgements from Linux captures agree with Metal's. That is -47's later task (3),
@@ -188,3 +188,58 @@ failed, 46 ANISOTROPIC replayed as LINEAR. They agree on every capture but one:
   why some of the 11 are empty; it wasn't checked per draw.
 - The GPU dump comes from -a9's harness. Its replay of a capture is trusted as described, not checked
   against a second GPU path.
+
+## The denser set, and the synthetic one (2026-09-27)
+
+By -a9. The judged set above exercises no specular, fog, LERP, point or spot lights, so -47 asked for more.
+
+**What the game draws at all.** Three scenes were captured on ANV, `-offscreen`, `-noaudio`, from
+feature/mac-port 06c60545. They're frozen read-only at thinkerer:`~/zhr-worker/l2-a9/set2`:
+- mobstress on Alpine Assault, 4000 frames: 35 captures;
+- the shell map, about 25 minutes: 215 captures;
+- the seed-1234 skirmish, 6000 frames: 93 captures.
+
+A census of the header fields, run over those 343 and over run4's 49, found:
+- Point lights: 136 captures in the shell map and 39 in the skirmish. They come from the explosions' light
+  pulses. There are none in run4 or mobstress.
+- None of the following, anywhere: fog, specular, spot lights, a LERP stage, SCISSORTESTENABLE, or
+  DepthBound = 0.
+
+The census has an armed control: one real capture, copied with each feature planted in turn, is counted
+every time. Specular is planted both lit and unlit. The census's first version counted specular only on lit
+draws; the control caught nothing because it planted specular lit only. Both have been fixed.
+
+The source says which of these absences are for good:
+- **Fog.** D3D fog needs the scene's `FogEnabled`, which starts false. Only `Set_Fog_Enable` changes it, and
+  nothing calls that (scene.cpp:132, scene.h:125).
+- **LERP.** No stage op the engine emits is LERP; `D3DTOP_LERP` appears only in names and in the device.
+- **Scissor.** Nothing outside the device sets a scissor rectangle or SCISSORTESTENABLE.
+- **Specular is reachable.** shader.cpp:1018 enables it from a model's secondary gradient; none of these
+  scenes draws such a model. (-a9 first called specular unreachable too, and corrected that the same day.
+  W3DWater's TRUE is in dead code.)
+- **Spot lights and DepthBound = 0** are absent by count only.
+
+**Driver or device.** -a9's replay of set2 against FFReference:
+- On ANV, 343 of 343 pass.
+- On lavapipe, 342 of 343 pass. The process loaded `libvulkan_lvp.so`.
+- The exception is the shell map's draw_00002: 2 pixels outside the envelope, of 478,601 written, about
+  10 levels per channel. At the worst pixel, (363, 326), ANV's output equals the reference exactly and
+  lavapipe's doesn't.
+- **Recorded as unclassified: the driver or a tolerance edge, ANV exact. It isn't a device finding.**
+- 128 of the 343 dumps are byte-identical between the two drivers. The rest differ within the envelope.
+
+**The synthetic set.** -47 asked for draws only of what the game can draw: specular, spot lights and
+DepthBound = 0.
+- They come from the device's own GPU test. `ffref_gpu_selfcheck` was run with `ZH_GPU_CAPTURE`, and the
+  captures showing those features were kept.
+- That test gained one scenario for this (feature/mac-port-l2-synth). It draws with no depth-stencil
+  surface bound while the device's ZENABLE is on with GREATER. GREATER passes nothing against the cleared
+  1.0, so any depth test would draw nothing.
+- The scenario passes on ANV: 4,096 exact.
+- Its mutation fails on 2,192 pixels. The mutation tells the reference that depth stays on.
+- set3-synth, at thinkerer:`~/zhr-worker/l2-a9/set3-synth`, holds 7 captures, labelled synthetic:
+  - one DepthBound = 0;
+  - five with specular: one unlit, and four lit, one of them with a spot light;
+  - one with a spot light alone.
+- One capture is the scenario of known finding F7 (N7, specular add with no vertex specular). Replaying it
+  outside the live test shows F7 as a failure; the live test counts it as known.
