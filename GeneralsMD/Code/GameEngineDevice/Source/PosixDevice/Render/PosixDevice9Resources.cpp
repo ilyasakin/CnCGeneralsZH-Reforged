@@ -27,6 +27,7 @@
 #include "PosixD3D9Caps.h"
 #include "PosixImageOps.h"
 #include "PosixResources9.h"
+#include "SdlCreationLog.h"
 
 #include <string.h>
 
@@ -159,6 +160,21 @@ RenderResult PosixDevice9::CreateTexture( unsigned int width, unsigned int heigh
 		return checked;
 	if (width == 0 || height == 0)
 		return D3DERR_INVALIDCALL;
+	if (Sdl_Creation_Log_Asked())
+	{
+		// PERF1: who makes the same small texture again every frame.  ZH_GPU_CREATION_TRACE=WxH names the
+		// caller of the 100th, 600th, 1100th and 1600th texture of that size.
+		static unsigned int traced_width = 0, traced_height = 0, made = 0;
+		static const bool tracing = getenv( "ZH_GPU_CREATION_TRACE" ) != NULL
+			&& sscanf( getenv( "ZH_GPU_CREATION_TRACE" ), "%ux%u", &traced_width, &traced_height ) == 2;
+		if (tracing && width == traced_width && height == traced_height && ++made <= 1600 && made % 500 == 100)
+		{
+			char what[96];
+			snprintf( what, sizeof(what), "CreateTexture %ux%u format %u pool %u, #%u", width, height, (unsigned)format,
+				(unsigned)pool, made );
+			Sdl_Creation_Log_Trace( what );
+		}
+	}
 	*texture = PosixTexture9::create( width, height, levels, usage, format, pool );
 	return (*texture != NULL) ? D3D_OK : D3DERR_OUTOFVIDEOMEMORY;
 }

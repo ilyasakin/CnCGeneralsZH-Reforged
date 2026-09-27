@@ -54,6 +54,7 @@
 #else
 #include <unistd.h>
 #include "zhio.h"
+#include "Platform/LoadTiming.h"
 #endif
 #include <string.h>
 #include <sys/stat.h>
@@ -153,11 +154,30 @@ enum
 	OPEN_READ_ONLY = O_RDONLY
 };
 
-static int openFile(const Char *filename, int flags) { return zh_open(filename, flags, 0666); }
+static int openFile(const Char *filename, int flags)
+{
+	if (!zhLoadTimingAsked())
+		return zh_open(filename, flags, 0666);
+	const double start = zhLoadNowMs();
+	const int handle = zh_open(filename, flags, 0666);
+	const double took = zhLoadNowMs() - start;
+	zhLoadReadMs() += took;
+	if (took > ZH_LOAD_TIMING_REPORT_MS)
+		fprintf(stderr, "LOAD open  t %10.1f ms  %7.1f ms  %s thread  %s\n", start, took, zhLoadThread(), filename);
+	return handle;
+}
 
 static int readFile(int handle, void *buffer, Int bytes, Bool text)
 {
-	return text ? zh_read_text(handle, buffer, bytes) : (int)::read(handle, buffer, bytes);
+	if (!zhLoadTimingAsked())
+		return text ? zh_read_text(handle, buffer, bytes) : (int)::read(handle, buffer, bytes);
+	const double start = zhLoadNowMs();
+	const int got = text ? zh_read_text(handle, buffer, bytes) : (int)::read(handle, buffer, bytes);
+	const double took = zhLoadNowMs() - start;
+	zhLoadReadMs() += took;
+	if (took > ZH_LOAD_TIMING_REPORT_MS)
+		fprintf(stderr, "LOAD read  t %10.1f ms  %7.1f ms  %s thread  %d bytes\n", start, took, zhLoadThread(), bytes);
+	return got;
 }
 
 static int writeFile(int handle, const void *buffer, Int bytes) { return (int)::write(handle, buffer, bytes); }

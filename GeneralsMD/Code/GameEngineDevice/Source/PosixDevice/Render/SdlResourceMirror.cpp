@@ -19,6 +19,7 @@
 // GPU copies of A2's textures and buffers (decision 7, phase A3c).  See SdlResourceMirror.h.
 
 #include "SdlResourceMirror.h"
+#include "SdlCreationLog.h"
 #include "PosixPixelCodec.h"
 #include "PosixResources9.h"
 #include "SdlGpuFrame.h"
@@ -190,6 +191,16 @@ SdlResourceMirrors::~SdlResourceMirrors()
 	Frame->Release_After_Batch(WhiteTexture, NULL);
 }
 
+/// PERF1's hitch hunt: how long taking Lock waited, when over 5 ms - another thread held it.
+static void Log_Lock_Wait(double started, const char *what)
+{
+	if (!Sdl_Creation_Log_Asked()) return;
+	const double waited = Sdl_Now_Ms() - started;
+	if (waited > 5.0) {
+		Sdl_Creation_Log("lockwait", started, waited, what);
+	}
+}
+
 void SdlResourceMirrors::Destroyed(const void * resource)
 {
 	SdlResourceMirrors * mirrors = LiveMirrors;
@@ -241,7 +252,10 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 	}
 	PosixTexture9 * texture = static_cast<PosixTexture9 *>(base);
 	const unsigned int levels = texture->levelCount();
+	const double started = Sdl_Creation_Log_Asked() ? Sdl_Now_Ms() : 0.0;
+	bool created = false;
 	std::lock_guard<std::mutex> guard(Lock);
+	Log_Lock_Wait(started, "texture");
 	std::unordered_map<const void *, Copy>::iterator found = Copies.find(texture);
 	if (found == Copies.end()) {
 		if (BcSupported < 0) {
@@ -297,6 +311,7 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 			}
 		}
 		found = Copies.insert(std::make_pair((const void *)texture, copy)).first;
+		created = true;
 	}
 	Copy & copy = found->second;
 	bool stale = copy.Versions.size() != levels;
@@ -316,8 +331,20 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 			copy.Versions[level] = image.version();
 		}
 		++TexturesUploaded;
+		if (Sdl_Creation_Log_Asked()) {
+			char detail[96];
+			snprintf(detail, sizeof(detail), "%ux%u, %u levels, format %u, %s", texture->level(0).width(),
+				texture->level(0).height(), levels, (unsigned)texture->level(0).format(), copy.Native ? "native" : "expanded");
+			Sdl_Creation_Log(created ? "texture" : "retexture", started, Sdl_Now_Ms() - started, detail);
+		}
 	}
 	copy.UsedBatch = Frame->Batch();
+	if (Sdl_Creation_Log_Asked() && Sdl_Now_Ms() - started > 5.0) {
+		char detail[96];
+		snprintf(detail, sizeof(detail), "%ux%u, %s, %s", texture->level(0).width(), texture->level(0).height(),
+			created ? "created" : "found", stale ? "uploaded" : "current");
+		Sdl_Creation_Log("slowtex", started, Sdl_Now_Ms() - started, detail);
+	}
 	return copy.Texture;
 }
 
@@ -367,9 +394,13 @@ SDL_GPUBuffer * SdlResourceMirrors::Buffer(const void * owner, const PosixBuffer
 		refusal = "an empty buffer";
 		return NULL;
 	}
+	const double started = Sdl_Creation_Log_Asked() ? Sdl_Now_Ms() : 0.0;
 	std::lock_guard<std::mutex> guard(Lock);
+	Log_Lock_Wait(started, "buffer");
 	std::unordered_map<const void *, Copy>::iterator found = Copies.find(owner);
+	bool created = false;
 	if (found == Copies.end()) {
+		created = true;
 		SDL_GPUBufferCreateInfo info;
 		SDL_zero(info);
 		info.usage = SDL_GPU_BUFFERUSAGE_VERTEX | SDL_GPU_BUFFERUSAGE_INDEX;
@@ -396,6 +427,11 @@ SDL_GPUBuffer * SdlResourceMirrors::Buffer(const void * owner, const PosixBuffer
 		Frame->Queue_Buffer_Upload(copy.Buffer, offset, size);
 		copy.Versions.assign(1, storage.version());
 		++BuffersUploaded;
+		if (Sdl_Creation_Log_Asked()) {
+			char detail[64];
+			snprintf(detail, sizeof(detail), "%u bytes", size);
+			Sdl_Creation_Log(created ? "buffer" : "rebuffer", started, Sdl_Now_Ms() - started, detail);
+		}
 	}
 	copy.UsedBatch = Frame->Batch();
 	return copy.Buffer;

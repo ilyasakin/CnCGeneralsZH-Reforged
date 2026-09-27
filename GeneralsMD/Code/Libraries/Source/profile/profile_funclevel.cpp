@@ -784,4 +784,6 @@ ProfileFuncLevel::ProfileFuncLevel(void)
 #endif // !defined HAS_PROFILE
 
 ProfileFuncLevel ProfileFuncLevel::Instance;
-HANDLE ProfileFastCS::testEvent=::CreateEvent(NULL,FALSE,FALSE,"");
+// ProfileFastCS::testEvent was defined here, and made an unnamed event at startup that nothing waited
+// on: the class no longer declares it (internal.h, its lock is an atomic flag now), so MSVC refused the
+// definition (W2).

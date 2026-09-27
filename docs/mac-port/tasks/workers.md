@@ -39,6 +39,10 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | build dir for -18 | `~/zhr-worker/build-18` (Release, `ZH_GAME_DATA=~/zhr-worker/data`), its logs `~/zhr-worker/build-18.*.log`, and `build-18/s18`: the sweep and lid-close scripts, APFS clones of the binary, their logs | `cmake`/`ninja` via `zheavy`, `scp` (-18) | in the folder |
 | -18's bundles | `~/zhr-worker/bundles/fmp18.bundle`, `dg18.bundle` | `scp` (-18) | in the folder |
 | disk images for the lid-close repro and `data_gone_check` | made in a temporary work folder under `build-18/s18` or `$TMPDIR`, attached, detached (by their own device) and deleted by the script that made them; none is left | `hdiutil create/attach/detach` (-18), no sudo | nothing left to undo; `hdiutil info` lists none |
+| -a9's offscreen probes (SDL3 GPU and raw Metal, no window) | `~/zhr-worker/probe-a9` | written and compiled by -a9 with clang against build-47's `libSDL3.a` | deleted by -a9, 2026-09-27, once `-offscreen` was validated there |
+| -a9's PERF1 folder: bundles, scripts, logs, captures, the install's hash list, a symlink farm of `data/zerohour` (510 links, real directories), and `tmo`, a perl stand-in for GNU `timeout`, which macOS lacks | `~/zhr-worker/perf-a9` | `scp` of bundles and scripts, then `setup.sh` and `matrix.sh` (-a9). Nothing was pushed anywhere | in the folder |
+| worktree for -a9 | `~/zhr-worker/wt-a9`, branch `perf1-finer-run`; the repository also holds `perf1-finer-nofix3` (fix 3 reverted, for the A/B). Vendor and art cloned in; its SDL3 patched by `vendor.sh` | `git worktree add` (-a9) | in the folder, and `git -C ~/zhr-worker/repo worktree prune` and `branch -D perf1-finer-run perf1-finer-nofix3` |
+| build dir for -a9 | `~/zhr-worker/build-a9` (Release, `ZH_GAME_DATA=~/zhr-worker/data`), with copies `generals-fix3` and `generals-nofix3` | `cmake`/`ninja` via `zheavy` (-a9) | in the folder |
 
 Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wide.
 
@@ -97,9 +101,35 @@ Everything is under `/home/zhr/zhr-worker` unless noted:
 | the repository | `~/zhr-worker/repo`, from `~/zhr-worker/bundles/fmp.bundle` (feature/mac-port 9d1c8895) | `git bundle` here, `scp`, `git clone` (-47) | in the folder |
 | worktree and build for -47 | `~/zhr-worker/wt-47` (branch `agent-47`, vendor copied in with `cp --reflink=auto`), `~/zhr-worker/build-47` | `git worktree add`, cmake/ninja via `zheavy` (-47) | in the folder |
 | `unifdef` 2.12-4 (system-wide, `/usr/bin/unifdef`), which widechar_check needs; it was not installed before | pacman | `sudo pacman -S --needed --noconfirm unifdef`, as the PM directed (-47, 2026-09-27) | `sudo pacman -Rs unifdef` |
+| `vulkan-swrast` 1:26.2.2-1 (lavapipe: `/usr/share/vulkan/icd.d/lvp_icd*.json`, llvmpipe on LLVM 22.1.8, Vulkan 1.4), a software Vulkan beside ANV for L2 | pacman, system-wide | `sudo pacman -S --needed --noconfirm vulkan-swrast`, as the PM approved (-47, 2026-09-27). Nothing else was installed or upgraded (pacman.log); it is one point release ahead of the host's mesa and vulkan-intel 26.2.1, because the sync database is newer | `sudo pacman -Rs vulkan-swrast` |
+| core dumps of uid 1001 (zhr): 12 from test_crash_reporting's children, one 14.8 MB `generals` from W1's null-this segfault | `/var/lib/systemd/coredump` (outside the worker folder), and their metadata in the systemd journal | systemd-coredump, from our crashing test children (-47) | the 13 files deleted with `sudo find … -name 'core.*.1001.*' -delete` (2026-09-27); uid 1000's chromium core untouched. The journal entries remain (coredumpctl lists them as missing). Since f8825d76 the children set RLIMIT_CORE to 0 and store none |
 
 **The Windows VM is not -47's.** The user approved it (relayed by the PM), but this session's permission
 classifier refused its setup as "Unauthorized Persistence" (an auto-started SSH server keyed to this Mac
 inside the VM), and -47 created nothing for it. The user then started it themselves (container
 `zhr-windows`) and the PM handles its access and tools. Its revert entries belong to them, not to this table.
 
+-47's one use of it (2026-09-27, for L1b's font heights, with -18 told before and after): `C:\zhr-worker\fontmetrics`
+holds `gdi-font-metrics.ps1` (the repository's Tools/ script) and its two outputs, `gdi-metrics.csv` and
+`fonts.txt`. It only read `C:\Windows\Fonts` and installed nothing. Undo: `Remove-Item -Recurse
+C:\zhr-worker\fontmetrics`. -47 reached it with a known-hosts file in its scratch folder, which kept nothing:
+no host key of it was left on the Mac (`~/.ssh/known_hosts` has none).
+
+
+### The Windows VM: what -18 created and installed for W2 (2026-09-27)
+
+| what | where | how it got there | undo |
+|---|---|---|---|
+| the work folder | `C:\zhr-worker` | `New-Item` (-18) | `Remove-Item -Recurse -Force C:\zhr-worker` removes everything below |
+| the repository | `C:\zhr-worker\repo` (`core.autocrlf true`), from `fmp.bundle` and `w2.bundle`; its `build64` and the ignored `build.local.bat` naming VS's CMake 3.31.6 | `scp`, `git clone`, `build.bat` (-18) | in the folder |
+| the game data and art copies | `C:\zhr-worker\data\zerohour` (2.9 GB), `C:\zhr-worker\art` (1.6 GB), hash-verified against thinkerer's | `scp -3` through the Mac (-18) | in the folder |
+| the farm | `C:\zhr-worker\farm`: symbolic links to the data and the Run folder, copies of the exe and DLLs | `farm.ps1` (-18) | in the folder |
+| scripts, logs, bundles, hash listings | `C:\zhr-worker\*.ps1`, `*.log`, `*.txt`, `*.bundle`, `hashtree.py`, `C:\Users\zhr\recon18.ps1` | `scp` (-18) | in the folder; `recon18.ps1` by hand |
+| ATL for VS 2022 Build Tools | component `Microsoft.VisualStudio.Component.VC.ATL` | `setup.exe modify --add` (-18) | `setup.exe modify --installPath "<BuildTools>" --remove Microsoft.VisualStudio.Component.VC.ATL --quiet` |
+| the DirectX End-User Runtime (June 2010): `d3dx9_43.dll` and its kind in System32 and SysWOW64 | the extracted redist in `C:\zhr-worker\dxredist` | `directx_Jun2010_redist.exe /Q /T`, `DXSETUP.exe /silent` (-18) | it has no uninstaller; the DLLs are harmless to leave, or are deleted by name (`d3dx9_*`, `d3dx10_*`, `d3dx11_*`, `D3DCompiler_*`, `XAudio2_*`, `X3DAudio*`, `XAPOFX*`, `xinput1_3`) |
+| winget's `Microsoft.DirectX` (web installer; installed no DLL) | winget's package record | `winget install` (-18) | `winget uninstall --id Microsoft.DirectX` |
+| replays copied into the user's Replays folder | `Documents\Command and Conquer Generals Zero Hour Data\Replays\w1a.rep`, `w1b.rep`, and the harness's `determinism*.rep` | `Copy-Item`, `replay-check.ps1` (-18) | delete them |
+| one-off scheduled tasks `zhr18desk`, `zhr18desk2` | Task Scheduler | `schtasks /create /it` (-18) | already deleted after each run |
+
+On thinkerer, for W2: `~/zhr-worker/tmp18` (hash listings, the VM's host key in a known-hosts file of its
+own, a copy of build-47's `generals`, `playwin.sh`, the Windows replay). Undo: `rm -rf ~/zhr-worker/tmp18`.

@@ -1650,7 +1650,15 @@ TEST(cpudetect_logs_are_printable)
 class LockLoopWorker : public ThreadClass
 {
 public:
-	LockLoopWorker(FastCriticalSectionClass &lock) : ThreadClass("LockLoopWorker"), m_lock(lock) {}
+	LockLoopWorker(FastCriticalSectionClass &lock) : ThreadClass("LockLoopWorker"), m_lock(lock), m_looping(false) {}
+
+	/// Until the worker has taken the lock once, or about a second: true when it has
+	bool Wait_Until_Looping()
+	{
+		for (int i = 0; i < 1000 && !m_looping.load(); ++i)
+			ThreadClass::Sleep_Ms(1);
+		return m_looping.load();
+	}
 
 protected:
 	virtual void Thread_Function()
@@ -1658,12 +1666,14 @@ protected:
 		while (running)
 		{
 			FastCriticalSectionClass::LockClass lock(m_lock);
+			m_looping.store(true);
 			for (volatile int i = 0; i < 2000; ++i) {}
 		}
 	}
 
 private:
 	FastCriticalSectionClass &m_lock;
+	std::atomic<bool> m_looping;
 };
 
 TEST(threadclass_stop_deadlocks_if_the_caller_holds_the_workers_lock)
@@ -1675,7 +1685,11 @@ TEST(threadclass_stop_deadlocks_if_the_caller_holds_the_workers_lock)
 	FastCriticalSectionClass lock;
 	LockLoopWorker worker(lock);
 	worker.Execute();
-	ThreadClass::Sleep_Ms(20); // let it get into its loop
+	/* In its loop before the lock is taken here, not after a fixed 20 ms sleep.  This check failed once
+	   (elapsed < 250) under ctest -j4 on a four-core machine (L1b, thinkerer) and not in 60 runs since;
+	   the likely reading is a worker not yet started, which sees running false and exits at once, so
+	   Stop() returns early.  Waiting for the loop removes that reading whichever it was. */
+	CHECK(worker.Wait_Until_Looping());
 
 	unsigned start = Clock_Milliseconds_Coarse();
 	{

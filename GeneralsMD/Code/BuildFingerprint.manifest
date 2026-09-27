@@ -1455,6 +1455,7 @@ GameEngineDevice/Source/PosixDevice/Render/PosixPixelCodec.h
 GameEngineDevice/Source/PosixDevice/Render/PosixResources9.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixResources9.h
 GameEngineDevice/Source/PosixDevice/Render/SdlConstants.h
+GameEngineDevice/Source/PosixDevice/Render/SdlCreationLog.h
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.h
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrameBatch.cpp
@@ -1605,6 +1606,7 @@ Libraries/Include/Platform/D3D9PosixMath.h
 Libraries/Include/Platform/DoubleClickTime.h
 Libraries/Include/Platform/EngineShaderName.h
 Libraries/Include/Platform/IsWindows9x.h
+Libraries/Include/Platform/LoadTiming.h
 Libraries/Include/Platform/MSVCCompat.h
 Libraries/Include/Platform/MsvcFloatCasts.h
 Libraries/Include/Platform/PosixD3D9/d3d9.h
@@ -1806,6 +1808,7 @@ Libraries/Source/WWVegas/WW3D2/font3d.h
 Libraries/Source/WWVegas/WW3D2/formconv.cpp
 Libraries/Source/WWVegas/WW3D2/formconv.h
 Libraries/Source/WWVegas/WW3D2/framgrab.h
+Libraries/Source/WWVegas/WW3D2/gdifontmetrics.h
 Libraries/Source/WWVegas/WW3D2/glyphrasteriser.cpp
 Libraries/Source/WWVegas/WW3D2/glyphrasteriser.h
 Libraries/Source/WWVegas/WW3D2/hanim.cpp
@@ -3548,6 +3551,8 @@ Tools/fingerprint-check.sh
 Tools/fingerprint-manifest.sh
 Tools/fingerprint/build_fingerprint.cpp
 Tools/gametext.py
+Tools/gdi-font-metrics-header.py
+Tools/gdi-font-metrics.ps1
 Tools/gentrigtables.py
 Tools/include_case_check.py
 Tools/install-guard.sh

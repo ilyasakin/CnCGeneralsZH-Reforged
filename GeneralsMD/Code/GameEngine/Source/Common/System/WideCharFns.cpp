@@ -396,24 +396,22 @@ static size_t narrowToWideChar( const wchar_t *in, WideChar *out, size_t outCoun
 /* The funnel's pieces.  See WideCharFormatV for why the POSIX side formats rather than forwards. */
 
 /** Collects the output under the header's contract: at most outCount units, the terminator counted
-	  among them; on overflow, as much as fits, terminated, and a negative return. */
+	  among them; on overflow, MSVC's fill - all outCount units, no terminator - and a negative return
+	  (measured on Windows, W2). */
 class WideCharFormatSink
 {
 public:
 	WideCharFormatSink( WideChar *out, size_t outCount ) : m_out( out ), m_count( outCount ), m_length( 0 ) {}
 	void put( WideChar c )
 	{
-		if (m_length + 1 < m_count)
+		if (m_length < m_count)
 			m_out[ m_length ] = c;
 		++m_length;
 	}
 	Int finish( void )
 	{
-		if (m_length + 1 > m_count)
-		{
-			m_out[ m_count - 1 ] = 0;		// truncated: everything that fitted, terminated
-			return -1;
-		}
+		if (m_length >= m_count)
+			return -1;		// truncated, or exactly full: every unit written, none of them a terminator
 		m_out[ m_length ] = 0;
 		return (Int)m_length;
 	}
