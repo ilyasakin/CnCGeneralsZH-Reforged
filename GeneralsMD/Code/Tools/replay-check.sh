@@ -60,7 +60,7 @@
 #   --log-lines <re>  print each live run's log lines matching the extended regex, as "  log: <line>",
 #                     before the log is removed (Tests/run_locomotor_check.sh reads defect #33's check)
 #   --package <folder>  the same for a Linux package (P3, Tools/linux-portable.sh): its launcher
-#                     zero-hour-reforged runs with no -root and no -overlay; the overlay it must report is
+#                     zero-hour-reforged.sh runs with no -root and no -overlay; the overlay it must report is
 #                     <folder>/share/zero-hour-reforged/overlay, the install is found through Registry.ini
 #   --appimage <file>  the same for the package as one AppImage: the file itself runs, mounted through FUSE; the
 #                     overlay it must report is under its own mount point, which is new every run
