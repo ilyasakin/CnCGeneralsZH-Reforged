@@ -15,13 +15,16 @@ Filing any of them is the user's decision. Each note says what was measured and 
 **What happens.** The process gets SIGSEGV at exit, in `SDL_QuitMouse` (`src/events/SDL_mouse.c`, the
 `next = cursor->next;` line of the loop that destroys `mouse->cursors`), reached from
 `SDL_QuitSubSystem(SDL_INIT_VIDEO)`. It needs these conditions:
-- the video driver has a `CreateCursor` but no `CreateAnimatedCursor` (the offscreen driver on Linux; the
-  dummy driver on macOS makes no cursors at all, and never gets this far);
+- the video driver has no `CreateAnimatedCursor`. Both the offscreen and the dummy driver lack it, and lack
+  `CreateCursor` too, in which case `SDL_CreateColorCursor` makes a generic cursor and still links it in;
 - the application made an animated cursor with `SDL_CreateAnimatedCursor` and more than one frame;
 - the application did not destroy that cursor itself before quitting video.
 
-The game hit it with the offscreen driver. Its cursors are Windows `.ani` files, made with
-`SDL_CreateAnimatedCursor` and never destroyed, because SDL frees what is left at quit.
+The game hit it with the offscreen driver on Linux. Its cursors are Windows `.ani` files, made with
+`SDL_CreateAnimatedCursor` and never destroyed, because SDL frees what is left at quit. The same runs with
+the dummy driver on macOS exited cleanly. The code path is the same, so that is most likely the same
+use-after-free reading freed memory that macOS's allocator had left intact, where glibc had already
+reused it. That is inferred, not measured.
 
 **Why (reading the code).** Without a driver `CreateAnimatedCursor`, `SDL_CreateAnimatedCursor` calls
 `SDL_CreateCursorAnimation`, which makes one cursor per frame with `SDL_CreateColorCursor`.
