@@ -21,9 +21,9 @@
 # Three runs of one fixed-seed skirmish, each with no window at all (-offscreen, which starts SDL's gamepads
 # only for ZH_INPUT_SCRIPT, so a worker's own pad cannot join) and no sound (-noaudio), timed out and
 # killed with their process group:
-#   pad   - ZH_INPUT_SCRIPT plays a virtual pad: select all (a back button, Ctrl+A through the command
-#           map), a move order (East, the right button), make group 1 (right shoulder + D-pad up, Ctrl+1),
-#           a second move order, and stop (West, S);
+#   pad   - ZH_INPUT_SCRIPT plays a virtual pad: select the idle dozer (a back button, the command map's
+#           I), a move order (East, the right button), make group 1 (right shoulder + D-pad up, Ctrl+1),
+#           a second move order, and stop (West, S) - the local player's only unit at the start is the dozer;
 #   hand  - the same through SDL's own mouse and key events, on the same logic frames;
 #   none  - no input: the armed control, so equal CRCs cannot come from input that did nothing.
 # PASS: pad and hand agree on the HEADLESS CRC and frame, and none differs.
@@ -100,8 +100,8 @@ OVERLAY="$WORK/overlay"
 # ---- the two scripts: the same commands on the same frames ----------------------------------------
 cat > "$WORK/pad.txt" <<'SCRIPT'
 60 mouse move 512 384
-90 pad LeftPaddle2 down
-92 pad LeftPaddle2 up
+90 pad LeftPaddle1 down
+92 pad LeftPaddle1 up
 120 pad East down
 122 pad East up
 150 pad RightShoulder down
@@ -116,10 +116,8 @@ cat > "$WORK/pad.txt" <<'SCRIPT'
 SCRIPT
 cat > "$WORK/hand.txt" <<'SCRIPT'
 60 mouse move 512 384
-90 key Left_Ctrl down
-90 key A down
-92 key A up
-92 key Left_Ctrl up
+90 key I down
+92 key I up
 120 mouse right down 512 384
 122 mouse right up 512 384
 150 key Left_Ctrl down
@@ -158,12 +156,12 @@ run_game hand "$WORK/hand.txt"; HAND_CRC="$RUN_CRC"; HAND_FRAME="$RUN_FRAME"; HA
 run_game none "";               NONE_CRC="$RUN_CRC"; NONE_FRAME="$RUN_FRAME"
 
 echo "pad:  CRC ${PAD_CRC:-none} at frame ${PAD_FRAME:-none}, $PAD_PLAYED of 14 actions played (exit $PAD_STATUS)"
-echo "hand: CRC ${HAND_CRC:-none} at frame ${HAND_FRAME:-none}, $HAND_PLAYED of 16 actions played (exit $HAND_STATUS)"
+echo "hand: CRC ${HAND_CRC:-none} at frame ${HAND_FRAME:-none}, $HAND_PLAYED of 14 actions played (exit $HAND_STATUS)"
 echo "none: CRC ${NONE_CRC:-none} at frame ${NONE_FRAME:-none}"
 status=0
 if [ -z "$PAD_CRC" ] || [ -z "$HAND_CRC" ] || [ -z "$NONE_CRC" ]; then
 	echo "FAIL: a run gave no result"; status=1
-elif [ "$PAD_PLAYED" != "14" ] || [ "$HAND_PLAYED" != "16" ]; then
+elif [ "$PAD_PLAYED" != "14" ] || [ "$HAND_PLAYED" != "14" ]; then
 	echo "FAIL: the scripts were not played whole"; status=1
 elif [ "$PAD_CRC" != "$HAND_CRC" ] || [ "$PAD_FRAME" != "$HAND_FRAME" ]; then
 	echo "FAIL: the pad and the hand disagree"; status=1
