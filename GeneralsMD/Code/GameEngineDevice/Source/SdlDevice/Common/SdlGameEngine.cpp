@@ -119,9 +119,21 @@ SdlGameEngine::SdlGameEngine( const WindowRequest &request )
 	m_sdlVideoStarted = FALSE;
 }
 
+/* The window and SDL's video outlive the engine, as WinMain's window outlives GameMain: the engine's own
+	 teardown (the base class's, which runs after this) still releases the device, and the GPU device made
+	 on SDL's video must go before the video does.  Under Vulkan, quitting the video unloads the Vulkan
+	 library, and the device's destroy then called into it (thinkerer, -offscreen, 2026-09-27).  So the
+	 window is handed on here, and SdlGameEngine_releaseWindow, which PosixMain calls after GameMain,
+	 releases it. */
+static SDL_Window *s_pendingWindow = NULL;
+static Bool s_pendingVideo = FALSE;
+
 SdlGameEngine::~SdlGameEngine()
 {
-	destroyWindow();
+	s_pendingWindow = m_window;
+	s_pendingVideo = m_sdlVideoStarted;
+	m_window = NULL;
+	m_sdlVideoStarted = FALSE;
 }
 
 // The window exists before the engine starts, as WinMain creates it before GameMain: GameText names it
@@ -252,29 +264,29 @@ void SdlGameEngine::startOffscreen( void )
 	DEBUG_LOG(( "SdlGameEngine: offscreen, no window; SDL video driver %s (%s)\n", SDL_GetCurrentVideoDriver(), driver ));
 }
 
-void SdlGameEngine::destroyWindow( void )
+void SdlGameEngine_releaseWindow( void )
 {
-	if (m_window != NULL)
+	if (s_pendingWindow != NULL)
 	{
-		if (s_titledWindow == m_window)
+		if (s_titledWindow == s_pendingWindow)
 		{
 			TheApplicationWindowTitleHook = NULL;
 			TheW3DWindowFrameHook = NULL;
 			TheW3DWindowSizeHook = NULL;
 			s_titledWindow = NULL;
 		}
-		if (ApplicationHWnd == (RenderWindow)m_window)
+		if (ApplicationHWnd == (RenderWindow)s_pendingWindow)
 			ApplicationHWnd = NULL;
 		setSdlMessageBoxOwner( NULL );
-		SDL_DestroyWindow( m_window );
-		m_window = NULL;
+		SDL_DestroyWindow( s_pendingWindow );
+		s_pendingWindow = NULL;
 	}
-	if (m_sdlVideoStarted)
+	if (s_pendingVideo)
 	{
 		ThePlatformDisplays = NULL;
 		SdlMouse_releaseCursors();		// before SDL_QuitMouse walks its list: SdlMouse.h says why
 		SDL_QuitSubSystem( SDL_INIT_VIDEO );
-		m_sdlVideoStarted = FALSE;
+		s_pendingVideo = FALSE;
 	}
 }
 
