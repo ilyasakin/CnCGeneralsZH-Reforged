@@ -540,6 +540,11 @@ W3DDisplay::~W3DDisplay()
 			twinBuffers, twinBytes / 1024,
 			texturesMirrored, texturesReused, texturesRefused,
 			pipelines, drawsMade, drawsRefused));
+		unsigned programsShipped = 0;
+		unsigned programsHeld = 0;
+		Direct3D11_Program_Statistics( programsShipped, programsHeld );
+		DEBUG_LOG(("-dx11 programs: %u shipped with the game, %u held at the end\n",
+			programsShipped, programsHeld));
 
 		unsigned long long noBuffer = 0;
 		unsigned long long noStage = 0;
@@ -1129,6 +1134,9 @@ void W3DDisplay::init( void )
 	Direct3D11_Enable( TheGlobalData->m_direct3D11 != FALSE );
 	Direct3D11_Present_Enable( TheGlobalData->m_direct3D11 != FALSE );
 	Direct3D11_Dump_Programs_To( TheGlobalData->m_direct3D11DumpPath.str() );
+	// The compiled-program cache is the player's, like Options.ini: an installed game cannot write
+	// next to its exe, and the shipped programs there are read-only anyway.
+	Direct3D11_Set_Shader_Cache_Directory( TheGlobalData->getPath_UserData().str() );
 	pushDirect3D11PostChain();
 	// Classic graphics is read here once and not again: a texture that has looked for its normal
 	// map keeps the answer, and a tile size cannot change under a loaded map.  The menu says the
