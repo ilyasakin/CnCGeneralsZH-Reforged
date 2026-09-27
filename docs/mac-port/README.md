@@ -1750,6 +1750,12 @@ hunting a crash or corruption that only one platform shows, look here first.**
   that. ASan found it on ZH_SANITIZE's first full run (headless and offscreen alike, at the reset). The
   dead write is gone; the erases, their frees and their order stay, and E1's CRCs are unchanged (all 12
   lines of replay_check and net_check, on finer).
+- **LCW's long run wrote a word past itself - fixed; the game never reaches it.** `LCW_Uncomp` filled a
+  long run (`0xFE`) two words at a time, so a run whose aligned part was 4 mod 8 bytes long wrote one word
+  past its end. The next operation overwrote it, but after the last one it landed past the output: on
+  1,780 of 92,586 chunks of a round trip over the install. ASan under ZH_SANITIZE found it in test_wwlib.
+  Nothing in the game decompresses LCW (its loaders have no callers outside WWLib); the fix writes one word
+  at a time, and every decoded byte is unchanged.
 
 ### "ctest is green" was not what it looked like
 
