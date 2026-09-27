@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 // The fixed-function vertex pipeline written out as HLSL.  What is checked here is the shape of
 // the program - which term is present, which register it reads, which case is refused - because

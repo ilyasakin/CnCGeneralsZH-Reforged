@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port: parts come from GeneralsMD/Code/GameEngine/Source/GameClient/GUI/IMEManager.cpp, the rest is new code, copyright 2026 İlyas Akın; see NOTICE.md and the git history.
 
 // FILE: IMEManagerPosix.cpp //////////////////////////////////////////////////////////////////////
 // Desc:   GameClient/IMEManager.h off Windows: see GameClient/IMEManagerPosix.h.

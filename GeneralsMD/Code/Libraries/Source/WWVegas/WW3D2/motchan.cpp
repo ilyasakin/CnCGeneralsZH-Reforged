@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /* $Header: /Commando/Code/ww3d2/motchan.cpp 6     11/29/01 1:07p Jani_p $ */
 /*********************************************************************************************** 
