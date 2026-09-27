@@ -793,7 +793,19 @@ void ThingTemplate::parseReplaceModule(INI *ini, void *instance, void *store, co
 
 	const char *modToRemove = ini->getNextToken();
 	AsciiString removedModuleName;
+	/* #33: an object's Locomotor sets live in its AI module's data, so replacing that module discards
+		 them unless the block re-states them.  Counted here; ThingFactory's checkLocomotors reports a
+		 thing whose replacement still has none once everything has loaded. */
+	AIUpdateModuleData *aiBefore = self->friend_getAIModuleInfo();
+	Int setsBefore = 0;
+	if (aiBefore != NULL)
+	{
+		for (LocomotorTemplateMap::const_iterator it = aiBefore->m_locomotorTemplates.begin(); it != aiBefore->m_locomotorTemplates.end(); ++it)
+			if (!it->second.empty())
+				++setsBefore;
+	}
 	Bool removed = self->removeModuleInfo(modToRemove, removedModuleName);
+	const Bool removedTheAI = aiBefore != NULL && self->friend_getAIModuleInfo() == NULL;
 	if (!removed)
 	{
 		DEBUG_CRASH(("[LINE: %d - FILE: '%s'] ReplaceModule %s was not found for %s; cannot continue.\n",
@@ -806,6 +818,8 @@ void ThingTemplate::parseReplaceModule(INI *ini, void *instance, void *store, co
 	ini->initFromINI(self, self->getFieldParse());
 	self->m_moduleBeingReplacedName.clear();
 	self->m_moduleBeingReplacedTag.clear();
+	if (removedTheAI && setsBefore > 0)
+		self->m_locomotorSetsLostToReplace = (Byte)(setsBefore > 127 ? 127 : setsBefore);
 
 	self->m_moduleParsingMode = oldMode;
 }
@@ -1015,6 +1029,7 @@ ThingTemplate::ThingTemplate() :
 	m_geometryInfo(GEOMETRY_SPHERE, FALSE, 1, 1, 1)
 {
 	m_moduleParsingMode = MODULEPARSE_NORMAL;
+	m_locomotorSetsLostToReplace = 0;
 	m_reskinnedFrom = NULL;
 	m_radarPriority = RADAR_PRIORITY_INVALID;
 
