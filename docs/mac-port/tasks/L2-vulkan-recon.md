@@ -363,6 +363,16 @@ decides.
   (0, 0, −.99) for N (0,0,−1), and (0, .96, −.28) for N (0, .6, −.8). With LOCALVIEWER, E = norm(−V) is as
   written and as measured.
 
+**What the device does with LOCALVIEWER off** (-a9's written description of the generator, not read by
+-47):
+- The halfway vector is normalize(L + (0, 0, +1)): the page's viewer, where Direct3D 9 measures (0,0,−1).
+- The reflection vector has no LOCALVIEWER branch: it always uses the local E, where Direct3D 9 measures a
+  fixed (0,0,−1) without it.
+- The N·L gate matches N3, at a threshold of 0.0001.
+
+Both deviations are real, but hidden: the engine never turns LOCALVIEWER off, and every game capture has it
+on. -a9 lists them beside F1–F4, F6, F8 and F11.
+
 **Readings the measurement confirmed.**
 - N4, N11, N13 and N17, as in the table.
 - N28: a missing coordinate set reads (0, 0). Texel (0, 0) where the vertices' (.6, .6) is texel (2, 2).
