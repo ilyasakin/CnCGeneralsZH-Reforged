@@ -114,6 +114,11 @@ holds `gdi-font-metrics.ps1` (the repository's Tools/ script) and its two output
 `fonts.txt`. It only read `C:\Windows\Fonts` and installed nothing. Undo: `Remove-Item -Recurse
 C:\zhr-worker\fontmetrics`. -47 reached it with a known-hosts file in its scratch folder, which kept nothing:
 no host key of it was left on the Mac (`~/.ssh/known_hosts` has none).
+A second use, for #33's Windows side (2026-09-27, -18 told before and after): `C:\zhr-worker\w47` holds -47's
+own clone of the integration branch (from -18's repository's objects and a bundle, `core.autocrlf true`), its
+`build64` from `build.bat Release`, a rule-9 farm (`w47\farm`: links to the data copy, the build's Run over
+it) and the scripts. A one-off interactive task `zhr47desk` ran the game in the desktop session and was
+deleted. The data copy's hash was unchanged. Undo: `Remove-Item -Recurse C:\zhr-worker\w47`.
 
 
 ### The Windows VM: what -18 created and installed for W2 (2026-09-27)
