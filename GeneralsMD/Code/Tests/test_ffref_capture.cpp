@@ -292,6 +292,11 @@ static bool load_texture(PosixDevice9 *device, const std::string &path, IDirect3
 		D3DLOCKED_RECT locked;
 		texture->LockRect(level, &locked, NULL, 0);
 		memcpy(locked.pBits, &bytes[at], size);
+		if (level == 0 && size > 0 && getenv("FFREF_FLIP_TEXEL") != NULL) {
+			// The pixel proof's armed control (PERF): one byte of what the device is given, in each texture's
+			// first level; the reference keeps the true bytes.  A dump compared with this on must differ.
+			static_cast<uint8_t *>(locked.pBits)[size / 2] ^= 0xFF;
+		}
 		texture->UnlockRect(level);
 		at += size;
 
@@ -681,6 +686,17 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	std::vector<uint8_t> bgra, split_picture;
 	SdlGpuFrame *gpu = device->Get_Gpu();
 	const bool read = gpu->Read_Back(gpu->Back_Buffer(), width, height, bgra);
+	if (read && !bgra.empty()) {
+		if (const char *dump = getenv("FFREF_GPU_DUMP")) {
+			// The GPU's pixels for each capture, raw BGRA rows: a device change's proof (PERF), since two
+			// builds replaying one capture set draw exactly the same draws, whatever the game's timing did.
+			const std::string path = std::string(dump) + "/" + file + ".bgra";
+			if (FILE *out = fopen(path.c_str(), "wb")) {
+				fwrite(&bgra[0], 1, bgra.size(), out);
+				fclose(out);
+			}
+		}
+	}
 	if (read && indices != NULL && header.Primitive == D3DPT_TRIANGLELIST && getenv("FFREF_SPLIT") != NULL) {
 		// C1's question, on the device alone: the same triangles as one call per triangle, into the same
 		// clear, against the one call above.  The reference draws the same either way (-47's measurement),
