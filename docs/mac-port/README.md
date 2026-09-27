@@ -1742,6 +1742,14 @@ hunting a crash or corruption that only one platform shows, look here first.**
   (`ArchiveFile::attachFile`). Any change to the global allocator must keep the zero-fill. ZH_SANITIZE
   keeps it with `calloc`. A normal build's `std::` containers and plain `new` get it through the same
   operator.
+- **A special-power timer cleared after its erase (`Player::init`) - fixed.** EA's reset loop took a
+  pointer to each `SpecialPowerReadyTimerType` in its `std::list`, erased it, and then called `clear()`
+  through the pointer: a write into the freed node, after every match. The shipped allocator made it
+  harmless. GameMemory keeps a freed block's links in its header (`m_nextBlock`), so the write landed in
+  dead user data, and the next allocation of that block is zero-filled. No other allocator promises
+  that. ASan found it on ZH_SANITIZE's first full run (headless and offscreen alike, at the reset). The
+  dead write is gone; the erases, their frees and their order stay, and E1's CRCs are unchanged (all 12
+  lines of replay_check and net_check, on finer).
 
 ### "ctest is green" was not what it looked like
 
