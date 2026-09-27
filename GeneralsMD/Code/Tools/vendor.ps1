@@ -88,7 +88,12 @@ function Install-LzhlPatch {
   $destination = Join-Path $libraries 'Source\Compression\LZHCompress\CompLibHeader'
   $header = Join-Path $destination '_lz.h'
   if (Select-String -LiteralPath $header -Pattern 'Zero Hour Reforged: altered' -SimpleMatch -Quiet) { return }
-  $patch = Join-Path $libraries 'Source\lzhl-clear-history.patch'
+  # The patch with the header's own line endings: the fetched header is LF, and a checkout made before
+  # .gitattributes pinned the patch to LF holds a CRLF copy of it (core.autocrlf), which matches no line.
+  $text = [IO.File]::ReadAllText((Join-Path $libraries 'Source\lzhl-clear-history.patch')) -replace "`r`n", "`n"
+  if ([IO.File]::ReadAllText($header).Contains("`r`n")) { $text = $text -replace "`n", "`r`n" }
+  $patch = Join-Path $work 'lzhl-clear-history.patch'
+  [IO.File]::WriteAllText($patch, $text)
   # without the ceiling git finds this checkout around the folder and skips the patch as outside it
   $env:GIT_CEILING_DIRECTORIES = Join-Path $libraries 'Source'
   try { git -C $destination -c core.autocrlf=false apply $patch }
