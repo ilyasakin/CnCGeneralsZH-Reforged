@@ -3975,6 +3975,44 @@ void W3DModelDraw::reactToTransformChange( const Matrix3D* oldMtx,
 } 
 
 //-------------------------------------------------------------------------------------------------
+/** R1, smooth motion (W3DSmoothMotion.h): on the first render pass after a logic tick, the transform the
+	render object holds now (doDrawModule's, or reactToTransformChange's for a model out of view) becomes
+	the current one, and the tick's verdict - blend, or show it as it is - is decided and counted. */
+void W3DModelDraw::smoothMotionCapture(UnsignedInt clientFrame, Bool marked)
+{
+	if (m_renderObject == NULL)
+		return;
+	m_smoothMotion.capture(m_renderObject->Get_Transform(), m_renderObject, m_renderObject->Is_Hidden() != 0, clientFrame,
+		marked != FALSE);
+}
+
+//-------------------------------------------------------------------------------------------------
+/** R1: just before the scene renders, show the render object `alpha` of the way from its previous logic
+	transform to its current one, when this tick's verdict allows it. */
+void W3DModelDraw::smoothMotionApply(Real alpha)
+{
+	if (m_renderObject == NULL || m_smoothMotion.Model != m_renderObject || m_smoothMotion.Snap != SMOOTH_BLENDED)
+		return;
+	Matrix3D shown;
+	if (SmoothMotion_Blend(m_smoothMotion.Prev, m_smoothMotion.Cur, alpha, shown) != SMOOTH_BLENDED)
+		return;
+	m_renderObject->Set_Transform(shown);
+	m_smoothMotion.Applied = true;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** R1: straight after the render, the logic transform goes back, so picking and anything the logic reads
+	from the render object (ParticleUplinkCannonUpdate's bones) see exactly what they did before. */
+void W3DModelDraw::smoothMotionRestore()
+{
+	if (!m_smoothMotion.Applied)
+		return;
+	m_smoothMotion.Applied = false;
+	if (m_renderObject != NULL && m_smoothMotion.Model == m_renderObject)
+		m_renderObject->Set_Transform(m_smoothMotion.Cur);
+}
+
+//-------------------------------------------------------------------------------------------------
 const ModelConditionInfo* W3DModelDraw::findBestInfo(const ModelConditionFlags& c) const
 {
 	return getW3DModelDrawModuleData()->findBestInfo(c);
