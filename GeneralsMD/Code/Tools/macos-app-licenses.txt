@@ -56,3 +56,6 @@ gamespy               gamespy
 # compiled into another library
 + zlib                # Compression/ZLib, inside libcompression
 + nanosvg             # compiled into HtmlOverlay.cpp, inside libgameengine
+
+# shipped as data, not linked
++ kenney-input-prompts  # the controller glyph fonts, staged into the overlay by stage-overlay.sh
