@@ -45,7 +45,7 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | build dir for -a9 | `~/zhr-worker/build-a9` (Release, `ZH_GAME_DATA=~/zhr-worker/data`), with copies `generals-fix3` and `generals-nofix3` | `cmake`/`ninja` via `zheavy` (-a9) | in the folder |
 | -a9's further worktrees and builds on finer: `wt-a9-l2`/`build-a9-l2` (L2's branch, for a Mac binary); `wt-a9-san`/`build-a9-tsan`/`build-a9-asan` (PERF candidate 1 under the sanitizers); `wt-a9-lw`/`build-a9-lw` (lock-wait instrumented) | `~/zhr-worker/…` | `git worktree add`, `cmake`/`ninja` via `zheavy` (-a9) | in the folder, then `git -C ~/zhr-worker/repo worktree prune` |
 | -a9's branches in finer's repository | `a9-*` (base, candidates, proof and pixel-proof branches, `a9-l2`, `a9-lw-*`) | fetched from bundles (-a9) | `git -C ~/zhr-worker/repo branch -D` each `a9-*` |
-| the fleet gate's folder (`ci-matrix.sh`, E2): the worktree `ci/wt` (vendor and art cloned in), the build `ci/build`, the logs `ci/*.log`, the lock `ci/lock`; the repository ref `refs/ci/head`; `bundles/ci-host.sh` | `~/zhr-worker/ci` | `ci-matrix.sh` (-18) | `git -C ~/zhr-worker/repo worktree remove --force ~/zhr-worker/ci/wt; git -C ~/zhr-worker/repo update-ref -d refs/ci/head; rm -rf ~/zhr-worker/ci ~/zhr-worker/bundles/ci-host.sh` |
+| the fleet gate's folder (`ci-matrix.sh`, E2): the worktree `ci/wt` (vendor and art cloned in), the build `ci/build`, the logs `ci/*.log`, the lock `ci/lock`; the repository ref `refs/ci/head`; each run's `bundles/ci-matrix-*.bundle` and `.sh`, which the run deletes (the first version's `bundles/ci-host.sh` too) | `~/zhr-worker/ci` | `ci-matrix.sh` (-18) | `git -C ~/zhr-worker/repo worktree remove --force ~/zhr-worker/ci/wt; git -C ~/zhr-worker/repo update-ref -d refs/ci/head; rm -rf ~/zhr-worker/ci ~/zhr-worker/bundles/ci-host.sh ~/zhr-worker/bundles/ci-matrix-*` |
 
 Nothing has been installed outside `~/zhr-worker` so far, and nothing system-wide.
 
@@ -143,7 +143,7 @@ deleted. The data copy's hash was unchanged. Undo: `Remove-Item -Recurse C:\zhr-
 | one-off scheduled tasks `zhr18desk`, `zhr18desk2`…`zhr18desk5`, and windows-ci.ps1's `zh-windows-ci-*` | Task Scheduler | `schtasks /create /it` (-18, windows-ci.ps1) | deleted after each run |
 | the PM's worktree for windows-ci.ps1 | `C:\zhr-worker\wt-pm-win` (a detached `git worktree` of `C:\zhr-worker\repo`, its own `build64`, `build.local.bat` copied), `C:\zhr-worker\bundles\`, and the check's work folder `C:\zhr-worker\ci-pm` (farm, logs, results) | `git worktree add` (-18) | `git -C C:\zhr-worker\repo worktree remove --force C:\zhr-worker\wt-pm-win`; delete the two folders |
 | a Windows Defender exclusion for the work folder, so real-time scanning cannot hold a test's file open (the PM's call, for a `test_wwlib` flake seen once at -j4) | Defender's settings: `(Get-MpPreference).ExclusionPath` lists `C:\zhr-worker` | `Add-MpPreference -ExclusionPath C:\zhr-worker` (-18, 2026-09-27) | `Remove-MpPreference -ExclusionPath C:\zhr-worker` |
-| ci-matrix.sh's part on the VM | `C:\zhr-worker\bundles\ci-host.ps1`, and each run's `ci-matrix-*.bundle` there until the run removes it | `scp` from `ci-matrix.sh` (-18) | in the folder |
+| ci-matrix.sh's part on the VM | each run's `C:\zhr-worker\bundles\ci-matrix-*.bundle` and `.ps1`, which the run deletes (and the first version's `ci-host.ps1`) | `scp` from `ci-matrix.sh` (-18) | in the folder |
 | -18's WINDOWS-DEBT checks (2026-09-27) | `C:\zhr-worker\w18` (their output: ctest's JSON, `test_gameengine -V`, the probe and its build, dx9_smoke's output, the GameSpy hash list); the scripts `checks18.ps1`, `dbg18.ps1`, `dx9cap.ps1`, `gshash.ps1`, `procs18.ps1` and `probe18.cpp` in `C:\zhr-worker\bundles`; a one-off desktop task `zhr18dx9`, deleted after its run | `scp`, `schtasks` (-18) | `Remove-Item -Recurse C:\zhr-worker\w18`; delete the six files |
 | -18's Debug-build worktree | `C:\zhr-worker\w18dbg` (a detached `git worktree` of `C:\zhr-worker\repo` at 6d5d69a6, with the PM tree's ignored vendored files, art and `build.local.bat` copied in; its `build64` holds the Debug build), and `windows-ci.ps1`'s work folder `C:\zhr-worker\w18\ci-dbg` | `git worktree add`, `robocopy`, `windows-ci.ps1 -Config Debug` (-18) | `git -C C:\zhr-worker\repo worktree remove --force C:\zhr-worker\w18dbg` |
 
@@ -154,7 +154,7 @@ Also on thinkerer, for #32's armed control and the final W2 check (turns agreed 
 with its logs `~/zhr-worker/build-18.*.log`. Undo: `git -C ~/zhr-worker/repo worktree remove --force
 ~/zhr-worker/wt-18; rm -rf ~/zhr-worker/build-18 ~/zhr-worker/build-18.*.log`.
 The fleet gate's folder on thinkerer is as on finer: `~/zhr-worker/ci` (worktree `ci/wt` with vendor and art copied in
-with `cp --reflink=auto`, build `ci/build`, logs, lock), the ref `refs/ci/head` and `bundles/ci-host.sh`, made by `ci-matrix.sh`
+with `cp --reflink=auto`, build `ci/build`, logs, lock), the ref `refs/ci/head` and the run files in `bundles/`, made by `ci-matrix.sh`
 (-18). Undo: `git -C ~/zhr-worker/repo worktree remove --force ~/zhr-worker/ci/wt; git -C ~/zhr-worker/repo update-ref -d
-refs/ci/head; rm -rf ~/zhr-worker/ci ~/zhr-worker/bundles/ci-host.sh`. The one core dump it made (the
+refs/ci/head; rm -rf ~/zhr-worker/ci ~/zhr-worker/bundles/ci-host.sh ~/zhr-worker/bundles/ci-matrix-*`. The one core dump it made (the
 #32 mutant's SIGSEGV, pid 3917314) was removed from `/var/lib/systemd/coredump` with `sudo rm` straight after.

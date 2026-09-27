@@ -20,7 +20,8 @@
 #
 # WHERE IT RUNS.  Nothing is built or run on this Mac: it bundles the branch, copies the bundle out, and reads
 # back.  finer and thinkerer each check out into ~/zhr-worker/ci (the worktree ci/wt, the build ci/build, the
-# logs ci/*.log), and every heavy step goes through zheavy, so the gate queues behind whatever else runs there.
+# logs ci/*.log).  Configure, build, ctest and every E1 run there are ONE zheavy job: the gate queues once behind
+# whatever else runs there, and says how long it queued.
 # The VM runs windows-ci.ps1 from C:\zhr-worker\wt-pm-win (build, ctest, the desktop GPU tests, E1 on a farm).
 # Two gates never share a host: the POSIX hosts hold ~/zhr-worker/ci/lock for the whole run, and the VM waits
 # for any other windows-ci.ps1 there to finish.
@@ -129,14 +130,17 @@ echo "ci-matrix: $REF at $COMMIT on $HOSTS; the logs go to $OUT"
 #      first command that reads stdin) ----------------------------------------------------------------------
 cat > "$OUT/ci-host.sh" <<'HOST'
 #!/usr/bin/env bash
-# ci-matrix.sh's part on a POSIX worker: ci-host.sh <leg> <branch> <bundle name> <expect> <clone command>
+# ci-matrix.sh's part on a POSIX worker: <this script> <leg> <branch> <bundle name> <expect> <clone command>
+# Each run copies it under a name of its own and it removes itself at the end, so a second gate's copy never
+# overwrites a script a first one's bash is still reading.
 set -u -o pipefail
-LEG="$1"; REF="$2"; NAME="$3"; EXPECT="$4"; CLONE="$5"
+LEG="$1"; REF="$2"; NAME="$3"; EXPECT="$4"; CLONE="$5"; PHASE="${6:-light}"; ASKED="${7:-}"
 Z="$HOME/zhr-worker"; CI="$Z/ci"
 export PATH="$Z/bin:$PATH" ZH_AGENT=ci-matrix
 say() { echo "CI $*"; }
-verdict() { echo "CI-VERDICT $LEG $*"; exit 0; }
+verdict() { echo "CI-VERDICT $LEG $*"; rm -f "$0"; exit 0; }
 mkdir -p "$CI"
+if [ "$PHASE" = light ]; then
 # One gate at a time: the lock is held by this shell's descriptor 9 (flock's lock belongs to the open file,
 # so it outlives the python that took it), and freed however this script ends.
 exec 9> "$CI/lock"
@@ -144,7 +148,6 @@ if ! python3 -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)' 2>
 	echo "waiting for the other ci-matrix run on this host ($CI/lock)"
 	python3 -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX)'
 fi
-start=$SECONDS
 
 cd "$Z/repo" || verdict "FAIL no repository at $Z/repo"
 git fetch -q -f "$Z/bundles/$NAME" "refs/heads/$REF:refs/ci/head" < /dev/null || verdict "FAIL could not fetch $REF from the bundle"
@@ -157,12 +160,21 @@ cd "$CI/wt" || verdict "FAIL no worktree"
 git checkout -q -f --detach refs/ci/head < /dev/null || verdict "FAIL could not check out $REF"
 say "checked out: $(git log --oneline -1 | cut -c1-100)"
 bash GeneralsMD/Code/Tools/vendor.sh > "$CI/vendor.log" 2>&1 < /dev/null || verdict "FAIL vendor.sh (see $CI/vendor.log)"
+# Everything heavy - configure, build, ctest, every E1 run - is ONE zheavy job, so the gate queues once.  A
+# ticket per step re-entered the back of the queue each time (finer, run 1: 35 of 61 minutes queueing).
+# Nothing inside may call zheavy again: a nested call takes a second ticket and waits behind this one's.
+# The lock (descriptor 9) stays held through the exec.
+exec zheavy bash "$0" "$LEG" "$REF" "$NAME" "$EXPECT" "$CLONE" heavy "$(date +%s)"
+fi
+
+say "queued: $(( $(date +%s) - ASKED )) s"
+start=$SECONDS
 
 if [ ! -f "$CI/build/CMakeCache.txt" ]; then
-	zheavy cmake -S "$CI/wt/GeneralsMD/Code" -B "$CI/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DZH_GAME_DATA="$Z/data" \
+	cmake -S "$CI/wt/GeneralsMD/Code" -B "$CI/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DZH_GAME_DATA="$Z/data" \
 		> "$CI/configure.log" 2>&1 < /dev/null || verdict "FAIL configure (see $CI/configure.log)"
 fi
-zheavy ninja -C "$CI/build" -k 0 > "$CI/build.log" 2>&1 < /dev/null
+ninja -C "$CI/build" -k 0 -j "${ZHEAVY_JOBS:-5}" > "$CI/build.log" 2>&1 < /dev/null	# zheavy caps only a bare ninja
 if [ $? -ne 0 ]; then
 	grep -E 'error:|FAILED:' "$CI/build.log" | head -5 | sed 's/^/CI   /'
 	verdict "FAIL the build (see $CI/build.log)"
@@ -170,7 +182,7 @@ fi
 say "build: ok"
 
 failed=0
-zheavy ctest --test-dir "$CI/build" -j4 --output-on-failure \
+ctest --test-dir "$CI/build" -j4 --output-on-failure \
 	-E 'test_milesaudiomanager|miles_smoke|test_miles_miniaudio|test_binkvideo' > "$CI/ctest.log" 2>&1 < /dev/null
 if [ $? -eq 0 ]; then say "ctest: passed"; else say "ctest: FAILED (see $CI/ctest.log)"; failed=1; fi
 grep -E 'tests passed|\*\*\*(Failed|Exception|Timeout|Not Run)' "$CI/ctest.log" | sed 's/^/CI   /'
@@ -178,7 +190,7 @@ say "skipped: $(sed -n -E 's/^[[:space:]]*[0-9]+ - (.*) \((Skipped|Disabled)\)$/
 
 for pair in $(printf '%s' "$EXPECT" | tr ',' ' '); do
 	run="${pair%%:*}"; seed="${run%@*}"; frames="${run#*@}"
-	ZH_DATA_DIR="$Z/data" zheavy bash "$CI/wt/GeneralsMD/Code/Tools/replay-check.sh" --generals "$CI/build/generals" \
+	ZH_DATA_DIR="$Z/data" bash "$CI/wt/GeneralsMD/Code/Tools/replay-check.sh" --generals "$CI/build/generals" \
 		--seeds "$seed" --maxframes "$frames" > "$CI/e1-$run.log" 2>&1 < /dev/null
 	status=$?
 	crc="$(sed -n 's/.*players: HEADLESS CRC \(0x[0-9A-Fa-f]*\) at frame.*/\1/p' "$CI/e1-$run.log" | tail -1)"
@@ -205,7 +217,7 @@ $parent = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcess
 function Get-OtherCi {
 	Get-CimInstance Win32_Process | Where-Object {
 		$_.ProcessId -ne $PID -and $_.ProcessId -ne $parent -and $_.CommandLine -and
-		($_.CommandLine -like '*windows-ci.ps1*' -or $_.CommandLine -like '*ci-host.ps1*') }
+		($_.CommandLine -like '*windows-ci.ps1*' -or $_.CommandLine -like '*ci-matrix-*.ps1*') }
 }
 if (Get-OtherCi) { Write-Host "waiting for the other windows-ci.ps1 run on this VM" }
 while (Get-OtherCi) { Start-Sleep -Seconds 30 }
@@ -237,25 +249,26 @@ if (Test-Path $result) {
 }
 "CI time: $([int]((Get-Date) - $start).TotalSeconds) s"
 "CI-VERDICT windows " + $(if ($code -eq 0) { "PASS" } else { "FAIL" })
+Remove-Item $PSCommandPath -ErrorAction SilentlyContinue	# each run's copy has a name of its own
 VM
 
 posix_leg() {	# posix_leg <leg> <ssh host> <clone command>
 	local leg="$1" host="$2" clone="$3"
 	scp -q "${SSH_OPTS[@]}" "$OUT/$NAME" "zhr@$host:zhr-worker/bundles/$NAME" \
-		&& scp -q "${SSH_OPTS[@]}" "$OUT/ci-host.sh" "zhr@$host:zhr-worker/bundles/ci-host.sh" \
+		&& scp -q "${SSH_OPTS[@]}" "$OUT/ci-host.sh" "zhr@$host:zhr-worker/bundles/${NAME%.bundle}.sh" \
 		|| { echo "CI-VERDICT $leg FAIL could not copy the bundle to $host"; return; }
-	ssh "${SSH_OPTS[@]}" "zhr@$host" "bash ~/zhr-worker/bundles/ci-host.sh '$leg' '$REF' '$NAME' '$EXPECT' '$clone'" < /dev/null
+	ssh "${SSH_OPTS[@]}" "zhr@$host" "bash ~/zhr-worker/bundles/${NAME%.bundle}.sh '$leg' '$REF' '$NAME' '$EXPECT' '$clone'" < /dev/null
 }
 
 windows_leg() {
 	local cfg="$OUT/ssh_config" runs expect
 	printf 'Include ~/.ssh/config\nHost ci-matrix-vm\n  HostName 127.0.0.1\n  Port 2222\n  User zhr\n  ProxyJump zhr@thinkerer\n  UserKnownHostsFile %s\n  BatchMode yes\n  ServerAliveInterval 60\n  ServerAliveCountMax 10\n' "$VMKH" > "$cfg"
 	scp -q -F "$cfg" "$OUT/$NAME" "ci-matrix-vm:C:/zhr-worker/bundles/$NAME" \
-		&& scp -q -F "$cfg" "$OUT/ci-host.ps1" "ci-matrix-vm:C:/zhr-worker/bundles/ci-host.ps1" \
+		&& scp -q -F "$cfg" "$OUT/ci-host.ps1" "ci-matrix-vm:C:/zhr-worker/bundles/${NAME%.bundle}.ps1" \
 		|| { echo "CI-VERDICT windows FAIL could not copy the bundle to the VM"; return; }
 	runs="$(printf '%s' "$EXPECT" | tr ',' '\n' | sed 's/:.*//' | paste -sd ',' -)"
 	expect="$(printf '%s' "$EXPECT" | tr ',' '\n' | grep ':' | paste -sd ',' -)"
-	ssh -F "$cfg" ci-matrix-vm "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\zhr-worker\\bundles\\ci-host.ps1 -Bundle C:\\zhr-worker\\bundles\\$NAME -Ref '$REF' -Runs '$runs'${expect:+ -ExpectCrc '$expect'}" < /dev/null | tr -d '\r'
+	ssh -F "$cfg" ci-matrix-vm "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\zhr-worker\\bundles\\${NAME%.bundle}.ps1 -Bundle C:\\zhr-worker\\bundles\\$NAME -Ref '$REF' -Runs '$runs'${expect:+ -ExpectCrc '$expect'}" < /dev/null | tr -d '\r'
 }
 
 # ---- fan out ------------------------------------------------------------------------------------------------
