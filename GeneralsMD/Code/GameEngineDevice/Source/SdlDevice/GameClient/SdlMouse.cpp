@@ -80,6 +80,17 @@ SdlMouse::SdlMouse( void )
 	SdlInput_install();
 }
 
+void SdlMouse_releaseCursors( void )
+{
+	for (Int cursor = 0; cursor < Mouse::NUM_MOUSE_CURSORS; ++cursor)
+		for (Int direction = 0; direction < MAX_2D_CURSOR_DIRECTIONS; ++direction)
+			if (theCursors[cursor][direction] != NULL)
+			{
+				SDL_DestroyCursor( theCursors[cursor][direction] );
+				theCursors[cursor][direction] = NULL;
+			}
+}
+
 SdlMouse::~SdlMouse( void )
 {
 	if (m_cursorConfined && SdlInput_gameWindow() != NULL)
