@@ -177,6 +177,7 @@ fi
 ninja -C "$CI/build" -k 0 -j "${ZHEAVY_JOBS:-5}" > "$CI/build.log" 2>&1 < /dev/null	# zheavy caps only a bare ninja
 if [ $? -ne 0 ]; then
 	grep -E 'error:|FAILED:' "$CI/build.log" | head -5 | sed 's/^/CI   /'
+	say "ctest, E1: not run (build failed)"
 	verdict "FAIL the build (see $CI/build.log)"
 fi
 say "build: ok"
@@ -223,6 +224,9 @@ if (Get-OtherCi) { Write-Host "waiting for the other windows-ci.ps1 run on this 
 while (Get-OtherCi) { Start-Sleep -Seconds 30 }
 
 Set-Location $root
+# A result left by an earlier run must never be read as this one's (a failed build writes none).
+$result = Join-Path $work "desktop-result.json"
+Remove-Item $result, "$result.partial" -ErrorAction SilentlyContinue
 $ciArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".\windows-ci.ps1", "-Bundle", $Bundle, "-Ref", $Ref,
 	"-DataDir", "C:\zhr-worker\data", "-WorkDir", $work, "-Runs", $Runs)
 if ($ExpectCrc -ne "") { $ciArgs += @("-ExpectCrc", $ExpectCrc) }
@@ -239,13 +243,14 @@ if (Test-Path $ctestLog) {
 	$skipped = Select-String -Path $ctestLog -Pattern '^\s*\d+ - (.*) \((Skipped|Disabled)\)$' | ForEach-Object { "$($_.Matches[0].Groups[1].Value) ($($_.Matches[0].Groups[2].Value))" }
 	"CI skipped: " + ($skipped -join ", ")
 }
-$result = Join-Path $work "desktop-result.json"
 if (Test-Path $result) {
 	$d = Get-Content -Raw $result | ConvertFrom-Json
 	foreach ($run in $Runs.Split(',')) {
 		$crc = $d.Crcs."$run"; if (-not $crc) { $crc = "none" }
 		"CI e1 $run $crc $($d.E1)"
 	}
+} else {
+	foreach ($run in $Runs.Split(',')) { "CI e1 $run none not run (no desktop result: the build or an earlier step failed)" }
 }
 "CI time: $([int]((Get-Date) - $start).TotalSeconds) s"
 "CI-VERDICT windows " + $(if ($code -eq 0) { "PASS" } else { "FAIL" })
