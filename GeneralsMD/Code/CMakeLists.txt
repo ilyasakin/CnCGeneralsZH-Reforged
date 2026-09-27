@@ -740,6 +740,9 @@ target_link_libraries(debug PUBLIC dbghelp comctl32 ws2_32)
 # "debug" is also a target_link_libraries config keyword, so it can never be
 # passed as a plain library name.  Link this alias instead.
 add_library(debuglib ALIAS debug)
+# debug.h asks the linker for this library by the build's name (#pragma comment(lib, "debugdebug.lib") under
+# _DEBUG), so a Debug build names it that way.  Release keeps debug.lib, the name it asks for there.
+set_target_properties(debug PROPERTIES OUTPUT_NAME_DEBUG debugdebug)
 
 # ---- profile --------------------------------------------------------------
 # EA's in-repo sampling/function profiler.  GameEngine includes profile.h, whose
@@ -1053,6 +1056,11 @@ endif()
 # ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.
 # The link list below is left exactly as it is on purpose - B6 owns it.
 add_library(gameengine STATIC ${ZH_NOT_YET_PORTABLE} ${GAMEENGINE_SOURCES})
+# GameMemory.cpp asks MSVC for the engine library by the build's name (#pragma comment(lib, "GameEngineDebug")
+# under _DEBUG), so a Debug build names it that way.  Release keeps gameengine.lib, which "GameEngine" finds.
+if(MSVC)
+  set_target_properties(gameengine PROPERTIES OUTPUT_NAME_DEBUG GameEngineDebug)
+endif()
 
 # N1 (decision 5): the build fingerprint GlobalData.cpp folds into m_exeCRC in place of the executable's
 # own bytes, on every platform, so two builds of the same source agree whatever compiled them.  CRC-32 over
@@ -1244,7 +1252,7 @@ endif()
 # GameEngine.lib, so they drop that request (W2).
 if(MSVC)
   foreach(name gametext_csf test_premain_strings test_premain_unicode)
-    target_link_options(${name} PRIVATE /NODEFAULTLIB:GameEngine.lib)
+    target_link_options(${name} PRIVATE /NODEFAULTLIB:GameEngine.lib $<$<CONFIG:Debug>:/NODEFAULTLIB:GameEngineDebug.lib>)
   endforeach()
 endif()
 set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
@@ -2081,6 +2089,8 @@ endif()  # ZH_PLATFORM_WINDOWS - renderer and Direct3D backend tests
 if(ZH_PLATFORM_WINDOWS)
 add_lib_test(test_wwdownload wwdownload)
 target_include_directories(test_wwdownload PRIVATE ${WW}/WWDownload)
+# A Debug wwdownload logs through DebugLog, which the engine defines; the test links no engine.
+target_sources(test_wwdownload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_wwdownload_stubs.cpp)
 
 add_lib_test(test_debug debuglib)
 

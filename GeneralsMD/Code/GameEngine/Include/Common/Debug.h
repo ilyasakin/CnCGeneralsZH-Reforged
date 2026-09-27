@@ -238,13 +238,18 @@ enum { GAME_DATA_GONE_EXIT_STATUS = 3 };		///< the process's exit status when th
 
 #ifdef DEBUG_PROFILE
 
+// int64_t, not Int64: wwdebug's files include this header without Lib/BaseType.h, and only they compile
+// DEBUG_PROFILE (the engine's targets define RELEASE_DEBUG_LOGGING, which turns it off).  EA wrote __int64;
+// on MSVC int64_t, __int64 and Int64 are one type.
+#include <stdint.h>
+
 class SimpleProfiler
 {
 private:
-	Int64 m_freq;
-	Int64 m_startThisSession;
-	Int64 m_totalThisSession;
-	Int64 m_totalAllSessions;
+	int64_t m_freq;
+	int64_t m_startThisSession;
+	int64_t m_totalThisSession;
+	int64_t m_totalAllSessions;
 	int			m_numSessions;
 
 public:
