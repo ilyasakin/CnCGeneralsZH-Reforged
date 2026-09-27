@@ -23,7 +23,7 @@ Everything is under `/Users/zhr/zhr-worker` unless noted:
 | the worker folder | `~/zhr-worker` | `mkdir` (-47) | `rm -rf ~/zhr-worker` removes everything below |
 | CMake 3.31.6 | `~/zhr-worker/tools/cmake-3.31.6-macos-universal`, linked from `bin/cmake` and `bin/ctest` | Kitware's release tarball, `curl` from github.com/Kitware/CMake/releases (-47) | in the folder |
 | Ninja 1.12.1 | `~/zhr-worker/bin/ninja` | `ninja-mac.zip` from github.com/ninja-build/ninja/releases (-47) | in the folder |
-| `zheavy`, the one-heavy-job lock | `~/zhr-worker/bin/zheavy`, lock file `~/zhr-worker/.heavy.lock` | written by -47 | in the folder |
+| `zheavy`, the heavy-job queue: first come first served; two default jobs at once (builds capped at -j5), or one `--exclusive` job alone | `~/zhr-worker/bin/zheavy`, from `docs/mac-port/tasks/workers/zheavy` (its test beside it); the machine lock `~/zhr-worker/.heavy.lock` and the queue `~/zhr-worker/.heavy/` | written by -47; the queue and the two classes on 2026-09-27, at the PM's request | in the folder |
 | the game data (the user's own install, 4.6 GB: `zerohour` and `generals`) | `~/zhr-worker/data` | `rsync -a` from this Mac's `/Volumes/External/Games/cnc` (-47) | in the folder |
 | the vendored sources git ignores (4,114 files, SDL3, freetype, GameSpy, …) | `~/zhr-worker/vendor` | `rsync --files-from` of the ignored files of the zhr2-B17 worktree (-47); on 2026-09-27 `Tools/vendor.sh` at 681d6f9a, run in a scratch worktree over a clone of it, patched one file (SDL3's `src/gpu/metal/SDL_gpu_metal.m`, sdl3-metal-windowless.patch), copied back here and into wt-pm and wt-47 (-47, for the PM) | in the folder |
 | the art archives (`Reforged*.big`, 1.65 GB) | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
@@ -94,7 +94,7 @@ Everything is under `/home/zhr/zhr-worker` unless noted:
 | what | where | how it got there | undo |
 |:--|:--|:--|:--|
 | the worker folder | `~/zhr-worker` | `mkdir` (-47) | `rm -rf ~/zhr-worker` removes everything below |
-| `zheavy` and `hashtree.py` | `~/zhr-worker/bin/` | `scp`, the same files as finer's (-47) | in the folder |
+| `zheavy` (the queue, as finer's, from `docs/mac-port/tasks/workers/zheavy`) and `hashtree.py` | `~/zhr-worker/bin/`; the queue in `~/zhr-worker/.heavy/` | `scp` (-47) | in the folder |
 | the game data (4.6 GB) | `~/zhr-worker/data` | `rsync -a` from this Mac (-47) | in the folder |
 | the vendored sources git ignores | `~/zhr-worker/vendor` | `rsync --files-from` (-47) | in the folder |
 | the art archives | `~/zhr-worker/art` | `rsync -a` (-47) | in the folder |
