@@ -60,6 +60,7 @@ const LookupListRec TheGamepadActionNames[] =
 	{ "Modifier",				GAMEPAD_ACTION_MODIFIER },
 	{ "Key",						GAMEPAD_ACTION_KEY },
 	{ "Command",				GAMEPAD_ACTION_COMMAND },
+	{ "CommandBar",			GAMEPAD_ACTION_COMMAND_BAR },
 	{ NULL, 0 }
 };
 

@@ -358,7 +358,7 @@ TEST(every_shipped_binding_parses_and_each_command_is_bound)
 {
 	CHECK( start() );
 	CHECK( TheGamepadMap != NULL );
-	CHECK_EQ( TheGamepadMap->getCount(), 21 );		// the mouse 3, modifiers 2, orders 4, groups 8, back buttons 4
+	CHECK_EQ( TheGamepadMap->getCount(), 22 );		// the mouse 3, modifiers 2, command bar 1, orders 4, groups 8, back buttons 4
 	for (Int i = 0; i < TheGamepadMap->getCount(); ++i)
 	{
 		const GamepadBinding &binding = TheGamepadMap->get( i );
@@ -691,6 +691,39 @@ TEST(full_tilt_holds_the_pointer_at_the_screens_edge_where_it_edge_scrolls)
 	settle( now );
 	Int x, y;
 	CHECK( SdlGamepad_pointer( x, y ) && x == 0 && y == 300 );
+}
+
+TEST(command_bar_mode_steps_to_the_nearest_button_that_way)
+{
+	// the command bar's grid, 7 by 2, 50 pixels apart, and a gap where a slot is empty
+	ICoord2D centres[ 13 ];
+	Int count = 0;
+	for (Int row = 0; row < 2; ++row)
+		for (Int column = 0; column < 7; ++column)
+			if (!(row == 1 && column == 3))
+			{
+				centres[ count ].x = 100 + column * 50;
+				centres[ count ].y = 500 + row * 50;
+				++count;
+			}
+	CHECK_EQ( count, 13 );
+	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 100, 500, 1, 0 ), 1 );		// right: the next column
+	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 100, 500, 0, 1 ), 7 );		// down: the row below
+	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 100, 500, -1, 0 ), -1 );	// nothing left of the first
+	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 250, 500, 0, 1 ), 9 );		// over the gap: the nearest below
+	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 300, 550, -1, 0 ), 9 );		// left across the gap on its own row
+}
+
+TEST(north_with_no_command_bar_shown_does_nothing)
+{
+	CHECK( start() );
+	clear();
+	Output pad;
+	padButton( SDL_GAMEPAD_BUTTON_NORTH, true );
+	padButton( SDL_GAMEPAD_BUTTON_NORTH, false );
+	frame( pad );
+	CHECK( pad.events.empty() );
+	CHECK( !SdlGamepad_inCommandBar() );
 }
 
 TEST(a_pad_pulled_out_mid_press_lets_go_of_all_it_held)

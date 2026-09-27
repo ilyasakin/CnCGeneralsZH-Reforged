@@ -20,7 +20,11 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/NameKeyGenerator.h"
+#include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
+#include "GameClient/GameWindow.h"
+#include "GameClient/GameWindowManager.h"
 #include "GameClient/GamepadMap.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/Mouse.h"
@@ -110,6 +114,85 @@ struct Pointer
 	Bool direct;					///< warps never come back here: moves go to SdlMouse directly
 };
 Pointer thePointer;
+Bool theCommandBarMode = FALSE;
+
+/// A window, and every window above it, shown
+Bool isShown( GameWindow *window )
+{
+	for (GameWindow *w = window; w != NULL; w = w->winGetParent())
+		if (w->winIsHidden())
+			return FALSE;
+	return window != NULL;
+}
+
+Bool windowCentre( GameWindow *window, Int &x, Int &y )
+{
+	Int left = 0, top = 0, width = 0, height = 0;
+	window->winGetScreenPosition( &left, &top );
+	window->winGetSize( &width, &height );
+	x = left + width / 2;
+	y = top + height / 2;
+	return width > 0 && height > 0;
+}
+
+/// The first shown window with this id, below list: several message boxes share their buttons' names
+GameWindow *findShown( GameWindow *list, NameKeyType id )
+{
+	for (GameWindow *window = list; window != NULL; window = window->winGetNext())
+	{
+		if (window->winIsHidden())
+			continue;
+		if (window->winGetWindowId() == (Int)id)
+			return window;
+		GameWindow *child = findShown( window->winGetChild(), id );
+		if (child != NULL)
+			return child;
+	}
+	return NULL;
+}
+
+GameWindow *findShown( const char *name )
+{
+	if (TheWindowManager == NULL || TheNameKeyGenerator == NULL)
+		return NULL;
+	return findShown( TheWindowManager->winGetWindowList(), TheNameKeyGenerator->nameToKey( AsciiString( name ) ) );
+}
+
+/// A message box's button shown now: its OK or Yes to accept, its Cancel or No not to (MessageBox.cpp)
+GameWindow *dialogButton( Bool accept )
+{
+	static const char *const acceptNames[] = { "MessageBox.wnd:ButtonOk", "MessageBox.wnd:ButtonYes",
+		"QuitMessageBox.wnd:ButtonOk", "QuitMessageBox.wnd:ButtonYes", NULL };
+	static const char *const declineNames[] = { "MessageBox.wnd:ButtonCancel", "MessageBox.wnd:ButtonNo",
+		"QuitMessageBox.wnd:ButtonCancel", "QuitMessageBox.wnd:ButtonNo", NULL };
+	for (const char *const *name = accept ? acceptNames : declineNames; *name != NULL; ++name)
+	{
+		GameWindow *button = findShown( *name );
+		if (button != NULL)
+			return button;
+	}
+	return NULL;
+}
+
+// below, with the pointer they move
+void movePointerTo( Int x, Int y, UnsignedInt time );
+Bool enterCommandBar( UnsignedInt time );
+void stepCommandBar( GamepadButtonType button, UnsignedInt time );
+
+/// The command bar's buttons shown now, by their centres (ControlBar.cpp's names for them)
+Int commandButtonCentres( ICoord2D *centres, Int max )
+{
+	Int count = 0;
+	for (Int i = 0; i < MAX_COMMANDS_PER_SET && count < max; ++i)
+	{
+		char name[ 64 ];
+		snprintf( name, sizeof( name ), "ControlBar.wnd:ButtonCommand%02d", i + 1 );
+		GameWindow *button = findShown( name );
+		if (button != NULL && windowCentre( button, centres[ count ].x, centres[ count ].y ))
+			++count;
+	}
+	return count;
+}
 
 UnsignedInt milliseconds( Uint64 timestampNs )
 {
@@ -215,6 +298,9 @@ Pressed apply( const GamepadBinding &binding, UnsignedInt time )
 				pressKeys( pressed, key, modState );
 			break;
 		}
+		case GAMEPAD_ACTION_COMMAND_BAR:
+			theCommandBarMode = theCommandBarMode ? FALSE : enterCommandBar( time );
+			break;
 		default:
 			break;
 	}
@@ -248,6 +334,38 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	pad.held[ button ] = TRUE;
 	pad.bound[ button ] = FALSE;
 	pad.chordWith[ button ] = GAMEPAD_BUTTON_NONE;
+	pad.pressed[ button ].mouseButton = -1;
+	pad.pressed[ button ].keyCount = 0;
+
+	// command-bar mode has the D-pad, and East leaves it
+	const Bool dpad = button == GAMEPAD_BUTTON_DPAD_UP || button == GAMEPAD_BUTTON_DPAD_DOWN
+		|| button == GAMEPAD_BUTTON_DPAD_LEFT || button == GAMEPAD_BUTTON_DPAD_RIGHT;
+	if (theCommandBarMode && dpad)
+	{
+		stepCommandBar( button, time );
+		return;
+	}
+	if (theCommandBarMode && button == GAMEPAD_BUTTON_EAST)
+	{
+		theCommandBarMode = FALSE;
+		return;
+	}
+
+	// a message box up: South and East click its answers, as a mouse would
+	GameWindow *answer = (button == GAMEPAD_BUTTON_SOUTH || button == GAMEPAD_BUTTON_EAST)
+		? dialogButton( button == GAMEPAD_BUTTON_SOUTH ) : NULL;
+	Int answerX, answerY;
+	if (answer != NULL && windowCentre( answer, answerX, answerY ))
+	{
+		movePointerTo( answerX, answerY, time );
+		pad.binding[ button ].m_button = button;
+		pad.binding[ button ].m_with = GAMEPAD_BUTTON_NONE;
+		pad.binding[ button ].m_action = GAMEPAD_ACTION_MOUSE_LEFT;
+		pad.bound[ button ] = TRUE;
+		pad.pressed[ button ] = apply( pad.binding[ button ], time );
+		return;
+	}
+
 	if (TheGamepadMap != NULL)
 	{
 		// a chord with a button already held wins over the button's own binding
@@ -274,8 +392,6 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	const GamepadButtonType with = pad.chordWith[ button ];
 	if (with != GAMEPAD_BUTTON_NONE && pad.suspended[ with ]++ == 0)
 		unapply( pad.pressed[ with ], time );
-	pad.pressed[ button ].mouseButton = -1;
-	pad.pressed[ button ].keyCount = 0;
 	if (pad.bound[ button ])
 		pad.pressed[ button ] = apply( pad.binding[ button ], time );
 }
@@ -373,6 +489,47 @@ void showPointer( Int x, Int y, UnsignedInt time )
 		SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, x, y, SdlMouse::BUTTON_LEFT, 0, 0, time );
 }
 
+/// The pad takes the pointer and puts it on a pixel (a button's centre)
+void movePointerTo( Int x, Int y, UnsignedInt time )
+{
+	thePointer.owned = TRUE;
+	thePointer.x = (Real)x;
+	thePointer.y = (Real)y;
+	showPointer( x, y, time );
+}
+
+/// Into command-bar mode, on its top-left button; FALSE when no command bar is shown
+Bool enterCommandBar( UnsignedInt time )
+{
+	ICoord2D centres[ MAX_COMMANDS_PER_SET ];
+	const Int count = commandButtonCentres( centres, MAX_COMMANDS_PER_SET );
+	Int first = -1;
+	for (Int i = 0; i < count; ++i)
+		if (first < 0 || centres[i].y < centres[first].y || (centres[i].y == centres[first].y && centres[i].x < centres[first].x))
+			first = i;
+	if (first < 0)
+		return FALSE;
+	movePointerTo( centres[first].x, centres[first].y, time );
+	return TRUE;
+}
+
+/// Command-bar mode's D-pad: the pointer to the nearest button that way
+void stepCommandBar( GamepadButtonType button, UnsignedInt time )
+{
+	ICoord2D centres[ MAX_COMMANDS_PER_SET ];
+	const Int count = commandButtonCentres( centres, MAX_COMMANDS_PER_SET );
+	if (count == 0)
+	{
+		theCommandBarMode = FALSE;		// the bar went away (a unit deselected): the D-pad is the D-pad again
+		return;
+	}
+	const Int dx = button == GAMEPAD_BUTTON_DPAD_LEFT ? -1 : (button == GAMEPAD_BUTTON_DPAD_RIGHT ? 1 : 0);
+	const Int dy = button == GAMEPAD_BUTTON_DPAD_UP ? -1 : (button == GAMEPAD_BUTTON_DPAD_DOWN ? 1 : 0);
+	const Int next = SdlGamepad_pickNeighbour( centres, count, thePointer.shownX, thePointer.shownY, dx, dy );
+	if (next >= 0)
+		movePointerTo( centres[next].x, centres[next].y, time );
+}
+
 /// The pad was used: it takes the pointer, and one parked in the edge band goes to the centre
 void padUsed( UnsignedInt time )
 {
@@ -431,6 +588,7 @@ void SdlGamepad_stop( void )
 	memset( theLastClicks, 0, sizeof( theLastClicks ) );
 	memset( &thePointer, 0, sizeof( thePointer ) );
 	theLastUsed = FALSE;
+	theCommandBarMode = FALSE;
 }
 
 void SdlGamepad_releaseAll( void )
@@ -466,6 +624,31 @@ void SdlGamepad_noteHand( void )
 Bool SdlGamepad_isLastUsed( void )
 {
 	return theLastUsed;
+}
+
+Bool SdlGamepad_inCommandBar( void )
+{
+	return theCommandBarMode;
+}
+
+Int SdlGamepad_pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy )
+{
+	Int best = -1, bestScore = 0;
+	for (Int i = 0; i < count; ++i)
+	{
+		const Int ox = centres[i].x - x, oy = centres[i].y - y;
+		const Int along = ox * dx + oy * dy;
+		if (along <= 0)
+			continue;
+		const Int across = abs( ox * dy - oy * dx );
+		const Int score = along + 2 * across;
+		if (best < 0 || score < bestScore)
+		{
+			best = i;
+			bestScore = score;
+		}
+	}
+	return best;
 }
 
 Bool SdlGamepad_pointer( Int &x, Int &y )
@@ -561,6 +744,7 @@ void SdlGamepad_update( UnsignedInt nowMs )
 	screenSize( width, height );
 	if ((vx != 0.0f || vy != 0.0f) && width > 0 && height > 0 && seconds > 0.0f)
 	{
+		theCommandBarMode = FALSE;		// the stick takes the pointer off the bar
 		if (!thePointer.owned && SdlMouse::active() != NULL)
 		{
 			Int x, y;

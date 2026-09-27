@@ -36,6 +36,11 @@
 //     that cannot warp), the pointer's moves go to SdlMouse directly and the log says so.  A pointer
 //     parked in the edge-scrolling band (the gamescope finding: (0, 0)) is put at the screen's centre
 //     when the pad is first used, so a pad player's camera does not run off to a corner.
+//   - Command-bar mode (GamepadMap's CommandBar, North by default): the pointer goes to the command
+//     bar's first button, the D-pad moves it to the nearest button that way, South clicks, and East
+//     leaves.  The pointer is really over the button, so its hover and its tooltip show as for a mouse.
+//   - A message box up: South moves the pointer onto its OK or Yes and clicks, East onto its Cancel or
+//     No.  A click, not a message to the box: the mouse's own way to answer it.
 //   - A key or mouse button held by two things at once (two pads, a shoulder and a chord) goes down once
 //     and up when the last lets go.  A pad pulled out, or the window losing the focus, lets go of all
 //     it holds, so nothing is left stuck down.
@@ -79,5 +84,12 @@ Bool SdlGamepad_isLastUsed( void );
 
 /// The pointer the pad moves, in the game's pixels; FALSE while the mouse has it
 Bool SdlGamepad_pointer( Int &x, Int &y );
+
+/// TRUE while command-bar mode has the D-pad
+Bool SdlGamepad_inCommandBar( void );
+
+/** Command-bar mode's step: of count button centres, the nearest one from (x, y) in the direction
+	* (dx, dy) (one of them 0, the other 1 or -1), sideways distance counting double; -1 when none */
+Int SdlGamepad_pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy );
 
 #endif // __SDLGAMEPAD_H

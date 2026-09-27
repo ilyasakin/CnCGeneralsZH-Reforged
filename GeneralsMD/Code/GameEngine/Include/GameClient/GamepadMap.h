@@ -31,7 +31,7 @@
 //
 //   GamepadBinding DPadUp             ; the button
 //     With = LeftShoulder             ; optional: only while this button is held
-//     Action = Command                ; MouseLeft, MouseMiddle, MouseRight, Modifier, Key or Command
+//     Action = Command                ; MouseLeft, MouseMiddle, MouseRight, Modifier, Key, Command or CommandBar
 //     Command = SELECT_TEAM5          ; for Command: a command map's name for a command
 //   End
 //
@@ -96,7 +96,8 @@ enum GamepadActionType
 	GAMEPAD_ACTION_MOUSE_RIGHT,
 	GAMEPAD_ACTION_MODIFIER,
 	GAMEPAD_ACTION_KEY,
-	GAMEPAD_ACTION_COMMAND
+	GAMEPAD_ACTION_COMMAND,
+	GAMEPAD_ACTION_COMMAND_BAR		///< in and out of command-bar mode (SdlGamepad.h)
 };
 
 extern const LookupListRec TheGamepadActionNames[];
