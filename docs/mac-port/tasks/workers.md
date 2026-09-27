@@ -139,7 +139,8 @@ deleted. The data copy's hash was unchanged. Undo: `Remove-Item -Recurse C:\zhr-
 | the DirectX End-User Runtime (June 2010): `d3dx9_43.dll` and its kind in System32 and SysWOW64 | the extracted redist in `C:\zhr-worker\dxredist` | `directx_Jun2010_redist.exe /Q /T`, `DXSETUP.exe /silent` (-18) | it has no uninstaller; the DLLs are harmless to leave, or are deleted by name (`d3dx9_*`, `d3dx10_*`, `d3dx11_*`, `D3DCompiler_*`, `XAudio2_*`, `X3DAudio*`, `XAPOFX*`, `xinput1_3`) |
 | winget's `Microsoft.DirectX` (web installer; installed no DLL) | winget's package record | `winget install` (-18) | `winget uninstall --id Microsoft.DirectX` |
 | replays copied into the user's Replays folder | `Documents\Command and Conquer Generals Zero Hour Data\Replays\w1a.rep`, `w1b.rep`, and the harness's `determinism*.rep` | `Copy-Item`, `replay-check.ps1` (-18) | delete them |
-| one-off scheduled tasks `zhr18desk`, `zhr18desk2` | Task Scheduler | `schtasks /create /it` (-18) | already deleted after each run |
+| one-off scheduled tasks `zhr18desk`, `zhr18desk2`…`zhr18desk5`, and windows-ci.ps1's `zh-windows-ci-*` | Task Scheduler | `schtasks /create /it` (-18, windows-ci.ps1) | deleted after each run |
+| the PM's worktree for windows-ci.ps1 | `C:\zhr-worker\wt-pm-win` (a detached `git worktree` of `C:\zhr-worker\repo`, its own `build64`, `build.local.bat` copied), `C:\zhr-worker\bundles\`, and the check's work folder `C:\zhr-worker\ci-pm` (farm, logs, results) | `git worktree add` (-18) | `git -C C:\zhr-worker\repo worktree remove --force C:\zhr-worker\wt-pm-win`; delete the two folders |
 
 On thinkerer, for W2: `~/zhr-worker/tmp18` (hash listings, the VM's host key in a known-hosts file of its
 own, a copy of build-47's `generals`, `playwin.sh`, the Windows replay, the bundles). Undo: `rm -rf ~/zhr-worker/tmp18`.
