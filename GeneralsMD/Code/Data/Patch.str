@@ -854,6 +854,22 @@ GUI:Gamepad
 "Controller"
 END
 
+GUI:GamepadSelect
+"Select"
+END
+
+GUI:GamepadBack
+"Back"
+END
+
+GUI:GamepadStart
+"Start"
+END
+
+GUI:GamepadTabs
+"Tabs"
+END
+
 TOOLTIP:Gamepad
 "Play with a controller: the left stick moves the pointer, the bottom face button clicks, and the top one takes you to the command bar. Off, a connected controller is ignored."
 END

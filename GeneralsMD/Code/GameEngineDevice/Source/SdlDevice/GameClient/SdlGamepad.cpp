@@ -26,6 +26,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadMap.h"
 #include "GameClient/KeyDefs.h"
@@ -62,7 +63,6 @@ const Int DOUBLE_CLICK_DISTANCE = 4;					///< Windows' SM_CXDOUBLECLK and SM_CYD
 const Real STICK_DEAD_ZONE = 0.15f;						///< the left stick's, radial
 const Real POINTER_CROSSING_SECONDS = 1.2f;		///< full tilt crosses the screen's width in this long
 const Int EDGE_BAND = 3;											///< LookAtXlat's edgeScrollSize: a pointer this near an edge scrolls
-const Int WARP_PATIENCE_FRAMES = 5;						///< frames a warp may take to come back before it is given up on
 
 /// What one press did, so that its release undoes exactly that
 struct Pressed
@@ -82,6 +82,7 @@ struct Pad
 	Bool bound[ GAMEPAD_BUTTON_COUNT ];
 	GamepadButtonType chordWith[ GAMEPAD_BUTTON_COUNT ];	///< the held button this press made a chord with
 	Int suspended[ GAMEPAD_BUTTON_COUNT ];							///< chords that have let this held button's keys go
+	Bool menuPress[ GAMEPAD_BUTTON_COUNT ];							///< pressed while a menu had the pad: its release is the menu's
 	Real axis[ SDL_GAMEPAD_AXIS_COUNT ];
 	Bool cameraKey[ 4 ];
 	Real wheelCarry;
@@ -113,12 +114,17 @@ struct Pointer
 	Bool owned;						///< the pad has it; FALSE once a hand moves the mouse
 	Real x, y;						///< in the game's pixels, the fraction kept
 	Int shownX, shownY;		///< where it was last put
-	Bool warpPending;			///< a warp has not come back yet
-	Int warpWait;					///< frames it has waited
-	Bool direct;					///< warps never come back here: moves go to SdlMouse directly
+	Bool drawn;						///< the game draws the cursor (RM_POLYGON) since a pad took it
 };
 Pointer thePointer;
 Bool theCommandBarMode = FALSE;
+
+// A menu's direction held down (the D-pad or the stick): it acts once, then again after a pause, then often
+const UnsignedInt NAV_FIRST_REPEAT_MS = 350, NAV_REPEAT_MS = 110;
+Int theNavAction = -1;						///< the GamepadFocus::Action held, or -1
+UnsignedInt theNavNext = 0;				///< when it acts again
+Int theStickNav = -1;							///< the direction the left stick holds in a menu, or -1
+Int theTriggerNav = -1;						///< a trigger held in a menu: PAGE_UP or PAGE_DOWN, or -1
 
 /// A window, and every window above it, shown
 Bool isShown( GameWindow *window )
@@ -341,6 +347,35 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	pad.pressed[ button ].mouseButton = -1;
 	pad.pressed[ button ].keyCount = 0;
 
+	// a menu, a popup or a box: the pad moves its focus and acts on it (GamepadFocus.h)
+	if (GamepadFocus::isActive())
+	{
+		GamepadFocus::setPadDriving( TRUE );
+		Int action = -1;
+		switch (button)
+		{
+			case GAMEPAD_BUTTON_DPAD_UP:				action = GamepadFocus::NAV_UP; break;
+			case GAMEPAD_BUTTON_DPAD_DOWN:			action = GamepadFocus::NAV_DOWN; break;
+			case GAMEPAD_BUTTON_DPAD_LEFT:			action = GamepadFocus::NAV_LEFT; break;
+			case GAMEPAD_BUTTON_DPAD_RIGHT:			action = GamepadFocus::NAV_RIGHT; break;
+			case GAMEPAD_BUTTON_SOUTH:					action = GamepadFocus::ACCEPT_DOWN; break;
+			case GAMEPAD_BUTTON_EAST:						action = GamepadFocus::BACK; break;
+			case GAMEPAD_BUTTON_START:					action = GamepadFocus::START; break;
+			case GAMEPAD_BUTTON_LEFT_SHOULDER:	action = GamepadFocus::TAB_PREV; break;
+			case GAMEPAD_BUTTON_RIGHT_SHOULDER:	action = GamepadFocus::TAB_NEXT; break;
+			default: break;
+		}
+		pad.menuPress[ button ] = TRUE;
+		if (action >= 0)
+			GamepadFocus::act( (GamepadFocus::Action)action );
+		if (action >= GamepadFocus::NAV_UP && action <= GamepadFocus::NAV_RIGHT)
+		{
+			theNavAction = action;
+			theNavNext = time + NAV_FIRST_REPEAT_MS;
+		}
+		return;
+	}
+
 	// command-bar mode has the D-pad, and East leaves it
 	const Bool dpad = button == GAMEPAD_BUTTON_DPAD_UP || button == GAMEPAD_BUTTON_DPAD_DOWN
 		|| button == GAMEPAD_BUTTON_DPAD_LEFT || button == GAMEPAD_BUTTON_DPAD_RIGHT;
@@ -352,21 +387,6 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	if (theCommandBarMode && button == GAMEPAD_BUTTON_EAST)
 	{
 		theCommandBarMode = FALSE;
-		return;
-	}
-
-	// a message box up: South and East click its answers, as a mouse would
-	GameWindow *answer = (button == GAMEPAD_BUTTON_SOUTH || button == GAMEPAD_BUTTON_EAST)
-		? dialogButton( button == GAMEPAD_BUTTON_SOUTH ) : NULL;
-	Int answerX, answerY;
-	if (answer != NULL && windowCentre( answer, answerX, answerY ))
-	{
-		movePointerTo( answerX, answerY, time );
-		pad.binding[ button ].m_button = button;
-		pad.binding[ button ].m_with = GAMEPAD_BUTTON_NONE;
-		pad.binding[ button ].m_action = GAMEPAD_ACTION_MOUSE_LEFT;
-		pad.bound[ button ] = TRUE;
-		pad.pressed[ button ] = apply( pad.binding[ button ], time );
 		return;
 	}
 
@@ -405,6 +425,16 @@ void releaseButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	if (!pad.held[ button ])
 		return;
 	pad.held[ button ] = FALSE;
+	if (pad.menuPress[ button ])
+	{
+		// pressed in a menu: its release is the menu's too (A's click ends on the release)
+		pad.menuPress[ button ] = FALSE;
+		if (button == GAMEPAD_BUTTON_SOUTH)
+			GamepadFocus::act( GamepadFocus::ACCEPT_UP );
+		if (button >= GAMEPAD_BUTTON_DPAD_UP && button <= GAMEPAD_BUTTON_DPAD_RIGHT)
+			theNavAction = -1;
+		return;
+	}
 	unapply( pad.pressed[ button ], time );		// nothing left in it while a chord has it let go
 	// chords made with this button no longer give anything back to it
 	pad.suspended[ button ] = 0;
@@ -526,50 +556,27 @@ void screenSize( Int &width, Int &height )
 		SDL_GetWindowSize( window, &width, &height );
 }
 
-/// The pointer to a pixel: warped, so it comes back as the platform's own motion, or straight to SdlMouse
-void pointerGoesDirect( UnsignedInt time );
+/** The game draws the cursor itself while a pad is in use: Mouse.ini's polygon images (W3DMouse's RM_POLYGON,
+	* which hides the platform's).  The pad moves the game's pointer directly, never the platform's: a warp
+	* of the platform's pointer does not come back on gamescope's Xwayland (the Steam Deck's Game Mode,
+	* measured), and a console-style cursor is the game's own on every platform anyway.  A real mouse or
+	* trackpad gives the platform's cursor back (SdlGamepad_noteHand). */
+void drawCursor( Bool drawn )
+{
+	if (thePointer.drawn == drawn || TheMouse == NULL)
+		return;
+	thePointer.drawn = drawn;
+	TheMouse->setRedrawMode( drawn ? Mouse::RM_POLYGON : Mouse::RM_WINDOWS );
+}
 
+/// The pointer to a pixel: straight to SdlMouse, as the platform's own motion would arrive
 void showPointer( Int x, Int y, UnsignedInt time )
 {
 	thePointer.shownX = x;
 	thePointer.shownY = y;
-	static const Bool noWarp = getenv( "ZH_TEST_NO_WARP" ) != NULL && *getenv( "ZH_TEST_NO_WARP" ) != 0;
-	if (noWarp && !thePointer.direct)
-	{
-		pointerGoesDirect( time );		// posts this very move
-		return;
-	}
-	SDL_Window *window = SdlInput_gameWindow();
-	if (!thePointer.direct && window != NULL)
-	{
-		Real wx, wy;
-		SdlInput_toWindowPoints( x, y, wx, wy );
-		SDL_WarpMouseInWindow( window, wx, wy );
-		thePointer.warpPending = TRUE;
-		thePointer.warpWait = 0;
-	}
-	else if (SdlMouse::active() != NULL)
-		SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, x, y, SdlMouse::BUTTON_LEFT, 0, 0, time );
-}
-
-/** From here on the pad moves the game's pointer itself and the game draws the cursor: Mouse.ini's polygon
-	* images (W3DMouse's RM_POLYGON, which hides the platform's).  For a platform whose warps never come back;
-	* a trackpad's or a mouse's motion still arrives and moves the same pointer, so one cursor follows every
-	* device.  ZH_TEST_NO_WARP (a test's switch, never a player's) takes this path from the first move, so a
-	* host whose warps do come back can still show it. */
-void pointerGoesDirect( UnsignedInt time )
-{
-	if (thePointer.direct)
-		return;
-	thePointer.warpPending = FALSE;
-	thePointer.direct = TRUE;
-	if (TheMouse != NULL)
-		TheMouse->setRedrawMode( Mouse::RM_POLYGON );
-	DEBUG_LOG(( "SdlGamepad: the pointer's warps do not come back on the %s video driver%s; the pad moves the "
-		"game's pointer directly, and the game draws the cursor itself\n", SDL_GetCurrentVideoDriver(),
-		getenv( "ZH_TEST_NO_WARP" ) != NULL ? " (ZH_TEST_NO_WARP)" : "" ));
+	drawCursor( TRUE );
 	if (SdlMouse::active() != NULL)
-		SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, thePointer.shownX, thePointer.shownY, SdlMouse::BUTTON_LEFT, 0, 0, time );
+		SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, x, y, SdlMouse::BUTTON_LEFT, 0, 0, time );
 }
 
 /// The pad takes the pointer and puts it on a pixel (a button's centre)
@@ -613,14 +620,38 @@ void stepCommandBar( GamepadButtonType button, UnsignedInt time )
 		movePointerTo( centres[next].x, centres[next].y, time );
 }
 
+// GamepadFocus's hooks: the pointer, the left button and the keys, as this layer gives them to the world
+void focusPointTo( Int x, Int y )
+{
+	movePointerTo( x, y, (UnsignedInt)SDL_GetTicks() );
+}
+
+void focusLeftButton( Bool down )
+{
+	if (down)
+		mouseDown( SdlMouse::BUTTON_LEFT, (UnsignedInt)SDL_GetTicks() );
+	else
+		mouseUp( SdlMouse::BUTTON_LEFT, (UnsignedInt)SDL_GetTicks() );
+}
+
+void focusKey( UnsignedByte dik, Bool down )
+{
+	if (down)
+		keyDown( dik );
+	else
+		keyUp( dik );
+}
+
 /// The pad was used: its buttons show in the hints, it takes the pointer, and a pointer parked in the
 /// edge band goes to the centre
 void padUsed( const Pad &pad, UnsignedInt time )
 {
 	GamepadHints::setShown( pad.glyphs );		// the last pad pressed sets the glyphs
+	GamepadFocus::setPadDriving( TRUE );
 	if (theLastUsed)
 		return;
 	theLastUsed = TRUE;
+	drawCursor( TRUE );		// the game's own cursor from the first press, where the game's pointer is
 	if (thePointer.owned || SdlMouse::active() == NULL)
 		return;
 	Int x, y, width, height;
@@ -657,6 +688,8 @@ Bool SdlGamepad_start( void )
 	if (!theStarted)
 	{
 		theStarted = SDL_InitSubSystem( SDL_INIT_GAMEPAD );
+		const GamepadFocus::Hooks hooks = { focusPointTo, focusLeftButton, focusKey };
+		GamepadFocus::setHooks( hooks );
 		if (!theStarted)
 		{
 			// before the debug log is open, so on stderr as well
@@ -700,15 +733,9 @@ Int SdlGamepad_count( void )
 	return (Int)thePads.size();
 }
 
-void SdlGamepad_noteMotion( Int x, Int y )
+void SdlGamepad_noteMotion( Int /*x*/, Int /*y*/ )
 {
-	if (thePointer.warpPending && x == thePointer.shownX && y == thePointer.shownY)
-	{
-		thePointer.warpPending = FALSE;		// the pad's own warp, back as the platform's motion
-		return;
-	}
-	if (thePointer.warpPending)
-		return;		// the platform's motion from before the warp, still in the queue
+	// the pad never moves the platform's pointer, so any motion the platform reports is a hand's
 	thePointer.owned = FALSE;
 	SdlGamepad_noteHand();
 }
@@ -716,6 +743,8 @@ void SdlGamepad_noteMotion( Int x, Int y )
 void SdlGamepad_noteHand( void )
 {
 	theLastUsed = FALSE;
+	drawCursor( FALSE );		// the platform's cursor again
+	GamepadFocus::setPadDriving( FALSE );
 	GamepadHints::setShown( GAMEPAD_GLYPHS_NONE );		// the keys' letters again
 }
 
@@ -731,22 +760,7 @@ Bool SdlGamepad_inCommandBar( void )
 
 Int SdlGamepad_pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy )
 {
-	Int best = -1, bestScore = 0;
-	for (Int i = 0; i < count; ++i)
-	{
-		const Int ox = centres[i].x - x, oy = centres[i].y - y;
-		const Int along = ox * dx + oy * dy;
-		if (along <= 0)
-			continue;
-		const Int across = abs( ox * dy - oy * dx );
-		const Int score = along + 2 * across;
-		if (best < 0 || score < bestScore)
-		{
-			best = i;
-			bestScore = score;
-		}
-	}
-	return best;
+	return GamepadFocus::pickNeighbour( centres, count, x, y, dx, dy );
 }
 
 Bool SdlGamepad_pointer( Int &x, Int &y )
@@ -831,9 +845,82 @@ void SdlGamepad_update( UnsignedInt nowMs )
 		return;
 	}
 
-	// a warp that never comes back: this platform cannot warp the pointer (gamescope's Xwayland, measured)
-	if (thePointer.warpPending && ++thePointer.warpWait > WARP_PATIENCE_FRAMES)
-		pointerGoesDirect( nowMs );
+	// a menu has the pad: directions held repeat, the left stick is a D-pad, the triggers page; the pointer,
+	// the camera and the wheel wait for the world (GamepadFocus.h)
+	if (GamepadFocus::isActive())
+	{
+		static UnsignedInt stickNext = 0, triggerNext = 0;
+		if (theNavAction >= 0 && nowMs >= theNavNext)
+		{
+			GamepadFocus::act( (GamepadFocus::Action)theNavAction );
+			theNavNext = nowMs + NAV_REPEAT_MS;
+		}
+		Real sx = 0.0f, sy = 0.0f, lt = 0.0f, rt = 0.0f;
+		for (size_t i = 0; i < thePads.size(); ++i)
+		{
+			const Real px = thePads[i].axis[ SDL_GAMEPAD_AXIS_LEFTX ], py = thePads[i].axis[ SDL_GAMEPAD_AXIS_LEFTY ];
+			if (px * px + py * py > sx * sx + sy * sy)
+			{
+				sx = px;
+				sy = py;
+			}
+			lt = thePads[i].axis[ SDL_GAMEPAD_AXIS_LEFT_TRIGGER ] > lt ? thePads[i].axis[ SDL_GAMEPAD_AXIS_LEFT_TRIGGER ] : lt;
+			rt = thePads[i].axis[ SDL_GAMEPAD_AXIS_RIGHT_TRIGGER ] > rt ? thePads[i].axis[ SDL_GAMEPAD_AXIS_RIGHT_TRIGGER ] : rt;
+			for (Int k = 0; k < 4; ++k)
+				if (thePads[i].cameraKey[ k ])
+				{
+					thePads[i].cameraKey[ k ] = FALSE;
+					keyUp( theCameraKeys[ k ] );
+				}
+		}
+		// the stick: a direction past 0.6 on its main axis, kept until it falls under 0.4
+		const Real STICK_ON = 0.6f, STICK_OFF = 0.4f;
+		Int stick = -1;
+		const Real ax = sx < 0 ? -sx : sx, ay = sy < 0 ? -sy : sy;
+		if (theStickNav == GamepadFocus::NAV_LEFT && sx < -STICK_OFF) stick = GamepadFocus::NAV_LEFT;
+		else if (theStickNav == GamepadFocus::NAV_RIGHT && sx > STICK_OFF) stick = GamepadFocus::NAV_RIGHT;
+		else if (theStickNav == GamepadFocus::NAV_UP && sy < -STICK_OFF) stick = GamepadFocus::NAV_UP;
+		else if (theStickNav == GamepadFocus::NAV_DOWN && sy > STICK_OFF) stick = GamepadFocus::NAV_DOWN;
+		else if (ax >= ay && ax > STICK_ON) stick = sx < 0 ? GamepadFocus::NAV_LEFT : GamepadFocus::NAV_RIGHT;
+		else if (ay > STICK_ON) stick = sy < 0 ? GamepadFocus::NAV_UP : GamepadFocus::NAV_DOWN;
+		if (stick != theStickNav)
+		{
+			theStickNav = stick;
+			if (stick >= 0)
+			{
+				GamepadFocus::setPadDriving( TRUE );
+				GamepadFocus::act( (GamepadFocus::Action)stick );
+				stickNext = nowMs + NAV_FIRST_REPEAT_MS;
+			}
+		}
+		else if (stick >= 0 && nowMs >= stickNext)
+		{
+			GamepadFocus::act( (GamepadFocus::Action)stick );
+			stickNext = nowMs + NAV_REPEAT_MS;
+		}
+		// the triggers: a page of a list, then again while held
+		const Int trigger = rt > 0.5f ? GamepadFocus::PAGE_DOWN : (lt > 0.5f ? GamepadFocus::PAGE_UP : -1);
+		if (trigger != theTriggerNav)
+		{
+			theTriggerNav = trigger;
+			if (trigger >= 0)
+			{
+				GamepadFocus::act( (GamepadFocus::Action)trigger );
+				triggerNext = nowMs + NAV_FIRST_REPEAT_MS;
+			}
+		}
+		else if (trigger >= 0 && nowMs >= triggerNext)
+		{
+			GamepadFocus::act( (GamepadFocus::Action)trigger );
+			triggerNext = nowMs + NAV_REPEAT_MS * 2;
+		}
+		for (size_t i = 0; i < thePads.size(); ++i)
+			thePads[i].wheelCarry = 0.0f;
+		theCommandBarMode = FALSE;
+		GamepadHints::setCommandBarMode( FALSE );
+		return;
+	}
+	theStickNav = theTriggerNav = -1;
 
 	// the left stick moves the pointer: every pad's tilt, a radial dead zone, a squared response
 	Real vx = 0.0f, vy = 0.0f;

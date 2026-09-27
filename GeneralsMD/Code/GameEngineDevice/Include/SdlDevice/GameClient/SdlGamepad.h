@@ -29,14 +29,12 @@
 //     a mouse's.  A chord (a binding With a held button) lets that button's own keys go while it lasts.
 //   - The triggers are the wheel, in proportion to how far they are pulled; the right stick holds the
 //     arrow keys, with some hysteresis.
-//   - The left stick moves the pointer: the platform's own, warped with SDL_WarpMouseInWindow, so the
-//     warp comes back as an ordinary motion event and the cursor, its text, the tooltips and edge
-//     scrolling all follow as they follow a mouse.  A radial dead zone, a squared response, and full
-//     tilt crossing the screen's width in 1.2 s of real time.  Where a warp never comes back (gamescope's
-//     Xwayland, the Steam Deck's Game Mode, measured), the pointer's moves go to SdlMouse directly and
-//     the game draws the cursor itself (RM_POLYGON), so the cursor on screen is the one the pad moves.  A pointer
-//     parked in the edge-scrolling band (the gamescope finding: (0, 0)) is put at the screen's centre
-//     when the pad is first used, so a pad player's camera does not run off to a corner.
+//   - The left stick moves the game's own pointer, and while a pad is in use the game draws the cursor itself
+//     (Mouse.ini's polygon images, RM_POLYGON), never the platform's: a warp of the platform's pointer does
+//     not come back on gamescope's Xwayland (the Steam Deck's Game Mode, measured).  A radial dead zone, a
+//     squared response, full tilt crossing the screen's width in 1.2 s of real time.  A real mouse or
+//     trackpad gives the platform's cursor back.  A pointer parked in the edge-scrolling band (the gamescope
+//     finding: (0, 0)) is put at the screen's centre when the pad is first used.
 //   - Command-bar mode (GamepadMap's CommandBar, North by default): the pointer goes to the command
 //     bar's first button, the D-pad moves it to the nearest button that way, South clicks, and East
 //     leaves.  The pointer is really over the button, so its hover and its tooltip show as for a mouse.
@@ -73,8 +71,8 @@ void SdlGamepad_releaseAll( void );
 /// The pads open now
 Int SdlGamepad_count( void );
 
-/** SdlInput's motion, in the game's pixels, before SdlMouse takes it: a warp of the pad's own coming back,
-	* or a hand on the mouse, which then has the pointer */
+/** SdlInput's motion, in the game's pixels, before SdlMouse takes it: a hand on the mouse or a trackpad (the
+	* pad never moves the platform's pointer), which then has the pointer and the platform's cursor */
 void SdlGamepad_noteMotion( Int x, Int y );
 
 /// SdlInput's key, mouse button or wheel: a hand is on the keyboard or the mouse

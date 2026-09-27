@@ -50,6 +50,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/Image.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/GamepadFocus.h"
 #include "mutex.h"
 #include "thread.h"
 
@@ -554,7 +555,8 @@ void W3DMouse::draw(void)
 	else if (m_currentRedrawMode == RM_POLYGON)
 	{	
 		const Image *image=cursorImages[m_currentPolygonCursor];
-		if (image)
+		// G1: while a pad moves a menu's focus the cursor is not drawn; the focus frame shows where it is
+		if (image && !GamepadFocus::hidesCursor())
 		{
 			TheDisplay->drawImage(image,m_currMouse.pos.x-m_currentHotSpot.x,m_currMouse.pos.y-m_currentHotSpot.y,
 				m_currMouse.pos.x+image->getImageWidth()-m_currentHotSpot.x, m_currMouse.pos.y+image->getImageHeight()-m_currentHotSpot.y);

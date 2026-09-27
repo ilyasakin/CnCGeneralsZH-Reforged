@@ -584,7 +584,7 @@ TEST(the_right_stick_holds_the_arrow_keys_with_some_hysteresis)
 
 namespace {
 
-/// Frames until the pointer's move shows: a warp coming back, or the direct path once warps are given up
+/// Frames until the pointer's move shows (it goes straight to SdlMouse; a few frames prove no more comes)
 std::vector<std::string> settle( UnsignedInt &now )
 {
 	Output out;

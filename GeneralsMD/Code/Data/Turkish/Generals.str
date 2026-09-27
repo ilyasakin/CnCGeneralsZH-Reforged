@@ -15413,6 +15413,22 @@ GUI:Gamepad
 "Oyun Kumandası"
 END
 
+GUI:GamepadSelect
+"Seç"
+END
+
+GUI:GamepadBack
+"Geri"
+END
+
+GUI:GamepadStart
+"Başlat"
+END
+
+GUI:GamepadTabs
+"Sekmeler"
+END
+
 TOOLTIP:Gamepad
 "Kumandayla oyna: sol çubuk imleci gezdirir, alttaki yüz düğmesi tıklar, üstteki komut çubuğuna götürür. Kapalıyken bağlı bir kumanda yok sayılır."
 END

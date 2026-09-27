@@ -312,6 +312,7 @@ GameEngine/Include/GameClient/GameWindowGlobal.h
 GameEngine/Include/GameClient/GameWindowID.h
 GameEngine/Include/GameClient/GameWindowManager.h
 GameEngine/Include/GameClient/GameWindowTransitions.h
+GameEngine/Include/GameClient/GamepadFocus.h
 GameEngine/Include/GameClient/GamepadHints.h
 GameEngine/Include/GameClient/GamepadMap.h
 GameEngine/Include/GameClient/GlobalLanguage.h
@@ -967,6 +968,7 @@ GameEngine/Source/GameClient/GraphDraw.cpp
 GameEngine/Source/GameClient/HtmlOverlay.cpp
 GameEngine/Source/GameClient/HtmlTemplate.cpp
 GameEngine/Source/GameClient/InGameUI.cpp
+GameEngine/Source/GameClient/Input/GamepadFocus.cpp
 GameEngine/Source/GameClient/Input/GamepadHints.cpp
 GameEngine/Source/GameClient/Input/GamepadMap.cpp
 GameEngine/Source/GameClient/Input/Keyboard.cpp

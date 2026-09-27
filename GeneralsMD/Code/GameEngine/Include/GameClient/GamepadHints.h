@@ -91,6 +91,11 @@ public:
 	/// In command-bar mode, South's glyph in the bottom right corner of the build card's box (InGameUI)
 	static void drawTooltipCorner( const IRegion2D &box );
 
+	/** TRUE for the family name of one of the glyph fonts.  Their glyphs sit at U+E0xx, which EA's text code
+		* draws from a font's alternate Unicode font (render2dsentence.cpp, Get_Char_Data): these fonts must
+		* have none, or every glyph comes out as the other font's missing-glyph box (W3DGameFont.cpp). */
+	static Bool isGlyphFont( const char *family );
+
 	/// A family's name for a button's glyph (Kenney's), or NULL: for the test
 	static const char *glyphName( GamepadGlyphSet set, Int button );
 };

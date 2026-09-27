@@ -264,6 +264,14 @@ Bool GamepadHints::isCommandBarMode( void )
 	return theCommandBarMode;
 }
 
+Bool GamepadHints::isGlyphFont( const char *family )
+{
+	for (Int set = GAMEPAD_GLYPHS_NONE + 1; family != NULL && set < GAMEPAD_GLYPHS_COUNT; ++set)
+		if (strcmp( family, theFonts[ set ].family ) == 0)
+			return TRUE;
+	return FALSE;
+}
+
 const char *GamepadHints::glyphName( GamepadGlyphSet set, Int button )
 {
 	if (set <= GAMEPAD_GLYPHS_NONE || set >= GAMEPAD_GLYPHS_COUNT || button < 0 || button >= GAMEPAD_GLYPH_COUNT)
