@@ -89,6 +89,7 @@ function Invoke-Run([string[]] $extra, [string] $prefix)
 }
 
 $failures = 0
+$diverged = 0		# of the failures, the seeds whose two runs finished and disagreed
 foreach ($seed in $Seeds)
 {
 	Write-Host ("seed {0}: recording ... " -f $seed) -NoNewline
@@ -121,6 +122,7 @@ foreach ($seed in $Seeds)
 		Write-Host ("DIVERGED: live {0} at frame {1}, playback {2} at frame {3}" -f
 								$live.CRC, $live.Frame, $back.CRC, $back.Frame)
 		$failures++
+		$diverged++
 	}
 }
 
@@ -129,8 +131,13 @@ if ($failures -eq 0)
 {
 	Write-Host ("{0} of {0} replays played back to the same world." -f $Seeds.Count)
 }
-else
+elseif ($diverged -gt 0)
 {
 	Write-Host ("{0} of {1} did not. The logic is not deterministic; do not ship it." -f $failures, $Seeds.Count)
+}
+else
+{
+	# a run that crashed, wrote nothing or was killed at -TimeoutMinutes compared nothing: a failure, not a verdict
+	Write-Host ("{0} of {1} gave no result to compare (crashed, killed or wrote no replay); nothing was compared." -f $failures, $Seeds.Count)
 }
 exit $failures
