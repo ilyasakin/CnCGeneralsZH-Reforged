@@ -40,7 +40,11 @@
  * draws it did this to ("N draws: ANISOTROPIC replayed as LINEAR"), so a pass never hides it; the GPU
  * side of the comparison must replay them the same way (the harness does, by that ruling).
  *
- *   ffref_judge <capture dir> [--gpu <dump dir>] [--only draw_NNNNN] [--mutate <bits>] [--shift-gpu]
+ *   ffref_judge <capture dir> [--gpu <dump dir>] [--only draw_NNNNN] [--mutate <bits>] [--shift-gpu] [--detail]
+ *
+ * For a disagreement it lists the outside pixels (up to 12): the GPU's colour, the reference's nominal
+ * colour and its envelope; with --detail (best with --only) also FFReference's record of the pixel: the
+ * triangle that wrote it, the coordinates and LOD it sampled at, and the triangle's corners on screen.
  *
  * Armed controls, so an "agree" is a comparison that can fail: --mutate draws with FFReference's own
  * deliberate departures (ffreference.h's Mutation bits; D3D10's pixel centres, swapped blend factors, ...),
@@ -117,11 +121,13 @@ int main( int argc, char *argv[] )
 	const std::string dir = argv[1];
 	std::string gpuDir, only;
 	unsigned mutations = 0;
-	bool shiftGpu = false;
+	bool shiftGpu = false, detail = false;
 	for (int i = 2; i < argc; ++i)
 	{
 		if (strcmp( argv[i], "--shift-gpu" ) == 0)
 			shiftGpu = true;
+		else if (strcmp( argv[i], "--detail" ) == 0)
+			detail = true;
 		else if (i + 1 < argc && strcmp( argv[i], "--gpu" ) == 0)
 			gpuDir = argv[++i];
 		else if (i + 1 < argc && strcmp( argv[i], "--only" ) == 0)
@@ -280,6 +286,7 @@ int main( int argc, char *argv[] )
 		// A8R8G8B8 keeps alpha; X8R8G8B8 reads destination alpha as 1 (D3DFORMAT)
 		target.create( (int)h.targetWidth, (int)h.targetHeight, h.targetFormat != 22 );
 		target.clear( colorFromD3D( 0xFF3F2F1Fu ), 1.0, 0 );
+		target.recordDetail = detail;
 		Report report;
 		const int count = h.indexCount ? (int)h.indexCount : (int)h.vertexCount;
 		const bool ok = draw( state, (int)h.primitiveType, vertices.empty() ? NULL : &vertices[0], (int)h.vertexCount,
@@ -335,7 +342,38 @@ int main( int argc, char *argv[] )
 				printf( ", worst %.1f/255 at (%d, %d)", c.worst * 255, c.worstX, c.worstY );
 			printf( "\n" );
 			if (!c.passed())
+			{
 				print( c, stdout, ("    " + names[n]).c_str() );
+				// the outside pixels themselves, as compare() judges them: past the envelope by more than base
+				const double base = 2.0 / 255.0;
+				int listed = 0;
+				for (int y = 0; y < (int)h.targetHeight && listed < 12; ++y)
+					for (int x = 0; x < (int)h.targetWidth && listed < 12; ++x)
+					{
+						const size_t i = (size_t)y * h.targetWidth + x;
+						const uint8_t *g = &gpu[i * 4];
+						const double gv[4] = { g[0] / 255.0, g[1] / 255.0, g[2] / 255.0, g[3] / 255.0 };
+						const Color &lo = target.lo[i], &hi = target.hi[i], &nom = target.color[i];
+						const double los[4] = { lo.r, lo.g, lo.b, lo.a }, his[4] = { hi.r, hi.g, hi.b, hi.a };
+						bool out = false;
+						for (int k = 0; k < (target.hasAlpha ? 4 : 3); ++k)
+							out = out || gv[k] < los[k] - base || gv[k] > his[k] + base;
+						if (!out)
+							continue;
+						++listed;
+						printf( "    outside (%d, %d): gpu %d %d %d %d, nominal %.1f %.1f %.1f %.1f, envelope r %.1f-%.1f g %.1f-%.1f b %.1f-%.1f a %.1f-%.1f (x255)\n",
+							x, y, g[0], g[1], g[2], g[3], nom.r * 255, nom.g * 255, nom.b * 255, nom.a * 255,
+							lo.r * 255, hi.r * 255, lo.g * 255, hi.g * 255, lo.b * 255, hi.b * 255, lo.a * 255, hi.a * 255 );
+						if (detail && i < target.detail.size())
+						{
+							const PixelDetail &d = target.detail[i];
+							printf( "      triangle %d of %d layer(s); stage 0 uv (%.6f, %.6f) lod %.3f; stage 1 uv (%.6f, %.6f) lod %.3f;"
+								" corners (%.2f, %.2f) (%.2f, %.2f) (%.2f, %.2f)\n", d.primitive, d.layers, d.uv[0][0], d.uv[0][1],
+								d.lod[0], d.uv[1][0], d.uv[1][1], d.lod[1], d.screen[0][0], d.screen[0][1], d.screen[1][0],
+								d.screen[1][1], d.screen[2][0], d.screen[2][1] );
+						}
+					}
+			}
 		}
 	}
 	printf( "ffref_judge: %d drawn, %d refused, %d unreadable", drawn, refused, unreadable );
