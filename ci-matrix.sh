@@ -12,6 +12,9 @@
 #                                     compared across the hosts.  Pins belong to a commit: upstream gameplay
 #                                     data moves them.  Default: 0@1200 and 1@12000, unpinned.
 #   --hosts finer,thinkerer,windows   a subset (default all three)
+#   --arch                            also finer-x86: the same branch built for x86_64 on finer and its E1 run
+#                                     under Rosetta, in ~/zhr-worker/ci-x86_64.  E1 only (no ctest), and its CRCs
+#                                     join the comparison.  Optional: it is a second full build of the tree
 #   --vm-known-hosts <file>           the VM's host key (the VM is port 2222 on thinkerer, reached by ProxyJump);
 #                                     default $ZH_VM_KNOWN_HOSTS
 #   --out <dir>                       where each host's full log goes (default: a new temporary folder)
@@ -94,10 +97,12 @@ EXPECT="0@1200,1@12000"
 HOSTS="finer,thinkerer,windows"
 VMKH="${ZH_VM_KNOWN_HOSTS:-}"
 OUT=""
+ARCH_LEG=0
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--expect) EXPECT="$2"; shift 2;;
 		--hosts) HOSTS="$2"; shift 2;;
+		--arch) ARCH_LEG=1; shift;;
 		--vm-known-hosts) VMKH="$2"; shift 2;;
 		--out) OUT="$2"; shift 2;;
 		*) echo "ci-matrix: unknown option $1" >&2; exit 2;;
@@ -107,8 +112,9 @@ if [ -z "$REF" ] || ! git show-ref -q --verify "refs/heads/$REF"; then
 	echo "usage: ci-matrix.sh <local branch> [--expect ...] [--hosts ...] [--vm-known-hosts file] [--out dir]" >&2
 	exit 2
 fi
+[ $ARCH_LEG -eq 1 ] && case ",$HOSTS," in *,finer-x86,*) ;; *) HOSTS="$HOSTS,finer-x86";; esac
 for h in $(printf '%s' "$HOSTS" | tr ',' ' '); do
-	case "$h" in finer|thinkerer|windows) ;; *) echo "ci-matrix: unknown host $h" >&2; exit 2;; esac
+	case "$h" in finer|finer-x86|thinkerer|windows) ;; *) echo "ci-matrix: unknown host $h" >&2; exit 2;; esac
 done
 case ",$HOSTS," in *,windows,*)
 	[ -n "$VMKH" ] && [ -s "$VMKH" ] || { echo "ci-matrix: the windows host needs --vm-known-hosts (or ZH_VM_KNOWN_HOSTS)" >&2; exit 2; };;
@@ -135,7 +141,8 @@ cat > "$OUT/ci-host.sh" <<'HOST'
 # overwrites a script a first one's bash is still reading.
 set -u -o pipefail
 LEG="$1"; REF="$2"; NAME="$3"; EXPECT="$4"; CLONE="$5"; PHASE="${6:-light}"; ASKED="${7:-}"
-Z="$HOME/zhr-worker"; CI="$Z/ci"
+ARCH="${CI_ARCH:-}"		# set for the --arch leg: a build for that architecture, E1 only, in its own folder
+Z="$HOME/zhr-worker"; CI="$Z/ci${ARCH:+-$ARCH}"
 export PATH="$Z/bin:$PATH" ZH_AGENT=ci-matrix
 say() { echo "CI $*"; }
 verdict() { echo "CI-VERDICT $LEG $*"; rm -f "$0"; exit 0; }
@@ -150,14 +157,14 @@ if ! python3 -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)' 2>
 fi
 
 cd "$Z/repo" || verdict "FAIL no repository at $Z/repo"
-git fetch -q -f "$Z/bundles/$NAME" "refs/heads/$REF:refs/ci/head" < /dev/null || verdict "FAIL could not fetch $REF from the bundle"
+git fetch -q -f "$Z/bundles/$NAME" "refs/heads/$REF:refs/ci/head${ARCH:+-$ARCH}" < /dev/null || verdict "FAIL could not fetch $REF from the bundle"
 rm -f "$Z/bundles/$NAME"
 if [ ! -d "$CI/wt" ]; then
-	git worktree add -q --detach "$CI/wt" refs/ci/head < /dev/null || verdict "FAIL could not make the worktree $CI/wt"
+	git worktree add -q --detach "$CI/wt" refs/ci/head${ARCH:+-$ARCH} < /dev/null || verdict "FAIL could not make the worktree $CI/wt"
 	$CLONE "$Z/vendor/." "$CI/wt/" && $CLONE "$Z"/art/Reforged*.big "$CI/wt/GeneralsMD/Run/" || verdict "FAIL could not copy the vendored sources and the art in"
 fi
 cd "$CI/wt" || verdict "FAIL no worktree"
-git checkout -q -f --detach refs/ci/head < /dev/null || verdict "FAIL could not check out $REF"
+git checkout -q -f --detach refs/ci/head${ARCH:+-$ARCH} < /dev/null || verdict "FAIL could not check out $REF"
 say "checked out: $(git log --oneline -1 | cut -c1-100)"
 bash GeneralsMD/Code/Tools/vendor.sh > "$CI/vendor.log" 2>&1 < /dev/null || verdict "FAIL vendor.sh (see $CI/vendor.log)"
 # Everything heavy - configure, build, ctest, every E1 run - is ONE zheavy job, so the gate queues once.  A
@@ -172,21 +179,28 @@ start=$SECONDS
 
 if [ ! -f "$CI/build/CMakeCache.txt" ]; then
 	cmake -S "$CI/wt/GeneralsMD/Code" -B "$CI/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DZH_GAME_DATA="$Z/data" \
+		${ARCH:+-DCMAKE_OSX_ARCHITECTURES=$ARCH} \
 		> "$CI/configure.log" 2>&1 < /dev/null || verdict "FAIL configure (see $CI/configure.log)"
 fi
-ninja -C "$CI/build" -k 0 -j "${ZHEAVY_JOBS:-5}" > "$CI/build.log" 2>&1 < /dev/null	# zheavy caps only a bare ninja
+targets=""; [ -n "$ARCH" ] && targets="generals zh_overlay zh_overlay_dev"	# what E1 needs, no more
+ninja -C "$CI/build" -k 0 -j "${ZHEAVY_JOBS:-5}" $targets > "$CI/build.log" 2>&1 < /dev/null	# zheavy caps only a bare ninja
 if [ $? -ne 0 ]; then
 	grep -E 'error:|FAILED:' "$CI/build.log" | head -5 | sed 's/^/CI   /'
+	say "ctest, E1: not run (build failed)"
 	verdict "FAIL the build (see $CI/build.log)"
 fi
 say "build: ok"
 
 failed=0
+if [ -n "$ARCH" ]; then
+	say "ctest: not run (the $ARCH leg runs E1 only; file $(file -b "$CI/build/generals" | cut -c1-60))"
+else
 ctest --test-dir "$CI/build" -j4 --output-on-failure \
 	-E 'test_milesaudiomanager|miles_smoke|test_miles_miniaudio|test_binkvideo' > "$CI/ctest.log" 2>&1 < /dev/null
 if [ $? -eq 0 ]; then say "ctest: passed"; else say "ctest: FAILED (see $CI/ctest.log)"; failed=1; fi
 grep -E 'tests passed|\*\*\*(Failed|Exception|Timeout|Not Run)' "$CI/ctest.log" | sed 's/^/CI   /'
 say "skipped: $(sed -n -E 's/^[[:space:]]*[0-9]+ - (.*) \((Skipped|Disabled)\)$/\1 (\2)/p' "$CI/ctest.log" | paste -sd ',' - | sed 's/,/, /g')"
+fi
 
 for pair in $(printf '%s' "$EXPECT" | tr ',' ' '); do
 	run="${pair%%:*}"; seed="${run%@*}"; frames="${run#*@}"
@@ -223,6 +237,9 @@ if (Get-OtherCi) { Write-Host "waiting for the other windows-ci.ps1 run on this 
 while (Get-OtherCi) { Start-Sleep -Seconds 30 }
 
 Set-Location $root
+# A result left by an earlier run must never be read as this one's (a failed build writes none).
+$result = Join-Path $work "desktop-result.json"
+Remove-Item $result, "$result.partial" -ErrorAction SilentlyContinue
 $ciArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".\windows-ci.ps1", "-Bundle", $Bundle, "-Ref", $Ref,
 	"-DataDir", "C:\zhr-worker\data", "-WorkDir", $work, "-Runs", $Runs)
 if ($ExpectCrc -ne "") { $ciArgs += @("-ExpectCrc", $ExpectCrc) }
@@ -239,25 +256,27 @@ if (Test-Path $ctestLog) {
 	$skipped = Select-String -Path $ctestLog -Pattern '^\s*\d+ - (.*) \((Skipped|Disabled)\)$' | ForEach-Object { "$($_.Matches[0].Groups[1].Value) ($($_.Matches[0].Groups[2].Value))" }
 	"CI skipped: " + ($skipped -join ", ")
 }
-$result = Join-Path $work "desktop-result.json"
 if (Test-Path $result) {
 	$d = Get-Content -Raw $result | ConvertFrom-Json
 	foreach ($run in $Runs.Split(',')) {
 		$crc = $d.Crcs."$run"; if (-not $crc) { $crc = "none" }
 		"CI e1 $run $crc $($d.E1)"
 	}
+} else {
+	foreach ($run in $Runs.Split(',')) { "CI e1 $run none not run (no desktop result: the build or an earlier step failed)" }
 }
 "CI time: $([int]((Get-Date) - $start).TotalSeconds) s"
 "CI-VERDICT windows " + $(if ($code -eq 0) { "PASS" } else { "FAIL" })
 Remove-Item $PSCommandPath -ErrorAction SilentlyContinue	# each run's copy has a name of its own
 VM
 
-posix_leg() {	# posix_leg <leg> <ssh host> <clone command>
-	local leg="$1" host="$2" clone="$3"
-	scp -q "${SSH_OPTS[@]}" "$OUT/$NAME" "zhr@$host:zhr-worker/bundles/$NAME" \
-		&& scp -q "${SSH_OPTS[@]}" "$OUT/ci-host.sh" "zhr@$host:zhr-worker/bundles/${NAME%.bundle}.sh" \
+posix_leg() {	# posix_leg <leg> <ssh host> <clone command> [architecture]
+	local leg="$1" host="$2" clone="$3" arch="${4:-}"
+	local bundle="${NAME%.bundle}-$leg.bundle"	# each leg its own files: two legs can share a host
+	scp -q "${SSH_OPTS[@]}" "$OUT/$NAME" "zhr@$host:zhr-worker/bundles/$bundle" \
+		&& scp -q "${SSH_OPTS[@]}" "$OUT/ci-host.sh" "zhr@$host:zhr-worker/bundles/${bundle%.bundle}.sh" \
 		|| { echo "CI-VERDICT $leg FAIL could not copy the bundle to $host"; return; }
-	ssh "${SSH_OPTS[@]}" "zhr@$host" "bash ~/zhr-worker/bundles/${NAME%.bundle}.sh '$leg' '$REF' '$NAME' '$EXPECT' '$clone'" < /dev/null
+	ssh "${SSH_OPTS[@]}" "zhr@$host" "${arch:+CI_ARCH=$arch }bash ~/zhr-worker/bundles/${bundle%.bundle}.sh '$leg' '$REF' '$bundle' '$EXPECT' '$clone'" < /dev/null
 }
 
 windows_leg() {
@@ -277,6 +296,7 @@ pids=()
 for h in $(printf '%s' "$HOSTS" | tr ',' ' '); do
 	case "$h" in
 		finer) posix_leg finer finer.local "cp -c -R" > "$OUT/finer.log" 2>&1 & pids+=($!);;
+		finer-x86) posix_leg finer-x86 finer.local "cp -c -R" x86_64 > "$OUT/finer-x86.log" 2>&1 & pids+=($!);;
 		thinkerer) posix_leg thinkerer thinkerer "cp -a --reflink=auto" > "$OUT/thinkerer.log" 2>&1 & pids+=($!);;
 		windows) windows_leg > "$OUT/windows.log" 2>&1 & pids+=($!);;
 	esac
