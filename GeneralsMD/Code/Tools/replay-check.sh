@@ -285,7 +285,7 @@ for match in $MATCHES; do
 done
 
 echo
-if [ -n "$APP" ]; then
+if [ -n "$APP" ] && [ "${APP%.app}" != "$APP" ]; then		# a macOS bundle's seal; a Linux package has none
 	if codesign --verify --deep --strict "$APP" 2>/dev/null; then
 		echo "the bundle's signature still verifies --deep --strict: nothing was written into it"
 	else

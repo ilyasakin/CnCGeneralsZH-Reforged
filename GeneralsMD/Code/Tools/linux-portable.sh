@@ -89,6 +89,11 @@ linked="$(package_link_libraries "$BUILD/build.ninja" "$LIBPATHS")" || fail "can
 [ -n "$linked" ] || fail "generals' link line names no static library"
 ENTRIES="$(package_license_entries "$TABLE" $linked)" || fail "refused: generals links libraries macos-app-licenses.txt does not cover:$ENTRIES"
 
+# ---- the art, unless it is left out: the staged overlay links it from GeneralsMD/Run ----------------------
+if [ "$ART" -eq 1 ] && ! ls "$BUILD/overlay"/Reforged*.big >/dev/null 2>&1; then
+	fail "the staged overlay holds no Reforged*.big art: put the archives in GeneralsMD/Run and build again, or pass --no-art"
+fi
+
 # ---- the HUD directive, over the overlay that will be copied in ------------------------------------------
 found="$(hud_check_files "$BUILD/overlay")"
 [ -z "$found" ] || fail "refused: the HUD overlay must stay on (ShowHudOverlay = No in: $(printf '%s ' $found))"
@@ -100,7 +105,7 @@ libs="$(printf '%s\n' "$needs" | sed '/^--$/q' | grep -v '^--$')"
 glibc="$(printf '%s\n' "$needs" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)"
 [ -n "$glibc" ] || fail "cannot read generals' glibc symbols"
 [ "$(printf '%s\n%s\n' "$glibc" GLIBC_2.31 | sort -V | tail -1)" = GLIBC_2.31 ] || fail "refused: generals needs $glibc, newer than GLIBC_2.31"
-! printf '%s\n' "$needs" | grep -qE 'GLIBCXX_|CXXABI_' || fail "refused: generals needs libstdc++ symbols (it must link it statically)"
+! grep -qE 'GLIBCXX_|CXXABI_' <<< "$needs" || fail "refused: generals needs libstdc++ symbols (it must link it statically)"
 allowed='^(libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|ld-linux-x86-64\.so\.2|libfontconfig\.so\.1)$'
 extra="$(printf '%s\n' "$libs" | grep -vE "$allowed")"
 [ -z "$extra" ] || fail "refused: generals needs shared libraries a SteamOS may lack: $(printf '%s ' $extra)"
