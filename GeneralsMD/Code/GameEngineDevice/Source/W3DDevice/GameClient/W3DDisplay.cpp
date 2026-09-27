@@ -469,6 +469,8 @@ static double s_aircraftLeadSum = 0.0;
 static unsigned long long s_aircraftLeadCount = 0;
 static Real s_aircraftLeadMax = 0.0f;
 static Real s_aircraftRadiusMax = 0.0f;
+static Int64 s_smoothPassTicks = 0;			// R1's blend and restore, together, over the run
+static unsigned long long s_smoothPasses = 0;
 
 W3DDisplay::~W3DDisplay()
 {
@@ -485,6 +487,9 @@ W3DDisplay::~W3DDisplay()
 				fprintf(stderr, " %s %llu;", SmoothMotion_SnapName((SmoothMotionSnap)i), counts[i]);
 			fprintf(stderr, "\n");
 		}
+		if (s_smoothPasses > 0 && getenv("ZH_SMOOTH_MOTION_STATS") != NULL)
+			fprintf(stderr, "smooth motion: blend and restore cost %.1f us a render frame over %llu frames\n",
+				(double)s_smoothPassTicks * 1.0e6 / (double)Clock_Ticks_Per_Second() / (double)s_smoothPasses, s_smoothPasses);
 		if (s_aircraftLeadCount > 0 && getenv("ZH_SMOOTH_MOTION_STATS") != NULL)
 			fprintf(stderr, "smooth motion: aircraft lead (logic position ahead of the drawn one): %llu samples, mean %.2f, max %.2f world units; the largest aircraft's bounding radius %.2f\n",
 				s_aircraftLeadCount, s_aircraftLeadSum / (double)s_aircraftLeadCount, s_aircraftLeadMax, s_aircraftRadiusMax);
@@ -2175,6 +2180,7 @@ static void smoothMotionApply()
 {
 	if (!TheSmoothMotionActive)
 		return;
+	const Int64 passStart = Clock_Ticks();
 	const UnsignedInt frame = TheGameClient->getFrame();
 	const Bool newTick = frame != s_smoothModelFrame;
 	s_smoothModelFrame = frame;
@@ -2219,6 +2225,8 @@ static void smoothMotionApply()
 		}
 	}
 	s_smoothApplied = TRUE;
+	s_smoothPassTicks += Clock_Ticks() - passStart;
+	++s_smoothPasses;
 }
 
 static void smoothMotionRestore()
@@ -2226,6 +2234,7 @@ static void smoothMotionRestore()
 	if (!s_smoothApplied)
 		return;
 	s_smoothApplied = FALSE;
+	const Int64 passStart = Clock_Ticks();
 	for (Drawable *draw = TheGameClient->firstDrawable(); draw != NULL; draw = draw->getNextDrawable())
 	{
 		DrawModule **modules = draw->getDrawModules();
@@ -2234,6 +2243,7 @@ static void smoothMotionRestore()
 		for (DrawModule **dm = modules; *dm; ++dm)
 			(*dm)->smoothMotionRestore();
 	}
+	s_smoothPassTicks += Clock_Ticks() - passStart;
 }
 
 static Real w3dElapsedMS( const Int64 &from, const Int64 &to )
