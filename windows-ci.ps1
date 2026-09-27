@@ -103,6 +103,35 @@ function Get-CtestExe {
 	return @{ CMake = $cmake; CTest = (Join-Path (Split-Path $cmake) "ctest.exe") }
 }
 
+# Build outputs dated more than five minutes ahead of the clock, deleted, and how many.  A VM whose clock
+# ran fast (7 h, until RealTimeIsUniversal) stamped its outputs in the future; once the clock was put right,
+# MSBuild took them for newer than any edited source and rebuilt nothing, and a Debug round tested a stale
+# generals.exe.  Deleting them makes the build redo exactly those.
+# Files git tracks are never touched: a checkout made while the clock ran fast dates them in the future too,
+# and Run\ holds some (BrowserEngine.dll, which dx8webbrowser.cpp #imports; a sweep of Run\ on a Windows
+# ARM64 VM deleted it and the next build failed).  If git cannot list them, nothing is deleted and -1 comes
+# back.
+function Remove-FutureOutputs([string] $root, [string[]] $dirs) {
+	$limit = (Get-Date).AddMinutes(5)
+	$present = @($dirs | Where-Object { Test-Path -LiteralPath $_ })
+	if ($present.Count -eq 0) { return 0 }
+	# git refuses a path outside the work tree, and nothing outside it is tracked
+	$top = [System.IO.Path]::GetFullPath($root).TrimEnd('\') + '\'
+	$inside = @($present | Where-Object { [System.IO.Path]::GetFullPath($_).StartsWith($top, [StringComparison]::OrdinalIgnoreCase) })
+	$listed = @()
+	if ($inside.Count -gt 0) {
+		$listed = @(git -C $root -c core.quotepath=off ls-files -- $inside)
+		if ($LASTEXITCODE -ne 0) { return -1 }
+	}
+	$tracked = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+	$listed | ForEach-Object { [void]$tracked.Add([System.IO.Path]::GetFullPath((Join-Path $root $_))) }
+	$future = @($present | ForEach-Object {
+		Get-ChildItem -LiteralPath $_ -Recurse -File -Force -ErrorAction SilentlyContinue } |
+		Where-Object { $_.LastWriteTime -gt $limit -and -not $tracked.Contains($_.FullName) })
+	$future | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+	return $future.Count
+}
+
 # every file of a folder: its relative path, size and SHA-256, sorted - equal listings mean an equal folder
 function Get-TreeListing([string] $dir) {
 	Get-ChildItem -LiteralPath $dir -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
@@ -208,13 +237,22 @@ if ($Bundle -ne "" -or $Ref -ne "") {
 if ($CheckedOut -ne "") { $summary += "checked out: $CheckedOut" }
 
 if (-not $SkipBuild) {
+	$futureOutputs = Remove-FutureOutputs $Root @($Build, $RunDir)
+	if ($futureOutputs -lt 0) { $summary += "build: git could not list the tracked files, so no output dated in the future was deleted" }
+	if ($futureOutputs -gt 0) { $summary += "build: deleted $futureOutputs output(s) dated in the future (a clock that ran fast); they are rebuilt" }
 	# The last build's exe goes first: a build that fails must leave nothing the desktop part could run.
 	Remove-Item (Join-Path $RunDir "generals.exe") -ErrorAction SilentlyContinue
 	Push-Location $Root
-	cmd /c "build.bat $Config < NUL" | Out-Host
+	# not $phase: PowerShell names ignore case, and that would be this script's -Phase, a [string].  A
+	# stopwatch, not Get-Date: the VM's wall clock was once stepped back 7 h in the middle of a gate.
+	$phaseClock = [Diagnostics.Stopwatch]::StartNew()
+	cmd /c "build.bat $Config < NUL" | Tee-Object -Variable buildOut | Out-Host
 	$built = $LASTEXITCODE
 	Pop-Location
-	$summary += "build: " + $(if ($built -eq 0) { "ok" } else { $failed = $true; "FAILED (exit $built)" })
+	# how much it rebuilt: MSBuild names each source it compiles on a line of its own
+	$compiled = @($buildOut | Where-Object { "$_" -match '^\s+[\w\.\-]+\.(cpp|c|cc|cxx)$' }).Count
+	$took = "$([int]$phaseClock.Elapsed.TotalSeconds) s, $compiled source(s) compiled"
+	$summary += "build: " + $(if ($built -eq 0) { "ok ($took)" } else { $failed = $true; "FAILED (exit $built; $took)" })
 	if ($built -ne 0) {
 		$summary += "ctest, GPU tests: not run (build failed)"
 		if ($DataDir -ne "") { $summary += "E1: not run (build failed)" }
@@ -230,15 +268,18 @@ if ($DataDir -ne "") { & $tools.CMake -S (Join-Path $Root "GeneralsMD\Code") -B 
 $session0 = (Get-Process -Id $PID).SessionId -eq 0
 Push-Location $Build
 $exclude = if ($session0) { "$NoSound|dx9_smoke|dx9_smoke_msaa|test_dx11device" } else { $NoSound }
+$phaseClock = [Diagnostics.Stopwatch]::StartNew()
 $ctestOut = & $tools.CTest -C $Config -j4 --timeout 900 --output-on-failure -E $exclude 2>&1
+$ctestTook = "$([int]$phaseClock.Elapsed.TotalSeconds) s"
 $ctestExit = $LASTEXITCODE
 Pop-Location
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
 $ctestOut | ForEach-Object { "$_" } | Out-File -Encoding utf8 (Join-Path $WorkDir "ctest.log")		# the failing tests' own output
-$summary += "ctest: " + $(if ($ctestExit -eq 0) { "passed" } else { $failed = $true; "FAILED (the output: $(Join-Path $WorkDir 'ctest.log'))" })
+$summary += "ctest: " + $(if ($ctestExit -eq 0) { "passed ($ctestTook)" } else { $failed = $true; "FAILED ($ctestTook; the output: $(Join-Path $WorkDir 'ctest.log'))" })
 $ctestOut | Select-String -Pattern 'tests passed|\*\*\*' | ForEach-Object { $summary += "  " + $_.Line.Trim() }
 
 # the desktop part: here, or in the interactive session through a one-off task
+$phaseClock = [Diagnostics.Stopwatch]::StartNew()
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
 $resultFile = Join-Path $WorkDir "desktop-result.json"
 Remove-Item $resultFile, "$resultFile.partial" -ErrorAction SilentlyContinue
@@ -253,16 +294,18 @@ if ($session0) {
 	"@powershell.exe $argList" | Out-File -Encoding ascii $wrapper
 	schtasks /create /tn $task /tr "`"$wrapper`"" /sc once /st 23:59 /it /ru $user /f | Out-Null
 	schtasks /run /tn $task | Out-Null
-	$deadline = (Get-Date).AddMinutes(90)
-	while (-not (Test-Path $resultFile) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 10 }
+	$waitClock = [Diagnostics.Stopwatch]::StartNew()		# not the wall clock: a VM's can step by hours
+	while (-not (Test-Path $resultFile) -and $waitClock.Elapsed.TotalMinutes -lt 90) { Start-Sleep -Seconds 10 }
 	Start-Sleep -Seconds 2
 	schtasks /delete /tn $task /f | Out-Null
 } else {
 	& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Phase desktop -ResultFile $resultFile -Config $Config -MaxFrames $MaxFrames -WorkDir $WorkDir -Runs ($Runs -join ',') -DataDir $DataDir
 }
+$desktopTook = "$([int]$phaseClock.Elapsed.TotalSeconds) s"
 if (-not (Test-Path $resultFile)) {
-	$summary += "desktop part: NO RESULT (it did not finish)"; $failed = $true
+	$summary += "desktop part: NO RESULT (it did not finish, $desktopTook)"; $failed = $true
 } else {
+	$summary += "desktop part (GPU tests and E1): $desktopTook"
 	$d = Get-Content -Raw $resultFile | ConvertFrom-Json
 	$summary += "GPU tests (desktop session): $($d.Gpu)"; if ($d.Gpu -ne "passed") { $failed = $true }
 	if ($DataDir -ne "") {
