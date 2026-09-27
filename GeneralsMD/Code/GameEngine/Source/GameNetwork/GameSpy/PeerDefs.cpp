@@ -74,6 +74,8 @@ GameSpyInfo::GameSpyInfo()
 
 GameSpyInfo::~GameSpyInfo()
 {
+	if (TheGameInfo == TheGameSpyGame)
+		TheGameInfo = NULL;	// the staging room is ours and goes with us
 	TheGameSpyGame = NULL;
 	reset();
 }

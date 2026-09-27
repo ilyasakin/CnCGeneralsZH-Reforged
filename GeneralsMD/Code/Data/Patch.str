@@ -1297,6 +1297,14 @@ GUI:ScoreboardPerSecond
 "PER SEC"
 END
 
+GUI:ControlBarMoneyEarning
+"$ %d  +%d/s"
+END
+
+CONTROLBAR:MoneyDescription
+"The money you have, and what you earned a second over the last half minute"
+END
+
 GUI:ScoreboardKills
 "K"
 END

@@ -611,6 +611,9 @@ void LANAPI::update( void )
 		// m_gameStartTime is when the next message goes out
 		// m_gameStartSeconds is how many seconds remain in the message
 
+		if (m_gameStartSeconds == 1)
+			LANDisableButtons();
+
 		RequestGameStartTimer( m_gameStartSeconds );
 	}
 	else if (m_gameStartTime && m_gameStartTime <= now)
@@ -741,6 +744,8 @@ void LANAPI::RequestGameAnnounce( void )
 			reply.LANMessageType = LANMessage::MSG_GAME_ANNOUNCE;
 
 			AsciiString gameOpts = GameInfoToAsciiString(m_currentGame);
+			if (gameOpts.isEmpty())
+				return;
 			strlcpy(reply.GameInfo.options,gameOpts.str(),ARRAY_SIZE(reply.GameInfo.options));
 			WideCharNCpy(reply.GameInfo.gameName, m_currentGame->getName().str(), g_lanGameNameLength);
 			reply.GameInfo.gameName[g_lanGameNameLength] = 0;
@@ -865,9 +870,9 @@ void LANAPI::RequestGameStartTimer( Int seconds )
 
 void LANAPI::RequestGameOptions( AsciiString gameOptions, Bool isPublic, UnsignedInt ip /* = 0 */ )
 {
-	DEBUG_ASSERTCRASH(gameOptions.getLength() < m_lanMaxOptionsLength, ("Game options string is too long!"));
+	DEBUG_ASSERTCRASH(gameOptions.getLength() <= m_lanMaxOptionsLength, ("Game options string is too long!"));
 
-	if (!m_currentGame)
+	if (!m_currentGame || gameOptions.isEmpty())
 		return;
 
 	LANMessage msg;

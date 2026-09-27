@@ -1141,7 +1141,8 @@ void WOLDisplayGameOptions( void )
 
 
   Int itemCount = GadgetComboBoxGetLength(comboBoxStartingCash);
-  for ( Int index = 0; index < itemCount; index++ )
+  Int index;
+  for ( index = 0; index < itemCount; index++ )
   {
     Int value  = (Int)(intptr_t)GadgetComboBoxGetItemData(comboBoxStartingCash, index);
     if ( value == theGame->getStartingCash().countMoney() )
@@ -1156,7 +1157,9 @@ void WOLDisplayGameOptions( void )
     }
   }
   
-  DEBUG_ASSERTCRASH( index < itemCount, ("Could not find new starting cash amount %d in list", theGame->getStartingCash().countMoney() ) );
+  // see LanGameOptionsMenu: an amount from the player's INI that the list does not carry
+  if ( index == itemCount )
+    PopulateStartingCashComboBox( comboBoxStartingCash, theGame );
 
   // UpdatePeaceTimeComboBox only writes when the selection actually changes, which is what keeps
   // this out of the same recursion the two above are guarding against

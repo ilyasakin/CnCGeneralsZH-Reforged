@@ -1126,17 +1126,33 @@ void Player::initFromDict(const Dict* d)
 }
 
 //=============================================================================
-void Player::becomingTeamMember(Object *obj, Bool yes) 
-{ 
+void Player::becomingTeamMember(Object *obj, Bool yes, Bool objectXferLoad)
+{
 	if (!obj)
-		return;	
+		return;
 
 	// energy production/consumption hooks, note we ignore things that are UNDER_CONSTRUCTION
 	if( !obj->getStatusBits().test( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 	{
 		obj->friend_adjustPowerForPlayer(yes);
 	}  // end if
-		
+
+	if (obj->isKindOf(KINDOF_DOZER)
+			&& obj->getAIUpdateInterface()
+			&& obj->getAIUpdateInterface()->isIdle())
+	{
+		// Need to remove it from the pick a peasant button
+		if (yes)
+			TheInGameUI->addIdleWorker(obj);
+		else
+			TheInGameUI->removeIdleWorker(obj, getPlayerIndex());
+	}
+
+	// An object being loaded already carries its saved vision range and bonuses; a battle plan
+	// applied again here would stack a Search and Destroy bonus on top and break the shroud.
+	if (objectXferLoad)
+		return;
+
 	// when we capture a building, we need to see if there's an AutoDepositUpdate hooked to it,
 	// if so, award the cash bonus
 	if(this != ThePlayerList->getNeutralPlayer() && yes)
@@ -1165,18 +1181,6 @@ void Player::becomingTeamMember(Object *obj, Bool yes)
 	// A new object is not ready here yet; Object::initObject marks it. One being destroyed is gone.
 	if( obj->areModulesReady() && !obj->isDestroyed() )
 		applyVisionSpies( obj, yes );
-
-
-	if (obj->isKindOf(KINDOF_DOZER) 
-			&& obj->getAIUpdateInterface() 
-			&& obj->getAIUpdateInterface()->isIdle())
-	{
-		// Need to remove it from the pick a peasant button
-		if (yes)
-			TheInGameUI->addIdleWorker(obj);
-		else
-			TheInGameUI->removeIdleWorker(obj, getPlayerIndex());
-	}
 }
 
 //=============================================================================
@@ -2580,14 +2584,21 @@ void Player::doBountyForKill(const Object* killer, const Object* victim)
 		getMoney()->deposit( bounty );
 		m_scoreKeeper.addMoneyEarned( bounty );
 
-		//Display cash income floating over the recipient.
-		UnicodeString moneyString;
-		moneyString.format( TheGameText->fetch( "GUI:AddCash" ), bounty );
-		Coord3D pos;
-		pos.zero();
-		pos.add( killer->getPosition() );
-		pos.z += 10.0f; //add a little z to make it show up above the unit.
-		TheInGameUI->addFloatingText( moneyString, &pos, GameMakeColor( 255, 255, 0, 255 ) );
+		// Display cash income floating over the recipient - but not to an enemy of a killer it cannot see,
+		// or the number gives the stealthed unit away. Client display only, the deposit above is logic.
+		const Object *seenKiller = killer->getContainedBy() ? killer->getContainedBy() : killer;
+		const Bool hiddenKiller = seenKiller->testStatus( OBJECT_STATUS_STEALTHED ) && !seenKiller->testStatus( OBJECT_STATUS_DETECTED );
+		const Player *localPlayer = ThePlayerList->getLocalPlayer();
+		if( !hiddenKiller || localPlayer->getRelationship( killer->getTeam() ) != ENEMIES )
+		{
+			UnicodeString moneyString;
+			moneyString.format( TheGameText->fetch( "GUI:AddCash" ), bounty );
+			Coord3D pos;
+			pos.zero();
+			pos.add( killer->getPosition() );
+			pos.z += 10.0f; //add a little z to make it show up above the unit.
+			TheInGameUI->addFloatingText( moneyString, &pos, GameMakeColor( 255, 255, 0, 255 ) );
+		}
 	}
 }
 
@@ -4032,7 +4043,8 @@ static void localApplyBattlePlanBonusesToObject( Object *obj, void *userData )
 				if( bonus->m_sightRangeScalar != 1.0f )
 				{
 					objectToModify->setVisionRange( obj->getVisionRange() * bonus->m_sightRangeScalar );
-					objectToModify->setShroudClearingRange( obj->getShroudClearingRange() * bonus->m_sightRangeScalar );
+					// the own range: a scaffold reports zero, and scaling that left the finished building blind
+					objectToModify->setShroudClearingRange( obj->getOwnShroudClearingRange() * bonus->m_sightRangeScalar );
 				}
 			}
 

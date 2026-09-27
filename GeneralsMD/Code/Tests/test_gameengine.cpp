@@ -5370,6 +5370,17 @@ TEST(a_transferred_file_has_to_be_what_its_name_says_it_is)
 	CHECK( IsValidTransferFileContent( "maps\\foo\\foo.tga", makeTga( 128, TRUE ), 128 ) );
 	CHECK( !IsValidTransferFileContent( "maps\\foo\\foo.tga", makeTga( 128, FALSE ), 128 ) );
 	CHECK( !IsValidTransferFileContent( "maps\\foo\\foo.tga", text, 8 ) );
+
+	// a Targa 1.0 has no footer at all, and a header that holds up does instead: an 8 by 8
+	// truecolor at 32 bits, and one byte short of the pixels it promises
+	static const Int PLAIN_BYTES = 18 + 8 * 8 * 4;
+	UnsignedByte *plain = makeTga( PLAIN_BYTES, FALSE );
+	plain[2] = 2;
+	plain[12] = 8;
+	plain[14] = 8;
+	plain[16] = 32;
+	CHECK( IsValidTransferFileContent( "maps\\foo\\foo.tga", plain, PLAIN_BYTES ) );
+	CHECK( !IsValidTransferFileContent( "maps\\foo\\foo.tga", plain, PLAIN_BYTES - 1 ) );
 }
 
 /* The name a joining player sends goes into the game state string the lobby passes around, and that

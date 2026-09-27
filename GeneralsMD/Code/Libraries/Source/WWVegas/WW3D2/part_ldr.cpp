@@ -290,8 +290,10 @@ ParticleEmitterDefClass::Set_Creation_Volume (Vector3Randomizer *randomizer)
 void							
 ParticleEmitterDefClass::Set_User_String (const char *pstring)		
 { 
-	SAFE_FREE (m_pUserString); 
-	m_pUserString = strdupAsWindows(pstring); 
+	// Copy first: pstring may be our own string (self-assignment).
+	char *copy = strdupAsWindows(pstring);
+	SAFE_FREE (m_pUserString);
+	m_pUserString = copy;
 	return ;
 }
 
@@ -303,8 +305,9 @@ ParticleEmitterDefClass::Set_User_String (const char *pstring)
 void							
 ParticleEmitterDefClass::Set_Name (const char *pname)			
 { 
-	SAFE_FREE (m_pName); 
-	m_pName = strdupAsWindows(pname); 
+	char *copy = strdupAsWindows(pname);
+	SAFE_FREE (m_pName);
+	m_pName = copy;
 	return ;
 }
 

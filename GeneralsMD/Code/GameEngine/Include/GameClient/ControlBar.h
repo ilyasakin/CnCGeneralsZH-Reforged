@@ -1065,6 +1065,9 @@ public:
 		return ( panel < 0 || panel >= CB_PANEL_COUNT ) ? 0.0f : m_panelSlide[ panel ];
 	}
 
+	/// post process step, after all commands and command sets are loaded - and again after a map.ini
+	void postProcessCommands( void );
+
 protected:
 	/// place one window and its descendants inside 'panel'; see layoutPanels
 	void placeInPanel( GameWindow *win, Int panel,
@@ -1110,9 +1113,6 @@ protected:
 
 	/// show rally point at world location, a NULL location will hide any visible rally point marker
 	void showRallyPoint( const Coord3D *loc );
-
-	/// post process step, after all commands and command sets are loaded
-	void postProcessCommands( void );
 
 	// the following methods are for resetting data for vaious contexts
 	void resetContainData( void );			/// reset container data we use to tie controls to objects IDs for containment

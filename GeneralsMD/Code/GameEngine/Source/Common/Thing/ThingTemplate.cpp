@@ -801,12 +801,18 @@ void ThingTemplate::parseReplaceModule(INI *ini, void *instance, void *store, co
 
 	self->m_moduleParsingMode = MODULEPARSE_ADD_REMOVE_REPLACE;
 
+	// The object's Locomotor lines are stored in its AI module's data, so a replaced AI module takes
+	// them along: Lazr_AmericaVehicleChinook's replaced ChinookAIUpdate left it no locomotor, and the
+	// first move order it got off the pad read a null one. (Upstream's fix, below: an emptied
+	// replacement gets the old sets back. The port's #33 re-stated them in FixesReforged.ini too.)
+	const AIUpdateModuleData *aiBefore = self->friend_getAIModuleInfo();
+	const LocomotorTemplateMap locomotorsBefore = aiBefore ? aiBefore->m_locomotorTemplates : LocomotorTemplateMap();
+
 	const char *modToRemove = ini->getNextToken();
 	AsciiString removedModuleName;
-	/* #33: an object's Locomotor sets live in its AI module's data, so replacing that module discards
-		 them unless the block re-states them.  Counted here; ThingFactory's checkLocomotors reports a
-		 thing whose replacement still has none once everything has loaded. */
-	AIUpdateModuleData *aiBefore = self->friend_getAIModuleInfo();
+	/* #33's guard: the sets the replaced AI module had are counted here, and ThingFactory's
+		 checkLocomotors reports any thing whose replacement still has none once everything has loaded.
+		 With upstream's carry-over below that can only fire if the carry-over itself fails. */
 	Int setsBefore = 0;
 	if (aiBefore != NULL)
 	{
@@ -815,7 +821,6 @@ void ThingTemplate::parseReplaceModule(INI *ini, void *instance, void *store, co
 				++setsBefore;
 	}
 	Bool removed = self->removeModuleInfo(modToRemove, removedModuleName);
-	const Bool removedTheAI = aiBefore != NULL && self->friend_getAIModuleInfo() == NULL;
 	if (!removed)
 	{
 		DEBUG_CRASH(("[LINE: %d - FILE: '%s'] ReplaceModule %s was not found for %s; cannot continue.\n",
@@ -823,12 +828,18 @@ void ThingTemplate::parseReplaceModule(INI *ini, void *instance, void *store, co
 		throw INI_INVALID_DATA;
 	}
 
+	const Bool replacesAIModule = aiBefore != NULL && self->friend_getAIModuleInfo() == NULL;
+
 	self->m_moduleBeingReplacedName = removedModuleName;
 	self->m_moduleBeingReplacedTag = modToRemove;
 	ini->initFromINI(self, self->getFieldParse());
+
+	AIUpdateModuleData *aiAfter = self->friend_getAIModuleInfo();
+	if (replacesAIModule && aiAfter != NULL && aiAfter->m_locomotorTemplates.empty())
+		aiAfter->m_locomotorTemplates = locomotorsBefore;
 	self->m_moduleBeingReplacedName.clear();
 	self->m_moduleBeingReplacedTag.clear();
-	if (removedTheAI && setsBefore > 0)
+	if (replacesAIModule && setsBefore > 0)
 		self->m_locomotorSetsLostToReplace = (Byte)(setsBefore > 127 ? 127 : setsBefore);
 
 	self->m_moduleParsingMode = oldMode;
