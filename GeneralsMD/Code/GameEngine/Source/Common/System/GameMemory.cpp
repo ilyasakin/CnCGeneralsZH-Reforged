@@ -3312,7 +3312,14 @@ void MemoryPoolFactory::debugMemoryReport(Int flags, Int startCheckpoint, Int en
 	#pragma comment(linker, "/force:multiple")
 #endif
 
+#ifdef ZH_SANITIZER_BUILD
+// Atomic in a sanitizer build: every new and delete counts here, from every thread, and TSan reports the
+// plain int's increments as the races they are (harmless for a counter only initMemoryManager reads).
+#include <atomic>
+static std::atomic<int> theLinkTester(0);
+#else
 static int theLinkTester = 0;
+#endif
 
 //-----------------------------------------------------------------------------
 void* STLSpecialAlloc::allocate(size_t __n) 
