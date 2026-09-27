@@ -8,6 +8,7 @@ Data/Art/Textures/ReforgedBarChinaRight.tga
 Data/Art/Textures/ReforgedBarGLACenter.tga
 Data/Art/Textures/ReforgedBarGLALeft.tga
 Data/Art/Textures/ReforgedBarGLARight.tga
+Data/Art/Textures/ReforgedLaserPink.tga
 Data/Art/Textures/ReforgedSignalAttack.tga
 Data/Art/Textures/ReforgedSignalDefend.tga
 Data/Art/Textures/ReforgedSignalLook.tga
@@ -25,9 +26,18 @@ Data/Cinema/tr_watch.txt
 Data/INI/BalanceReforged.ini
 Data/INI/CommandMapReforged.ini
 Data/INI/CommandMapWASD.ini
+Data/INI/CommandSetReforged.ini
 Data/INI/FXListReforged.ini
+Data/INI/FixesReforged.ini
+Data/INI/ObjectCreationListReforged.ini
+Data/INI/ParticleSystemReforged.ini
+Data/INI/ScienceReforged.ini
+Data/INI/SpecialPowerReforged.ini
+Data/INI/UpgradeReforged.ini
 Data/Install_Final.bmp
 Data/Patch.str
+Data/Scenarios/airbelow.txt
+Data/Scenarios/airbelowfar.txt
 Data/Scenarios/bridgecross.txt
 Data/Scenarios/bridgelong.txt
 Data/Scenarios/chokeprobe.txt
@@ -2618,9 +2628,12 @@ Tests/d3dx_golden.h
 Tests/d3dx_oracle/d3dx_oracle.cpp
 Tests/d3dx_oracle/run_d3dx_oracle.sh
 Tests/d3dx_sweep.h
+Tests/ffreference/ffcapture.cpp
+Tests/ffreference/ffcapture.h
 Tests/ffreference/ffdecl_captures.cpp
 Tests/ffreference/ffprogram.cpp
 Tests/ffreference/ffprogram.h
+Tests/ffreference/ffref_judge.cpp
 Tests/ffreference/ffreference.cpp
 Tests/ffreference/ffreference.h
 Tests/ffshader_dump.cpp
@@ -2633,6 +2646,7 @@ Tests/miles_smoke.cpp
 Tests/replay_wide_oracle.cpp
 Tests/run_data_gone_check.sh
 Tests/run_generals_smoke.sh
+Tests/run_locomotor_check.sh
 Tests/run_mission_check.sh
 Tests/run_net_check.sh
 Tests/run_replay_check.sh
@@ -3670,6 +3684,7 @@ Tools/optionsmenu_layout.py
 Tools/overlay-crc-check.sh
 Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
+Tools/pink_laser.py
 Tools/replay-check.sh
 Tools/root-readonly-check.sh
 Tools/signal_marks.py

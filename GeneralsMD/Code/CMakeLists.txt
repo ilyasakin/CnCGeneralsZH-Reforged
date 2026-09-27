@@ -720,6 +720,8 @@ add_library(debug STATIC
   ${LIBSRC}/debug/debug_purecall.cpp
   ${LIBSRC}/debug/debug_stack.cpp)
 target_include_directories(debug PUBLIC ${LIBSRC}/debug)
+# Common/EarlyCommandLine.h, header-only: the crash box stands aside under -headless (W2)
+target_include_directories(debug PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 target_link_libraries(debug PUBLIC dbghelp comctl32 ws2_32)
 # "debug" is also a target_link_libraries config keyword, so it can never be
 # passed as a plain library name.  Link this alias instead.
@@ -1159,12 +1161,17 @@ set(ZH_WIDECHAR_TEST_SUPPORT
 if(ZH_PLATFORM_POSIX)
   set(ZH_ZHIO_LIBS wwlib wwdebug)
 endif()
+# XferCRC.cpp's htonl is Winsock's on Windows; the game gets ws2_32 through gameengine, these tests
+# build XferCRC.cpp themselves (W2).
+if(ZH_PLATFORM_WINDOWS)
+  set(ZH_XFERCRC_LIBS ws2_32)
+endif()
 function(zh_widechar_gate name)
   add_executable(${name} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_widechar_crc_gate.cpp ${ZH_WIDECHAR_TEST_SUPPORT})
   target_include_directories(${name} PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
   target_compile_definitions(${name} PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
   set_target_properties(${name} PROPERTIES CXX_STANDARD 17)
-  target_link_libraries(${name} PRIVATE ${ZH_ZHIO_LIBS})
+  target_link_libraries(${name} PRIVATE ${ZH_ZHIO_LIBS} ${ZH_XFERCRC_LIBS})
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 zh_widechar_gate(widechar_crc_gate)
@@ -1176,7 +1183,7 @@ add_executable(widechar_format_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_
 target_include_directories(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
 target_compile_definitions(widechar_format_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
 set_target_properties(widechar_format_selfcheck PROPERTIES CXX_STANDARD 17)
-target_link_libraries(widechar_format_selfcheck PRIVATE ${ZH_ZHIO_LIBS})
+target_link_libraries(widechar_format_selfcheck PRIVATE ${ZH_ZHIO_LIBS} ${ZH_XFERCRC_LIBS})
 add_test(NAME widechar_format_selfcheck COMMAND widechar_format_selfcheck)
 # The game's own .csf through the real GameText.cpp, RAMFile, File and memory manager: every string
 # against an independent reading, some against their English text, and a golden hash for a Windows
@@ -1215,6 +1222,14 @@ if(ZH_PLATFORM_POSIX)
     target_compile_definitions(${name} PRIVATE ZH_EAGER_VTABLE_STUB_NO_POOL)
   endforeach()
 endif()
+# GameMemory.cpp asks MSVC for the game's own library by name (#pragma comment(lib, "GameEngine"), EA's
+# way of linking its new and delete first).  These tests build GameMemory.cpp themselves and link no
+# GameEngine.lib, so they drop that request (W2).
+if(MSVC)
+  foreach(name gametext_csf test_premain_strings test_premain_unicode)
+    target_link_options(${name} PRIVATE /NODEFAULTLIB:GameEngine.lib)
+  endforeach()
+endif()
 set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
 if(ZH_GAME_DATA)
   set_tests_properties(gametext_csf PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
@@ -1227,7 +1242,7 @@ add_executable(widechar_file_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_wi
 target_include_directories(widechar_file_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
 target_compile_definitions(widechar_file_selfcheck PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>)
 set_target_properties(widechar_file_selfcheck PROPERTIES CXX_STANDARD 17)
-target_link_libraries(widechar_file_selfcheck PRIVATE test_harness ${ZH_ZHIO_LIBS})
+target_link_libraries(widechar_file_selfcheck PRIVATE test_harness ${ZH_ZHIO_LIBS} ${ZH_XFERCRC_LIBS})
 add_test(NAME widechar_file_selfcheck COMMAND widechar_file_selfcheck)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   zh_widechar_gate(widechar_crc_gate_msvc_model)
@@ -1560,6 +1575,9 @@ list(REMOVE_ITEM GAMEENGINEDEVICE_SOURCES
   ${GED}/Source/Win32Device/GameClient/Win32DIMouse.cpp)
 # PosixDevice is the POSIX platform layer (C1), built below as posixdevice, never on Windows.
 list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/Source/PosixDevice/")
+# SdlDevice is the same for SDL3 (C2, C3), built below as sdldevice, never on Windows either; the glob
+# above took it in, and W2's first MSVC build found no SDL3 to compile it against.
+list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/Source/SdlDevice/")
 # Sound and video are the game's own.  Miles and Bink were binary-only, and the DLLs the retail
 # game ships are 32-bit, so there is nothing for a 64-bit exe to bind to: what it links instead is
 # those two APIs written over XAudio2 and FFmpeg.  FFmpeg decodes binkvideo and binkaudio natively,
@@ -1646,7 +1664,8 @@ add_custom_command(TARGET generals POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
           ${CMAKE_CURRENT_SOURCE_DIR}/Data/Install_Final.bmp
           ${CMAKE_CURRENT_SOURCE_DIR}/../Run/
-  # The three command bar plates per side and the smoke signals' ground marks.  A loose
+  # The three command bar plates per side, the smoke signals' ground marks and the
+  # SupW uplink's pink laser strip (Tools/pink_laser.py).  A loose
   # texture beats every .big, so these land in Run/Art/Textures where the W3D file
   # system looks first.
   COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -1771,9 +1790,17 @@ if(ZH_PLATFORM_POSIX)
   # and an edited replay is reported DIVERGED.  Same-machine determinism only: see the script.
   add_test(NAME replay_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_replay_check.sh $<TARGET_FILE:generals>)
-  set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)	# three 12000-frame matches since #33
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+  # Defect #33: no override leaves a unit without the locomotors EA gave it (a ReplaceModule of its AI
+  # module discards them unless the block re-states them).  One short run of the game on its data.
+  add_test(NAME locomotor_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_locomotor_check.sh $<TARGET_FILE:generals>)
+  set_tests_properties(locomotor_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+  if(ZH_GAME_DATA)
+    set_tests_properties(locomotor_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
   # -mission, headless: a campaign mission, a challenge, a plain map and a missing one each start (or
   # quit) instead of sitting at the main menu.  Skipped without game data: see the script.
@@ -1978,6 +2005,9 @@ target_include_directories(test_wwutil PRIVATE ${WW}/Wwutil ${WW}/WWLib ${WW}/WW
 # Lib/Clock.h is header-only and links nothing, so this runs on both platforms from day one -
 # which matters, because the macOS half of that header is the half nobody has ever executed.
 add_lib_test(test_clock)
+if(ZH_PLATFORM_WINDOWS)
+  target_link_libraries(test_clock PRIVATE winmm)		# Clock.h's Windows half: timeGetTime, timeBeginPeriod (W2)
+endif()
 
 add_lib_test(test_compression compression)
 
@@ -1993,6 +2023,11 @@ target_include_directories(test_w3dlayout PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
   ${WW}/WW3D2 ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/WWSaveLoad ${WW}/Wwutil)
 
+# The vertex program generator is shared (ffvertex builds everywhere), so its unit test runs everywhere:
+# registered on Windows only, it went stale through defects #23 and #26, which changed the generator
+# off Windows (W2).
+add_lib_test(test_ffvertex ffvertex)
+
 # Every test from here to test_pixelcentre links the renderer or a Direct3D backend, so they exist
 # only where those targets do.  D2 through D5 bring the Metal side back with tests of its own.
 if(ZH_PLATFORM_WINDOWS)
@@ -2005,7 +2040,6 @@ add_lib_test(test_ffshader ffshader)
 add_lib_test(test_dx11device dx11device)
 add_lib_test(test_dx11state dx11state)
 add_lib_test(test_dx11layout dx11layout)
-add_lib_test(test_ffvertex ffvertex)
 add_lib_test(test_ffvertexcompile ffvertex ffshader)
 # The generated vertex program run against the fixed-function pipeline it replaces, on a real
 # Direct3D 9 device.  It skips itself on a machine with no device rather than failing.
@@ -2325,7 +2359,8 @@ target_link_libraries(ffshader_dump PRIVATE ffvertex engineshader)
 # A3b: FFReference, D3D9's fixed-function pipeline in double precision from Microsoft's documentation
 # alone - the oracle A3's harness compares the GPU's fixed-function draws against.  Independent of
 # ffshader/ffvertex by construction: it shares no code or headers with them (see ffreference.h).
-add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp ${TESTS}/ffreference/ffprogram.cpp)
+add_library(ffreference STATIC ${TESTS}/ffreference/ffreference.cpp ${TESTS}/ffreference/ffprogram.cpp
+  ${TESTS}/ffreference/ffcapture.cpp)
 target_include_directories(ffreference PUBLIC ${TESTS})
 add_lib_test(test_ffreference ffreference)
 add_lib_test(test_ffprogram ffreference)
@@ -2335,6 +2370,11 @@ target_compile_definitions(test_ffprogram PRIVATE ZH_CODE_DIR="${CMAKE_CURRENT_S
 # test: captures are made on demand (ZH_GPU_CAPTURE) and never committed.  ffdecl_captures <dir>...
 add_executable(ffdecl_captures ${TESTS}/ffreference/ffdecl_captures.cpp)
 target_link_libraries(ffdecl_captures PRIVATE ffreference)
+# L2's oracle side: FFReference's own replay of a capture set, from ffcapture.h's reader (written from
+# the format's description, not from the device or its harness), judged against the GPU's pixels.  A tool,
+# not a test, for the same reason.  ffref_judge <dir> [--gpu <dump dir>] [--only draw_NNNNN]
+add_executable(ffref_judge ${TESTS}/ffreference/ffref_judge.cpp)
+target_link_libraries(ffref_judge PRIVATE ffreference)
 if(ZH_GAME_DATA)
   set_tests_properties(test_ffprogram PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
 endif()
@@ -2439,22 +2479,28 @@ endif()
 #
 # It skips rather than fails where the cross toolchain or Rosetta is absent, because it is a
 # capability of a developer's machine and not a requirement of the build.  ctest reads 77 as a skip.
-add_test(NAME arch_differential
-         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/arch_diff/run_arch_diff.sh
-                 ${CMAKE_CURRENT_SOURCE_DIR}
-                 ${CMAKE_CURRENT_BINARY_DIR}/arch_diff)
-set_tests_properties(arch_differential PROPERTIES SKIP_RETURN_CODE 77)
+# Both oracles below are shell scripts driving a cross toolchain or Rosetta, so POSIX only: registered on
+# Windows they were "Process not started" failures in W2's first Windows ctest.
+if(ZH_PLATFORM_POSIX)
+  add_test(NAME arch_differential
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/arch_diff/run_arch_diff.sh
+                   ${CMAKE_CURRENT_SOURCE_DIR}
+                   ${CMAKE_CURRENT_BINARY_DIR}/arch_diff)
+  set_tests_properties(arch_differential PROPERTIES SKIP_RETURN_CODE 77)
+endif()
 
 # The D3DX oracle: runs Microsoft's own D3DXVec4Transform machine code under Rosetta and compares
 # d3dxportable.h against it.  It needs d3dx9_43.dll, which this repository does not carry, so it
 # reads ZH_D3DX9_X64 at run time (a Steam install's Jun2010_d3dx9_43_x64.cab, or the DLL) and skips
 # without it.  A green run matches two of the DLL's three bodies, not "Windows";
 # Tests/d3dx_oracle/run_d3dx_oracle.sh says why.
-add_test(NAME d3dx_oracle
-         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/d3dx_oracle/run_d3dx_oracle.sh
-                 ${CMAKE_CURRENT_SOURCE_DIR}
-                 ${CMAKE_CURRENT_BINARY_DIR}/d3dx_oracle)
-set_tests_properties(d3dx_oracle PROPERTIES SKIP_RETURN_CODE 77)
+if(ZH_PLATFORM_POSIX)
+  add_test(NAME d3dx_oracle
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/d3dx_oracle/run_d3dx_oracle.sh
+                   ${CMAKE_CURRENT_SOURCE_DIR}
+                   ${CMAKE_CURRENT_BINARY_DIR}/d3dx_oracle)
+  set_tests_properties(d3dx_oracle PROPERTIES SKIP_RETURN_CODE 77)
+endif()
 # A3e-asm: Microsoft's own D3DXAssembleShader (d3dx9_43 and the D3DCompiler_43 it loads, run as PE images
 # under Rosetta) against FFReference's ps.1.1 assembler on the water's four programs.  Opt-in like
 # d3dx_oracle: ZH_D3DX9_X64 at run time, skipped without it.  Tests/d3dx_assemble/run_assemble_oracle.sh.
@@ -2537,7 +2583,7 @@ if(ZH_PLATFORM_POSIX)
   # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
   foreach(_zh_test replay_check replay_check_app net_check overlay_crc_check packaging_resolution_check root_readonly_check
                    lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager
-                   mission_check data_gone_check)
+                   mission_check data_gone_check locomotor_check)
     if(TEST ${_zh_test})
       set_property(TEST ${_zh_test} APPEND PROPERTY RESOURCE_LOCK zh_install)
     endif()

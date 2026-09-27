@@ -28,6 +28,21 @@ flip. `ConnectionManager.cpp:706`/`:718` must still be left alone.
 This task's analysis also said `%S` on POSIX "runs through `mbrtowc`". It does not: in C99 `%S` is a
 wide string. Corrected in `B1-wide-format-sites.md`.
 
+## Measured on Windows 2026-09-27 (W2): truncation
+
+MSVC's real `_vsnwprintf(out, 8, L"%s", <longer>)`, from `widechar_format_selfcheck` on the W2 VM:
+- it writes all 8 units, returns -1, and writes **no terminator**;
+- the funnel's POSIX side wrote 7 units and a terminator, and the test expected that.
+
+Every caller passes one less than its buffer and either throws on a negative return
+(`UnicodeString::format`, `format_va`) or terminates the last unit itself (the two `InGameUI::message`
+variants). So MSVC's fill was safe, but a truncated in-game message showed one more character on Windows.
+
+**The fix:** the POSIX side now follows MSVC (all `outCount` units, unterminated, -1). The test compares
+exactly `outCount` units, with a guard unit that catches a write past them. The exact-fit difference the
+header documents stays: MSVC's units, with truncation's sign. Windows is unchanged, so there is no
+WINDOWS-DEBT row. (`docs/mac-port/tasks/W2-windows-build.md`.)
+
 ## Why (the original analysis, kept)
 
 The answer to "should the funnel parse the format and consume the `va_list`?" is **no — remove the

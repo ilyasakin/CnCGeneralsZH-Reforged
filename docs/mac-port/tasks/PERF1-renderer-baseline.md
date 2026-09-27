@@ -419,3 +419,53 @@ not read (`powermetrics` needs sudo here), so the comparison is not closed.
 **Installed or created on finer:** listed, with how to undo each, in `docs/mac-port/tasks/workers.md`
 (probe-a9, since deleted; perf-a9 with its farm, bundles, scripts and logs; wt-a9 and its two run
 branches; build-a9).
+
+**Not the throttle tiers either** (the PM's cheap test). The skirmish at 1920x1080 was run once under
+`taskpolicy -t 0 -l 0` (no I/O throttle or timer-latency tier), as zhr, without sudo. The P-cluster read
+2,085 MHz 40 s in, as in the other runs (2,022 to 2,149), and work p50 was 4.33 ms. A plausible reading,
+not measured: at 120 frames a second the main thread is busy about half the time, so the performance
+cores never ramp. The gap to this Mac stays open.
+
+## Same-result speed-ups (the user's rule, 2026-09-27)
+
+The user's rule: "any safe performance improvement chance should be taken if and only if it will produce
+the same result guaranteed". The PM ranked the candidates from finer's engine profile and set the order:
+5, 1, 3, then L2, then 2, 4, 6. Each is one commit, with:
+- an ABBA A/B on finer (skirmish and mobstress at 1920x1080, offscreen at 120 Hz, silent, with the
+  overlay; six runs per binary per configuration; the machine's lock held exclusively for the batch; 60 s
+  idle before each run; thermal pressure and cluster frequencies logged);
+- the suite;
+- the proof that the result is the same.
+
+**How rendering sameness is proven.** A screenshot of the running game cannot show it. Two runs of the
+SAME binary give different pixels (the HUD's live fps and time; particles and animation follow wall-clock
+time), so that method fails its own control. Instead, ONE capture set is replayed through the base and
+candidate builds, and every capture's GPU read-back is compared byte for byte (`FFREF_GPU_DUMP`). The
+same draws with the same state give the same bytes, whatever the game's timing did. The comparison is
+armed: with one byte flipped in each texture on the device side (`FFREF_FLIP_TEXEL`), it must report
+differences. Capture signatures are compared too, over several runs of each binary.
+
+### Candidate 5: samplers found by their state's bytes (379448bb)
+
+The sampler cache keyed each lookup by a 56-byte `std::string`, past the string's inline buffer, so
+every lookup allocated: up to 8 a draw. The key is now the 14 states, hashed and compared by their bytes,
+with a last-used fast path. The same states give the same sampler.
+
+| finer, medians of six runs, base / candidate | Work p50 (ms) | Device draw p50 (ms) | Work p99 (ms) |
+|---|---|---|---|
+| skirmish, 1920x1080 | 4.522 / 4.431 | 2.064 / 1.903 | 7.467 / 7.405 |
+| mobstress, 1920x1080 | 10.613 / 9.661 | 4.256 / 3.703 | 13.860 / 13.386 |
+
+The means agree with the medians in direction and size. The gain grows with the draw count: 0.16 ms of
+device draw in the skirmish, and 0.55 ms (13%) under mobstress. All thermal readings were Nominal, and
+there were no sleeps.
+
+**The same result:**
+- the suite, 84 of 84;
+- the pixel proof: 48 of 48 captures byte-identical, 0 differ, and the armed control reports 3;
+- the FFReference replay: 48 compared, 0 failed, the known C1/C5 findings, on base and candidate alike.
+- Signatures: the candidate's first capture had two signatures more than base's (the same programs under
+  two pipeline keys, from engine-set render states: no culling, a stencil test, alpha test at 96). Seven
+  captures settle it. The base binary gave 48, 48, 50 and 50; the candidate 50, 50 and 50. The base
+  binary itself shows both counts, so those two are what a 600-frame run happens to reach, not the
+  candidate.

@@ -92,6 +92,38 @@ int main()
 	// strdup as the Windows build has it (Platform/StrdupAsWindows.h): a copy of any string, and NULL for
 	// NULL, the UCRT's _strdup; Darwin's and glibc's strdup read through a NULL.  A cloned particle emitter's
 	// NULL user string crashed the fog of war off Windows (defect #31).
+	// uint16 and uint32 (S8): the table MSVC 19.44 x64 printed on Windows 11 (W2), value by value.
+	// (unsigned short) is the low 16 bits of the 32-bit conversion; (unsigned) the low 32 bits of the
+	// 64-bit one, which is not the int path: 3e9 survives it, and 2^32, NaN and the infinities are 0.
+	{
+		struct Row { float value; unsigned short u16; unsigned int u32; };
+		const float inf = std::numeric_limits<float>::infinity();
+		const Row rows[] = {
+			{ -1.5f, 65535, 4294967295u }, { -70000.5f, 61072, 4294897296u }, { 70000.5f, 4464, 70000u },
+			{ 65535.9f, 65535, 65535u }, { 65536.0f, 0, 65536u }, { 131071.0f, 65535, 131071u },
+			{ 2147483520.0f, 65408, 2147483520u }, { 2147483648.0f, 0, 2147483648u }, { 3.0e9f, 0, 3000000000u },
+			{ 4294967040.0f, 0, 4294967040u }, { 4294967296.0f, 0, 0u }, { 5.0e9f, 0, 705032704u },
+			{ -3.0e9f, 0, 1294967296u }, { 1.0e20f, 0, 0u }, { -1.0e20f, 0, 0u }, { inf, 0, 0u }, { -inf, 0, 0u },
+			{ std::numeric_limits<float>::quiet_NaN(), 0, 0u } };
+		for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); ++i) {
+			const unsigned short u16 = floatToUnsignedShortAsMsvc(rows[i].value);
+			const unsigned int u32 = floatToUnsignedAsMsvc(rows[i].value);
+			if (u16 != rows[i].u16 || u32 != rows[i].u32) {
+				++failures;
+				printf("FAIL: %g converts to %u/%u, Windows gave %u/%u\n", (double)rows[i].value, (unsigned)u16, u32,
+					(unsigned)rows[i].u16, rows[i].u32);
+			}
+#if defined(_MSC_VER)
+			volatile float value = rows[i].value;		// and the same against MSVC's own casts, at run time
+			if ((unsigned short)value != u16 || (unsigned int)value != u32) {
+				++failures;
+				printf("FAIL: MSVC casts %g to %u/%u, the helpers say %u/%u\n", (double)rows[i].value,
+					(unsigned)(unsigned short)value, (unsigned int)value, (unsigned)u16, u32);
+			}
+#endif
+		}
+	}
+
 	if (strdupAsWindows(NULL) != NULL) {
 		++failures;
 		printf("FAIL: strdupAsWindows(NULL) is not NULL\n");
@@ -107,6 +139,6 @@ int main()
 		printf("test_msvc_float_casts: %d FAILED\n", failures);
 		return 1;
 	}
-	printf("test_msvc_float_casts: every conversion is MSVC's byte\n");
+	printf("test_msvc_float_casts: every conversion is MSVC's byte, uint16 and uint32\n");
 	return 0;
 }

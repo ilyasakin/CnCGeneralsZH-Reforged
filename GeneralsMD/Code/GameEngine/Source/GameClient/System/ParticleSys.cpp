@@ -3383,6 +3383,8 @@ void ParticleSystemManager::init( void )
 	/// Read INI data and build templates
 	INI ini;
 	ini.load( AsciiString( "Data\\INI\\ParticleSystem.ini" ), INI_LOAD_OVERWRITE, NULL );
+	// The fork's own systems, beside EA's 1088 rather than in a loose copy of all of them
+	ini.load( AsciiString( "Data\\INI\\ParticleSystemReforged.ini" ), INI_LOAD_OVERWRITE, NULL );
 
 	// "-particlebounce" on the command line: every system hits the terrain, using the built-in
 	// defaults.  Without it nothing changes unless a system's INI sets GroundCollision itself.
