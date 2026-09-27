@@ -3341,8 +3341,8 @@ RenderResult W3DShaderManager::LoadAndCreateD3DPixelShader(const char* strFilePa
 
 	if (Render_Failed(hr))
 	{
-		DEBUG_LOG(("SHADER: %s did not translate to Direct3D 9, hr=0x%08lx\n",
-			strFilePath, (unsigned long)hr));
+		DEBUG_LOG(("SHADER: %s did not translate to Direct3D 9, hr=0x%08x\n",
+			strFilePath, (unsigned int)hr));
 		return RENDER_FAIL;
 	}
 
@@ -3375,8 +3375,8 @@ RenderResult W3DShaderManager::LoadAndCreateD3DVertexShader(const char* strFileP
 
 	if (Render_Failed(hr))
 	{
-		DEBUG_LOG(("SHADER: %s did not translate to Direct3D 9, hr=0x%08lx\n",
-			strFilePath, (unsigned long)hr));
+		DEBUG_LOG(("SHADER: %s did not translate to Direct3D 9, hr=0x%08x\n",
+			strFilePath, (unsigned int)hr));
 		return RENDER_FAIL;
 	}
 

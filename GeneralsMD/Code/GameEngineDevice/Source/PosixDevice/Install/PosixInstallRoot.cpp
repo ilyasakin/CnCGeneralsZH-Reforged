@@ -110,6 +110,55 @@ bool holdsBaseGame( const std::string &zeroHour, const std::string &registryFile
 	return false;
 }
 
+/// The Steam libraries below `home` (P3, the Steam Deck): each Steam folder's own library and every other
+/// library its steamapps/libraryfolders.vdf lists ("path" entries, an SD card's among them), in file
+/// order, without repeats.  Read only; a missing or unreadable file lists nothing.
+std::vector<std::string> steamLibraries( const std::string &home )
+{
+	static const char *const steamFolders[] = { ".local/share/Steam", ".steam/steam", ".steam/root",
+		".var/app/com.valvesoftware.Steam/.local/share/Steam" };		// the last: Flatpak's Steam
+	std::vector<std::string> libraries;
+	std::vector<std::string> seen;		// real paths, so ~/.steam/steam -> ~/.local/share/Steam is one library
+	const auto add = [&]( const std::string &library )
+	{
+		const std::string key = realOf( library );
+		for (size_t i = 0; i < seen.size(); ++i)
+			if (seen[i] == key)
+				return;
+		seen.push_back( key );
+		libraries.push_back( library );
+	};
+	for (size_t f = 0; f < sizeof( steamFolders ) / sizeof( steamFolders[0] ); ++f)
+	{
+		const std::string steam = join( home, steamFolders[f] );
+		if (!isFolder( steam ))
+			continue;
+		add( steam );
+		FILE *vdf = zh_fopen( join( steam, "steamapps/libraryfolders.vdf" ).c_str(), "rb" );
+		if (vdf == NULL)
+			continue;
+		char line[ 4096 ];
+		while (fgets( line, sizeof( line ), vdf ) != NULL)
+		{
+			// "path"		"/run/media/deck/SD/SteamLibrary", the value's backslashes escaped
+			const char *key = strstr( line, "\"path\"" );
+			if (key == NULL)
+				continue;
+			const char *open = strchr( key + 6, '"' );
+			if (open == NULL)
+				continue;
+			std::string value;
+			const char *c = open + 1;
+			for (; *c != 0 && *c != '"'; ++c)
+				value += (*c == '\\' && c[1] != 0) ? *++c : *c;
+			if (*c == '"' && !value.empty())
+				add( value );
+		}
+		fclose( vdf );
+	}
+	return libraries;
+}
+
 std::string argumentValue( const std::vector<std::string> &arguments, const char *name )
 {
 	for (size_t i = 0; i + 1 < arguments.size(); ++i)
@@ -176,6 +225,13 @@ std::vector<std::string> PosixKnownInstallPlaces( const std::string &home )
 		places.push_back( join( join( home, "Games" ), ZERO_HOUR_FOLDER_NAMES[i] ) );
 	for (size_t i = 0; i < names; ++i)
 		places.push_back( join( "/Applications", ZERO_HOUR_FOLDER_NAMES[i] ) );
+
+	// Steam's own libraries (Linux, the Steam Deck): Zero Hour as Steam installs it for Proton, its base game
+	// in a "Command & Conquer Generals" folder beside it, where the check looks
+	const std::vector<std::string> libraries = steamLibraries( home );
+	for (size_t l = 0; l < libraries.size(); ++l)
+		for (size_t i = 0; i < names; ++i)
+			places.push_back( join( join( libraries[l], "steamapps/common" ), ZERO_HOUR_FOLDER_NAMES[i] ) );
 
 	// Wine prefixes the players on Macs use: CrossOver's and Whisky's bottles, each a Windows drive
 	static const char *const bottles[] = {

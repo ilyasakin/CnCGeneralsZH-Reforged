@@ -43,6 +43,8 @@ Data/Scenarios/bridgecross.txt
 Data/Scenarios/bridgelong.txt
 Data/Scenarios/chokeprobe.txt
 Data/Scenarios/crowdbattle.txt
+Data/Scenarios/inferno30.txt
+Data/Scenarios/mappers.txt
 Data/Scenarios/mass420x2.txt
 Data/Scenarios/mass840.txt
 Data/Scenarios/massmove.txt
@@ -2303,6 +2305,7 @@ Libraries/Source/WWVegas/WWLib/tgatodxt.cpp
 Libraries/Source/WWVegas/WWLib/tgatodxt.h
 Libraries/Source/WWVegas/WWLib/thread.cpp
 Libraries/Source/WWVegas/WWLib/thread.h
+Libraries/Source/WWVegas/WWLib/threadwake.h
 Libraries/Source/WWVegas/WWLib/timer.h
 Libraries/Source/WWVegas/WWLib/trackwin.h
 Libraries/Source/WWVegas/WWLib/trackxy.h
@@ -2591,6 +2594,7 @@ Libraries/Source/gamespy-strlwr-c-only.patch
 Libraries/Source/glslang/.gitignore
 Libraries/Source/litehtml-parsed-css.patch
 Libraries/Source/litehtml/.gitignore
+Libraries/Source/lzhl-clear-history.patch
 Libraries/Source/max4sdk/.gitignore
 Libraries/Source/miniaudio/.gitignore
 Libraries/Source/nanosvg/.gitignore
@@ -2705,8 +2709,10 @@ Tests/test_ffvertex.cpp
 Tests/test_ffvertexcompile.cpp
 Tests/test_ffvertexd3d9.cpp
 Tests/test_fingerprint_manifest.sh
+Tests/test_first_launch_chooser.sh
 Tests/test_fontchars.cpp
 Tests/test_fpucontrol.cpp
+Tests/test_game_results.inc
 Tests/test_gameengine.cpp
 Tests/test_gameengine_stubs.cpp
 Tests/test_gametext_csf.cpp
@@ -2716,6 +2722,7 @@ Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
 Tests/test_lan_broadcast.cpp
+Tests/test_linux_portable.sh
 Tests/test_macos_app.sh
 Tests/test_main.cpp
 Tests/test_miles_miniaudio.cpp
@@ -3580,6 +3587,7 @@ Tools/include_case_check.py
 Tools/install-guard.sh
 Tools/license-headers.py
 Tools/linux-check.sh
+Tools/linux-portable.sh
 Tools/lobbyroom_layout.py
 Tools/lobbysettings_layout.py
 Tools/lod-first-run-check.sh
@@ -3702,6 +3710,7 @@ Tools/net-check.sh
 Tools/net_check.py
 Tools/optionsmenu_layout.py
 Tools/overlay-crc-check.sh
+Tools/package-common.sh
 Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
 Tools/pink_laser.py

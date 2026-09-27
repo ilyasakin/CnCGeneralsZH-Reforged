@@ -183,7 +183,8 @@ PosixDevice9::~PosixDevice9()
 		if (Sdl_Creation_Log_Asked()) {
 			Sdl_Creation_Log_Flush();
 		}
-		fprintf(stderr, "PosixDevice9: %u draws recorded, %u presents\n", DrawsRecorded, PresentCount);
+		fprintf(stderr, "PosixDevice9: %u draws recorded, %u presents, %u of them to a window that was not visible, %u with"
+			" no drawable\n", DrawsRecorded, PresentCount, Gpu->Presents_Not_Visible(), Gpu->Presents_Not_Shown());
 		for (std::map<std::string, unsigned int>::const_iterator it = DrawRefusals.begin(); it != DrawRefusals.end(); ++it) {
 			fprintf(stderr, "PosixDevice9:   refused %u: %s\n", it->second, it->first.c_str());
 		}

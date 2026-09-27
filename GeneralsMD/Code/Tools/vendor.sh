@@ -265,6 +265,26 @@ install_lzhl() {
   step "LZH-Light 1.0 -> Libraries/Source/Compression/LZHCompress"
 }
 
+# --- The fork's one change to LZH-Light, Libraries/Source/lzhl-clear-history.patch: LZBuffer's history
+# starts cleared.  The compressor's backward match reads history it has not written yet (MemorySanitizer,
+# Lz.cpp), so the output depended on what the allocator left there.  The game's operator new zero-fills,
+# so the game compresses the same bytes as before; anything on another allocator now does too.  The
+# licence asks for altered copies to be marked, and the marker is what this checks, as the others do.
+install_lzhl_patch() {
+  local destination="$libraries/Source/Compression/LZHCompress/CompLibHeader"
+  local header="$destination/_lz.h"
+  if grep -q 'Zero Hour Reforged: altered' "$header" 2>/dev/null; then return 0; fi
+  local patch="$libraries/Source/lzhl-clear-history.patch"
+  GIT_CEILING_DIRECTORIES="$libraries/Source" \
+    git -C "$destination" -c core.autocrlf=false apply "$patch" || true
+  if ! grep -q 'Zero Hour Reforged: altered' "$header" 2>/dev/null; then
+    echo "[vendor] lzhl-clear-history.patch did not apply to Libraries/Source/Compression/LZHCompress" >&2
+    echo "[vendor] ($header still lacks its marker)" >&2
+    exit 1
+  fi
+  step "lzhl-clear-history.patch -> Libraries/Source/Compression/LZHCompress"
+}
+
 # --- The DirectX 8 headers and import libraries are Windows-only and vendor.ps1 keeps them. Nothing
 # that compiles on a Mac includes d3d8.h, and the .lib files are MSVC import libraries that no
 # toolchain here can link, so fetching them would cost 40 MB to satisfy nobody.
@@ -745,6 +765,7 @@ EOF
 mkdir -p "$work"
 install_zlib
 install_lzhl
+install_lzhl_patch
 report_directx
 install_gamespy
 install_gamespy_patch
