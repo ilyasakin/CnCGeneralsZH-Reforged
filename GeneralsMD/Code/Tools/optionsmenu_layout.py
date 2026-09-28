@@ -168,6 +168,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckWasdCamera",        "GUI:WasdCamera"),
     (CHECK,  "CheckGamepad",           "GUI:Gamepad"),
     (CHECK,  "CheckGamepadAim",        "GUI:GamepadAim"),
+    (CHECK,  "CheckGamepadSwapConfirm", "GUI:GamepadSwapConfirm"),
     (CHECK,  "CheckChromaLighting",    "GUI:ChromaLighting"),
 ]
 
@@ -276,6 +277,7 @@ GROUP_LAYOUT = [
         ("check", "CheckWasdCamera"),
         ("check", "CheckGamepad"),
         ("check", "CheckGamepadAim"),
+        ("check", "CheckGamepadSwapConfirm"),
         ("check", "CheckChromaLighting")]),
 
     ("PageGameplay", 0, "GUI:OptionsGroupBattlefield", [

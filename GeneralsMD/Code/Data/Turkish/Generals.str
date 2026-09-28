@@ -15441,6 +15441,14 @@ TOOLTIP:GamepadAim
 "Maçta kumandanın imleci, görebildiğin en yakın birliğe ya da binaya oturur ve birinin üzerinden geçerken yavaşlar. Kapalıyken tam çubuğun götürdüğü yere gider."
 END
 
+GUI:GamepadSwapConfirm
+"Onay ve İptal Yer Değiştirsin"
+END
+
+TOOLTIP:GamepadSwapConfirm
+"Öbür yüz düğmesiyle onayla. Xbox, PlayStation ve Steam Deck kumandaları alttaki düğmeyle, Nintendo kumandaları sağdaki A ile onaylar; işaretliyken her biri tersini yapar, düğme ipuçları da ona uyar."
+END
+
 GUI:ChromaLighting
 "Razer Chroma Işıkları"
 END

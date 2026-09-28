@@ -882,6 +882,14 @@ TOOLTIP:GamepadAim
 "In a match, the controller's pointer settles onto the nearest unit or building you can see, and slows as it passes over one. Off, it goes exactly where the stick puts it."
 END
 
+GUI:GamepadSwapConfirm
+"Swap Confirm and Cancel"
+END
+
+TOOLTIP:GamepadSwapConfirm
+"Confirm with the other face button. Xbox, PlayStation and Steam Deck controllers confirm with the bottom button and Nintendo controllers with A, the right one; ticked, each does it the other way round, and the button hints follow."
+END
+
 GUI:ChromaLighting
 "Razer Chroma Lighting"
 END

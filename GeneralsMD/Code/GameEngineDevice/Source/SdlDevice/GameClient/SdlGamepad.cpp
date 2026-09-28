@@ -89,6 +89,8 @@ struct Pad
 	Bool menuPress[ GAMEPAD_BUTTON_COUNT ];							///< pressed while a menu had the pad: its release is the menu's
 	Bool radialPress[ GAMEPAD_BUTTON_COUNT ];						///< pressed for the radial menu, or while it was open: its release is the radial's
 	Bool deferred[ GAMEPAD_BUTTON_COUNT ];							///< an OnRelease binding waiting for its release, no chord made yet
+	Bool aOnEast;																				///< the button labelled A (or Cross) is the east one: a Nintendo layout
+	GamepadButtonType downAs[ GAMEPAD_BUTTON_COUNT ];		///< what each physical button was pressed as, for its release
 	Pressed tap[ GAMEPAD_BUTTON_COUNT ];								///< an OnRelease action pressed on the release, let go next update
 	Bool tapHeld[ GAMEPAD_BUTTON_COUNT ];
 	Real axis[ SDL_GAMEPAD_AXIS_COUNT ];
@@ -567,6 +569,21 @@ Bool isSteamDeck( void )
 	return known == 1;
 }
 
+/** Confirm on the bottom button and cancel on the right one, as the bindings and menus are written, unless the pad
+	* is a Nintendo layout (A on the right: A confirms there, B below cancels), or the player swapped them, or both */
+Bool swapsConfirm( const Pad &pad )
+{
+	const Bool option = TheGlobalData != NULL && TheGlobalData->m_gamepadSwapConfirm;
+	return pad.aOnEast != option;
+}
+
+GamepadButtonType semanticFor( const Pad &pad, GamepadButtonType physical )
+{
+	if (!swapsConfirm( pad ))
+		return physical;
+	return physical == GAMEPAD_BUTTON_SOUTH ? GAMEPAD_BUTTON_EAST : (physical == GAMEPAD_BUTTON_EAST ? GAMEPAD_BUTTON_SOUTH : physical);
+}
+
 /// Whose glyphs a pad's hints draw: its family by SDL's type, the Deck's own controls by their IDs
 GamepadGlyphSet glyphsFor( SDL_Gamepad *gamepad )
 {
@@ -602,8 +619,12 @@ void openPad( SDL_JoystickID id )
 	pad.gamepad = gamepad;
 	pad.id = id;
 	pad.glyphs = glyphsFor( gamepad );
+	pad.aOnEast = SDL_GetGamepadButtonLabel( gamepad, SDL_GAMEPAD_BUTTON_EAST ) == SDL_GAMEPAD_BUTTON_LABEL_A;
+	DEBUG_LOG(( "SdlGamepad: pad %d \"%s\", glyphs %d, confirms on %s\n", (int)id, SDL_GetGamepadName( gamepad ) != NULL ? SDL_GetGamepadName( gamepad ) : "",
+		(int)pad.glyphs, pad.aOnEast ? "the right button (A)" : "the bottom button" ));
 	for (Int button = 0; button < GAMEPAD_BUTTON_COUNT; ++button)
 	{
+		pad.downAs[ button ] = (GamepadButtonType)button;
 		pad.chordWith[ button ] = GAMEPAD_BUTTON_NONE;
 		pad.pressed[ button ].mouseButton = -1;
 	}
@@ -724,7 +745,8 @@ void focusKey( UnsignedByte dik, Bool down )
 /// edge band goes to the centre
 void padUsed( const Pad &pad, UnsignedInt time )
 {
-	GamepadHints::setShown( pad.glyphs );		// the last pad pressed sets the glyphs
+	GamepadHints::setShown( pad.glyphs );		// the last pad pressed sets the glyphs...
+	GamepadHints::setConfirmSwapped( swapsConfirm( pad ) );		// ...and which of its buttons confirms
 	GamepadFocus::setPadDriving( TRUE );
 	if (theLastUsed)
 		return;
@@ -869,7 +891,12 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 			Pad *pad = findPad( event.gbutton.which );
 			if (pad == NULL || event.gbutton.button >= GAMEPAD_BUTTON_COUNT)
 				return TRUE;
-			const GamepadButtonType button = (GamepadButtonType)event.gbutton.button;		// the same order (GamepadMap.h)
+			// the same order (GamepadMap.h), with confirm and cancel as the pad's family has them: a press is taken as
+			// what it means now, and its release as what the press was, whatever the option did in between
+			const GamepadButtonType physical = (GamepadButtonType)event.gbutton.button;
+			if (event.gbutton.down)
+				pad->downAs[ physical ] = semanticFor( *pad, physical );
+			const GamepadButtonType button = pad->downAs[ physical ];
 			if (event.gbutton.down)
 				padUsed( *pad, milliseconds( event.gbutton.timestamp ) );
 			if (event.gbutton.down)

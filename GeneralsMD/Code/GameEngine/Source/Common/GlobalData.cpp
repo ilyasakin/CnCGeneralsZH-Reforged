@@ -952,6 +952,7 @@ GlobalData::GlobalData()
 	m_wasdCamera = FALSE;
 	m_gamepadEnabled = TRUE;
 	m_gamepadAim = TRUE;
+	m_gamepadSwapConfirm = FALSE;
 	// the lines have been on since they were added, so nobody loses them until they say so
 	m_showOrderLines = TRUE;
 

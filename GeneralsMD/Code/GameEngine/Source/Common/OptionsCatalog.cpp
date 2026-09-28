@@ -79,6 +79,7 @@ OPTION_INT_ACCESSORS( m_inputScheme )
 OPTION_BOOL_ACCESSORS( m_wasdCamera )
 OPTION_BOOL_ACCESSORS( m_gamepadEnabled )
 OPTION_BOOL_ACCESSORS( m_gamepadAim )
+OPTION_BOOL_ACCESSORS( m_gamepadSwapConfirm )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
 OPTION_BOOL_ACCESSORS( m_shadowsForProjectiles )
@@ -385,6 +386,12 @@ const OptionDef TheOptionCatalog[] =
 	{ "GamepadAim",								OPT_WND( "CheckGamepadAim" ), "GUI:GamepadAim",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_gamepadAim, set_m_gamepadAim },
+
+	// Confirm and cancel the other way round from the pad's own layout: Xbox, PlayStation and the Deck confirm on
+	// the bottom button, Nintendo pads on A, the right one (SdlGamepad.h).  Which button means which, only.
+	{ "GamepadSwapConfirm",				OPT_WND( "CheckGamepadSwapConfirm" ), "GUI:GamepadSwapConfirm",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_gamepadSwapConfirm, set_m_gamepadSwapConfirm },
 
 	// Which language the words are in.  English is the string table the game shipped with, and every
 	// other entry is a translation laid over it, so a line the translation lacks stays English.  The

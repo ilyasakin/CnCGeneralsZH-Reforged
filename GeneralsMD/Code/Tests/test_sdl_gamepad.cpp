@@ -944,6 +944,132 @@ TEST(the_controller_option_off_ignores_the_pad_and_lets_go_of_what_it_held)
 	CHECK( same( pad, hand ) );
 }
 
+/// A second virtual pad that SDL takes for a real family by its USB ids, as it takes a plugged-in one
+SDL_Joystick *attachFamilyPad( Uint16 vendor, Uint16 product, const char *name )
+{
+	SDL_VirtualJoystickDesc desc;
+	SDL_INIT_INTERFACE( &desc );
+	desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
+	desc.vendor_id = vendor;
+	desc.product_id = product;
+	desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
+	desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
+	desc.name = name;
+	const SDL_JoystickID id = SDL_AttachVirtualJoystick( &desc );
+	SDL_Joystick *joystick = id != 0 ? SDL_OpenJoystick( id ) : NULL;
+	if (joystick != NULL)
+	{
+		SDL_SetJoystickVirtualAxis( joystick, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
+		SDL_SetJoystickVirtualAxis( joystick, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
+	}
+	pump();
+	return joystick;
+}
+
+void detachFamilyPad( SDL_Joystick *joystick )
+{
+	const SDL_JoystickID id = SDL_GetJoystickID( joystick );
+	SDL_CloseJoystick( joystick );
+	SDL_DetachVirtualJoystick( id );
+	pump();
+}
+
+void press( SDL_Joystick *joystick, SDL_GamepadButton button )
+{
+	SDL_SetJoystickVirtualButton( joystick, button, true );
+	pump();
+	SDL_SetJoystickVirtualButton( joystick, button, false );
+	pump();
+}
+
+/// A tap of each of a pad's two confirm-and-cancel buttons against a hand's left then right click: the
+/// pad confirms (the left button) with confirm, and cancels (the right one) with cancel
+bool confirmsWith( SDL_Joystick *joystick, SDL_GamepadButton confirm, SDL_GamepadButton cancel )
+{
+	static int calls = 0;
+	const float x = 400.0f + 20.0f * (calls++ % 10), y = 310.0f;		// a new place each time: no double click with the last
+	pushMotion( x, y );
+	clear();
+	Output pad, hand;
+	press( joystick, confirm );
+	press( joystick, cancel );
+	frame( pad );
+	pushButton( SDL_BUTTON_LEFT, true, 1, x, y );
+	pushButton( SDL_BUTTON_LEFT, false, 1, x, y );
+	pushButton( SDL_BUTTON_RIGHT, true, 1, x, y );
+	pushButton( SDL_BUTTON_RIGHT, false, 1, x, y );
+	frame( hand );
+	return same( pad, hand );
+}
+
+TEST(a_nintendo_pad_confirms_with_a_on_the_right_and_its_hints_draw_a_for_confirm)
+{
+	CHECK( start() );
+	SDL_Joystick *nintendo = attachFamilyPad( 0x057e, 0x2009, "Nintendo Switch Pro Controller" );		// SDL's ids for it
+	CHECK( nintendo != NULL );
+	CHECK_EQ( SdlGamepad_count(), 2 );
+	CHECK( confirmsWith( nintendo, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_SOUTH ) );
+	press( nintendo, SDL_GAMEPAD_BUTTON_WEST );		// used last: its family and its confirm show
+	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_NINTENDO );
+	CHECK( GamepadHints::isConfirmSwapped() );
+	// confirm's hint is the glyph of A, which does it; cancel's is B's
+	CHECK( strcmp( GamepadHints::glyphName( GAMEPAD_GLYPHS_NINTENDO, GamepadHints::physicalFor( GAMEPAD_BUTTON_SOUTH ) ), "switch_button_a" ) == 0 );
+	CHECK( strcmp( GamepadHints::glyphName( GAMEPAD_GLYPHS_NINTENDO, GamepadHints::physicalFor( GAMEPAD_BUTTON_EAST ) ), "switch_button_b" ) == 0 );
+	CHECK_EQ( GamepadHints::physicalFor( GAMEPAD_BUTTON_NORTH ), (Int)GAMEPAD_BUTTON_NORTH );
+	// the Xbox-labelled pad, used next, confirms at the bottom again
+	CHECK( confirmsWith( thePad, SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST ) );
+	CHECK( !GamepadHints::isConfirmSwapped() );
+	CHECK( strcmp( GamepadHints::glyphName( GAMEPAD_GLYPHS_XBOX, GamepadHints::physicalFor( GAMEPAD_BUTTON_SOUTH ) ), "xbox_button_a" ) == 0 );
+	detachFamilyPad( nintendo );
+	CHECK_EQ( SdlGamepad_count(), 1 );
+}
+
+TEST(a_playstation_pad_confirms_with_cross_at_the_bottom)
+{
+	CHECK( start() );
+	SDL_Joystick *playstation = attachFamilyPad( 0x054c, 0x0ce6, "DualSense Wireless Controller" );
+	CHECK( playstation != NULL );
+	CHECK( confirmsWith( playstation, SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST ) );
+	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_PLAYSTATION );
+	CHECK( !GamepadHints::isConfirmSwapped() );
+	CHECK( strcmp( GamepadHints::glyphName( GAMEPAD_GLYPHS_PLAYSTATION, GamepadHints::physicalFor( GAMEPAD_BUTTON_SOUTH ) ), "playstation_button_cross" ) == 0 );
+	detachFamilyPad( playstation );
+}
+
+TEST(the_swap_option_trades_confirm_and_cancel_on_every_family)
+{
+	CHECK( start() );
+	SDL_Joystick *nintendo = attachFamilyPad( 0x057e, 0x2009, "Nintendo Switch Pro Controller" );
+	CHECK( nintendo != NULL );
+	TheWritableGlobalData->m_gamepadSwapConfirm = TRUE;		// Options > Controls > Swap Confirm and Cancel
+	CHECK( confirmsWith( thePad, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_SOUTH ) );
+	CHECK( GamepadHints::isConfirmSwapped() );
+	CHECK( confirmsWith( nintendo, SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST ) );		// swapped back: B below confirms
+	CHECK( !GamepadHints::isConfirmSwapped() );
+	TheWritableGlobalData->m_gamepadSwapConfirm = FALSE;
+	CHECK( confirmsWith( thePad, SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST ) );		// armed: the option did it
+	detachFamilyPad( nintendo );
+}
+
+TEST(a_press_is_released_as_what_it_was_pressed_as_when_the_option_changes_between)
+{
+	CHECK( start() );
+	pushMotion( 250, 350 );
+	clear();
+	Output pad, hand;
+	SDL_SetJoystickVirtualButton( thePad, SDL_GAMEPAD_BUTTON_SOUTH, true );		// confirm: the left button down
+	pump();
+	TheWritableGlobalData->m_gamepadSwapConfirm = TRUE;
+	SDL_SetJoystickVirtualButton( thePad, SDL_GAMEPAD_BUTTON_SOUTH, false );	// still the left button's release
+	pump();
+	TheWritableGlobalData->m_gamepadSwapConfirm = FALSE;
+	frame( pad );
+	pushButton( SDL_BUTTON_LEFT, true, 1, 250, 350 );
+	pushButton( SDL_BUTTON_LEFT, false, 1, 250, 350 );
+	frame( hand );
+	CHECK( same( pad, hand ) );
+}
+
 TEST(a_pad_pulled_out_mid_press_lets_go_of_all_it_held)
 {
 	CHECK( start() );

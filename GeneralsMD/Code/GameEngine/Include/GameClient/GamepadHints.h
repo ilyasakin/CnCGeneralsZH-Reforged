@@ -78,11 +78,20 @@ public:
 	static void setShown( GamepadGlyphSet set );
 	static GamepadGlyphSet getShown( void );
 
+	/** The last pad used confirms on its right button and cancels on the bottom one (a Nintendo layout, or the
+		* player's swap): the bindings and menus name confirm as South, and a hint for South then draws the right
+		* button's glyph, the one that does it */
+	static void setConfirmSwapped( Bool swapped );
+	static Bool isConfirmSwapped( void );
+	/// The button, where it sits, that does what button names: South and East trade places while swapped
+	static Int physicalFor( Int button );
+
 	static void setCommandBarMode( Bool on );
 	static Bool isCommandBarMode( void );
 
 	/** The font (at pointSize) and character that draw button's glyph (a GamepadButtonType or a
-		* GAMEPAD_GLYPH_*) in set; FALSE when the family draws none for it or its font is not there */
+		* GAMEPAD_GLYPH_*) in set; FALSE when the family draws none for it or its font is not there.  button names
+		* what the button does (South is confirm): the glyph is physicalFor's, the one that does it */
 	static Bool glyphFor( GamepadGlyphSet set, Int button, Int pointSize, GameFont *&font, UnicodeString &glyph );
 
 	/// What window shows now, with the glyph's font and character for HINT_INSTEAD and HINT_BESIDE

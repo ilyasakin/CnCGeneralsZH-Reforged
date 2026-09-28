@@ -325,6 +325,7 @@ public:
 	Bool isWasdCamera( void ) const { return m_wasdCamera && !isLegacyInput(); }
 	Bool m_gamepadEnabled;				///< G1: a connected controller plays; off, every controller is ignored (client only)
 	Bool m_gamepadAim;						///< G1: in a match a pad's pointer settles onto what it nears, and slows over it (client only)
+	Bool m_gamepadSwapConfirm;		///< G1: confirm and cancel the other way round from the pad's own layout (client only)
 	Bool m_showOrderLines;				///< draw a line from each selected unit to where it is going, and its queue (client only)
 	Bool m_scriptDebug;						///< Should we attempt to load the script debugger window (.DLL)
 	Bool m_particleEdit;					///< Should we attempt to load the particle editor (.DLL)

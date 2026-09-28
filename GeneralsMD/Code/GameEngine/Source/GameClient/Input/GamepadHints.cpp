@@ -120,6 +120,7 @@ struct LoadedFont
 
 LoadedFont theLoaded[ GAMEPAD_GLYPHS_COUNT ];
 GamepadGlyphSet theShown = GAMEPAD_GLYPHS_NONE;
+Bool theConfirmSwapped = FALSE;
 Bool theCommandBarMode = FALSE;
 
 /// Kenney's map: one "glyph_name: U+E004" a line
@@ -249,6 +250,23 @@ void GamepadHints::setShown( GamepadGlyphSet set )
 	theShown = set;
 }
 
+void GamepadHints::setConfirmSwapped( Bool swapped )
+{
+	theConfirmSwapped = swapped;
+}
+
+Bool GamepadHints::isConfirmSwapped( void )
+{
+	return theConfirmSwapped;
+}
+
+Int GamepadHints::physicalFor( Int button )
+{
+	if (!theConfirmSwapped)
+		return button;
+	return button == GAMEPAD_BUTTON_SOUTH ? GAMEPAD_BUTTON_EAST : (button == GAMEPAD_BUTTON_EAST ? GAMEPAD_BUTTON_SOUTH : button);
+}
+
 GamepadGlyphSet GamepadHints::getShown( void )
 {
 	return theShown;
@@ -281,7 +299,7 @@ const char *GamepadHints::glyphName( GamepadGlyphSet set, Int button )
 
 Bool GamepadHints::glyphFor( GamepadGlyphSet set, Int button, Int pointSize, GameFont *&font, UnicodeString &glyph )
 {
-	const char *name = glyphName( set, button );
+	const char *name = glyphName( set, physicalFor( button ) );		// the one that does it
 	if (name == NULL || TheFontLibrary == NULL)
 		return FALSE;
 	LoadedFont &fontData = loaded( set );
