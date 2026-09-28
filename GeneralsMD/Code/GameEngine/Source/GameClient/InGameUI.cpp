@@ -83,6 +83,7 @@
 #include "GameClient/GameWindowID.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/Image.h"
+#include "GameClient/GamepadHints.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/PlayerColorScheme.h"
 #include "GameClient/VideoPlayer.h"
@@ -13851,6 +13852,7 @@ Bool InGameUI::drawTooltipPage( const UnicodeString &cursorText, const RGBColor 
 	const Int screenHeight = TheDisplay->getHeight();
 	const ICoord2D &mouse = TheMouse->getMouseStatus()->pos;
 	const Int gap = REAL_TO_INT( TOOLTIP_ANCHOR_GAP * ControlBarUniformScale() );
+	IRegion2D shownBox = { { 0, 0 }, { 0, 0 } };
 	for( Int pass = 0; pass < TOOLTIP_LAYOUT_PASSES; pass++ )
 	{
 		IRegion2D box;
@@ -13873,6 +13875,7 @@ Bool InGameUI::drawTooltipPage( const UnicodeString &cursorText, const RGBColor 
 		putPageRect( values, "box", box, TRUE );
 		m_tooltipOverlay->setPage( HtmlTemplate_expand( m_tooltipPage, values, lists, lookupGameText ) );
 
+		shownBox = box;
 		std::vector< IRegion2D > laidOut;
 		m_tooltipOverlay->rectsOf( "#box", laidOut );
 		DEBUG_ASSERTCRASH( laidOut.size() == 1, ( "%s has %d #box elements, wants one\n", TOOLTIP_PAGE, (Int)laidOut.size() ) );
@@ -13882,6 +13885,9 @@ Bool InGameUI::drawTooltipPage( const UnicodeString &cursorText, const RGBColor 
 		m_tooltipSize = size;
 	}
 	m_tooltipOverlay->draw();
+	// G1: a pad in command-bar mode presses what the card describes with South; its glyph in the corner
+	if( card )
+		GamepadHints::drawTooltipCorner( shownBox );
 	return TRUE;
 }
 

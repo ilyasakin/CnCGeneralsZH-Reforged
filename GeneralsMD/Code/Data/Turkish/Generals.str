@@ -15385,6 +15385,98 @@ GUI:OptionsGroupInput
 "Kontrol Düzeni"
 END
 
+GUI:Gamepad
+"Oyun Kumandası"
+END
+
+GUI:GamepadSelect
+"Seç"
+END
+
+GUI:GamepadBack
+"Geri"
+END
+
+GUI:GamepadStart
+"Başlat"
+END
+
+GUI:GamepadTabs
+"Sekmeler"
+END
+
+GUI:GamepadOrder
+"Emir"
+END
+
+GUI:GamepadAttackMove
+"Saldırarak ilerle"
+END
+
+GUI:GamepadCommands
+"Komutlar"
+END
+
+GUI:GamepadIdleWorker
+"Boştaki işçi"
+END
+
+GUI:GamepadAdd
+"Ekle"
+END
+
+GUI:GamepadQueue
+"Sıraya al"
+END
+
+GUI:GamepadGroupsHigh
+"Gruplar 5-8"
+END
+
+GUI:GamepadForceFire
+"Zorla ateş"
+END
+
+GUI:GamepadMakeGroup
+"Grup kur"
+END
+
+GUI:GamepadScatter
+"Dağıl"
+END
+
+GUI:GamepadStop
+"Dur"
+END
+
+GUI:GamepadZoomTurn
+"Yakınlaştır ve döndür"
+END
+
+GUI:GamepadArmy
+"Tüm ordu"
+END
+
+TOOLTIP:Gamepad
+"Kumandayla oyna: sol çubuk imleci gezdirir, A seçer, X emri verir, B geri alır, RT basılı tutulunca komut menüsü açılır. Gerisini üstteki şerit gösterir. Kapalıyken bağlı bir kumanda yok sayılır."
+END
+
+GUI:GamepadAim
+"Kumanda Nişan Yardımı"
+END
+
+TOOLTIP:GamepadAim
+"Maçta kumandanın imleci, görebildiğin en yakın birliğe ya da binaya oturur ve birinin üzerinden geçerken yavaşlar. Kapalıyken tam çubuğun götürdüğü yere gider."
+END
+
+GUI:GamepadSwapConfirm
+"Onay ve İptal Yer Değiştirsin"
+END
+
+TOOLTIP:GamepadSwapConfirm
+"Öbür yüz düğmesiyle onayla. Xbox, PlayStation ve Steam Deck kumandaları alttaki düğmeyle, Nintendo kumandaları sağdaki A ile onaylar; işaretliyken her biri tersini yapar, düğme ipuçları da ona uyar."
+END
+
 GUI:ChromaLighting
 "Razer Chroma Işıkları"
 END

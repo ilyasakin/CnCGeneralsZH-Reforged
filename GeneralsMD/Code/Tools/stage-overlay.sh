@@ -71,6 +71,15 @@ else
 	copy Install_Final.bmp Install_Final.bmp
 	copy Art/Textures Art/Textures
 	copy Window Window
+	# G1's button hint fonts and their glyph maps, when vendor.sh has fetched them (Kenney's Input Prompts,
+	# CC0): Data/Fonts/Gamepad, where GamepadHints.cpp asks for them
+	prompts="$data/../Libraries/Source/KenneyInputPrompts"
+	if [ -f "$prompts/License.txt" ]; then
+		mkdir -p "$out/Data/Fonts/Gamepad"
+		for f in "$prompts"/*.ttf "$prompts"/*_map.txt; do
+			[ -f "$f" ] && cp -- "$f" "$out/Data/Fonts/Gamepad/"
+		done
+	fi
 	if [ -n "$run" ] && [ -d "$run" ]; then
 		for big in "$run"/Reforged*.big; do
 			[ -f "$big" ] && ln -s "$(cd "$(dirname "$big")" && pwd)/$(basename "$big")" "$out/$(basename "$big")"

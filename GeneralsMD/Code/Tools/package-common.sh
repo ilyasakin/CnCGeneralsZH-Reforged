@@ -94,6 +94,12 @@ license_entry() {
 			awk 'NR == 1 && !/^\/\*/ { exit 1 } { print } /\*\// { exit }' "$s/Compression/ZLib/zlib.h" > "$L/zlib-LICENSE.txt" &&
 			grep -q "This notice may not be removed" "$L/zlib-LICENSE.txt";;
 		nanosvg) cp "$s/nanosvg/LICENSE.txt" "$L/nanosvg-LICENSE.txt";;
+		kenney-input-prompts)		# the controller hint fonts the overlay carries (stage-overlay.sh), once vendor.sh has them
+			[ -f "$s/KenneyInputPrompts/License.txt" ] || return 0		# not vendored: the overlay has no fonts either
+			cp "$s/KenneyInputPrompts/License.txt" "$L/Kenney-Input-Prompts-LICENSE.txt" &&
+			printf '%s\n' "Kenney's \"Input Prompts\" 1.5A (www.kenney.nl), Creative Commons CC0 1.0:" \
+				"https://kenney.nl/assets/input-prompts.  The game draws four of its glyph fonts, in their plain single-colour" \
+				"form, as controller button hints (Data/Fonts/Gamepad in its overlay)." > "$L/Kenney-Input-Prompts-SOURCE.txt";;
 		*) echo "no license_entry named $1" >&2; return 1;;
 	esac
 }

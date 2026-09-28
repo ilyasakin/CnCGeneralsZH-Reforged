@@ -115,6 +115,7 @@
 #include "GameClient/Water.h"
 #include "GameClient/TerrainRoads.h"
 #include "GameClient/MetaEvent.h"
+#include "GameClient/GamepadMap.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GlobalLanguage.h"
@@ -1278,6 +1279,11 @@ void GameEngine::init( int argc, char *argv[] )
 		ini.load("Data\\INI\\CommandMapDemo.ini", INI_LOAD_MULTIFILE, NULL);
 #endif
 
+		// A gamepad's buttons, bound to the mouse's buttons and to the command map's messages (G1,
+		// GamepadMap.h).  No CRC, as the command maps have none.
+		initSubsystem(TheGamepadMap,"TheGamepadMap", MSGNEW("GameEngineSubsystem") GamepadMap(), NULL, NULL, "Data\\INI\\GamepadReforged.ini");
+
+
 		initSubsystem(TheActionManager,"TheActionManager", MSGNEW("GameEngineSubsystem") ActionManager(), NULL);
 		//initSubsystem((CComObject<WebBrowser> *)TheWebBrowser,"(CComObject<WebBrowser> *)TheWebBrowser", (CComObject<WebBrowser> *)createWebBrowser(), NULL);
 		initSubsystem(TheGameStateMap,"TheGameStateMap", MSGNEW("GameEngineSubsystem") GameStateMap, NULL, NULL, NULL );
@@ -1613,6 +1619,13 @@ Bool GameEngine_mayStartAnotherCatchupTick( Int ticksSoFar, Int maxTicks, Real e
 	 client; nothing here reaches the logic. */
 static Int64 s_lastLogicTickTicks = 0;
 static Real s_msPerLogicTick = 0.0f;
+
+static Bool s_oneLogicFramePerPass = FALSE;
+
+void GameEngine_setOneLogicFramePerPass( Bool one )
+{
+	s_oneLogicFramePerPass = one;
+}
 
 void GameEngine_noteLogicTickDone( Int logicFps, Bool fastMode )
 {
@@ -2728,7 +2741,7 @@ void GameEngine::update( void )
 				if (noteFrameLimit() && frameLimitOvershoot() == 0)
 					break;
 
-				if (!mayCatchUp)
+				if (!mayCatchUp || s_oneLogicFramePerPass)
 					break;
 				tCatchupNow = Clock_Ticks();
 				if (!GameEngine_mayStartAnotherCatchupTick( logicTicksThisPass, maxTicksThisPass,

@@ -121,6 +121,7 @@ SdlMouse::SdlMouse( void )
 	memset( &m_eventBuffer, 0, sizeof( m_eventBuffer ) );
 	m_nextFreeIndex = 0;
 	m_nextGetIndex = 0;
+	m_lastEventX = m_lastEventY = 0;
 	m_currentSdlCursor = NONE;
 	m_directionFrame = 0;		// points up
 	m_lostFocus = FALSE;
@@ -247,6 +248,8 @@ void SdlMouse::addEvent( EventKind kind, Int x, Int y, Button button, Int clicks
 		static const char *const kinds[] = { "none", "move", "down", "up", "wheel" };
 		fprintf( stderr, "pointer check: the mouse got %s (button %d) at game %d,%d\n", kinds[kind], (Int)button, x, y );
 	}
+	m_lastEventX = x;
+	m_lastEventY = y;
 	SdlMouseEvent &slot = m_eventBuffer[ m_nextFreeIndex ];
 	slot.kind = kind;
 	slot.x = x;
@@ -258,6 +261,19 @@ void SdlMouse::addEvent( EventKind kind, Int x, Int y, Button button, Int clicks
 	m_nextFreeIndex++;
 	if (m_nextFreeIndex >= Mouse::NUM_MOUSE_EVENTS)
 		m_nextFreeIndex = 0;
+}
+
+void SdlMouse::getPointerPosition( Int &x, Int &y ) const
+{
+	if (m_positionReported)
+	{
+		x = m_lastEventX;
+		y = m_lastEventY;
+		return;
+	}
+	float wx = 0, wy = 0;
+	SDL_GetMouseState( &wx, &wy );
+	SdlInput_toGamePixels( wx, wy, x, y );
 }
 
 UnsignedByte SdlMouse::getMouseEvent( MouseIO *result, Bool flush )
@@ -372,6 +388,24 @@ SDL_Cursor *SdlMouse::createCursor( const AniCursor &cursor )
 	for (size_t i = 0; i < surfaces.size(); ++i)
 		SDL_DestroySurface( surfaces[i] );
 	return made;
+}
+
+Bool SdlMouse::firstCursorFrame( MouseCursor cursor, AniCursorFrame &frame ) const
+{
+	if (cursor <= NONE || cursor >= NUM_MOUSE_CURSORS || m_cursorInfo[cursor].textureName.isEmpty())
+		return FALSE;
+	char path[256];
+	if (m_cursorInfo[cursor].numDirections > 1)
+		snprintf( path, ARRAY_SIZE( path ), "data\\cursors\\%s0.ANI", m_cursorInfo[cursor].textureName.str() );
+	else
+		snprintf( path, ARRAY_SIZE( path ), "data\\cursors\\%s.ANI", m_cursorInfo[cursor].textureName.str() );
+	std::vector<UnsignedByte> bytes;
+	AniCursor decoded;
+	if (!readWholeFile( path, bytes ) || !AniCursor_decode( &bytes[0], bytes.size(), decoded ) || decoded.steps.empty()
+			|| decoded.steps[0].frame < 0 || decoded.steps[0].frame >= (Int)decoded.frames.size())
+		return FALSE;
+	frame = decoded.frames[ decoded.steps[0].frame ];
+	return TRUE;
 }
 
 void SdlMouse::setCursor( MouseCursor cursor )
