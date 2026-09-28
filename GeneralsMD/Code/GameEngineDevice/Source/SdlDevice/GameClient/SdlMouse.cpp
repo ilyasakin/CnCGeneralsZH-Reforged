@@ -326,6 +326,24 @@ SDL_Cursor *SdlMouse::createCursor( const AniCursor &cursor )
 	return made;
 }
 
+Bool SdlMouse::firstCursorFrame( MouseCursor cursor, AniCursorFrame &frame ) const
+{
+	if (cursor <= NONE || cursor >= NUM_MOUSE_CURSORS || m_cursorInfo[cursor].textureName.isEmpty())
+		return FALSE;
+	char path[256];
+	if (m_cursorInfo[cursor].numDirections > 1)
+		snprintf( path, ARRAY_SIZE( path ), "data\\cursors\\%s0.ANI", m_cursorInfo[cursor].textureName.str() );
+	else
+		snprintf( path, ARRAY_SIZE( path ), "data\\cursors\\%s.ANI", m_cursorInfo[cursor].textureName.str() );
+	std::vector<UnsignedByte> bytes;
+	AniCursor decoded;
+	if (!readWholeFile( path, bytes ) || !AniCursor_decode( &bytes[0], bytes.size(), decoded ) || decoded.steps.empty()
+			|| decoded.steps[0].frame < 0 || decoded.steps[0].frame >= (Int)decoded.frames.size())
+		return FALSE;
+	frame = decoded.frames[ decoded.steps[0].frame ];
+	return TRUE;
+}
+
 void SdlMouse::setCursor( MouseCursor cursor )
 {
 	Mouse::setCursor( cursor );

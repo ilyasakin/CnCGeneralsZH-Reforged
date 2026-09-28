@@ -44,6 +44,7 @@
 #include "GameClient/Mouse.h"
 
 struct AniCursor;
+struct AniCursorFrame;
 struct SDL_Cursor;
 struct SDL_Window;
 
@@ -73,6 +74,10 @@ public:
 	void getPointerPosition( Int &x, Int &y ) const;
 
 	void lostFocus( Bool state ) { m_lostFocus = state; }	///< Win32Mouse's, for the focus handling
+
+	/** The first frame of a cursor's .ANI (its first direction): the art the platform's cursor shows, for a
+		* renderer that draws the cursor itself (W3DMouse's RM_POLYGON, when a pad drives); FALSE without one */
+	Bool firstCursorFrame( MouseCursor cursor, AniCursorFrame &frame ) const;
 
 	/// The mouse SDL's events go to: the one the game made, or none yet
 	static SdlMouse *active( void ) { return s_active; }
