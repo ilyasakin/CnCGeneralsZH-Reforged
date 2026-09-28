@@ -29,6 +29,7 @@
 
 #include "Common/ArchiveFileSystem.h"
 #include "Common/CommandLine.h"
+#include "Common/EarlyCommandLine.h"	// unattendedByEnvironment, for -nologo and -novideo in Release
 #include "Common/CRCDebug.h"
 #include "Common/LocalFileSystem.h"
 #include "Common/OptionsCatalog.h"
@@ -188,10 +189,31 @@ Int parseNoMusic(char *args[], int)
 }
 
 
+/* -nologo and -novideo in a Release build are for our harnesses only.  EA kept both switches in the Debug and
+	 Internal builds, and made Release's -quickstart skip the sizzle movie "but still force the EA logo to show
+	 up.  This is for legal reasons." (parseQuickStart).  A player's Release run keeps that: the logo plays
+	 whatever the command line says.  A run with ZH_UNATTENDED set - the CI scripts and the test harnesses,
+	 never a player - may skip the videos, the logo included, so a visible test run does not spend its first
+	 minute on movies.  Debug and Internal builds take both switches as EA's did. */
+static Bool videoSkipAllowed( const char *which )
+{
+#if defined(_DEBUG) || defined(_INTERNAL)
+	(void)which;
+	return TRUE;
+#else
+	if (unattendedByEnvironment())
+		return TRUE;
+	DEBUG_LOG(("%s ignored: a Release build skips videos only in a run with ZH_UNATTENDED set; the EA logo stays for players\n", which));
+	return FALSE;
+#endif
+}
+
 //=============================================================================
 //=============================================================================
 Int parseNoVideo(char *args[], int)
 {
+	if (!videoSkipAllowed( "-novideo" ))
+		return 1;
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_videoOn = false;
@@ -986,9 +1008,10 @@ Int parseNoShaders(char *args[], int)
 	return 1;
 }
 
-#if (defined(_DEBUG) || defined(_INTERNAL))
 Int parseNoLogo(char *args[], int)
 {
+	if (!videoSkipAllowed( "-nologo" ))
+		return 1;
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_playIntro = FALSE;
@@ -997,7 +1020,6 @@ Int parseNoLogo(char *args[], int)
 	}
 	return 1;
 }
-#endif
 
 Int parseNoSizzle( char *args[], int )
 {
@@ -2388,6 +2410,10 @@ static CommandLineParam params[] =
 	{ "-shadowmapboth", parseShadowMapBoth },
 	{ "-noparticleshadows", parseNoParticleShadows },
 	{ "-quickstart", parseQuickStart },
+	/* In every build, but a Release build honours them only with ZH_UNATTENDED set (videoSkipAllowed): the
+		 EA logo stays for players. */
+	{ "-nologo", parseNoLogo },
+	{ "-novideo", parseNoVideo },
 
 	{ "-packetloss", parsePacketLoss },
 	{ "-latAvg", parseLatencyAverage },
@@ -2408,7 +2434,6 @@ static CommandLineParam params[] =
 #if (defined(_DEBUG) || defined(_INTERNAL))
 	{ "-noaudio", parseNoAudio },
 	{ "-nomusic", parseNoMusic },
-	{ "-novideo", parseNoVideo },
 	{ "-noLogOrCrash", parseNoLogOrCrash },
 	{ "-FPUPreserve", parseFPUPreserve },
 	{ "-benchmark", parseBenchmark },
@@ -2457,7 +2482,6 @@ static CommandLineParam params[] =
 	{ "-noshadowvolumes", parseNoShadows },
 	{ "-nofx", parseNoFX },
 	{ "-ignoresync", parseSync },
-	{ "-nologo", parseNoLogo },
 	{ "-shellmap", parseShellMap },
 	{ "-noShellAnim", parseNoWindowAnimation },
 	{ "-winCursors", parseWinCursors },
