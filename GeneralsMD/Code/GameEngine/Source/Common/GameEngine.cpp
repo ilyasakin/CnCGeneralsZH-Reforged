@@ -1143,6 +1143,13 @@ void GameEngine::init( int argc, char *argv[] )
 	DEBUG_LOG(("%s", Buf));////////////////////////////////////////////////////////////////////////////
 	#endif/////////////////////////////////////////////////////////////////////////////////////////////
 		initSubsystem(TheAudio,"TheAudio", createAudioManager(), NULL);
+		// Whether this run can make a sound, in its log: a device handle exists only if the audio manager
+		// went on to open one, which it does not do with audio off (-noaudio, -headless, and off Windows a
+		// hidden window or -offscreen).
+		if (!TheGlobalData->m_audioOn)
+			DEBUG_LOG(("TheAudio: audio off, no device opened\n"));
+		else
+			DEBUG_LOG(("TheAudio: audio on, device handle %s\n", TheAudio->getDevice() != NULL ? "set" : "none (no device could be opened)"));
 		//
 		// Missing music used to end the process here, with setQuitting and not one word anywhere: the
 		// game started, the window appeared for a moment and it closed again.  A player who deleted

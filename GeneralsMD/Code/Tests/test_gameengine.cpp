@@ -9082,6 +9082,31 @@ TEST(the_slow_frame_bar_moves_only_for_a_positive_number)
 	TheWritableGlobalData = saved;
 }
 
+/* -noaudio turns every sound off in every build.  It was registered in the Debug and Internal builds only,
+   so a Release build ignored it and a windowed run with it opened the audio device.  ctest runs this in
+   the configuration it built, which is Release on every gate. */
+TEST(noaudio_switch_turns_every_sound_off_in_every_build)
+{
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+	CHECK( TheGlobalData->m_audioOn );
+	CHECK( TheGlobalData->m_musicOn );
+	CHECK( TheGlobalData->m_soundsOn );
+	CHECK( TheGlobalData->m_speechOn );
+
+	char exe[] = "generals.exe";
+	char noAudio[] = "-noaudio";
+	char *argv[] = { exe, noAudio };
+	parseCommandLine( 2, argv );
+	CHECK( !TheGlobalData->m_audioOn );
+	CHECK( !TheGlobalData->m_musicOn );
+	CHECK( !TheGlobalData->m_soundsOn );
+	CHECK( !TheGlobalData->m_speechOn );
+
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = saved;
+}
+
 TEST(a_netgame_slot_list_is_the_player_order_on_every_machine)
 {
 	/* -netgame carries what the LAN lobby otherwise agrees on: who plays, at which address, in
