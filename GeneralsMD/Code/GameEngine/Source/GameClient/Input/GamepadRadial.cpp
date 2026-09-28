@@ -94,9 +94,9 @@ UnicodeString pickName( GameWindow *window )
 	UnicodeString name;
 	for (const WideChar *c = label.str(); *c != 0; ++c)
 	{
-		if (*c == L'&' && c[1] != L'&')
+		if (*c == '&' && c[1] != '&')
 			continue;
-		if (*c == L'&')
+		if (*c == '&')
 			++c;
 		name.concat( *c );
 	}
