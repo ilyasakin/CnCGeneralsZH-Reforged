@@ -304,15 +304,18 @@ TEST(engineshader_writes_the_output_structure_ffvertex_writes)
 	CHECK(contains(hlsl, "float4 Position : SV_Position;"));
 	CHECK(contains(hlsl, "float4 Diffuse  : COLOR0;"));
 	CHECK(contains(hlsl, "float4 Specular : COLOR1;"));
-	size_t previous = hlsl.find("float4 Specular : COLOR1;");
+	// Searched from struct Output: the trees' struct Input comes first and has its own TexCoord0.
+	const size_t output = hlsl.find("struct Output");
+	CHECK(output != std::string::npos);
+	size_t previous = hlsl.find("float4 Specular : COLOR1;", output);
 	for (unsigned stage = 0; stage < MAXIMUM_VERTEX_STAGES; ++stage) {
 		char member[64];
 		snprintf(member, sizeof(member), "float2 TexCoord%u : TEXCOORD%u;", stage, stage);
-		const size_t at = hlsl.find(member);
+		const size_t at = hlsl.find(member, output);
 		CHECK(at != std::string::npos && previous != std::string::npos && at > previous);
 		previous = at;
 	}
-	const size_t fog = hlsl.find("float Fog : FOG;");
+	const size_t fog = hlsl.find("float Fog : FOG;", output);
 	CHECK(fog != std::string::npos && previous != std::string::npos && fog > previous);
 }
 
