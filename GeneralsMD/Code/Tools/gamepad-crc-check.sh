@@ -27,7 +27,9 @@
 #           and stop (both shoulders, S) - the local player's only unit at the start is the dozer;
 #   hand  - the same through SDL's own mouse and key events, on the same logic frames;
 #   none  - no input: the armed control, so equal CRCs cannot come from input that did nothing.
-# PASS: pad and hand agree on the HEADLESS CRC and frame, and none differs.
+# PASS: pad and hand agree on the CRC of -maxframes' own frame (HEADLESS CRC AT LIMIT), and none differs.  The
+# pad runs one frame past the limit and the hand two (ZH_TEST_FRAME_LIMIT_OVERSHOOT), as load once made them,
+# and each must say so: the control that the comparison is at the limit, not where a run stopped.
 # Then the radial menu (GamepadRadial.h), in two more runs of the same match: the pad builds from the ring's
 # top sector, the hand by clicking the command button the pad's run logged.  PASS: the ring pressed the bar's
 # first button, the two agree, and both differ from the plain pad run (the building is the difference).
@@ -148,38 +150,49 @@ cat > "$WORK/hand.txt" <<'SCRIPT'
 302 key S up
 SCRIPT
 
-run_game() {	# run_game <name> [script [frames]]: sets RUN_CRC, RUN_FRAME, RUN_PLAYED, RUN_STATUS
+# Every run is compared at -maxframes' own frame, from the CRC the engine logs as the logic finishes it
+# ("HEADLESS CRC AT LIMIT"), never at the frame the run happened to stop on: one engine pass can run several
+# logic frames to catch up, and a loaded worker once stopped a pad run on 601 and its hand on 602, which can
+# only disagree.  OVERSHOOT (ZH_TEST_FRAME_LIMIT_OVERSHOOT, a test's switch) runs a run that many frames past
+# the limit: the plain pad and hand runs use 1 and 2, the control that the comparison is at the limit.
+OVERSHOOT=0
+run_game() {	# run_game <name> [script [frames]]: sets RUN_CRC and RUN_FRAME (at the limit), RUN_STOP, RUN_PLAYED, RUN_STATUS
 	local prefix="$TAG$1" script="${2:-}" frames="${3:-$MAXFRAMES}"
 	local log="$EXEDIR/${prefix}DebugLogFile.txt"
 	rm -f -- "$log"
-	( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_INPUT_SCRIPT="$script" \
+	( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_INPUT_SCRIPT="$script" ZH_AUDIO_BACKEND=null \
+		ZH_TEST_FRAME_LIMIT_OVERSHOOT="$OVERSHOOT" \
 		perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
 		"$GENERALS" -offscreen -noaudio -win -xres 1024 -yres 768 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
 		-multiInstance -noFPSLimit -maxframes "$frames" -logPrefix "$prefix" \
 		-randommap 0 2 -autoskirmish 2 -aidiff brutal -seed 0 \
 		> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
 	RUN_STATUS=$?
-	RUN_CRC=""; RUN_FRAME=""; RUN_PLAYED=0
+	RUN_CRC=""; RUN_FRAME=""; RUN_STOP=""; RUN_PLAYED=0
 	[ -f "$log" ] || return
 	local line
-	line="$(grep -a 'HEADLESS CRC: 0x' "$log" | tail -1)"
-	RUN_CRC="$(printf '%s' "$line" | sed -n 's/.*HEADLESS CRC: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\1/p')"
-	RUN_FRAME="$(printf '%s' "$line" | sed -n 's/.*HEADLESS CRC: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\2/p')"
+	line="$(grep -a 'HEADLESS CRC AT LIMIT: 0x' "$log" | tail -1)"
+	RUN_CRC="$(printf '%s' "$line" | sed -n 's/.*HEADLESS CRC AT LIMIT: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\1/p')"
+	RUN_FRAME="$(printf '%s' "$line" | sed -n 's/.*HEADLESS CRC AT LIMIT: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\2/p')"
+	RUN_STOP="$(grep -a 'HEADLESS CRC: 0x' "$log" | tail -1 | sed -n 's/.*HEADLESS CRC: 0x[0-9A-Fa-f]* at frame \([0-9]*\).*/\1/p')"
 	RUN_PLAYED="$(grep -a 'INPUT SCRIPT: frame ' "$log" | grep -a -c -v 'not understood')"
 }
 
-run_game pad "$WORK/pad.txt";   PAD_CRC="$RUN_CRC"; PAD_FRAME="$RUN_FRAME"; PAD_PLAYED="$RUN_PLAYED"; PAD_STATUS="$RUN_STATUS"
-run_game hand "$WORK/hand.txt"; HAND_CRC="$RUN_CRC"; HAND_FRAME="$RUN_FRAME"; HAND_PLAYED="$RUN_PLAYED"; HAND_STATUS="$RUN_STATUS"
-run_game none "";               NONE_CRC="$RUN_CRC"; NONE_FRAME="$RUN_FRAME"
+OVERSHOOT=1; run_game pad "$WORK/pad.txt";   PAD_CRC="$RUN_CRC"; PAD_FRAME="$RUN_FRAME"; PAD_STOP="$RUN_STOP"; PAD_PLAYED="$RUN_PLAYED"; PAD_STATUS="$RUN_STATUS"
+OVERSHOOT=2; run_game hand "$WORK/hand.txt"; HAND_CRC="$RUN_CRC"; HAND_FRAME="$RUN_FRAME"; HAND_STOP="$RUN_STOP"; HAND_PLAYED="$RUN_PLAYED"; HAND_STATUS="$RUN_STATUS"
+OVERSHOOT=0; run_game none "";               NONE_CRC="$RUN_CRC"; NONE_FRAME="$RUN_FRAME"
 
-echo "pad:  CRC ${PAD_CRC:-none} at frame ${PAD_FRAME:-none}, $PAD_PLAYED of 18 actions played (exit $PAD_STATUS)"
-echo "hand: CRC ${HAND_CRC:-none} at frame ${HAND_FRAME:-none}, $HAND_PLAYED of 16 actions played (exit $HAND_STATUS)"
+echo "pad:  CRC ${PAD_CRC:-none} at frame ${PAD_FRAME:-none}, stopped at ${PAD_STOP:-none}, $PAD_PLAYED of 18 actions played (exit $PAD_STATUS)"
+echo "hand: CRC ${HAND_CRC:-none} at frame ${HAND_FRAME:-none}, stopped at ${HAND_STOP:-none}, $HAND_PLAYED of 16 actions played (exit $HAND_STATUS)"
 echo "none: CRC ${NONE_CRC:-none} at frame ${NONE_FRAME:-none}"
 status=0
 if [ -z "$PAD_CRC" ] || [ -z "$HAND_CRC" ] || [ -z "$NONE_CRC" ]; then
 	echo "FAIL: a run gave no result"; status=1
 elif [ "$PAD_PLAYED" != "18" ] || [ "$HAND_PLAYED" != "16" ]; then
 	echo "FAIL: the scripts were not played whole"; status=1
+elif [ "$PAD_FRAME" != "$MAXFRAMES" ] || [ "$HAND_FRAME" != "$MAXFRAMES" ] || [ "$PAD_STOP" != "$(( MAXFRAMES + 1 ))" ] \
+		|| [ "$HAND_STOP" != "$(( MAXFRAMES + 2 ))" ]; then
+	echo "FAIL: the overshoot control: the pad and hand runs must stop one and two frames past $MAXFRAMES and be compared at $MAXFRAMES"; status=1
 elif [ "$PAD_CRC" != "$HAND_CRC" ] || [ "$PAD_FRAME" != "$HAND_FRAME" ]; then
 	echo "FAIL: the pad and the hand disagree"; status=1
 elif [ "$PAD_CRC" = "$NONE_CRC" ]; then
