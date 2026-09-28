@@ -874,6 +874,14 @@ TOOLTIP:Gamepad
 "Play with a controller: the left stick moves the pointer, the bottom face button clicks, and the top one takes you to the command bar. Off, a connected controller is ignored."
 END
 
+GUI:GamepadAim
+"Controller Aim Assist"
+END
+
+TOOLTIP:GamepadAim
+"In a match, the controller's pointer settles onto the nearest unit or building you can see, and slows as it passes over one. Off, it goes exactly where the stick puts it."
+END
+
 GUI:ChromaLighting
 "Razer Chroma Lighting"
 END

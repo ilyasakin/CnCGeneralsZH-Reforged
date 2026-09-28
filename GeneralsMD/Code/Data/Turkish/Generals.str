@@ -15433,6 +15433,14 @@ TOOLTIP:Gamepad
 "Kumandayla oyna: sol çubuk imleci gezdirir, alttaki yüz düğmesi tıklar, üstteki komut çubuğuna götürür. Kapalıyken bağlı bir kumanda yok sayılır."
 END
 
+GUI:GamepadAim
+"Kumanda Nişan Yardımı"
+END
+
+TOOLTIP:GamepadAim
+"Maçta kumandanın imleci, görebildiğin en yakın birliğe ya da binaya oturur ve birinin üzerinden geçerken yavaşlar. Kapalıyken tam çubuğun götürdüğü yere gider."
+END
+
 GUI:ChromaLighting
 "Razer Chroma Işıkları"
 END

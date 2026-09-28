@@ -26,6 +26,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/GamepadAim.h"
 #include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadMap.h"
@@ -62,6 +63,7 @@ const Real CAMERA_KEY_OFF = 0.35f;						///< ...and the tilt below which it lets
 const Int DOUBLE_CLICK_DISTANCE = 4;					///< Windows' SM_CXDOUBLECLK and SM_CYDOUBLECLK
 const Real STICK_DEAD_ZONE = 0.15f;						///< the left stick's, radial
 const Real POINTER_CROSSING_SECONDS = 1.2f;		///< full tilt crosses the screen's width in this long
+const Real AIM_FRICTION = 0.55f;								///< the pointer's speed over something aimable (GamepadAim.h)
 const Int EDGE_BAND = 3;											///< LookAtXlat's edgeScrollSize: a pointer this near an edge scrolls
 
 /// What one press did, so that its release undoes exactly that
@@ -953,7 +955,9 @@ void SdlGamepad_update( UnsignedInt nowMs )
 			thePointer.shownX = x;
 			thePointer.shownY = y;
 		}
-		const Real speed = width / POINTER_CROSSING_SECONDS;		// pixels a second at full tilt
+		Real speed = width / POINTER_CROSSING_SECONDS;		// pixels a second at full tilt
+		if (GamepadAim::nearTarget( thePointer.shownX, thePointer.shownY, GamepadAim::radiusFor( height ) / 2 ))
+			speed *= AIM_FRICTION;		// aim assist: slower over a unit or a building, so a flick stops on it
 		thePointer.x += vx * speed * seconds;
 		thePointer.y += vy * speed * seconds;
 		// held to the screen: at an edge it edge-scrolls, as a mouse there does
@@ -962,6 +966,18 @@ void SdlGamepad_update( UnsignedInt nowMs )
 		const Int x = (Int)thePointer.x, y = (Int)thePointer.y;
 		if (x != thePointer.shownX || y != thePointer.shownY)
 			showPointer( x, y, nowMs );
+	}
+	else if (theLastUsed && thePointer.owned && !theCommandBarMode && width > 0 && height > 0 && seconds > 0.0f)
+	{
+		// aim assist: the resting pointer eases onto the nearest unit or building the player can see
+		ICoord2D target;
+		if (GamepadAim::magnetTarget( thePointer.shownX, thePointer.shownY, GamepadAim::radiusFor( height ), target ))
+		{
+			GamepadAim::easeToward( thePointer.x, thePointer.y, target, seconds );
+			const Int x = (Int)thePointer.x, y = (Int)thePointer.y;
+			if (x != thePointer.shownX || y != thePointer.shownY)
+				showPointer( x, y, nowMs );
+		}
 	}
 	GamepadHints::setCommandBarMode( theCommandBarMode );		// before this frame's drawing reads it
 

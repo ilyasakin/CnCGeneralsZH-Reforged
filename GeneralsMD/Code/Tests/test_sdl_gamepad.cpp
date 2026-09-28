@@ -47,6 +47,7 @@
 #include "Common/GameMemory.h"
 #include "Common/GlobalData.h"
 #include "Common/INI.h"
+#include "GameClient/GamepadAim.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadMap.h"
 #include "GameClient/KeyDefs.h"
@@ -713,6 +714,38 @@ TEST(command_bar_mode_steps_to_the_nearest_button_that_way)
 	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 100, 500, -1, 0 ), -1 );	// nothing left of the first
 	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 250, 500, 0, 1 ), 9 );		// over the gap: the nearest below
 	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 300, 550, -1, 0 ), 9 );		// left across the gap on its own row
+}
+
+TEST(aim_assist_picks_the_nearest_point_within_its_radius)
+{
+	const ICoord2D points[] = { { 100, 100 }, { 130, 100 }, { 112, 109 }, { 400, 400 } };
+	CHECK_EQ( GamepadAim::nearest( points, 4, 110, 100, 24 ), 2 );		// 9.2 away, nearer than 10 and 20
+	CHECK_EQ( GamepadAim::nearest( points, 4, 300, 300, 24 ), -1 );	// nothing within the radius
+	CHECK_EQ( GamepadAim::nearest( points, 4, 400, 424, 24 ), 3 );		// exactly on the radius counts
+	CHECK_EQ( GamepadAim::nearest( points, 4, 115, 90, 24 ), 0 );		// equals (18.0 and 18.0; 112,109 is 19.2): the first
+	CHECK_EQ( GamepadAim::nearest( points, 0, 0, 0, 24 ), -1 );
+	CHECK( GamepadAim::radiusFor( 800 ) == 24 && GamepadAim::radiusFor( 1080 ) == 32 && GamepadAim::radiusFor( 200 ) == 12 );
+}
+
+TEST(aim_assist_eases_onto_its_target_and_never_overshoots)
+{
+	const ICoord2D target = { 200, 100 };
+	Real x = 176.0f, y = 100.0f, last = x;
+	Bool overshot = FALSE, monotonic = TRUE;
+	for (Int frame = 0; frame < 30; ++frame)		// half a second at 60 frames a second
+	{
+		GamepadAim::easeToward( x, y, target, 1.0f / 60.0f );
+		overshot = overshot || x > 200.0f;
+		monotonic = monotonic && x >= last;
+		last = x;
+	}
+	CHECK( !overshot && monotonic );
+	CHECK( x == 200.0f && y == 100.0f );		// arrived exactly: the last pixel is closed outright
+	x = 176.0f;
+	GamepadAim::easeToward( x, y, target, 0.0f );
+	CHECK( x == 176.0f );		// no time, no move
+	GamepadAim::easeToward( x, y, target, 0.06f );
+	CHECK( x > 190.0f && x < 192.0f );		// one time constant: 24 * e^-1 = 8.8 left
 }
 
 TEST(north_with_no_command_bar_shown_does_nothing)

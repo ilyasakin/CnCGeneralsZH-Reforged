@@ -92,6 +92,9 @@ trap cleanup EXIT
 install_snapshot "$INSTALL" "$WORK/install-before.list"
 
 mkdir -p "$ROOT" "$USERDATA"
+# Aim assist (GamepadAim.h) moves a resting pad's pointer onto a unit near it, so the pad would click beside
+# the hand's pixel: this check is about the same click at the same pixel, so the assist is off here
+printf 'GamepadAim = no\n' > "$USERDATA/Options.ini"
 ( cd "$INSTALL" && find . -type d ! -name '._*' ) | while IFS= read -r d; do mkdir -p "$ROOT/$d"; done
 ( cd "$INSTALL" && find . -type f ! -name '._*' ) | while IFS= read -r f; do ln -s "$INSTALL/${f#./}" "$ROOT/$f"; done
 OVERLAY="$WORK/overlay"
