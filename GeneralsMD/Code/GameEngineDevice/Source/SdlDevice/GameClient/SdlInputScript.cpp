@@ -47,7 +47,10 @@ struct Action
 	std::string line;
 };
 
-const UnsignedInt SETTLED_MS = 250;		///< the default focus's own stillness rule (GamepadFocus.cpp)
+/// How long the menu must stand still before an "s" step: a second, where the default focus's own rule is 250 ms,
+/// because a pane can hold its widgets still while its hover and focus are still catching up (seen on the M3 Pro Mac: a
+/// Back that came 250 ms after the difficulty pane stood still moved the focus to Hard instead)
+const UnsignedInt SETTLED_MS = 1000;
 
 std::vector<Action> theActions;
 size_t theNext = 0;

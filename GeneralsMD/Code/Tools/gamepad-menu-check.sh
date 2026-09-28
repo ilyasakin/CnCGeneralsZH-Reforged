@@ -100,7 +100,7 @@ mkdir -p "$ROOT" "$USERDATA"
 OVERLAY="$WORK/overlay"
 "$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
 
-# ---- the walk: each press waits until the menu has stood still for 250 ms since the one before (focus,
+# ---- the walk: each press waits until the menu has stood still for a second since the one before (focus,
 # screen and every widget's place: GamepadFocus::isSettled), and its release follows in the same pass.  A
 # walk timed in passes misrouted under load: a release that came 350 ms after its press, on a loaded
 # worker, let the menu's own repeat press the D-pad a second time, and the focus went to Credits.
