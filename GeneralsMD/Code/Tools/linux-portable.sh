@@ -18,7 +18,9 @@
 # linux-portable.sh: the portable Linux build (P3, docs/mac-port/tasks/P3-steam-deck.md) - one folder that runs
 # on the Steam Deck's SteamOS and any desktop Linux of the last five years, with nothing installed.
 #
-#   <out>/zero-hour-reforged                      the launcher: runs bin/generals with the player's arguments
+#   <out>/zero-hour-reforged.sh                   the launcher: runs bin/generals with the player's arguments (a .sh:
+#                                                 Steam's Add a Non-Steam Game picker takes .sh, .exe, .application
+#                                                 or an AppImage, never a bare executable)
 #   <out>/bin/generals                            stripped; bin/generals.debug beside it (a GNU debuglink)
 #   <out>/share/zero-hour-reforged/overlay/       the staged overlay (zh_overlay), its art copied in
 #   <out>/share/zero-hour-reforged/licenses/      from macos-app-licenses.txt, checked against the link line
@@ -156,7 +158,7 @@ for e in $ENTRIES; do
 	license_entry "$e" "$S/licenses" || fail "cannot write the licence entry '$e'"
 done
 
-cat > "$OUT/zero-hour-reforged" <<'LAUNCHER'
+cat > "$OUT/zero-hour-reforged.sh" <<'LAUNCHER'
 #!/bin/sh
 # Zero Hour Reforged's launcher (P3): the game finds its overlay beside it and the player's Zero Hour by itself
 # (Registry.ini, then ~/Games, the Steam libraries and the rest; see README.txt).  Arguments pass through,
@@ -164,7 +166,7 @@ cat > "$OUT/zero-hour-reforged" <<'LAUNCHER'
 here="$(dirname "$(readlink -f "$0")")"
 exec "$here/bin/generals" "$@"
 LAUNCHER
-chmod +x "$OUT/zero-hour-reforged"
+chmod +x "$OUT/zero-hour-reforged.sh"
 
 python3 - "$CODE/Main/Generals.ico" "$OUT/share/icons/hicolor/48x48/apps/zero-hour-reforged.png" <<'ICON_EOF' || fail "cannot make the icon"
 # the .ico's largest 24-bit image, its AND mask as alpha, written as a PNG
@@ -206,7 +208,7 @@ cat > "$OUT/share/applications/zero-hour-reforged.desktop" <<'DESKTOP'
 Type=Application
 Name=Zero Hour Reforged
 Comment=Command & Conquer Generals Zero Hour, reforged
-Exec=zero-hour-reforged
+Exec=zero-hour-reforged.sh
 Icon=zero-hour-reforged
 # a template: to use it, put the folder's path in Exec and copy this file to ~/.local/share/applications
 Categories=Game;StrategyGame;
@@ -237,9 +239,9 @@ Generals Zero Hour (Steam, EA App, CD or First Decade), with the original Genera
 
 INSTALL
   Unpack the folder anywhere you can write, e.g. ~/Games/ZeroHourReforged. To start it, run
-  zero-hour-reforged in the folder.
+  zero-hour-reforged.sh in the folder.
 
-  In Steam: Games > Add a Non-Steam Game to My Library > Browse, choose zero-hour-reforged.
+  In Steam: Games > Add a Non-Steam Game to My Library > Browse, choose zero-hour-reforged.sh.
 
 WHERE YOUR ZERO HOUR IS
   The game finds it by itself when it is in one of these places:
@@ -280,7 +282,7 @@ if [ -n "$APPIMAGETOOL" ]; then
 	A="$OUT.AppDir"
 	rm -rf -- "$A" "$OUT.AppImage"
 	cp -al "$OUT" "$A" 2>/dev/null || cp -R "$OUT" "$A" || fail "cannot make $A"
-	cp "$OUT/zero-hour-reforged" "$A/AppRun" && cp "$OUT/share/applications/zero-hour-reforged.desktop" "$A/" \
+	cp "$OUT/zero-hour-reforged.sh" "$A/AppRun" && cp "$OUT/share/applications/zero-hour-reforged.desktop" "$A/" \
 		&& cp "$OUT/share/icons/hicolor/48x48/apps/zero-hour-reforged.png" "$A/zero-hour-reforged.png" \
 		&& ln -s zero-hour-reforged.png "$A/.DirIcon" || fail "cannot complete $A"
 	ARCH=x86_64 "$APPIMAGETOOL" --no-appstream --runtime-file "$RUNTIME" "$A" "$OUT.AppImage" > "$OUT.appimagetool.log" 2>&1 \
