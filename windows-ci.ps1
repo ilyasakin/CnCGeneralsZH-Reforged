@@ -74,6 +74,12 @@ param(
 	# the game's platform, x64 or ARM64; empty is this machine's own.  An ARM64 machine given x64 cross-builds
 	# the x64 game (build.bat's ZH_PLATFORM) and runs its tests and E1 under Windows' x64 emulation
 	[ValidateSet("", "x64", "ARM64")] [string] $Platform = "",
+	# a folder put in front of PATH for everything this runs (the tests, the desktop part, E1): the x64 lane's
+	# d3dx9_43.dll on an ARM64 machine, which has none of its own, so nothing is installed system-wide
+	[string] $DllPath = "",
+	# a program that prints the full path of the DLL it loads by the same search; its answer and that file's
+	# SHA-256 go in the summary, before the tests and again from the desktop part, so the DLL used is on record
+	[string] $DllProbe = "",
 	# internal: "desktop" when the script is running its desktop part, and where that part writes its result
 	[string] $Phase = "all",
 	[string] $CheckedOut = "",	# internal: what the -Bundle/-Ref hand-over checked out, for the summary
@@ -95,6 +101,7 @@ $Root = $PSScriptRoot
 # build.bat's folder: ARM64 builds into build-arm64 and x64 into build64; the platform is -Platform's, which
 # build.bat reads from ZH_PLATFORM, or else the machine's own
 if ($Platform -ne "") { $env:ZH_PLATFORM = $Platform }
+if ($DllPath -ne "") { $env:PATH = "$DllPath;$env:PATH" }
 $arm64 = if ($Platform -ne "") { $Platform -eq "ARM64" } else { $env:PROCESSOR_ARCHITECTURE -eq "ARM64" }
 $Build = Join-Path $Root $(if ($arm64) { "build-arm64" } else { "build64" })
 $RunDir = Join-Path $Root "GeneralsMD\Run"
@@ -172,8 +179,16 @@ function New-Farm([string] $data, [string] $farm) {
 }
 
 # ---- the desktop part: GPU tests and E1, returning a result object -------------------------------------
+# what -DllProbe says loads, and its SHA-256
+function Get-DllProbe {
+	$where = "$(& $DllProbe 2>&1 | Select-Object -First 1)".Trim()
+	if (Test-Path -LiteralPath $where -PathType Leaf) { return "$where, sha256 $((Get-FileHash -Algorithm SHA256 -LiteralPath $where).Hash)" }
+	return "none loaded ($where)"
+}
+
 function Invoke-DesktopPart {
-	$r = [ordered]@{ Gpu = "not run"; E1 = "not run"; Crcs = @{}; DataUnchanged = $null; Log = @() }
+	$r = [ordered]@{ Gpu = "not run"; E1 = "not run"; Crcs = @{}; DataUnchanged = $null; Log = @(); Dll = "" }
+	if ($DllProbe -ne "") { $r.Dll = Get-DllProbe }
 	$tools = Get-CtestExe
 	Push-Location $Build
 	$gpu = & $tools.CTest -C $Config -R $GpuTests --output-on-failure 2>&1
@@ -270,6 +285,7 @@ if (-not $SkipBuild) {
 	}
 }
 $tools = Get-CtestExe
+if ($DllProbe -ne "") { $summary += "dll probe (tests): $(Get-DllProbe)" }
 if ($DataDir -ne "") { & $tools.CMake -S (Join-Path $Root "GeneralsMD\Code") -B $Build "-DZH_GAME_DATA=$DataDir" | Out-Null }
 
 $session0 = (Get-Process -Id $PID).SessionId -eq 0
@@ -293,6 +309,8 @@ Remove-Item $resultFile, "$resultFile.partial" -ErrorAction SilentlyContinue
 $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Phase desktop -ResultFile `"$resultFile`" -Config $Config -MaxFrames $MaxFrames -WorkDir `"$WorkDir`" -Runs $($Runs -join ',')"
 if ($DataDir -ne "") { $argList += " -DataDir `"$DataDir`"" }
 if ($Platform -ne "") { $argList += " -Platform $Platform" }
+if ($DllPath -ne "") { $argList += " -DllPath `"$DllPath`"" }
+if ($DllProbe -ne "") { $argList += " -DllProbe `"$DllProbe`"" }
 if ($session0) {
 	$user = (Get-CimInstance Win32_ComputerSystem).UserName
 	if (-not $user) { Write-Host "no user is logged on to a desktop: the GPU tests and E1 cannot run"; exit 1 }
@@ -307,8 +325,9 @@ if ($session0) {
 	Start-Sleep -Seconds 2
 	schtasks /delete /tn $task /f | Out-Null
 } else {
-	# -Platform only when given: Windows PowerShell drops an empty argument to a program, which would leave it bare
-	$platformArgs = @(if ($Platform -ne "") { "-Platform", $Platform })
+	# each only when given: Windows PowerShell drops an empty argument to a program, which would leave its name bare
+	$platformArgs = @(if ($Platform -ne "") { "-Platform", $Platform }) + @(if ($DllPath -ne "") { "-DllPath", $DllPath }) +
+		@(if ($DllProbe -ne "") { "-DllProbe", $DllProbe })
 	& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Phase desktop -ResultFile $resultFile -Config $Config -MaxFrames $MaxFrames -WorkDir $WorkDir -Runs ($Runs -join ',') -DataDir $DataDir @platformArgs
 }
 $desktopTook = "$([int]$phaseClock.Elapsed.TotalSeconds) s"
@@ -317,6 +336,7 @@ if (-not (Test-Path $resultFile)) {
 } else {
 	$summary += "desktop part (GPU tests and E1): $desktopTook"
 	$d = Get-Content -Raw $resultFile | ConvertFrom-Json
+	if ($d.Dll) { $summary += "dll probe (desktop part): $($d.Dll)" }
 	$summary += "GPU tests (desktop session): $($d.Gpu)"; if ($d.Gpu -ne "passed") { $failed = $true }
 	if ($DataDir -ne "") {
 		$summary += "E1: $($d.E1)"; if ($d.E1 -ne "played back the same") { $failed = $true }
