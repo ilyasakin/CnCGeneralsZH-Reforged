@@ -2686,7 +2686,11 @@ if(Python3_Interpreter_FOUND)
   # Tools/order_cameos.py paints the command bar's attack, hold position and move cameos: three
   # whole pictures in the places the mapped images name, told apart by colour, the same every run.
   add_test(NAME order_cameos_selfcheck
-           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/order_cameos.py selfcheck)
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/run_with_modules.py numpy,PIL
+                   ${CMAKE_CURRENT_SOURCE_DIR}/Tools/order_cameos.py selfcheck)
+  # numpy and Pillow are not on every machine (a Mac's system Python has neither): without them the
+  # test is skipped and says which is missing, instead of failing on an ImportError
+  set_tests_properties(order_cameos_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
   # The options screen is three tracked files that have to agree: TheOptionCatalog names a widget,
   # Data/Window/Menus/OptionsMenu.wnd has to carry it, and Data/Patch.str has to carry its label,
   # its tooltip and every combo box entry.  Nothing at build time notices a typo in any of them -

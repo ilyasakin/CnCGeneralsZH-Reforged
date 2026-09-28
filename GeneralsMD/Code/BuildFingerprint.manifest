@@ -3723,6 +3723,7 @@ Tools/pink_laser.py
 Tools/record-dx11-shaders.ps1
 Tools/replay-check.sh
 Tools/root-readonly-check.sh
+Tools/run_with_modules.py
 Tools/signal_marks.py
 Tools/stage-overlay.sh
 Tools/syntax_sweep.py
