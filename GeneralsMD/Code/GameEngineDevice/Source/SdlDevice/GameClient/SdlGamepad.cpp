@@ -569,6 +569,8 @@ void drawCursor( Bool drawn )
 		return;
 	thePointer.drawn = drawn;
 	TheMouse->setRedrawMode( drawn ? Mouse::RM_POLYGON : Mouse::RM_WINDOWS );
+	DEBUG_LOG(( "SdlGamepad: the cursor is drawn by %s, at %d,%d\n", drawn ? "the game (a pad is in use)" : "the platform",
+		thePointer.shownX, thePointer.shownY ));
 }
 
 /// The pointer to a pixel: straight to SdlMouse, as the platform's own motion would arrive
