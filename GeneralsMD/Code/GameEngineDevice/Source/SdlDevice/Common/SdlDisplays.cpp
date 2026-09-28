@@ -22,6 +22,8 @@
 
 #include "SdlDevice/Common/SdlDisplays.h"
 
+#include "SdlDevice/Common/SdlPanel.h"
+
 #include <SDL3/SDL.h>
 
 #include <math.h>
@@ -140,4 +142,13 @@ static int sdlListDisplayModes( const char *device, DisplayModeEntry *entries, i
 	return count;
 }
 
-const PlatformDisplays TheSdlDisplays = { sdlListMonitors, sdlListDisplayModes };
+/** The panel's own pixels, where the platform knows them (SdlPanel.h): SDL reports the desktop's backing
+	* store, 3420x2224 on a 2560x1664 panel in macOS's "More Space" mode, and has no word for the panel. */
+static bool sdlPanelSize( const char *device, int *width, int *height )
+{
+	SDL_Rect bounds;
+	return SDL_GetDisplayBounds( displayNamed( device ), &bounds )
+		&& SdlPanel_nativePixels( bounds.x, bounds.y, bounds.w, bounds.h, width, height );
+}
+
+const PlatformDisplays TheSdlDisplays = { sdlListMonitors, sdlListDisplayModes, sdlPanelSize };

@@ -1675,7 +1675,7 @@ if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
   target_include_directories(zh_d3d12_shim PRIVATE ${ZH_POSIX_D3D9_INCLUDE} ${WW}/WW3D2 ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
   target_compile_definitions(zh_d3d12_shim PRIVATE ${ZH_D3D12_DEVICE_DEFINES})
   target_compile_options(zh_d3d12_shim PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
-  target_link_libraries(zh_d3d12_shim PRIVATE d3dx9posix_d3d12)
+  target_link_libraries(zh_d3d12_shim PRIVATE d3dx9posix_d3d12 sdl3shadercompile SDL3::SDL3-static)
 
   add_library(zh_d3d12 SHARED ${D3D12DEVICE}/D3D12Adapter.cpp ${D3D12DEVICE}/D3D12Exports.cpp ${D3D12DEVICE}/zh_d3d12.def)
   set_target_properties(zh_d3d12 PROPERTIES CXX_STANDARD 17)
@@ -1690,6 +1690,28 @@ if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
   add_dependencies(test_d3d12_slice zh_d3d12)
   add_test(NAME test_d3d12_slice COMMAND test_d3d12_slice $<TARGET_FILE:zh_d3d12>)
   set_tests_properties(test_d3d12_slice PROPERTIES SKIP_RETURN_CODE 77)
+
+  # FFReference against the -d3d12 device: A3b's scenarios and the replay of captures, the same sources as
+  # off Windows, built with the device's settings.  The capture replay needs
+  # captures written by this build (ZH_FFREF_CAPTURE_DIR): DrawCapture.h is the writing build's structures.
+  # FFReference itself is built with the POSIX tests; here it is the same sources, self-contained.
+  add_library(ffreference_d3d12 STATIC ${CMAKE_CURRENT_SOURCE_DIR}/Tests/ffreference/ffreference.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/ffreference/ffprogram.cpp ${CMAKE_CURRENT_SOURCE_DIR}/Tests/ffreference/ffcapture.cpp)
+  set_target_properties(ffreference_d3d12 PROPERTIES CXX_STANDARD 17)
+  target_include_directories(ffreference_d3d12 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
+  foreach(ffref ffref_gpu ffref_capture)
+    add_executable(${ffref}_d3d12 ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_${ffref}.cpp)
+    set_target_properties(${ffref}_d3d12 PROPERTIES CXX_STANDARD 17)
+    target_include_directories(${ffref}_d3d12 PRIVATE ${ZH_POSIX_D3D9_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
+      ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render ${WW}/WW3D2)
+    target_compile_definitions(${ffref}_d3d12 PRIVATE ${ZH_D3D12_DEVICE_DEFINES})
+    target_compile_options(${ffref}_d3d12 PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
+    target_link_libraries(${ffref}_d3d12 PRIVATE posixd3d9 d3dx9posix_d3d12 ffreference_d3d12 SDL3::SDL3-static)
+    add_test(NAME ${ffref}_d3d12 COMMAND ${ffref}_d3d12)
+    # A folder of its own to capture into, as every test has off Windows (the loop at the end of this file).
+    set_tests_properties(${ffref}_d3d12 PROPERTIES SKIP_RETURN_CODE 77
+      ENVIRONMENT "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data/${ffref}_d3d12")
+  endforeach()
 endif()
 
 # ===========================================================================
@@ -1792,6 +1814,14 @@ if(ZH_D3D12)
   add_dependencies(generals zh_d3d12)
   add_custom_command(TARGET generals POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:zh_d3d12> ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+  # The Direct3D 12 programs that ship with the game (sdl3shadercompile.cpp), compiled on Windows by
+  # Microsoft's d3dcompiler_47 when they were recorded: beside the exe, where the device reads them before
+  # compiling anything, as dx11shaders.shipped is for the Direct3D 11 backend.
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Data/d3d12shaders.shipped)
+    add_custom_command(TARGET generals POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              ${CMAKE_CURRENT_SOURCE_DIR}/Data/d3d12shaders.shipped ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+  endif()
 endif()
 # The game reads its data relative to the working directory, so it has to sit
 # beside Run/'s .big files to find anything (Phase 5).
@@ -1911,6 +1941,9 @@ if(ZH_PLATFORM_POSIX)
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
   target_link_libraries(sdldevice PUBLIC posixdevice w3ddevice SDL3::SDL3-static milesaudiomanager sdlinput)
+  if(APPLE)
+    target_link_libraries(sdldevice PRIVATE "-framework CoreGraphics")		# SdlDisplays' panel size
+  endif()
 
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
