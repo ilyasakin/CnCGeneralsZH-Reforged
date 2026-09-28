@@ -154,14 +154,19 @@ STATUS=$?
 # the screen keys are layout files, some with the shell's Menus/ folder: the file name is enough
 GOT="$(grep -a 'GAMEPAD FOCUS: ' "$LOG" 2>/dev/null | sed 's/.*GAMEPAD FOCUS: //; s|^Menus/||')"
 PLAYED="$(grep -a 'INPUT SCRIPT: frame ' "$LOG" 2>/dev/null | grep -a -c -v 'not understood')"
+# a step the menu dropped is pressed again and logged apart (SdlInputScript.h): a diagnostic that must count none, or
+# a player's press would have been dropped there too
+AGAIN="$(grep -a -c 'INPUT SCRIPT AGAIN' "$LOG" 2>/dev/null)"; AGAIN=${AGAIN:-0}
 ACTIONS="$(grep -c . "$WORK/walk.txt")"
-echo "exit $STATUS; $PLAYED of $ACTIONS actions played; the focus went:"
+echo "exit $STATUS; $PLAYED of $ACTIONS actions played, $AGAIN pressed again; the focus went:"
 printf '%s\n' "$GOT" | sed 's/^/  /'
 status=0
 if [ "$STATUS" -ne 0 ]; then
 	echo "FAIL: the run did not end by the script's quit (exit $STATUS)"; status=1
 elif [ "$PLAYED" != "$ACTIONS" ]; then
 	echo "FAIL: the script was not played whole"; status=1
+elif [ "$AGAIN" != "0" ]; then
+	echo "FAIL: the menu dropped $AGAIN press(es) the walk made once it stood still, and pressed again (INPUT SCRIPT AGAIN in the log)"; status=1
 elif [ "$GOT" != "$EXPECTED" ]; then
 	echo "FAIL: the focus did not follow the list; expected:"
 	printf '%s\n' "$EXPECTED" | sed 's/^/  /'
