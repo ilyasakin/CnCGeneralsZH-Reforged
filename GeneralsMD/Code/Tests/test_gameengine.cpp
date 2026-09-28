@@ -9105,6 +9105,8 @@ TEST(noaudio_switch_turns_every_sound_off_in_every_build)
 
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
+}
+
 /* -nologo and -novideo: a Release build honours them only in a run with ZH_UNATTENDED set (our harnesses), so a
    player's Release run always shows the EA logo, as EA's parseQuickStart keeps it "for legal reasons".  A Debug
    or Internal build takes them as EA's did.  The CI scripts export ZH_UNATTENDED to the tests, so this sets and
