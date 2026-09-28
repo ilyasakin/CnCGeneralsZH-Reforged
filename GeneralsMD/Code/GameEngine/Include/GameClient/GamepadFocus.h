@@ -72,11 +72,11 @@ public:
 
 	/** A pressed or B pressed while the shell is in a transition it began under HOLD_MS ago (EA's menus drop a
 		* press then: a pane's buttons scaling in, and MainMenu.cpp's dontAllowTransitions, about a second after a pane
-		* opens) is held, and pressed when the transition ends, or HOLD_MS after the press at the latest; dropped
+		* opens) is held, and pressed when the transition ends, or HOLD_MS and HOLD_FRAMES after the press at the latest; dropped
 		* if the screen changes first or the pad moves the focus meanwhile.  Only the pad's presses: a mouse and the keys keep EA's behaviour.  The
 		* pad's layer calls this every update while a menu has the pad. */
 	static void update( void );
-	enum { HOLD_MS = 1500 };
+	enum { HOLD_MS = 1500, HOLD_FRAMES = 45 };		///< the cap: both, whichever comes later
 
 	/// The pad drives the menus (TRUE) or a hand does (FALSE): the frame and the hints show, and the cursor
 	/// is not drawn, only while a pad does

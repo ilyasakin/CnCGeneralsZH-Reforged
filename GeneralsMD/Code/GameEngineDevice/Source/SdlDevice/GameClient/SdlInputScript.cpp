@@ -251,6 +251,9 @@ Bool SdlInputScript_start( void )
 			SDL_SetJoystickVirtualAxis( thePad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
 		}
 	}
+	// every action on its own logic frame: no catch-up burst runs several frames between two of this's passes
+	if (!theActions.empty())
+		GameEngine_setOneLogicFramePerPass( TRUE );
 	// the window, and this with it, starts before the debug log is open: stderr says it
 	fprintf( stderr, "generals: input script: %d actions from %s%s\n", (int)theActions.size(), path,
 		padLines ? (thePad != NULL ? ", on a virtual pad" : ", but no virtual pad") : "" );
