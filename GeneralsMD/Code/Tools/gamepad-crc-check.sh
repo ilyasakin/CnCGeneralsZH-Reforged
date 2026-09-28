@@ -228,8 +228,9 @@ fi
 
 # ---- the base chord (GamepadCycle.h): View held with RB selects the command centre, then a dozer from it ----
 # The pad steps to its first production building (the command centre, the only one at the start) and queues
-# its first command (a dozer) from the radial; the hand clicks the command centre where the starting camera
-# has it, in the middle of the screen, and clicks that command button.  A dozer takes about 330 frames to come
+# its first command (a dozer) from the radial; the hand clicks the command centre where the pad's log says it
+# was on the screen before the chord looked at it (the two cameras are the same until then), and clicks that
+# command button.  A dozer takes about 330 frames to come
 # out, so these runs go on to frame CYCLE_FRAMES, and the radial run's script to the same frame is the
 # control.  They must agree, and differ from the control: the difference is the dozer.
 { cat "$WORK/pad-radial.txt"; cat <<'SCRIPT'
@@ -248,11 +249,12 @@ run_game radialcontrol "$WORK/pad-radial.txt" "$CYCLE_FRAMES"; RC_CRC="$RUN_CRC"
 run_game padcycle "$WORK/pad-cycle.txt" "$CYCLE_FRAMES"
 PC_CRC="$RUN_CRC"; PC_FRAME="$RUN_FRAME"; PC_PLAYED="$RUN_PLAYED"; PC_STATUS="$RUN_STATUS"
 CYCLED="$(grep -a 'GAMEPAD STRUCTURES: selected' "$EXEDIR/${TAG}padcycleDebugLogFile.txt" 2>/dev/null | tail -1)"
+CC_AT="$(printf '%s' "$CYCLED" | sed -n 's/.* at \([0-9]*\),\([0-9]*\) before the look.*/\1 \2/p')"
 CC_BUTTON="$(grep -a 'GAMEPAD RADIAL: pressed' "$EXEDIR/${TAG}padcycleDebugLogFile.txt" 2>/dev/null | tail -1 \
 	| sed -n 's/.*centre \([0-9]*\),\([0-9]*\).*/\1 \2/p')"
 HC_CRC=""; HC_FRAME=""; HC_PLAYED=0; HC_STATUS=""
-if [ -n "$CC_BUTTON" ] && [ -f "$WORK/hand-radial.txt" ]; then
-	{ cat "$WORK/hand-radial.txt"; printf '%s\n' "400 mouse move 512 384" "402 mouse left down 512 384" "404 mouse left up 512 384" \
+if [ -n "$CC_BUTTON" ] && [ -n "$CC_AT" ] && [ -f "$WORK/hand-radial.txt" ]; then
+	{ cat "$WORK/hand-radial.txt"; printf '%s\n' "400 mouse move $CC_AT" "402 mouse left down $CC_AT" "404 mouse left up $CC_AT" \
 		"426 mouse move $CC_BUTTON" "426 mouse left down $CC_BUTTON" "428 mouse left up $CC_BUTTON"; } > "$WORK/hand-cycle.txt"
 	run_game handcycle "$WORK/hand-cycle.txt" "$CYCLE_FRAMES"
 	HC_CRC="$RUN_CRC"; HC_FRAME="$RUN_FRAME"; HC_PLAYED="$RUN_PLAYED"; HC_STATUS="$RUN_STATUS"

@@ -85,9 +85,14 @@ Bool GamepadCycle::structure( Int step )
 	group->appendBooleanArgument( TRUE );
 	group->appendObjectIDArgument( next->getID() );
 	TheInGameUI->selectDrawable( next->getDrawable() );
+	ICoord2D before = { -1, -1 };		// where it was on the screen before the look: where a click would have taken it
 	if (TheTacticalView != NULL)
+	{
+		if (!TheTacticalView->worldToScreen( next->getPosition(), &before ))
+			before.x = before.y = -1;
 		TheTacticalView->lookAt( next->getPosition() );
-	DEBUG_LOG(( "GAMEPAD STRUCTURES: selected %s, id %d, %d of %d\n", next->getTemplate()->getName().str(), (Int)next->getID(),
-		stepFrom( current, (Int)buildings.size(), step ) + 1, (Int)buildings.size() ));
+	}
+	DEBUG_LOG(( "GAMEPAD STRUCTURES: selected %s, id %d, %d of %d, at %d,%d before the look\n", next->getTemplate()->getName().str(),
+		(Int)next->getID(), stepFrom( current, (Int)buildings.size(), step ) + 1, (Int)buildings.size(), before.x, before.y ));
 	return TRUE;
 }
