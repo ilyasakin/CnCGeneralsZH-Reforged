@@ -32,6 +32,7 @@
 #include "GameClient/GameText.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/GameWindowTransitions.h"
 #include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/KeyDefs.h"
@@ -438,7 +439,12 @@ Bool GamepadFocus::isSettled( UnsignedInt stillMs )
 		sameSince = now;
 		return FALSE;
 	}
-	return now - sameSince >= stillMs;
+	// the menus ignore a press while a transition runs (MainMenu.cpp's dontAllowTransitions), even with every
+	// widget in its place; one pane's transition never reports finished, so a long enough stillness stands in
+	const UnsignedInt TRANSITION_GIVE_UP_MS = 3000;
+	const Bool moving = (TheTransitionHandler != NULL && !TheTransitionHandler->isFinished())
+		|| (TheShell != NULL && !TheShell->isAnimFinished());
+	return now - sameSince >= (moving ? TRANSITION_GIVE_UP_MS : stillMs);
 }
 
 Bool GamepadFocus::isActive( void )
