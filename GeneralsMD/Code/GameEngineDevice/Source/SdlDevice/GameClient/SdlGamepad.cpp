@@ -21,9 +21,11 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/GlobalData.h"
+#include "Common/MessageStream.h"
 #include "Common/NameKeyGenerator.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/InGameUI.h"
@@ -207,32 +209,39 @@ void movePointerTo( Int x, Int y, UnsignedInt time );
 Bool enterCommandBar( UnsignedInt time );
 void stepCommandBar( GamepadButtonType button, UnsignedInt time );
 
-/// The command bar's buttons shown now, by their centres and, given boxes, their rectangles, and, given slots,
-/// their slot numbers (ControlBar.cpp's names for them)
-Int commandButtonCentres( ICoord2D *centres, Int max, GamepadFocus::Box *boxes = NULL, Int *slots = NULL )
+/// The command grid's places something stands at now (a command button, or one of the page's order keys, which have
+/// no window), by their centres and, given boxes, their rectangles, and, given places, their places (ControlBar.h's
+/// CommandPlace: 0 is Q, then along the rows)
+Int commandPlaceCentres( ICoord2D *centres, Int max, GamepadFocus::Box *boxes = NULL, Int *places = NULL )
 {
+	IRegion2D rects[ COMMAND_PLACE_COUNT ];
+	Int holds[ COMMAND_PLACE_COUNT ];
+	if (!InGameUI_commandPlaces( rects, holds ))
+		return 0;
 	Int count = 0;
-	for (Int i = 0; i < MAX_COMMANDS_PER_SET && count < max; ++i)
+	for (Int place = 0; place < COMMAND_PLACE_COUNT && count < max; ++place)
 	{
-		char name[ 64 ];
-		snprintf( name, sizeof( name ), "ControlBar.wnd:ButtonCommand%02d", i + 1 );
-		GameWindow *button = findShown( name );
-		if (button != NULL && windowCentre( button, centres[ count ].x, centres[ count ].y ))
+		if (holds[ place ] == COMMAND_PLACE_HOLDS_NOTHING)
+			continue;
+		centres[ count ].x = rects[ place ].lo.x + (rects[ place ].hi.x - rects[ place ].lo.x) / 2;
+		centres[ count ].y = rects[ place ].lo.y + (rects[ place ].hi.y - rects[ place ].lo.y) / 2;
+		if (boxes != NULL)
 		{
-			if (boxes != NULL)
-			{
-				Int left = 0, top = 0, width = 0, height = 0;
-				button->winGetScreenPosition( &left, &top );
-				button->winGetSize( &width, &height );
-				const GamepadFocus::Box box = { left, top, left + width - 1, top + height - 1 };
-				boxes[ count ] = box;
-			}
-			if (slots != NULL)
-				slots[ count ] = i + 1;
-			++count;
+			const GamepadFocus::Box box = { rects[ place ].lo.x, rects[ place ].lo.y, rects[ place ].hi.x - 1, rects[ place ].hi.y - 1 };
+			boxes[ count ] = box;
 		}
+		if (places != NULL)
+			places[ count ] = place;
+		++count;
 	}
 	return count;
+}
+
+/// A place's key as shipped, for the logs: Q W E R T Y, A S D F G H, Z X C V B N
+char placeLetter( Int place )
+{
+	static const char LETTERS[] = "QWERTYASDFGHZXCVBN";
+	return place >= 0 && place < COMMAND_PLACE_COUNT ? LETTERS[ place ] : '?';
 }
 
 UnsignedInt milliseconds( Uint64 timestampNs )
@@ -314,15 +323,49 @@ void pressKeys( Pressed &pressed, MappableKeyType key, MappableKeyModState modSt
 		keyDown( pressed.keys[ i ] );
 }
 
-/** The order button: the input scheme's (Modern's right, Legacy's left), except that an ability, a structure or an
-	* order key waiting for its target is aimed with the left button under both */
+/** The order button: the right, except that an ability, a structure or an order key waiting for its target is aimed
+	* with the left */
 Int orderButton( void )
 {
 	const Bool aiming = TheInGameUI != NULL && (TheInGameUI->getGUICommand() != NULL || TheInGameUI->getPendingPlaceType() != NULL
 		|| TheInGameUI->isOrderKeyArmed());
-	if (aiming || (TheGlobalData != NULL && TheGlobalData->isLegacyInput()))
-		return SdlMouse::BUTTON_LEFT;
-	return SdlMouse::BUTTON_RIGHT;
+	return aiming ? SdlMouse::BUTTON_LEFT : SdlMouse::BUTTON_RIGHT;
+}
+
+/// The command grid's place whose key gives `command` now that the grid has the letter it had (ControlBar.cpp's
+/// orderAtPlace: A force fire, S stop, D attack move, X guard, C hold position, V move), or -1
+Int orderPlace( GameMessage::Type command )
+{
+	switch (command)
+	{
+		case GameMessage::MSG_META_TOGGLE_FORCEATTACK:	return COMMAND_PLACE_ATTACK;
+		case GameMessage::MSG_META_STOP:								return COMMAND_PLACE_STOP;
+		case GameMessage::MSG_META_TOGGLE_ATTACKMOVE:		return COMMAND_PLACE_ATTACK_MOVE;
+		case GameMessage::MSG_META_TOGGLE_GUARD:				return COMMAND_PLACE_GUARD;
+		case GameMessage::MSG_META_HOLD_POSITION:				return COMMAND_PLACE_HOLD;
+		case GameMessage::MSG_META_TOGGLE_MOVE:					return COMMAND_PLACE_MOVE;
+		default:																				return -1;
+	}
+}
+
+/// TRUE when a place's key gives its order now (ControlBar::pressCommandButton): nothing stands there, or the order's
+/// own button; a place a building or an ability took presses that instead, which the pad's order button must not
+Bool placeGivesOrder( Int place )
+{
+	GameWindow *window = NULL;
+	TheControlBar->peekCommandButtonPress( place, &window );
+	const CommandButton *command = window != NULL ? (const CommandButton *)GadgetButtonGetData( window ) : NULL;
+	if (command == NULL)
+		return TRUE;
+	switch (command->getCommandType())
+	{
+		case GUI_COMMAND_STOP:									return place == COMMAND_PLACE_STOP;
+		case GUI_COMMAND_ATTACK_MOVE:						return place == COMMAND_PLACE_ATTACK_MOVE;
+		case GUI_COMMAND_GUARD:
+		case GUI_COMMAND_GUARD_WITHOUT_PURSUIT:
+		case GUI_COMMAND_GUARD_FLYING_UNITS_ONLY:	return place == COMMAND_PLACE_GUARD;
+		default:																return FALSE;
+	}
 }
 
 Pressed apply( const GamepadBinding &binding, UnsignedInt time )
@@ -343,11 +386,23 @@ Pressed apply( const GamepadBinding &binding, UnsignedInt time )
 			break;
 		case GAMEPAD_ACTION_COMMAND:
 		{
-			// whatever the player's input scheme binds the command to, now
+			// the key the player's command map binds the command to, now, so a modifier held with it counts as
+			// with the key (RB's CTRL on a group's number makes the group).  An order whose letter the command
+			// grid took (stop's S, attack move's D) is its place's, pressed as that key presses it where the key
+			// still gives the order, and nothing where the key would press the building standing there; any
+			// other command no key reaches is sent as its message, as a key would send it
 			MappableKeyType key;
 			MappableKeyModState modState;
+			const Int place = orderPlace( binding.m_command );
 			if (GamepadMap::keyForCommand( binding.m_command, key, modState ))
 				pressKeys( pressed, key, modState );
+			else if (place >= 0 && TheControlBar != NULL)
+			{
+				if (placeGivesOrder( place ))
+					TheControlBar->pressCommandButton( place );
+			}
+			else if (TheMessageStream != NULL)
+				TheMessageStream->appendMessage( binding.m_command );
 			break;
 		}
 		case GAMEPAD_ACTION_COMMAND_BAR:
@@ -360,11 +415,7 @@ Pressed apply( const GamepadBinding &binding, UnsignedInt time )
 			pressed.mouseButton = orderButton();
 			break;
 		case GAMEPAD_ACTION_CANCEL:
-			// Legacy's right button is the cancel and the deselect the pad means; Modern's orders as well
-			if (TheGlobalData != NULL && TheGlobalData->isLegacyInput())
-				pressed.mouseButton = SdlMouse::BUTTON_RIGHT;
-			else
-				GamepadCancel::press();
+			GamepadCancel::press();
 			break;
 		default:
 			break;
@@ -503,6 +554,17 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 		pad.deferred[ button ] = TRUE;
 		return;
 	}
+	// the order is a click, down and up at once as a hand's quick click comes: held while the stick moves the
+	// pointer, the right button would drag, and a right drag pans the camera.  Both in one pass, as EA tells a
+	// click from a drag by the wall-clock time between them (Mouse::isClick)
+	if (pad.bound[ button ] && pad.binding[ button ].m_action == GAMEPAD_ACTION_ORDER)
+	{
+		Pressed click = apply( pad.binding[ button ], time );
+		unapply( click, time );
+		pad.pressed[ button ].mouseButton = -1;
+		pad.pressed[ button ].keyCount = 0;
+		return;
+	}
 	if (pad.bound[ button ])
 		pad.pressed[ button ] = apply( pad.binding[ button ], time );
 }
@@ -558,14 +620,21 @@ void releaseButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 		pad.pressed[ with ] = apply( pad.binding[ with ], time );
 }
 
-/// The key the player's map turns the camera with, left (0) or right (1), down or up; none bound, nothing
+/// The key the player's map turns the camera with, left (0) or right (1), down or up; none of its own, the turn's
+/// begin and end messages themselves
 void rotateKey( Int side, Bool down )
 {
 	MappableKeyType key;
 	MappableKeyModState modState;
 	if (!GamepadMap::keyForCommand( side == 0 ? GameMessage::MSG_META_BEGIN_CAMERA_ROTATE_LEFT : GameMessage::MSG_META_BEGIN_CAMERA_ROTATE_RIGHT,
 			key, modState ) || key == MK_NONE)
+	{
+		if (TheMessageStream != NULL)
+			TheMessageStream->appendMessage( side == 0
+				? (down ? GameMessage::MSG_META_BEGIN_CAMERA_ROTATE_LEFT : GameMessage::MSG_META_END_CAMERA_ROTATE_LEFT)
+				: (down ? GameMessage::MSG_META_BEGIN_CAMERA_ROTATE_RIGHT : GameMessage::MSG_META_END_CAMERA_ROTATE_RIGHT) );
 		return;
+	}
 	if (down)
 		keyDown( (UnsignedByte)key );
 	else
@@ -751,29 +820,28 @@ void movePointerTo( Int x, Int y, UnsignedInt time )
 	showPointer( x, y, time );
 }
 
-/// Into command-bar mode, on its top-left button; FALSE when no command bar is shown
+/// Into command-bar mode, on the grid's first place that holds something (the grid reads along its rows); FALSE when
+/// no command grid is shown
 Bool enterCommandBar( UnsignedInt time )
 {
-	ICoord2D centres[ MAX_COMMANDS_PER_SET ];
-	const Int count = commandButtonCentres( centres, MAX_COMMANDS_PER_SET );
-	Int first = -1;
-	for (Int i = 0; i < count; ++i)
-		if (first < 0 || centres[i].y < centres[first].y || (centres[i].y == centres[first].y && centres[i].x < centres[first].x))
-			first = i;
-	if (first < 0)
+	ICoord2D centres[ COMMAND_PLACE_COUNT ];
+	Int places[ COMMAND_PLACE_COUNT ];
+	if (commandPlaceCentres( centres, COMMAND_PLACE_COUNT, NULL, places ) == 0)
 		return FALSE;
-	movePointerTo( centres[first].x, centres[first].y, time );
+	movePointerTo( centres[0].x, centres[0].y, time );
+	DEBUG_LOG(( "GAMEPAD BAR: %c\n", placeLetter( places[0] ) ));
 	return TRUE;
 }
 
-/// Command-bar mode's D-pad: the pointer to the next button that way, the bar taken as rows and columns
-/// (GamepadFocus::pickNeighbourBox), its column kept going up and down and its row going left and right
+/// Command-bar mode's D-pad: the pointer to the next place that holds something that way, the grid's rows and columns
+/// (GamepadFocus::pickNeighbourBox over its places' rectangles), its column kept going up and down and its row going
+/// left and right, the empty places passed over
 void stepCommandBar( GamepadButtonType button, UnsignedInt time )
 {
-	ICoord2D centres[ MAX_COMMANDS_PER_SET ];
-	GamepadFocus::Box boxes[ MAX_COMMANDS_PER_SET ];
-	Int slots[ MAX_COMMANDS_PER_SET ];
-	const Int count = commandButtonCentres( centres, MAX_COMMANDS_PER_SET, boxes, slots );
+	ICoord2D centres[ COMMAND_PLACE_COUNT ];
+	GamepadFocus::Box boxes[ COMMAND_PLACE_COUNT ];
+	Int slots[ COMMAND_PLACE_COUNT ];
+	const Int count = commandPlaceCentres( centres, COMMAND_PLACE_COUNT, boxes, slots );
 	if (count == 0)
 	{
 		theCommandBarMode = FALSE;		// the bar went away (a unit deselected): the D-pad is the D-pad again
@@ -803,7 +871,7 @@ void stepCommandBar( GamepadButtonType button, UnsignedInt time )
 		laneX = centres[ next ].x;
 	laneSlot = slots[ next ];
 	movePointerTo( centres[next].x, centres[next].y, time );
-	DEBUG_LOG(( "GAMEPAD BAR: ControlBar.wnd:ButtonCommand%02d\n", slots[ next ] ));
+	DEBUG_LOG(( "GAMEPAD BAR: %c\n", placeLetter( slots[ next ] ) ));
 	DEBUG_LOG(( "GAMEPAD BAR AT: %d,%d to %d,%d\n", boxes[ next ].left, boxes[ next ].top, boxes[ next ].right, boxes[ next ].bottom ));
 }
 

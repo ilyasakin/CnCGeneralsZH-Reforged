@@ -647,11 +647,12 @@ Int GamepadFocus::pickNeighbourBox( const Box *boxes, Int count, const Box &from
 			continue;		// outside the 45 degree cone
 		if (off > 0 && edges < 0)
 			continue;		// out of line and overlapping the focus along the way: above or below it, not beside (or the reverse)
-		// a step aside costs three steps along, and leaving the line at all a flat NOT_IN_LINE more: a box in line
-		// wins over any as near or nearer beside it, and a row or column holds across a gap (a command card's
-		// empty slot) rather than stepping to the next row; among boxes as good, the lane's (the remembered column
-		// or row) first, then the nearest to it
-		const Int NOT_IN_LINE = 128;
+		// a box in line wins over every box beside the line, however much nearer: up and down keep the column and
+		// left and right the row, across a gap (a command card's empty place) or down to the page's buttons below a
+		// shorter column (Options' Controls page: from its middle column's last box down to Cancel, not across to
+		// the next column's last), and only where nothing is in line does the step go aside, a step aside costing
+		// three along; among boxes as good, the lane's (the remembered column or row) first, then the nearest to it
+		const Int NOT_IN_LINE = 1 << 20;
 		const Int score = gap + 3 * off + (off > 0 ? NOT_IN_LINE : 0);
 		const Int sideways = abs( (across ? y : x) - lane );
 		const Int tie = offLane * 65536 + sideways;

@@ -15449,6 +15449,14 @@ GUI:GamepadStop
 "Dur"
 END
 
+GUI:GamepadHold
+"Konumu koru"
+END
+
+GUI:GamepadMove
+"Hareket et"
+END
+
 GUI:GamepadZoomTurn
 "Yakınlaştır ve döndür"
 END

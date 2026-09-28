@@ -153,7 +153,8 @@ public:
 	static void parseCommandName( INI *ini, void *instance, void *store, const void *userData );
 
 	/** The key and modifiers the player's command map binds command to now, as a key press would need
-		* them; FALSE when it binds none */
+		* them; FALSE when it binds none, or only keys an earlier record takes (the pad then sends the
+		* command's message itself) */
 	static Bool keyForCommand( GameMessage::Type command, MappableKeyType &key, MappableKeyModState &modState );
 
 	/// The binding of button while with is held (GAMEPAD_BUTTON_NONE: its own), or NULL

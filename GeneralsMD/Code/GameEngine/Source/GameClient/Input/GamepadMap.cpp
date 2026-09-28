@@ -147,12 +147,22 @@ void GamepadMap::set( const GamepadBinding &binding )
 	if (TheMetaMap == NULL)
 		return FALSE;
 	for (const MetaMapRec *rec = TheMetaMap->getFirstMetaMapRec(); rec != NULL; rec = rec->m_next)
-		if (rec->m_meta == command && rec->m_key != MK_NONE)
-		{
-			key = rec->m_key;
-			modState = rec->m_modState;
-			return TRUE;
-		}
+	{
+		if (rec->m_meta != command || rec->m_key == MK_NONE)
+			continue;
+		// the translator takes the first record for a key, its modifiers and its transition
+		// (MetaEventTranslator), so a record an earlier one shadows is not what that key does: the
+		// command grid's places took S and H from the shipped map's stop and home, for one
+		Bool shadowed = FALSE;
+		for (const MetaMapRec *before = TheMetaMap->getFirstMetaMapRec(); before != rec && !shadowed; before = before->m_next)
+			shadowed = before->m_key == rec->m_key && before->m_modState == rec->m_modState
+				&& before->m_transition == rec->m_transition && (before->m_usableIn & rec->m_usableIn) != 0;
+		if (shadowed)
+			continue;
+		key = rec->m_key;
+		modState = rec->m_modState;
+		return TRUE;
+	}
 	return FALSE;
 }
 

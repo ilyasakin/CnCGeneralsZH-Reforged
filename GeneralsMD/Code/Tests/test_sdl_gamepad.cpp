@@ -98,7 +98,10 @@ const char *const TEST_COMMAND_MAP =
 	"CommandMap VIEW_LAST_RADAR_EVENT\n  Key = KEY_SPACE\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
 	"CommandMap VIEW_COMMAND_CENTER\n  Key = KEY_H\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
 	"CommandMap BEGIN_CAMERA_ROTATE_LEFT\n  Key = KEY_KP4\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
-	"CommandMap BEGIN_CAMERA_ROTATE_RIGHT\n  Key = KEY_KP6\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n";
+	"CommandMap BEGIN_CAMERA_ROTATE_RIGHT\n  Key = KEY_KP6\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
+	// the command grid's place S after the shipped map's stop on S, as the game loads the maps: a record read later
+	// goes to the front of the list (MetaMap::getMetaMapRec), where the translator finds it first, so S is the place's
+	"CommandMap COMMAND_SLOT08\n  Key = KEY_S\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n";
 
 bool writeFile( const std::string &path, const std::string &text )
 {
@@ -148,8 +151,6 @@ bool loadMaps( void )
 		return false;
 
 	TheWritableGlobalData = NEW GlobalData;
-	TheWritableGlobalData->m_inputScheme = INPUT_SCHEME_MODERN;
-	TheWritableGlobalData->m_wasdCamera = FALSE;
 	TheLocalFileSystem = NEW PosixLocalFileSystem;
 	TheFileSystem = NEW FileSystem;
 	TheMetaMap = NEW MetaMap;
@@ -374,7 +375,7 @@ TEST(every_shipped_binding_parses_and_each_command_is_bound)
 	{
 		const GamepadBinding &binding = TheGamepadMap->get( i );
 		CHECK( binding.m_action != GAMEPAD_ACTION_NONE );
-		if (binding.m_action == GAMEPAD_ACTION_COMMAND)
+		if (binding.m_action == GAMEPAD_ACTION_COMMAND && binding.m_command != GameMessage::MSG_META_STOP)
 		{
 			MappableKeyType key;
 			MappableKeyModState modState;
@@ -389,6 +390,19 @@ TEST(every_shipped_binding_parses_and_each_command_is_bound)
 	CHECK_EQ( (Int)TheGamepadMap->buttonFor( GAMEPAD_ACTION_ORDER ), (Int)GAMEPAD_BUTTON_WEST );
 	CHECK_EQ( (Int)TheGamepadMap->buttonFor( GAMEPAD_ACTION_CANCEL ), (Int)GAMEPAD_BUTTON_EAST );
 	CHECK_EQ( SdlGamepad_count(), 1 );
+}
+
+TEST(a_key_an_earlier_record_takes_is_not_the_commands_key)
+{
+	CHECK( start() );
+	MappableKeyType key = MK_NONE;
+	MappableKeyModState modState = NONE;
+	// S is the grid place's first, so it is not stop's: the pad sends stop's message itself
+	CHECK( !GamepadMap::keyForCommand( GameMessage::MSG_META_STOP, key, modState ) );
+	// F is attack move's alone
+	CHECK( GamepadMap::keyForCommand( GameMessage::MSG_META_TOGGLE_ATTACKMOVE, key, modState ) );
+	CHECK_EQ( (Int)key, (Int)KEY_F );
+	CHECK_EQ( (Int)modState, (Int)NONE );
 }
 
 TEST(south_clicks_and_double_clicks_where_the_pointer_is_as_the_left_button)
@@ -644,7 +658,7 @@ TEST(both_shoulders_stop_and_the_left_one_with_y_is_the_whole_army_and_the_right
 	clear();
 	Output pad, hand;
 	padButton( SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, true );
-	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, true );		// STOP: S, and no Ctrl of its own
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, true );		// STOP: no key (the grid's S), no Ctrl of its own
 	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, false );
 	padButton( SDL_GAMEPAD_BUTTON_NORTH, true );						// SELECT_ALL: Ctrl+A
 	padButton( SDL_GAMEPAD_BUTTON_NORTH, false );
@@ -656,8 +670,6 @@ TEST(both_shoulders_stop_and_the_left_one_with_y_is_the_whole_army_and_the_right
 	padButton( SDL_GAMEPAD_BUTTON_EAST, false );						// ...and held again
 	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, false );
 	frame( pad );
-	pushKey( SDL_SCANCODE_S, true );
-	pushKey( SDL_SCANCODE_S, false );
 	pushKey( SDL_SCANCODE_LCTRL, true );
 	pushKey( SDL_SCANCODE_A, true );
 	pushKey( SDL_SCANCODE_A, false );
@@ -920,6 +932,17 @@ TEST(the_command_cards_grid_keeps_its_column_going_down)
 	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, count, boxes[ 9 ], 1, 0, centreY( boxes[ 9 ] ) ), 10 );	// across the gap on its row
 }
 
+TEST(the_dpad_goes_down_its_column_to_the_buttons_below_before_across_to_a_nearer_column)
+{
+	// Options' Controls page at 1280x800: the Orders column's last box, the Input column's last two beside and below
+	// it, and Cancel far below in the Orders column's own span
+	const GamepadFocus::Box boxes[] = { box( 458, 280, 364, 31 ), box( 858, 318, 337, 31 ), box( 858, 355, 337, 31 ),
+		box( 622, 638, 284, 40 ) };
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[0], 0, 1, centreX( boxes[0] ) ), 3 );
+	// with nothing in line below, the step goes aside, to the nearest in the cone
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 3, boxes[0], 0, 1, centreX( boxes[0] ) ), 1 );
+}
+
 TEST(aim_assist_picks_the_nearest_point_within_its_radius)
 {
 	const ICoord2D points[] = { { 100, 100 }, { 130, 100 }, { 112, 109 }, { 400, 400 } };
@@ -1151,29 +1174,27 @@ void press( SDL_Joystick *joystick, SDL_GamepadButton button )
 	pump();
 }
 
-/// A tap of each of a pad's two confirm-and-cancel buttons against a hand's left then right click: the
-/// pad confirms (the left button) with confirm, and cancels with cancel - under Legacy, whose cancel is the
-/// right button (Modern's is no click at all: GamepadCancel)
+/// A tap of a pad's confirm button against a hand's left click, and of its cancel button against nothing: the
+/// pad confirms (the left button) with confirm, and cancel clicks nothing at all (GamepadCancel)
 bool confirmsWith( SDL_Joystick *joystick, SDL_GamepadButton confirm, SDL_GamepadButton cancel )
 {
-	struct Legacy
-	{
-		Legacy() { TheWritableGlobalData->m_inputScheme = INPUT_SCHEME_LEGACY; }
-		~Legacy() { TheWritableGlobalData->m_inputScheme = INPUT_SCHEME_MODERN; }
-	} legacy;
 	static int calls = 0;
 	const float x = 400.0f + 20.0f * (calls++ % 10), y = 310.0f;		// a new place each time: no double click with the last
 	pushMotion( x, y );
 	clear();
-	Output pad, hand;
+	Output pad, hand, cancelled;
 	press( joystick, confirm );
-	press( joystick, cancel );
 	frame( pad );
 	pushButton( SDL_BUTTON_LEFT, true, 1, x, y );
 	pushButton( SDL_BUTTON_LEFT, false, 1, x, y );
-	pushButton( SDL_BUTTON_RIGHT, true, 1, x, y );
-	pushButton( SDL_BUTTON_RIGHT, false, 1, x, y );
 	frame( hand );
+	press( joystick, cancel );
+	frame( cancelled );
+	if (!cancelled.events.empty())
+	{
+		printf( "    cancel gave %d event(s), the first %s\n", (int)cancelled.events.size(), cancelled.events[0].c_str() );
+		return false;
+	}
 	return same( pad, hand );
 }
 

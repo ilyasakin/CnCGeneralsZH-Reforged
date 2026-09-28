@@ -22,7 +22,7 @@
 # it was recorded (--record prints them instead of checking).
 #
 # The menus are one run, each press when the menu has stood still ("s" steps), its release in the same pass ("n");
-# the command card is a second run, a skirmish, its steps keyed to logic frames and logged ("GAMEPAD BAR").  Both
+# the command card is a second run, a skirmish, its steps keyed to logic frames and logged by grid place ("GAMEPAD BAR: Q").  Both
 # -offscreen and ZH_AUDIO_BACKEND=null: no window, no sound.  Rule 9: a farm of the install, listed before and after.
 #
 # Usage: gamepad-dpad-check.sh --generals <path> [--data <dir>] [--keep] [--record]
@@ -109,7 +109,7 @@ page() { taps DPadDown 5; tap DPadRight; taps DPadDown 2; taps DPadUp 3; tap DPa
 {
 	echo "60 mouse move 512 384"
 	echo "90 pad LeftShoulder down"; echo "n pad LeftShoulder up"			# the idle dozer
-	echo "150 pad axis RightTrigger 32767"; echo "n pad axis RightTrigger -32768"	# a tap: the command card, first button
+	echo "150 pad axis RightTrigger 32767"; echo "n pad axis RightTrigger -32768"	# a tap: the command grid, its first place
 	f=180
 	for b in DPadRight DPadRight DPadRight DPadDown DPadLeft DPadLeft DPadUp DPadRight DPadDown DPadRight DPadRight DPadRight DPadUp; do
 		echo "$f pad $b down"; echo "n pad $b up"; f=$(( f + 15 ))
@@ -205,18 +205,15 @@ OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
 OptionsMenu.wnd OptionsMenu.wnd:Retaliation
 OptionsMenu.wnd OptionsMenu.wnd:CheckDoubleClickAttackMove
-OptionsMenu.wnd OptionsMenu.wnd:CheckGamepad
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
 OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadAim
 OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
 OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
-OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
-OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
-OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadAim
-OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
-OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
-OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
-OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHealthBars
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxPlayerColors
 OptionsMenu.wnd OptionsMenu.wnd:CheckOrderLines
@@ -235,7 +232,6 @@ OptionsMenu.wnd OptionsMenu.wnd:CheckSendDelay
 OptionsMenu.wnd OptionsMenu.wnd:ButtonFirewallRefresh
 OptionsMenu.wnd OptionsMenu.wnd:TextEntryFirewallPortOverride
 OptionsMenu.wnd OptionsMenu.wnd:TextEntryHTTPProxy
-OptionsMenu.wnd OptionsMenu.wnd:CheckSendDelay
 OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
 MainMenu.wnd MainMenu.wnd:ButtonOptions
@@ -248,26 +244,26 @@ MainMenu.wnd MainMenu.wnd:ButtonChina
 MainMenu.wnd MainMenu.wnd:ButtonChallenge
 MainMenu.wnd MainMenu.wnd:ButtonSkirmish
 SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonStart
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ListboxInfo
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:TabLobbySettings
 SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonSelectMap
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ListboxInfo
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxPlayer7
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonMapStartPosition1
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonMapStartPosition0
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxTeam1
 SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ListboxInfo
 SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonStart
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ListboxInfo"
-EXPECTED_CARD="ControlBar.wnd:ButtonCommand03
-ControlBar.wnd:ButtonCommand05
-ControlBar.wnd:ButtonCommand07
-ControlBar.wnd:ButtonCommand08
-ControlBar.wnd:ButtonCommand06
-ControlBar.wnd:ButtonCommand04
-ControlBar.wnd:ButtonCommand03
-ControlBar.wnd:ButtonCommand05
-ControlBar.wnd:ButtonCommand06
-ControlBar.wnd:ButtonCommand08
-ControlBar.wnd:ButtonCommand09
-ControlBar.wnd:ButtonCommand11"
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonSelectMap"
+EXPECTED_CARD="Q
+W
+E
+R
+F
+D
+S
+W
+E
+D
+F
+N
+R"
 
 status=0
 echo "menus: exit $MENU_STATUS, $MENU_PLAYED of $(grep -c . "$WORK/menus.txt") steps played, ${MENU_AGAIN:-0} pressed again"

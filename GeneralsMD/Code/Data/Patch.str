@@ -890,6 +890,14 @@ GUI:GamepadStop
 "Stop"
 END
 
+GUI:GamepadHold
+"Hold position"
+END
+
+GUI:GamepadMove
+"Move"
+END
+
 GUI:GamepadZoomTurn
 "Zoom and turn"
 END

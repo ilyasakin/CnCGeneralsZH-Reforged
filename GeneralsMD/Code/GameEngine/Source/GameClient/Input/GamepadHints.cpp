@@ -35,8 +35,10 @@
 #include "GameClient/GameText.h"
 #include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadHints.h"
+#include "GameClient/GamepadMap.h"
 #include "GameClient/GamepadRadial.h"
 #include "GameClient/GlobalLanguage.h"
+#include "GameClient/InGameUI.h"
 #include "GameLogic/GameLogic.h"
 #include "GameClient/Mouse.h"
 
@@ -314,43 +316,87 @@ Int commandSlotOf( Int id )
 	return -1;
 }
 
-Bool isShown( GameWindow *window )
-{
-	for (GameWindow *w = window; w != NULL; w = w->winGetParent())
-		if (w->winIsHidden())
-			return FALSE;
-	return window != NULL;
-}
-
-/// The slot of the bar's top-left shown button, where the command bar's button's glyph goes; worked out once a frame
-Int firstShownSlot( void )
+/// A command slot's grid place now (ControlBar.h's CommandPlace), or -1; worked out once a frame
+Int placeOfSlot( Int slot )
 {
 	static UnsignedInt frame = 0xFFFFFFFF;
-	static Int first = -1;
+	static Int where[ MAX_COMMANDS_PER_SET ];
 	const UnsignedInt now = TheGameClient != NULL ? TheGameClient->getFrame() : 0;
-	if (now == frame)
-		return first;
-	frame = now;
-	first = -1;
-	Int firstX = 0, firstY = 0;
-	commandSlotOf( 0 );		// the keys, made
-	for (Int i = 0; TheWindowManager != NULL && i < MAX_COMMANDS_PER_SET; ++i)
+	if (now != frame && TheControlBar != NULL)
 	{
-		char name[ 64 ];
-		snprintf( name, sizeof( name ), "ControlBar.wnd:ButtonCommand%02d", i + 1 );
-		GameWindow *button = TheWindowManager->winGetWindowFromId( NULL, keyFor( name ) );
-		if (!isShown( button ))
-			continue;
-		Int x, y;
-		button->winGetScreenPosition( &x, &y );
-		if (first < 0 || y < firstY || (y == firstY && x < firstX))
-		{
-			first = i;
-			firstX = x;
-			firstY = y;
-		}
+		frame = now;
+		TheControlBar->getCommandPlaces( where );
 	}
-	return first;
+	return frame == now && slot >= 0 && slot < MAX_COMMANDS_PER_SET ? where[ slot ] : -1;
+}
+
+/// The grid's first place that holds something (the grid reads along its rows), where the command bar's button's glyph
+/// goes: a command button's, or an order key's (drawOrderKeys); -1 with the grid not shown
+Int firstTakenPlace( void )
+{
+	IRegion2D rects[ COMMAND_PLACE_COUNT ];
+	Int holds[ COMMAND_PLACE_COUNT ];
+	if (!InGameUI_commandPlaces( rects, holds ))
+		return -1;
+	for (Int place = 0; place < COMMAND_PLACE_COUNT; ++place)
+		if (holds[ place ] != COMMAND_PLACE_HOLDS_NOTHING)
+			return place;
+	return -1;
+}
+
+/// The page's order keys (attack, hold position, move) have no window for hintFor: their glyph, where their letter was
+/// (the page leaves it out while a pad plays), under the same rules as a command button's: the command bar's button
+/// on the grid's first place, and in command-bar mode South on the one the pointer is on
+void drawOrderKeys( void )
+{
+	if (theShown == GAMEPAD_GLYPHS_NONE || TheDisplay == NULL || TheDisplayStringManager == NULL)
+		return;
+	IRegion2D rects[ COMMAND_PLACE_COUNT ];
+	Int holds[ COMMAND_PLACE_COUNT ];
+	if (!InGameUI_commandPlaces( rects, holds ))
+		return;
+	const Int first = firstTakenPlace();
+	const MouseIO *mouse = TheMouse != NULL ? TheMouse->getMouseStatus() : NULL;
+	const GamepadButtonType bar = TheGamepadMap != NULL ? TheGamepadMap->buttonFor( GAMEPAD_ACTION_COMMAND_BAR ) : GAMEPAD_BUTTON_NONE;
+	static DisplayString *strings[ COMMAND_PLACE_COUNT ] = { NULL };
+	for (Int place = 0; place < COMMAND_PLACE_COUNT; ++place)
+	{
+		if (holds[ place ] != COMMAND_PLACE_HOLDS_ORDER)
+			continue;
+		const IRegion2D &rect = rects[ place ];
+		Int button = GAMEPAD_BUTTON_NONE;
+		if (theCommandBarMode)
+		{
+			if (mouse != NULL && mouse->pos.x >= rect.lo.x && mouse->pos.x < rect.hi.x && mouse->pos.y >= rect.lo.y && mouse->pos.y < rect.hi.y)
+				button = GAMEPAD_BUTTON_SOUTH;
+		}
+		else if (place == first)
+			button = bar;
+		if (button == GAMEPAD_BUTTON_NONE)
+			continue;
+		GameFont *font = NULL;
+		UnicodeString text;
+		const Int points = (rect.hi.y - rect.lo.y) / 4 > 8 ? (rect.hi.y - rect.lo.y) / 4 : 8;
+		if (!GamepadHints::glyphFor( theShown, button, points, font, text ))
+			continue;
+		DisplayString *&glyph = strings[ place ];
+		if (glyph == NULL)
+			glyph = TheDisplayStringManager->newDisplayString();
+		if (glyph == NULL)
+			continue;
+		if (glyph->getFont() != font)
+			glyph->setFont( font );
+		if (glyph->getText() != text)
+			glyph->setText( text );
+		Int width, height;
+		glyph->getSize( &width, &height );
+		Int inkTop = 0, inkBottom = height;
+		GamepadHints::inkRows( theShown, button, height, inkTop, inkBottom );
+		// as a command button's: its ink two pixels in from the corner, on a translucent plate (W3DPushButton.cpp)
+		const Int x = rect.lo.x + 2, y = rect.lo.y + 2 - inkTop;
+		TheDisplay->drawFillRect( x - 2, y + inkTop - 1, width + 4, inkBottom - inkTop + 2, GameMakeColor( 0, 0, 0, 160 ) );
+		glyph->draw( x, y, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+	}
 }
 
 }  // namespace
@@ -489,7 +535,7 @@ GamepadHints::Hint GamepadHints::hintFor( GameWindow *window, Int pointSize, Gam
 	}
 	const GamepadButtonType bar = TheGamepadMap != NULL ? TheGamepadMap->buttonFor( GAMEPAD_ACTION_COMMAND_BAR ) : GAMEPAD_BUTTON_NONE;
 	which = bar;
-	if (commandSlotOf( id ) == firstShownSlot() && bar != GAMEPAD_BUTTON_NONE && glyphFor( theShown, bar, pointSize, font, glyph ))
+	if (placeOfSlot( commandSlotOf( id ) ) == firstTakenPlace() && bar != GAMEPAD_BUTTON_NONE && glyphFor( theShown, bar, pointSize, font, glyph ))
 		return HINT_INSTEAD;
 	return HINT_HIDE;
 }
@@ -506,6 +552,8 @@ Int GamepadHints::getLayer( void )
 
 void GamepadHints::drawMatchStrip( void )
 {
+	if (!GamepadRadial::isOpen())
+		drawOrderKeys();
 	if (theShown == GAMEPAD_GLYPHS_NONE || TheDisplay == NULL || TheDisplayStringManager == NULL || TheFontLibrary == NULL
 			|| TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame()
 			|| GamepadFocus::isActive() || GamepadRadial::isOpen())
