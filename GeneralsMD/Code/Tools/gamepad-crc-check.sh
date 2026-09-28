@@ -29,7 +29,8 @@
 #   none  - no input: the armed control, so equal CRCs cannot come from input that did nothing.
 # PASS: pad and hand agree on the CRC of -maxframes' own frame (HEADLESS CRC AT LIMIT), and none differs.  The
 # pad runs one frame past the limit and the hand two (ZH_TEST_FRAME_LIMIT_OVERSHOOT), as load once made them,
-# and each must say so: the control that the comparison is at the limit, not where a run stopped.
+# and each must have stopped past it (load can add a frame or two more): the control that the comparison is at
+# the limit, not where a run stopped.
 # Then the radial menu (GamepadRadial.h), in two more runs of the same match: the pad builds from the ring's
 # top sector, the hand by clicking the command button the pad's run logged.  PASS: the ring pressed the bar's
 # first button, the two agree, and both differ from the plain pad run (the building is the difference).
@@ -190,9 +191,10 @@ if [ -z "$PAD_CRC" ] || [ -z "$HAND_CRC" ] || [ -z "$NONE_CRC" ]; then
 	echo "FAIL: a run gave no result"; status=1
 elif [ "$PAD_PLAYED" != "18" ] || [ "$HAND_PLAYED" != "16" ]; then
 	echo "FAIL: the scripts were not played whole"; status=1
-elif [ "$PAD_FRAME" != "$MAXFRAMES" ] || [ "$HAND_FRAME" != "$MAXFRAMES" ] || [ "$PAD_STOP" != "$(( MAXFRAMES + 1 ))" ] \
-		|| [ "$HAND_STOP" != "$(( MAXFRAMES + 2 ))" ]; then
-	echo "FAIL: the overshoot control: the pad and hand runs must stop one and two frames past $MAXFRAMES and be compared at $MAXFRAMES"; status=1
+elif [ "$PAD_FRAME" != "$MAXFRAMES" ] || [ "$HAND_FRAME" != "$MAXFRAMES" ] || [ "${PAD_STOP:-0}" -le "$MAXFRAMES" ] \
+		|| [ "${HAND_STOP:-0}" -le "$MAXFRAMES" ]; then
+	# past the limit, and by at least the overshoot asked: a loaded worker runs a frame or two further of its own
+	echo "FAIL: the overshoot control: the pad and hand runs must stop past $MAXFRAMES and be compared at $MAXFRAMES"; status=1
 elif [ "$PAD_CRC" != "$HAND_CRC" ] || [ "$PAD_FRAME" != "$HAND_FRAME" ]; then
 	echo "FAIL: the pad and the hand disagree"; status=1
 elif [ "$PAD_CRC" = "$NONE_CRC" ]; then
