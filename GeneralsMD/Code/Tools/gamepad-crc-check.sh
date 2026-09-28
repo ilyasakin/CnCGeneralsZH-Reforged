@@ -22,8 +22,9 @@
 # only for ZH_INPUT_SCRIPT, so a worker's own pad cannot join) and no sound (-noaudio), timed out and
 # killed with their process group:
 #   pad   - ZH_INPUT_SCRIPT plays a virtual pad: select the idle dozer (a back button, the command map's
-#           I), a move order (East, the right button), make group 1 (right shoulder + D-pad up, Ctrl+1),
-#           a second move order, and stop (West, S) - the local player's only unit at the start is the dozer;
+#           I), a move order (West, Order: Modern's right button), make group 1 (right shoulder + D-pad up,
+#           Ctrl+1), an attack move (Y arms it, F; West aims it, as an armed key is aimed: the left button),
+#           and stop (both shoulders, S) - the local player's only unit at the start is the dozer;
 #   hand  - the same through SDL's own mouse and key events, on the same logic frames;
 #   none  - no input: the armed control, so equal CRCs cannot come from input that did nothing.
 # PASS: pad and hand agree on the HEADLESS CRC and frame, and none differs.
@@ -112,17 +113,21 @@ cat > "$WORK/pad.txt" <<'SCRIPT'
 60 mouse move 512 384
 90 pad LeftPaddle1 down
 92 pad LeftPaddle1 up
-120 pad East down
-122 pad East up
+120 pad West down
+122 pad West up
 150 pad RightShoulder down
 152 pad DPadUp down
 154 pad DPadUp up
 156 pad RightShoulder up
 200 mouse move 700 500
-210 pad East down
-212 pad East up
-300 pad West down
-302 pad West up
+205 pad North down
+207 pad North up
+210 pad West down
+212 pad West up
+298 pad LeftShoulder down
+300 pad RightShoulder down
+302 pad RightShoulder up
+304 pad LeftShoulder up
 SCRIPT
 cat > "$WORK/hand.txt" <<'SCRIPT'
 60 mouse move 512 384
@@ -135,8 +140,10 @@ cat > "$WORK/hand.txt" <<'SCRIPT'
 154 key 1 up
 156 key Left_Ctrl up
 200 mouse move 700 500
-210 mouse right down 700 500
-212 mouse right up 700 500
+205 key F down
+207 key F up
+210 mouse left down 700 500
+212 mouse left up 700 500
 300 key S down
 302 key S up
 SCRIPT
@@ -165,13 +172,13 @@ run_game pad "$WORK/pad.txt";   PAD_CRC="$RUN_CRC"; PAD_FRAME="$RUN_FRAME"; PAD_
 run_game hand "$WORK/hand.txt"; HAND_CRC="$RUN_CRC"; HAND_FRAME="$RUN_FRAME"; HAND_PLAYED="$RUN_PLAYED"; HAND_STATUS="$RUN_STATUS"
 run_game none "";               NONE_CRC="$RUN_CRC"; NONE_FRAME="$RUN_FRAME"
 
-echo "pad:  CRC ${PAD_CRC:-none} at frame ${PAD_FRAME:-none}, $PAD_PLAYED of 14 actions played (exit $PAD_STATUS)"
-echo "hand: CRC ${HAND_CRC:-none} at frame ${HAND_FRAME:-none}, $HAND_PLAYED of 14 actions played (exit $HAND_STATUS)"
+echo "pad:  CRC ${PAD_CRC:-none} at frame ${PAD_FRAME:-none}, $PAD_PLAYED of 18 actions played (exit $PAD_STATUS)"
+echo "hand: CRC ${HAND_CRC:-none} at frame ${HAND_FRAME:-none}, $HAND_PLAYED of 16 actions played (exit $HAND_STATUS)"
 echo "none: CRC ${NONE_CRC:-none} at frame ${NONE_FRAME:-none}"
 status=0
 if [ -z "$PAD_CRC" ] || [ -z "$HAND_CRC" ] || [ -z "$NONE_CRC" ]; then
 	echo "FAIL: a run gave no result"; status=1
-elif [ "$PAD_PLAYED" != "14" ] || [ "$HAND_PLAYED" != "14" ]; then
+elif [ "$PAD_PLAYED" != "18" ] || [ "$HAND_PLAYED" != "16" ]; then
 	echo "FAIL: the scripts were not played whole"; status=1
 elif [ "$PAD_CRC" != "$HAND_CRC" ] || [ "$PAD_FRAME" != "$HAND_FRAME" ]; then
 	echo "FAIL: the pad and the hand disagree"; status=1
@@ -182,15 +189,15 @@ else
 fi
 
 # ---- the radial menu (GamepadRadial.h): the same match, and then a building from the ring ------------------
-# The pad holds Y, tilts the stick up (the ring's first sector: the dozer's first command button), lets Y go,
+# The pad holds RT, tilts the stick up (the ring's first sector: the dozer's first command button), lets RT go,
 # and places the building with A; the hand clicks that button, at the centre the pad's run logged, and places
 # it with a click.  The pad's log must name the bar's first button as the one pressed, the two runs must agree,
 # and both must differ from the plain pad run above: the difference is the building.
 { cat "$WORK/pad.txt"; cat <<'SCRIPT'
-330 pad North down
+330 pad axis RightTrigger 32767
 332 pad axis LeftY -32767
 334 pad axis LeftY 0
-336 pad North up
+336 pad axis RightTrigger -32768
 360 mouse move RADIAL_X RADIAL_Y
 370 pad South down
 372 pad South up
@@ -208,15 +215,15 @@ if [ -n "$BUTTON_AT" ]; then
 	HR_CRC="$RUN_CRC"; HR_FRAME="$RUN_FRAME"; HR_PLAYED="$RUN_PLAYED"; HR_STATUS="$RUN_STATUS"
 fi
 echo "radial: ${PRESSED#*GAMEPAD RADIAL: }"
-echo "pad, radial:  CRC ${PR_CRC:-none} at frame ${PR_FRAME:-none}, $PR_PLAYED of 21 actions played (exit $PR_STATUS)"
-echo "hand, button: CRC ${HR_CRC:-none} at frame ${HR_FRAME:-none}, $HR_PLAYED of 20 actions played (exit $HR_STATUS)"
+echo "pad, radial:  CRC ${PR_CRC:-none} at frame ${PR_FRAME:-none}, $PR_PLAYED of 25 actions played (exit $PR_STATUS)"
+echo "hand, button: CRC ${HR_CRC:-none} at frame ${HR_FRAME:-none}, $HR_PLAYED of 22 actions played (exit $HR_STATUS)"
 if [ -z "$BUTTON_AT" ]; then
 	echo "FAIL: the pad's radial pressed no button (no GAMEPAD RADIAL line in its log)"; status=1
 elif ! printf '%s' "$PRESSED" | grep -q 'ControlBar.wnd:ButtonCommand01, sector 0 '; then
 	echo "FAIL: the ring's top sector, tilted to, pressed another button than the bar's first"; status=1
 elif [ -z "$PR_CRC" ] || [ -z "$HR_CRC" ]; then
 	echo "FAIL: a radial run gave no result"; status=1
-elif [ "$PR_PLAYED" != "21" ] || [ "$HR_PLAYED" != "20" ]; then
+elif [ "$PR_PLAYED" != "25" ] || [ "$HR_PLAYED" != "22" ]; then
 	echo "FAIL: the radial scripts were not played whole"; status=1
 elif [ "$PR_CRC" != "$HR_CRC" ] || [ "$PR_FRAME" != "$HR_FRAME" ]; then
 	echo "FAIL: the radial and the hand's click on the button disagree"; status=1
@@ -238,10 +245,10 @@ fi
 402 pad RightShoulder down
 404 pad RightShoulder up
 406 pad Back up
-420 pad North down
+420 pad axis RightTrigger 32767
 422 pad axis LeftY -32767
 424 pad axis LeftY 0
-426 pad North up
+426 pad axis RightTrigger -32768
 SCRIPT
 } > "$WORK/pad-cycle.txt"
 CYCLE_FRAMES=900
@@ -260,14 +267,14 @@ if [ -n "$CC_BUTTON" ] && [ -n "$CC_AT" ] && [ -f "$WORK/hand-radial.txt" ]; the
 	HC_CRC="$RUN_CRC"; HC_FRAME="$RUN_FRAME"; HC_PLAYED="$RUN_PLAYED"; HC_STATUS="$RUN_STATUS"
 fi
 echo "cycle: ${CYCLED#*GAMEPAD STRUCTURES: }"
-echo "pad, cycle:   CRC ${PC_CRC:-none} at frame ${PC_FRAME:-none}, $PC_PLAYED of 29 actions played (exit $PC_STATUS)"
-echo "hand, clicks: CRC ${HC_CRC:-none} at frame ${HC_FRAME:-none}, $HC_PLAYED of 26 actions played (exit $HC_STATUS)"
+echo "pad, cycle:   CRC ${PC_CRC:-none} at frame ${PC_FRAME:-none}, $PC_PLAYED of 33 actions played (exit $PC_STATUS)"
+echo "hand, clicks: CRC ${HC_CRC:-none} at frame ${HC_FRAME:-none}, $HC_PLAYED of 28 actions played (exit $HC_STATUS)"
 echo "control, the radial run to frame $CYCLE_FRAMES: CRC ${RC_CRC:-none}"
 if ! printf '%s' "$CYCLED" | grep -q 'CommandCenter'; then
 	echo "FAIL: View and RB did not select the command centre"; status=1
 elif [ -z "$PC_CRC" ] || [ -z "$HC_CRC" ] || [ -z "$RC_CRC" ]; then
 	echo "FAIL: a cycle run gave no result"; status=1
-elif [ "$PC_PLAYED" != "29" ] || [ "$HC_PLAYED" != "26" ]; then
+elif [ "$PC_PLAYED" != "33" ] || [ "$HC_PLAYED" != "28" ]; then
 	echo "FAIL: the cycle scripts were not played whole"; status=1
 elif [ "$PC_CRC" != "$HC_CRC" ] || [ "$PC_FRAME" != "$HC_FRAME" ]; then
 	echo "FAIL: the base chord's selection and the hand's click on the command centre disagree"; status=1

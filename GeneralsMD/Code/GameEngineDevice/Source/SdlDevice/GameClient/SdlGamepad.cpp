@@ -26,7 +26,9 @@
 #include "GameClient/Display.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/InGameUI.h"
 #include "GameClient/GamepadAim.h"
+#include "GameClient/GamepadCancel.h"
 #include "GameClient/GamepadCycle.h"
 #include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadRadial.h"
@@ -53,13 +55,16 @@ static_assert( (Int)SDL_GAMEPAD_BUTTON_SOUTH == (Int)GAMEPAD_BUTTON_SOUTH, "Game
 static_assert( (Int)SDL_GAMEPAD_BUTTON_DPAD_UP == (Int)GAMEPAD_BUTTON_DPAD_UP, "GamepadMap.h follows SDL_GamepadButton" );
 static_assert( (Int)SDL_GAMEPAD_BUTTON_LEFT_PADDLE2 == (Int)GAMEPAD_BUTTON_LEFT_PADDLE2, "GamepadMap.h follows SDL_GamepadButton" );
 static_assert( (Int)SDL_GAMEPAD_BUTTON_TOUCHPAD == (Int)GAMEPAD_BUTTON_TOUCHPAD, "GamepadMap.h follows SDL_GamepadButton" );
+static_assert( (Int)GAMEPAD_BUTTON_LEFT_TRIGGER == (Int)GAMEPAD_BUTTON_TOUCHPAD + 1, "the triggers follow SDL's buttons" );
 
 namespace {
 
 enum { MAX_PADS = 8, MAX_PRESSED_KEYS = 4, MOUSE_BUTTONS = 3 };
 
 const Real TRIGGER_DEAD_ZONE = 0.1f;
-const Real WHEEL_NOTCHES_PER_SECOND = 6.0f;		///< a trigger pulled all the way
+const Real TRIGGER_PRESS = 0.5f;							///< a trigger pulled past half is pressed...
+const Real TRIGGER_RELEASE = 0.3f;						///< ...and let go under this
+const Real WHEEL_NOTCHES_PER_SECOND = 6.0f;		///< the right stick pushed all the way, the camera layer held
 const Real CAMERA_KEY_ON = 0.5f;							///< the right stick's tilt that holds an arrow key...
 const Real CAMERA_KEY_OFF = 0.35f;						///< ...and the tilt below which it lets go
 const Int DOUBLE_CLICK_DISTANCE = 4;					///< Windows' SM_CXDOUBLECLK and SM_CYDOUBLECLK
@@ -92,6 +97,8 @@ struct Pad
 	Bool aOnEast;																				///< the button labelled A (or Cross) is the east one: a Nintendo layout
 	GamepadButtonType downAs[ GAMEPAD_BUTTON_COUNT ];		///< what each physical button was pressed as, for its release
 	Pressed tap[ GAMEPAD_BUTTON_COUNT ];								///< an OnRelease action pressed on the release, let go next update
+	Bool triggerDown[ 2 ];															///< the left and right triggers, as buttons
+	Bool rotateKey[ 2 ];																///< the camera layer's rotate keys held: left, right
 	Bool tapHeld[ GAMEPAD_BUTTON_COUNT ];
 	Real axis[ SDL_GAMEPAD_AXIS_COUNT ];
 	Bool cameraKey[ 4 ];
@@ -294,6 +301,17 @@ void pressKeys( Pressed &pressed, MappableKeyType key, MappableKeyModState modSt
 		keyDown( pressed.keys[ i ] );
 }
 
+/** The order button: the input scheme's (Modern's right, Legacy's left), except that an ability, a structure or an
+	* order key waiting for its target is aimed with the left button under both */
+Int orderButton( void )
+{
+	const Bool aiming = TheInGameUI != NULL && (TheInGameUI->getGUICommand() != NULL || TheInGameUI->getPendingPlaceType() != NULL
+		|| TheInGameUI->isOrderKeyArmed());
+	if (aiming || (TheGlobalData != NULL && TheGlobalData->isLegacyInput()))
+		return SdlMouse::BUTTON_LEFT;
+	return SdlMouse::BUTTON_RIGHT;
+}
+
 Pressed apply( const GamepadBinding &binding, UnsignedInt time )
 {
 	Pressed pressed;
@@ -324,6 +342,16 @@ Pressed apply( const GamepadBinding &binding, UnsignedInt time )
 			break;
 		case GAMEPAD_ACTION_STRUCTURES:
 			GamepadCycle::structure( binding.m_step );
+			break;
+		case GAMEPAD_ACTION_ORDER:
+			pressed.mouseButton = orderButton();
+			break;
+		case GAMEPAD_ACTION_CANCEL:
+			// Legacy's right button is the cancel and the deselect the pad means; Modern's orders as well
+			if (TheGlobalData != NULL && TheGlobalData->isLegacyInput())
+				pressed.mouseButton = SdlMouse::BUTTON_RIGHT;
+			else
+				GamepadCancel::press();
 			break;
 		default:
 			break;
@@ -517,6 +545,20 @@ void releaseButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 		pad.pressed[ with ] = apply( pad.binding[ with ], time );
 }
 
+/// The key the player's map turns the camera with, left (0) or right (1), down or up; none bound, nothing
+void rotateKey( Int side, Bool down )
+{
+	MappableKeyType key;
+	MappableKeyModState modState;
+	if (!GamepadMap::keyForCommand( side == 0 ? GameMessage::MSG_META_BEGIN_CAMERA_ROTATE_LEFT : GameMessage::MSG_META_BEGIN_CAMERA_ROTATE_RIGHT,
+			key, modState ) || key == MK_NONE)
+		return;
+	if (down)
+		keyDown( (UnsignedByte)key );
+	else
+		keyUp( (UnsignedByte)key );
+}
+
 void releasePad( Pad &pad, UnsignedInt time )
 {
 	// a pad let go of all at once acts on nothing: no OnRelease action waiting fires, and a tap ends
@@ -537,6 +579,15 @@ void releasePad( Pad &pad, UnsignedInt time )
 			pad.cameraKey[ i ] = FALSE;
 			keyUp( theCameraKeys[ i ] );
 		}
+	for (Int i = 0; i < 2; ++i)
+	{
+		pad.triggerDown[ i ] = FALSE;
+		if (pad.rotateKey[ i ])
+		{
+			pad.rotateKey[ i ] = FALSE;
+			rotateKey( i, FALSE );
+		}
+	}
 	for (Int axis = 0; axis < SDL_GAMEPAD_AXIS_COUNT; ++axis)
 		pad.axis[ axis ] = 0.0f;
 	pad.wheelCarry = 0.0f;
@@ -889,8 +940,8 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 			if (!padsWanted())
 				return TRUE;		// the option is off: taken, and nothing done with it
 			Pad *pad = findPad( event.gbutton.which );
-			if (pad == NULL || event.gbutton.button >= GAMEPAD_BUTTON_COUNT)
-				return TRUE;
+			if (pad == NULL || event.gbutton.button > GAMEPAD_BUTTON_TOUCHPAD)
+				return TRUE;		// SDL's buttons past the touchpad bind to nothing; the triggers come as axes
 			// the same order (GamepadMap.h), with confirm and cancel as the pad's family has them: a press is taken as
 			// what it means now, and its release as what the press was, whatever the option did in between
 			const GamepadButtonType physical = (GamepadButtonType)event.gbutton.button;
@@ -919,6 +970,21 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 					? TRIGGER_DEAD_ZONE : STICK_DEAD_ZONE;
 				if (value > deadZone || value < -deadZone)
 					padUsed( *pad, milliseconds( event.gaxis.timestamp ) );
+				// a trigger past half is a press of LeftTrigger or RightTrigger, let go under TRIGGER_RELEASE
+				const Int side = event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ? 0 : (event.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER ? 1 : -1);
+				if (side >= 0)
+				{
+					const Bool down = pad->axis[ event.gaxis.axis ] > (pad->triggerDown[ side ] ? TRIGGER_RELEASE : TRIGGER_PRESS);
+					if (down != pad->triggerDown[ side ])
+					{
+						pad->triggerDown[ side ] = down;
+						const GamepadButtonType button = side == 0 ? GAMEPAD_BUTTON_LEFT_TRIGGER : GAMEPAD_BUTTON_RIGHT_TRIGGER;
+						if (down)
+							pressButton( *pad, button, milliseconds( event.gaxis.timestamp ) );
+						else
+							releaseButton( *pad, button, milliseconds( event.gaxis.timestamp ) );
+					}
+				}
 			}
 			return TRUE;
 		}
@@ -1104,9 +1170,19 @@ void SdlGamepad_update( UnsignedInt nowMs )
 	{
 		Pad &pad = thePads[i];
 
-		// the triggers are the wheel: the right one in (up), the left one out, 120 a notch as SdlInput's
-		const Real pull = triggerPull( pad.axis[ SDL_GAMEPAD_AXIS_RIGHT_TRIGGER ] ) - triggerPull( pad.axis[ SDL_GAMEPAD_AXIS_LEFT_TRIGGER ] );
-		pad.wheelCarry += pull * WHEEL_NOTCHES_PER_SECOND * 120.0f * seconds;
+		// the camera layer (a CameraLayer binding's button held, LB's): the right stick zooms and turns the camera
+		// instead of moving it; using it is a chord, so the button's OnRelease action does not follow
+		Int layer = -1;
+		for (Int button = 0; button < GAMEPAD_BUTTON_COUNT && layer < 0; ++button)
+			if (pad.held[ button ] && pad.bound[ button ] && pad.binding[ button ].m_cameraLayer && !pad.menuPress[ button ])
+				layer = button;
+		const Real rx = pad.axis[ SDL_GAMEPAD_AXIS_RIGHTX ], ry = pad.axis[ SDL_GAMEPAD_AXIS_RIGHTY ];
+		if (layer >= 0 && (rx * rx + ry * ry) > STICK_DEAD_ZONE * STICK_DEAD_ZONE)
+			pad.deferred[ layer ] = FALSE;
+
+		// the wheel, 120 a notch as SdlInput's: the stick pushed up zooms in (up), down out
+		const Real zoom = layer >= 0 ? triggerPull( -ry > 0.0f ? -ry : 0.0f ) - triggerPull( ry > 0.0f ? ry : 0.0f ) : 0.0f;
+		pad.wheelCarry += zoom * WHEEL_NOTCHES_PER_SECOND * 120.0f * seconds;
 		const Int delta = (Int)pad.wheelCarry;		// toward zero: the fraction waits for the next frame
 		pad.wheelCarry -= (Real)delta;
 		if (delta != 0 && SdlMouse::active() != NULL)
@@ -1116,9 +1192,20 @@ void SdlGamepad_update( UnsignedInt nowMs )
 			SdlMouse::active()->addEvent( SdlMouse::EVENT_WHEEL, x, y, SdlMouse::BUTTON_LEFT, 0, delta, nowMs );
 		}
 
-		// the right stick holds the arrow keys: up, down, left, right (a stick's up is negative)
-		const Real rx = pad.axis[ SDL_GAMEPAD_AXIS_RIGHTX ], ry = pad.axis[ SDL_GAMEPAD_AXIS_RIGHTY ];
-		const Real tilt[ 4 ] = { -ry, ry, -rx, rx };
+		// the turn: the player's rotate keys held while the stick is pushed left or right
+		for (Int side = 0; side < 2; ++side)
+		{
+			const Real push = side == 0 ? -rx : rx;
+			const Bool want = layer >= 0 && push > (pad.rotateKey[ side ] ? CAMERA_KEY_OFF : CAMERA_KEY_ON);
+			if (want != pad.rotateKey[ side ])
+			{
+				pad.rotateKey[ side ] = want;
+				rotateKey( side, want );
+			}
+		}
+
+		// the right stick holds the arrow keys: up, down, left, right (a stick's up is negative); not in the layer
+		const Real tilt[ 4 ] = { layer >= 0 ? 0.0f : -ry, layer >= 0 ? 0.0f : ry, layer >= 0 ? 0.0f : -rx, layer >= 0 ? 0.0f : rx };
 		for (Int k = 0; k < 4; ++k)
 		{
 			const Bool want = tilt[ k ] > (pad.cameraKey[ k ] ? CAMERA_KEY_OFF : CAMERA_KEY_ON);

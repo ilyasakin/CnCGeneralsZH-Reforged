@@ -18,12 +18,14 @@
 // GamepadRadial.h: the radial command menu for a pad in a match (docs/mac-port/tasks/G1-gamepad-screens.md, "The
 // radial command menu"), the way console RTS games put the command card under the thumb.
 //
-// Y held opens a ring of the command bar's shown buttons around the screen's centre: the selection's command card
-// (production, abilities, upgrades, a dozer's structures), greyed where the bar has them disabled.  The left stick
-// picks a sector, 0 at the top and on clockwise; letting Y go presses the pick, A presses it at once, B closes.
-// A press is the command bar's own (ControlBar::pressCommandWindow, the GBM_SELECTED a click on that button sends),
-// so the orders that follow are the ones a mouse on the bar gives.  A tap of Y that picks nothing is still the
-// command-bar mode it was before (SdlGamepad.h).
+// RT held (the CommandBar binding's button, GamepadReforged.ini) opens a ring of the command bar's shown buttons
+// around the screen's centre: the selection's command card (production, abilities, upgrades, a dozer's
+// structures), greyed where the bar has them disabled.  RT, as C&C 3's Kane's Wrath put its CommandStick there and
+// Red Alert 3 and the Age of Empires console games their command radials.  The left stick picks a sector, 0 at the
+// top and on clockwise; letting RT go presses the pick, A presses it at once, B closes.  A press is the command
+// bar's own (ControlBar::pressCommandWindow, the GBM_SELECTED a click on that button sends), so the orders that
+// follow are the ones a mouse on the bar gives.  A tap of RT that picks nothing is the command-bar mode
+// (SdlGamepad.h).
 
 #pragma once
 

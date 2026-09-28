@@ -21,7 +21,8 @@
 // While a pad is the device in use (SdlGamepad says so, and which kind of pad it is), the GUI shows that
 // pad's buttons instead of the keys:
 //   - the command bar's corner letters: in command-bar mode South's glyph on the button under the
-//     pointer, outside it North's glyph on the bar's first button, and no letters (keys a pad has not);
+//     pointer, outside it the glyph of the button that opens the bar (RT's) on its first button, and no
+//     letters (keys a pad has not);
 //   - a message box's answers: South's glyph beside OK or Yes, East's beside Cancel or No;
 //   - in command-bar mode, South's glyph in the corner of the build card the hovered button shows.
 // Keyboard and mouse input hides them all again, and the letters come back.
@@ -59,13 +60,13 @@ enum GamepadGlyphSet
 	GAMEPAD_GLYPHS_COUNT
 };
 
-/// The glyphs past the buttons: the triggers, which are axes
+/// The glyphs: one a button, the triggers last
 enum
 {
-	GAMEPAD_GLYPH_LEFT_TRIGGER = GAMEPAD_BUTTON_COUNT,
-	GAMEPAD_GLYPH_RIGHT_TRIGGER,
+	GAMEPAD_GLYPH_LEFT_TRIGGER = GAMEPAD_BUTTON_LEFT_TRIGGER,
+	GAMEPAD_GLYPH_RIGHT_TRIGGER = GAMEPAD_BUTTON_RIGHT_TRIGGER,
 
-	GAMEPAD_GLYPH_COUNT
+	GAMEPAD_GLYPH_COUNT = GAMEPAD_BUTTON_COUNT
 };
 
 class GamepadHints

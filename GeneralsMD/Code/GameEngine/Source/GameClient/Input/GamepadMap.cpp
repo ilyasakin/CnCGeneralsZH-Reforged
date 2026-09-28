@@ -48,6 +48,8 @@ const LookupListRec TheGamepadButtonNames[] =
 	{ "RightPaddle2",		GAMEPAD_BUTTON_RIGHT_PADDLE2 },
 	{ "LeftPaddle2",		GAMEPAD_BUTTON_LEFT_PADDLE2 },
 	{ "Touchpad",				GAMEPAD_BUTTON_TOUCHPAD },
+	{ "LeftTrigger",		GAMEPAD_BUTTON_LEFT_TRIGGER },
+	{ "RightTrigger",		GAMEPAD_BUTTON_RIGHT_TRIGGER },
 	{ NULL, 0 }
 };
 
@@ -62,6 +64,8 @@ const LookupListRec TheGamepadActionNames[] =
 	{ "Command",				GAMEPAD_ACTION_COMMAND },
 	{ "CommandBar",			GAMEPAD_ACTION_COMMAND_BAR },
 	{ "Structures",			GAMEPAD_ACTION_STRUCTURES },
+	{ "Order",					GAMEPAD_ACTION_ORDER },
+	{ "Cancel",					GAMEPAD_ACTION_CANCEL },
 	{ NULL, 0 }
 };
 
@@ -81,6 +85,7 @@ static const FieldParse TheGamepadBindingFieldParseTable[] =
 	{ "Command",				GamepadMap::parseCommandName,	NULL,							offsetof( GamepadBinding, m_command ) },
 	{ "Step",						INI::parseLookupList,		TheGamepadStepNames,		offsetof( GamepadBinding, m_step ) },
 	{ "OnRelease",			INI::parseBool,					NULL,										offsetof( GamepadBinding, m_onRelease ) },
+	{ "CameraLayer",		INI::parseBool,					NULL,										offsetof( GamepadBinding, m_cameraLayer ) },
 	{ NULL,							NULL,										0,											0 }
 };
 
@@ -98,6 +103,14 @@ const GamepadBinding *GamepadMap::find( GamepadButtonType button, GamepadButtonT
 		if (m_bindings[i].m_button == button && m_bindings[i].m_with == with)
 			return &m_bindings[i];
 	return NULL;
+}
+
+GamepadButtonType GamepadMap::buttonFor( GamepadActionType action ) const
+{
+	for (size_t i = 0; i < m_bindings.size(); ++i)
+		if (m_bindings[i].m_action == action && m_bindings[i].m_with == GAMEPAD_BUTTON_NONE)
+			return m_bindings[i].m_button;
+	return GAMEPAD_BUTTON_NONE;
 }
 
 Bool GamepadMap::hasChordsWith( GamepadButtonType with ) const
@@ -156,6 +169,7 @@ void GamepadMap::set( const GamepadBinding &binding )
 	binding.m_command = GameMessage::MSG_INVALID;
 	binding.m_step = 0;
 	binding.m_onRelease = FALSE;
+	binding.m_cameraLayer = FALSE;
 	ini->initFromINI( &binding, TheGamepadBindingFieldParseTable );
 
 	// a modifier action with no modifier, a key action with no key, a command action with no command, a

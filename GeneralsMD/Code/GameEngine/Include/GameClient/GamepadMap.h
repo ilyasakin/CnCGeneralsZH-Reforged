@@ -36,6 +36,8 @@
 //     Command = SELECT_TEAM5          ; for Command: a command map's name for a command
 //     Step = Next                     ; for Structures: Next or Previous
 //     OnRelease = Yes                 ; optional: act on the release, and only if no chord used the button
+//     CameraLayer = Yes               ; optional: held, the right stick zooms (up and down) and turns the
+//                                     ; camera (left and right); using it counts as a chord
 //   End
 //
 // Modifier holds modifiers alone (`Modifiers = SHIFT`), as a hand holds Shift.  Key presses a named key
@@ -45,6 +47,14 @@
 //
 // Structures selects the local player's next or previous production building and looks at it
 // (GamepadCycle.h): the selection message is the one a click on that building sends.
+//
+// Order presses the input scheme's order button: the right one under Modern, the left under Legacy, and
+// the left one under both while an armed ability, attack move or guard waits for its target (they are aimed
+// with the left button).  Cancel drops what is armed - an ability waiting for a target, a structure being
+// placed, an order key - and with nothing armed clears the selection (GamepadCancel.h): what a Modern right
+// click cancels, without the order that click also gives, and what a Modern click on empty ground clears.
+//
+// The triggers bind as LeftTrigger and RightTrigger: a trigger pulled past half is a press.
 //
 // A binding with a With replaces its button's own binding while the other button is held.  The held
 // button's own keys are let go for as long as the chord lasts (SdlGamepad.h).  OnRelease suits a button
@@ -64,7 +74,8 @@
 
 class INI;
 
-/// The buttons by position, in SDL_GamepadButton's order (SDL3), so the device layer can cast
+/// The buttons by position, in SDL_GamepadButton's order (SDL3) up to the touchpad, so the device layer can
+/// cast; then the two triggers, which SDL has as axes
 enum GamepadButtonType
 {
 	GAMEPAD_BUTTON_NONE = -1,
@@ -89,6 +100,8 @@ enum GamepadButtonType
 	GAMEPAD_BUTTON_RIGHT_PADDLE2,		///< the Deck's R5
 	GAMEPAD_BUTTON_LEFT_PADDLE2,		///< the Deck's L5
 	GAMEPAD_BUTTON_TOUCHPAD,
+	GAMEPAD_BUTTON_LEFT_TRIGGER,		///< the triggers are axes: pulled past half they are pressed (SdlGamepad)
+	GAMEPAD_BUTTON_RIGHT_TRIGGER,
 
 	GAMEPAD_BUTTON_COUNT
 };
@@ -106,7 +119,9 @@ enum GamepadActionType
 	GAMEPAD_ACTION_KEY,
 	GAMEPAD_ACTION_COMMAND,
 	GAMEPAD_ACTION_COMMAND_BAR,		///< in and out of command-bar mode (SdlGamepad.h)
-	GAMEPAD_ACTION_STRUCTURES			///< the next or previous production building (GamepadCycle.h)
+	GAMEPAD_ACTION_STRUCTURES,		///< the next or previous production building (GamepadCycle.h)
+	GAMEPAD_ACTION_ORDER,					///< the order button of the input scheme, or the left one while a target is wanted
+	GAMEPAD_ACTION_CANCEL					///< what is armed goes, else the selection (GamepadCancel.h)
 };
 
 extern const LookupListRec TheGamepadActionNames[];
@@ -121,6 +136,7 @@ struct GamepadBinding
 	GameMessage::Type			m_command;		///< for GAMEPAD_ACTION_COMMAND: a meta message the maps bind
 	Int										m_step;				///< for GAMEPAD_ACTION_STRUCTURES: 1 the next, -1 the previous
 	Bool									m_onRelease;	///< act on the release, only if no chord used the button
+	Bool									m_cameraLayer;	///< held, the right stick zooms and turns the camera; its use is a chord
 };
 
 class GamepadMap : public SubsystemInterface
@@ -142,6 +158,9 @@ public:
 
 	/// The binding of button while with is held (GAMEPAD_BUTTON_NONE: its own), or NULL
 	const GamepadBinding *find( GamepadButtonType button, GamepadButtonType with ) const;
+
+	/// The button whose own binding (no With) is action, or GAMEPAD_BUTTON_NONE: where a hint for it points
+	GamepadButtonType buttonFor( GamepadActionType action ) const;
 
 	/// Every binding with a With naming this button, so a press can look for a chord
 	Bool hasChordsWith( GamepadButtonType with ) const;

@@ -212,7 +212,7 @@ Bool isShown( GameWindow *window )
 	return window != NULL;
 }
 
-/// The slot of the bar's top-left shown button, where North's glyph goes; worked out once a frame
+/// The slot of the bar's top-left shown button, where the command bar's button's glyph goes; worked out once a frame
 Int firstShownSlot( void )
 {
 	static UnsignedInt frame = 0xFFFFFFFF;
@@ -339,7 +339,8 @@ GamepadHints::Hint GamepadHints::hintFor( GameWindow *window, Int pointSize, Gam
 			return HINT_INSTEAD;
 		return HINT_HIDE;
 	}
-	if (commandSlotOf( id ) == firstShownSlot() && glyphFor( theShown, GAMEPAD_BUTTON_NORTH, pointSize, font, glyph ))
+	const GamepadButtonType bar = TheGamepadMap != NULL ? TheGamepadMap->buttonFor( GAMEPAD_ACTION_COMMAND_BAR ) : GAMEPAD_BUTTON_NONE;
+	if (commandSlotOf( id ) == firstShownSlot() && bar != GAMEPAD_BUTTON_NONE && glyphFor( theShown, bar, pointSize, font, glyph ))
 		return HINT_INSTEAD;
 	return HINT_HIDE;
 }

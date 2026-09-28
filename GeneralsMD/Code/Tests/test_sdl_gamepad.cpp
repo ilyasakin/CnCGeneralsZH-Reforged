@@ -91,7 +91,11 @@ const char *const TEST_COMMAND_MAP =
 	"CommandMap SELECT_TEAM5\n  Key = KEY_5\n  Transition = UP\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
 	"CommandMap SELECT_TEAM6\n  Key = KEY_6\n  Transition = UP\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
 	"CommandMap SELECT_TEAM7\n  Key = KEY_7\n  Transition = UP\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
-	"CommandMap SELECT_TEAM8\n  Key = KEY_8\n  Transition = UP\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n";
+	"CommandMap SELECT_TEAM8\n  Key = KEY_8\n  Transition = UP\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
+	"CommandMap VIEW_LAST_RADAR_EVENT\n  Key = KEY_SPACE\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
+	"CommandMap VIEW_COMMAND_CENTER\n  Key = KEY_H\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
+	"CommandMap BEGIN_CAMERA_ROTATE_LEFT\n  Key = KEY_KP4\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n"
+	"CommandMap BEGIN_CAMERA_ROTATE_RIGHT\n  Key = KEY_KP6\n  Transition = DOWN\n  Modifiers = NONE\n  UseableIn = GAME\nEnd\n";
 
 bool writeFile( const std::string &path, const std::string &text )
 {
@@ -362,7 +366,7 @@ TEST(every_shipped_binding_parses_and_each_command_is_bound)
 {
 	CHECK( start() );
 	CHECK( TheGamepadMap != NULL );
-	CHECK_EQ( TheGamepadMap->getCount(), 24 );		// the mouse 3, modifiers 2, command bar 1, orders 4, groups 8, back buttons 4, base 2
+	CHECK_EQ( TheGamepadMap->getCount(), 30 );		// faces 4, triggers 2, shoulders 2, their chords 4, View and its base chords 3, Start and the sticks 3, groups 8, back buttons 4
 	for (Int i = 0; i < TheGamepadMap->getCount(); ++i)
 	{
 		const GamepadBinding &binding = TheGamepadMap->get( i );
@@ -376,8 +380,11 @@ TEST(every_shipped_binding_parses_and_each_command_is_bound)
 	}
 	const GamepadBinding *south = TheGamepadMap->find( GAMEPAD_BUTTON_SOUTH, GAMEPAD_BUTTON_NONE );
 	CHECK( south != NULL && south->m_action == GAMEPAD_ACTION_MOUSE_LEFT );
-	const GamepadBinding *chord = TheGamepadMap->find( GAMEPAD_BUTTON_DPAD_UP, GAMEPAD_BUTTON_LEFT_SHOULDER );
+	const GamepadBinding *chord = TheGamepadMap->find( GAMEPAD_BUTTON_DPAD_UP, GAMEPAD_BUTTON_LEFT_TRIGGER );
 	CHECK( chord != NULL && chord->m_action == GAMEPAD_ACTION_COMMAND );
+	CHECK_EQ( (Int)TheGamepadMap->buttonFor( GAMEPAD_ACTION_COMMAND_BAR ), (Int)GAMEPAD_BUTTON_RIGHT_TRIGGER );
+	CHECK_EQ( (Int)TheGamepadMap->buttonFor( GAMEPAD_ACTION_ORDER ), (Int)GAMEPAD_BUTTON_WEST );
+	CHECK_EQ( (Int)TheGamepadMap->buttonFor( GAMEPAD_ACTION_CANCEL ), (Int)GAMEPAD_BUTTON_EAST );
 	CHECK_EQ( SdlGamepad_count(), 1 );
 }
 
@@ -422,14 +429,16 @@ TEST(south_held_across_a_move_is_a_drag_box)
 	CHECK( same( pad, hand ) );
 }
 
-TEST(east_is_the_right_button_and_the_right_stick_click_the_middle)
+TEST(west_is_the_order_button_east_takes_back_and_the_right_stick_clicks_the_middle)
 {
 	CHECK( start() );
 	pushMotion( 500, 100 );
 	clear();
 	Output pad, hand;
-	padButton( SDL_GAMEPAD_BUTTON_EAST, true );
+	padButton( SDL_GAMEPAD_BUTTON_EAST, true );		// Cancel, outside a match: nothing to take back, and no click
 	padButton( SDL_GAMEPAD_BUTTON_EAST, false );
+	padButton( SDL_GAMEPAD_BUTTON_WEST, true );		// Order: Modern's order button, the right one
+	padButton( SDL_GAMEPAD_BUTTON_WEST, false );
 	padButton( SDL_GAMEPAD_BUTTON_RIGHT_STICK, true );
 	padButton( SDL_GAMEPAD_BUTTON_RIGHT_STICK, false );
 	frame( pad );
@@ -446,25 +455,23 @@ TEST(a_command_presses_the_key_the_players_map_binds_it_to)
 	CHECK( start() );
 	clear();
 	Output pad, hand;
-	padButton( SDL_GAMEPAD_BUTTON_WEST, true );		// STOP: S
+	padButton( SDL_GAMEPAD_BUTTON_NORTH, true );		// TOGGLE_ATTACKMOVE: F
 	frame( pad );
-	padButton( SDL_GAMEPAD_BUTTON_WEST, false );
+	padButton( SDL_GAMEPAD_BUTTON_NORTH, false );
 	frame( pad );
-	padButton( SDL_GAMEPAD_BUTTON_BACK, true );		// SELECT_MATCHING_UNITS: Ctrl+D, on the release (OnRelease)
+	padButton( SDL_GAMEPAD_BUTTON_BACK, true );		// VIEW_LAST_RADAR_EVENT: Space, on the release (OnRelease)
 	frame( pad );
 	padButton( SDL_GAMEPAD_BUTTON_BACK, false );
 	frame( pad );
 	SdlGamepad_update( 20000 );									// ...let go on the next update, a tap over two frames
 	frame( pad );
-	pushKey( SDL_SCANCODE_S, true );
+	pushKey( SDL_SCANCODE_F, true );
 	frame( hand );
-	pushKey( SDL_SCANCODE_S, false );
+	pushKey( SDL_SCANCODE_F, false );
 	frame( hand );
-	pushKey( SDL_SCANCODE_LCTRL, true );
-	pushKey( SDL_SCANCODE_D, true );
+	pushKey( SDL_SCANCODE_SPACE, true );
 	frame( hand );
-	pushKey( SDL_SCANCODE_D, false );
-	pushKey( SDL_SCANCODE_LCTRL, false );
+	pushKey( SDL_SCANCODE_SPACE, false );
 	frame( hand );
 	CHECK( same( pad, hand ) );
 }
@@ -482,7 +489,7 @@ TEST(view_held_with_a_shoulder_is_the_base_chord_and_its_own_command_does_not_fo
 	padButton( SDL_GAMEPAD_BUTTON_BACK, false );
 	SdlGamepad_update( 21000 );
 	frame( pad );
-	CHECK( pad.events.empty() );		// no Ctrl from the shoulder, and no Ctrl+D from View's release
+	CHECK( pad.events.empty() );		// no Ctrl from the shoulder, and no Space from View's release
 	const GamepadBinding *next = TheGamepadMap->find( GAMEPAD_BUTTON_RIGHT_SHOULDER, GAMEPAD_BUTTON_BACK );
 	const GamepadBinding *previous = TheGamepadMap->find( GAMEPAD_BUTTON_LEFT_SHOULDER, GAMEPAD_BUTTON_BACK );
 	CHECK( next != NULL && next->m_action == GAMEPAD_ACTION_STRUCTURES && next->m_step == 1 );
@@ -525,18 +532,20 @@ TEST(ctrl_held_on_the_right_shoulder_makes_the_dpads_group)
 	CHECK( same( pad, hand ) );
 }
 
-TEST(a_with_chord_lets_the_shoulders_shift_go_for_its_length)
+TEST(a_with_chord_lets_the_left_triggers_shift_go_for_its_length)
 {
 	CHECK( start() );
 	clear();
 	Output pad, hand;
-	padButton( SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, true );		// Shift down
+	padAxis( SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MAX );	// pulled past half: Shift down
 	frame( pad );
 	padButton( SDL_GAMEPAD_BUTTON_DPAD_UP, true );					// group 5: Shift up, 5 down
 	frame( pad );
 	padButton( SDL_GAMEPAD_BUTTON_DPAD_UP, false );					// 5 up, Shift down again
 	frame( pad );
-	padButton( SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, false );		// Shift up
+	padAxis( SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 12000 );				// eased to 0.37: still held
+	frame( pad );
+	padAxis( SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );	// let go: Shift up
 	frame( pad );
 	pushKey( SDL_SCANCODE_LSHIFT, true );
 	frame( hand );
@@ -557,38 +566,110 @@ TEST(one_ctrl_held_by_two_bindings_goes_down_once)
 	clear();
 	Output pad, hand;
 	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, true );		// Ctrl
-	padButton( SDL_GAMEPAD_BUTTON_BACK, true );							// Ctrl+D on View's release (OnRelease): Ctrl already down
-	padButton( SDL_GAMEPAD_BUTTON_BACK, false );						// D down...
-	SdlGamepad_update( 22000 );															// ...and up on the next update; Ctrl stays for the shoulder
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1, true );		// SELECT_ALL, Ctrl+A: Ctrl already down
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1, false );		// A up; Ctrl stays for the shoulder
 	frame( pad );
 	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, false );
 	frame( pad );
 	pushKey( SDL_SCANCODE_LCTRL, true );
-	pushKey( SDL_SCANCODE_D, true );
-	pushKey( SDL_SCANCODE_D, false );
+	pushKey( SDL_SCANCODE_A, true );
+	pushKey( SDL_SCANCODE_A, false );
 	frame( hand );
 	pushKey( SDL_SCANCODE_LCTRL, false );
 	frame( hand );
 	CHECK( same( pad, hand ) );
 }
 
-TEST(the_triggers_are_the_wheel_in_proportion_to_the_pull)
+TEST(the_left_shoulder_held_makes_the_right_stick_zoom_and_turn_and_spends_its_tap)
 {
 	CHECK( start() );
 	pushMotion( 250, 150 );
 	clear();
 	Output pad, hand;
+	padButton( SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, true );		// the camera layer
 	SdlGamepad_update( 10000 );
-	padAxis( SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MAX );		// all the way: 6 notches a second
-	SdlGamepad_update( 10100 );																					// 0.1 s: 72 of 120
-	padAxis( SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
-	padAxis( SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MAX );
-	SdlGamepad_update( 10150 );																					// out, 0.05 s: -36
-	padAxis( SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
-	SdlGamepad_update( 10200 );																					// released: nothing
+	padAxis( SDL_GAMEPAD_AXIS_RIGHTY, SDL_JOYSTICK_AXIS_MIN );	// up all the way: 6 notches a second in
+	SdlGamepad_update( 10100 );																	// 0.1 s: 72 of 120
+	padAxis( SDL_GAMEPAD_AXIS_RIGHTY, SDL_JOYSTICK_AXIS_MAX );	// down: out
+	SdlGamepad_update( 10150 );																	// 0.05 s: -36
+	padAxis( SDL_GAMEPAD_AXIS_RIGHTY, 0 );
+	padAxis( SDL_GAMEPAD_AXIS_RIGHTX, 30000 );									// right: the turn right key, no arrow key
+	SdlGamepad_update( 10166 );
+	padAxis( SDL_GAMEPAD_AXIS_RIGHTX, 0 );
+	SdlGamepad_update( 10182 );
+	padButton( SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, false );		// the layer was used: no idle worker
+	SdlGamepad_update( 10200 );
+	SdlGamepad_update( 10216 );
 	frame( pad );
 	pushWheel( 0.6f, 250, 150 );
 	pushWheel( -0.3f, 250, 150 );
+	pushKey( SDL_SCANCODE_KP_6, true );
+	pushKey( SDL_SCANCODE_KP_6, false );
+	frame( hand );
+	CHECK( same( pad, hand ) );
+}
+
+TEST(a_tap_of_the_left_shoulder_is_the_next_idle_worker_and_the_triggers_are_no_wheel)
+{
+	CHECK( start() );
+	pushMotion( 260, 160 );
+	clear();
+	Output pad, hand;
+	padButton( SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, true );
+	padButton( SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, false );		// I, on the release...
+	frame( pad );
+	SdlGamepad_update( 11000 );															// ...let go on the next update
+	frame( pad );
+	padAxis( SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MAX );	// Shift, and no zoom however long it is held
+	SdlGamepad_update( 11100 );
+	padAxis( SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
+	SdlGamepad_update( 11200 );
+	frame( pad );
+	pushKey( SDL_SCANCODE_I, true );
+	frame( hand );
+	pushKey( SDL_SCANCODE_I, false );
+	frame( hand );
+	pushKey( SDL_SCANCODE_LSHIFT, true );
+	pushKey( SDL_SCANCODE_LSHIFT, false );
+	frame( hand );
+	CHECK( same( pad, hand ) );
+}
+
+TEST(both_shoulders_stop_and_the_left_one_with_y_is_the_whole_army_and_the_right_one_with_b_scatters)
+{
+	CHECK( start() );
+	clear();
+	Output pad, hand;
+	padButton( SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, true );
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, true );		// STOP: S, and no Ctrl of its own
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, false );
+	padButton( SDL_GAMEPAD_BUTTON_NORTH, true );						// SELECT_ALL: Ctrl+A
+	padButton( SDL_GAMEPAD_BUTTON_NORTH, false );
+	padButton( SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, false );		// chords were made: no idle worker
+	SdlGamepad_update( 12000 );
+	frame( pad );
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, true );		// Ctrl...
+	padButton( SDL_GAMEPAD_BUTTON_EAST, true );							// ...let go for SCATTER, Shift+Ctrl+X
+	padButton( SDL_GAMEPAD_BUTTON_EAST, false );						// ...and held again
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, false );
+	frame( pad );
+	pushKey( SDL_SCANCODE_S, true );
+	pushKey( SDL_SCANCODE_S, false );
+	pushKey( SDL_SCANCODE_LCTRL, true );
+	pushKey( SDL_SCANCODE_A, true );
+	pushKey( SDL_SCANCODE_A, false );
+	pushKey( SDL_SCANCODE_LCTRL, false );
+	frame( hand );
+	pushKey( SDL_SCANCODE_LCTRL, true );
+	pushKey( SDL_SCANCODE_LCTRL, false );
+	pushKey( SDL_SCANCODE_LCTRL, true );
+	pushKey( SDL_SCANCODE_LSHIFT, true );
+	pushKey( SDL_SCANCODE_X, true );
+	pushKey( SDL_SCANCODE_X, false );
+	pushKey( SDL_SCANCODE_LSHIFT, false );
+	pushKey( SDL_SCANCODE_LCTRL, false );
+	pushKey( SDL_SCANCODE_LCTRL, true );
+	pushKey( SDL_SCANCODE_LCTRL, false );
 	frame( hand );
 	CHECK( same( pad, hand ) );
 }
@@ -801,13 +882,15 @@ TEST(the_radial_menus_sectors_start_at_the_top_and_go_clockwise)
 	CHECK_EQ( GamepadRadial::sectorFor( 1.0f, 0.0f, 1 ), 0 );			// one sector takes every direction
 }
 
-TEST(north_with_no_command_bar_shown_does_nothing)
+TEST(the_right_trigger_with_no_command_bar_shown_does_nothing)
 {
 	CHECK( start() );
 	clear();
 	Output pad;
-	padButton( SDL_GAMEPAD_BUTTON_NORTH, true );
-	padButton( SDL_GAMEPAD_BUTTON_NORTH, false );
+	padAxis( SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MAX );
+	SdlGamepad_update( 13000 );
+	padAxis( SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, SDL_JOYSTICK_AXIS_MIN );
+	SdlGamepad_update( 13100 );
 	frame( pad );
 	CHECK( pad.events.empty() );
 	CHECK( !SdlGamepad_inCommandBar() );
@@ -983,9 +1066,15 @@ void press( SDL_Joystick *joystick, SDL_GamepadButton button )
 }
 
 /// A tap of each of a pad's two confirm-and-cancel buttons against a hand's left then right click: the
-/// pad confirms (the left button) with confirm, and cancels (the right one) with cancel
+/// pad confirms (the left button) with confirm, and cancels with cancel - under Legacy, whose cancel is the
+/// right button (Modern's is no click at all: GamepadCancel)
 bool confirmsWith( SDL_Joystick *joystick, SDL_GamepadButton confirm, SDL_GamepadButton cancel )
 {
+	struct Legacy
+	{
+		Legacy() { TheWritableGlobalData->m_inputScheme = INPUT_SCHEME_LEGACY; }
+		~Legacy() { TheWritableGlobalData->m_inputScheme = INPUT_SCHEME_MODERN; }
+	} legacy;
 	static int calls = 0;
 	const float x = 400.0f + 20.0f * (calls++ % 10), y = 310.0f;		// a new place each time: no double click with the last
 	pushMotion( x, y );
@@ -1009,7 +1098,7 @@ TEST(a_nintendo_pad_confirms_with_a_on_the_right_and_its_hints_draw_a_for_confir
 	CHECK( nintendo != NULL );
 	CHECK_EQ( SdlGamepad_count(), 2 );
 	CHECK( confirmsWith( nintendo, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_SOUTH ) );
-	press( nintendo, SDL_GAMEPAD_BUTTON_WEST );		// used last: its family and its confirm show
+	press( nintendo, SDL_GAMEPAD_BUTTON_DPAD_UP );		// used last: its family and its confirm show
 	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_NINTENDO );
 	CHECK( GamepadHints::isConfirmSwapped() );
 	// confirm's hint is the glyph of A, which does it; cancel's is B's
@@ -1030,6 +1119,7 @@ TEST(a_playstation_pad_confirms_with_cross_at_the_bottom)
 	SDL_Joystick *playstation = attachFamilyPad( 0x054c, 0x0ce6, "DualSense Wireless Controller" );
 	CHECK( playstation != NULL );
 	CHECK( confirmsWith( playstation, SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST ) );
+	press( playstation, SDL_GAMEPAD_BUTTON_DPAD_UP );		// used last, after the hand's clicks
 	CHECK_EQ( (Int)GamepadHints::getShown(), (Int)GAMEPAD_GLYPHS_PLAYSTATION );
 	CHECK( !GamepadHints::isConfirmSwapped() );
 	CHECK( strcmp( GamepadHints::glyphName( GAMEPAD_GLYPHS_PLAYSTATION, GamepadHints::physicalFor( GAMEPAD_BUTTON_SOUTH ) ), "playstation_button_cross" ) == 0 );
