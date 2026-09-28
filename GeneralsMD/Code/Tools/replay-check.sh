@@ -101,7 +101,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
 		--app) APP="$(cd "$2" && pwd)"; GENERALS="$APP/Contents/MacOS/generals"; PACKAGED_OVERLAY="$APP/Contents/Resources/Overlay"; shift 2;;
-		--package) APP="$(cd "$2" && pwd -P)"; GENERALS="$APP/zero-hour-reforged"; PACKAGED_OVERLAY="$APP/share/zero-hour-reforged/overlay"; shift 2;;
+		--package) APP="$(cd "$2" && pwd -P)"; GENERALS="$APP/zero-hour-reforged.sh"; PACKAGED_OVERLAY="$APP/share/zero-hour-reforged/overlay"; shift 2;;
 		--appimage) APP="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"; GENERALS="$APP"; PACKAGED_OVERLAY="*/share/zero-hour-reforged/overlay"; shift 2;;
 		--data) DATA="$2"; shift 2;;
 		--seeds) SEEDS="$2"; shift 2;;
