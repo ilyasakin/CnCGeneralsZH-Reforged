@@ -51,7 +51,7 @@ struct Action
 /// because a pane can hold its widgets still while its hover and focus are still catching up (seen on the M3 Pro Mac: a
 /// Back that came 250 ms after the difficulty pane stood still moved the focus to Hard instead)
 const UnsignedInt SETTLED_MS = 1000;
-const UnsignedInt AGAIN_MS = 2000;		///< how long a menu that a press did not move must stand still before it is pressed again
+const UnsignedInt AGAIN_MS = 2000;		///< how long after a press that moved nothing it is pressed again (the menu still settled)
 const Int MAX_AGAIN = 2;
 
 std::vector<Action> theActions;
@@ -260,7 +260,7 @@ void SdlInputScript_play( UnsignedInt logicFrame )
 	static UnsignedInt lastPlayedPass = 0;
 	// the last "s" step played, the focus changes counted then, and how often it has been pressed again
 	static size_t lastStep = (size_t)-1;
-	static UnsignedInt changesAtStep = 0;
+	static UnsignedInt changesAtStep = 0, pressedAt = 0;
 	static Int again = 0;
 	Bool repeating = FALSE;
 	while (theNext < theActions.size())
@@ -277,7 +277,8 @@ void SdlInputScript_play( UnsignedInt logicFrame )
 			const Bool tookNothing = lastStep != (size_t)-1 && GamepadFocus::focusChanges() == changesAtStep;
 			if (tookNothing && again < MAX_AGAIN)
 			{
-				if (!GamepadFocus::isSettled( AGAIN_MS ))
+				// measured from the press: the menu stood still before it too, since the press moved nothing
+				if ((UnsignedInt)SDL_GetTicks() - pressedAt < AGAIN_MS || !GamepadFocus::isSettled( SETTLED_MS ))
 					break;
 				++again;
 				theNext = lastStep;
@@ -296,6 +297,7 @@ void SdlInputScript_play( UnsignedInt logicFrame )
 				again = 0;
 			lastStep = theNext;
 			changesAtStep = GamepadFocus::focusChanges();
+			pressedAt = (UnsignedInt)SDL_GetTicks();
 		}
 		const Action &action = theActions[ theNext++ ];
 		const Bool known = play( action.line.c_str() );
