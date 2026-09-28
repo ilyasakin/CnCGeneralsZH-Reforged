@@ -23,7 +23,8 @@
 # ZH_OFFSCREEN_HZ paces the passes, because the shell's menus move in on the clock: a press sent sooner
 # than a screen's transition lands on the screen before it.  The engine logs each change of focus
 # ("GAMEPAD FOCUS: <screen> <widget>"), and the walk must give exactly EXPECTED below:
-#   the main menu starts on Solo Play; down, down, down reaches Options; A opens it on its first widget;
+#   the main menu starts on Solo Play (kept once the pad is first used, so the log begins with the first
+#   press's move: down from Solo Play is Multiplayer); down, down, down reaches Options; A opens it on its first widget;
 #   RB turns to the second page, on that page's first widget, and down moves within it; B cancels back
 #   to the main menu with Options still focused; B there goes to Exit, and down wraps to Solo Play; A opens
 #   its pane on the first side; A on it opens the difficulty pane on Medium; B twice backs out to the main
@@ -117,8 +118,7 @@ tap() { echo "p$1 pad $2 down"; echo "p$(( $1 + 3 )) pad $2 up"; }
 	echo "p2900 quit"
 } > "$WORK/walk.txt"
 
-EXPECTED="MainMenu.wnd MainMenu.wnd:ButtonSinglePlayer
-MainMenu.wnd MainMenu.wnd:ButtonMultiplayer
+EXPECTED="MainMenu.wnd MainMenu.wnd:ButtonMultiplayer
 MainMenu.wnd MainMenu.wnd:ButtonLoadReplay
 MainMenu.wnd MainMenu.wnd:ButtonOptions
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
