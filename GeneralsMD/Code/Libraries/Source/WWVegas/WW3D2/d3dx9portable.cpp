@@ -159,10 +159,12 @@ D3DXMATRIX * D3DXPortable_Matrix_Inverse(D3DXMATRIX * out, float * determinant, 
 unsigned int D3DXPortable_FVF_Vertex_Size(unsigned int fvf)
 {
 	unsigned int size = 0;
+	// D3DFVF_XYZW adds nothing: Microsoft's d3dx9_43 D3DXGetFVFVertexSize has no case for it and sizes
+	// only the rest (0x4002 gives 0 bytes, 0x4102 gives 8).  The DLL is the reference, so this answers
+	// the same; test_d3dx9portable_oracle holds it to the DLL.  The engine builds no XYZW format.
 	switch (fvf & D3DFVF_POSITION_MASK) {
 		case D3DFVF_XYZ:	size = 12; break;
 		case D3DFVF_XYZRHW:	size = 16; break;
-		case D3DFVF_XYZW:	size = 16; break;
 		case D3DFVF_XYZB1:	size = 16; break;
 		case D3DFVF_XYZB2:	size = 20; break;
 		case D3DFVF_XYZB3:	size = 24; break;

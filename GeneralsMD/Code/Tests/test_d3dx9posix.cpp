@@ -100,7 +100,9 @@ static void check_fvf_sizes()
 
 	// HeightMap's software path: position with RHW, a colour and two two-float sets.
 	CHECK(Get_FVF_Vertex_Size(D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX2) == 16 + 4 + 16);
-	CHECK(Get_FVF_Vertex_Size(D3DFVF_XYZW) == 16);
+	// XYZW is sized as nothing, as Microsoft's D3DX sizes it (test_d3dx9portable_oracle, against the DLL).
+	CHECK(Get_FVF_Vertex_Size(D3DFVF_XYZW) == 0);
+	CHECK(Get_FVF_Vertex_Size(D3DFVF_XYZW | D3DFVF_TEX1) == 8);
 	CHECK(Get_FVF_Vertex_Size(D3DFVF_XYZB4 | D3DFVF_LASTBETA_UBYTE4 | D3DFVF_NORMAL) == 12 + 16 + 12);
 	CHECK(Get_FVF_Vertex_Size(D3DFVF_XYZB1 | D3DFVF_PSIZE | D3DFVF_SPECULAR) == 16 + 4 + 4);
 	// Each blend weight is four bytes, the last one included whatever LASTBETA says it holds.
