@@ -23,3 +23,5 @@ GeneralsMD/Code/BuildFingerprint.manifest text eol=lf
 
 # Compiled Direct3D 11 programs, recorded by Tools/record-dx11-shaders.ps1: binary, never converted.
 GeneralsMD/Code/Data/dx11shaders.shipped -text
+# Compiled Direct3D 12 programs (-d3d12), recorded the same way with -Renderer d3d12: binary, never converted.
+GeneralsMD/Code/Data/d3d12shaders.shipped -text
