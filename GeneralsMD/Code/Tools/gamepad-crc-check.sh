@@ -27,6 +27,10 @@
 #   hand  - the same through SDL's own mouse and key events, on the same logic frames;
 #   none  - no input: the armed control, so equal CRCs cannot come from input that did nothing.
 # PASS: pad and hand agree on the HEADLESS CRC and frame, and none differs.
+# Then the radial menu (GamepadRadial.h), in two more runs of the same match: the pad builds from the ring's
+# top sector, the hand by clicking the command button the pad's run logged.  PASS: the ring pressed the bar's
+# first button, the two agree, and both differ from the plain pad run (the building is the difference).
+# Aim assist is off throughout: it would move a resting pad's pointer off the hand's pixel.
 #
 # Rule 9: the install is only read, through a farm of links, and listed before and after
 # (install-guard.sh); the overlay is staged into the work folder; the user data folder is in it too.
@@ -178,7 +182,8 @@ fi
 # ---- the radial menu (GamepadRadial.h): the same match, and then a building from the ring ------------------
 # The pad holds Y, tilts the stick up (the ring's first sector: the dozer's first command button), lets Y go,
 # and places the building with A; the hand clicks that button, at the centre the pad's run logged, and places
-# it with a click.  They must agree, and differ from the plain pad run above: the difference is the building.
+# it with a click.  The pad's log must name the bar's first button as the one pressed, the two runs must agree,
+# and both must differ from the plain pad run above: the difference is the building.
 { cat "$WORK/pad.txt"; cat <<'SCRIPT'
 330 pad North down
 332 pad axis LeftY -32767
@@ -205,6 +210,8 @@ echo "pad, radial:  CRC ${PR_CRC:-none} at frame ${PR_FRAME:-none}, $PR_PLAYED o
 echo "hand, button: CRC ${HR_CRC:-none} at frame ${HR_FRAME:-none}, $HR_PLAYED of 20 actions played (exit $HR_STATUS)"
 if [ -z "$BUTTON_AT" ]; then
 	echo "FAIL: the pad's radial pressed no button (no GAMEPAD RADIAL line in its log)"; status=1
+elif ! printf '%s' "$PRESSED" | grep -q 'ControlBar.wnd:ButtonCommand01, sector 0 '; then
+	echo "FAIL: the ring's top sector, tilted to, pressed another button than the bar's first"; status=1
 elif [ -z "$PR_CRC" ] || [ -z "$HR_CRC" ]; then
 	echo "FAIL: a radial run gave no result"; status=1
 elif [ "$PR_PLAYED" != "21" ] || [ "$HR_PLAYED" != "20" ]; then

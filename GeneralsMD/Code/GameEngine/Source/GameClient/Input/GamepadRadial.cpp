@@ -139,8 +139,9 @@ Bool GamepadRadial::activate( void )
 	Int x, y, w, h;
 	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &w, &h );
-	DEBUG_LOG(( "GAMEPAD RADIAL: pressed ButtonCommand%02d, sector %d of %d, centre %d,%d\n", theSlots[ thePick ] + 1, thePick,
-		(Int)theSlots.size(), x + w / 2, y + h / 2 ));
+	WinInstanceData *data = window->winGetInstanceData();		// the window pressed names itself
+	DEBUG_LOG(( "GAMEPAD RADIAL: pressed %s, sector %d of %d, centre %d,%d\n", data != NULL ? data->m_decoratedNameString.str() : "?",
+		thePick, (Int)theSlots.size(), x + w / 2, y + h / 2 ));
 	TheControlBar->pressCommandWindow( window );
 	return TRUE;
 }
