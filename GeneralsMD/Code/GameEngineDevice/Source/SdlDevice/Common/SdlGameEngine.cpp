@@ -185,7 +185,7 @@ void SdlGameEngine::createWindow( void )
 
 	/* The window's drawable in pixels, not points.  The game's sizes are pixels (SdlDisplays.h), and without
 		 this SDL's Metal view is sized in points: a first run on a scaled Mac drew 3420x2224 into a 1710x1112
-		 swapchain, which macOS then scaled up again (the Air, 2026-09-28).  The mouse is unaffected: it is
+		 swapchain, which macOS then scaled up again (an M2 MacBook Air, 2026-09-28).  The mouse is unaffected: it is
 		 mapped from the window's points (SdlInput_toGamePixels).  Where points are pixels (X11, gamescope) this
 		 changes nothing. */
 	SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;

@@ -163,7 +163,7 @@ int fake_modes(const char *, DisplayModeEntry *entries, int capacity)
 
 const PlatformDisplays TheFakeDisplays = { fake_monitors, fake_modes };
 
-// The Air in its "More Space" mode, a 3420x2224 store on a 2560x1664 panel, and beside it a display whose
+// An M2 MacBook Air in its "More Space" mode, a 3420x2224 store on a 2560x1664 panel, and beside it a display whose
 // panel the platform cannot name.
 int fake_scaled_monitors(MonitorEntry *entries, int capacity)
 {
@@ -236,7 +236,7 @@ TEST(a_first_run_starts_at_the_monitors_own_size)
 TEST(a_first_run_on_a_scaled_display_starts_at_the_panels_pixels)
 {
 	int width = 0, height = 0;
-	fitToPanel(3420, 2224, 2560, 1664, &width, &height);		// the Air's "More Space": the panel itself
+	fitToPanel(3420, 2224, 2560, 1664, &width, &height);		// an M2 MacBook Air's "More Space": the panel
 	CHECK_EQ(width, 2560);
 	CHECK_EQ(height, 1664);
 	fitToPanel(2560, 1664, 2560, 1664, &width, &height);		// the default mode: the panel already
