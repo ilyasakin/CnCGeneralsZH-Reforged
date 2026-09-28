@@ -557,8 +557,9 @@ TEST(one_ctrl_held_by_two_bindings_goes_down_once)
 	clear();
 	Output pad, hand;
 	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, true );		// Ctrl
-	padButton( SDL_GAMEPAD_BUTTON_BACK, true );							// Ctrl+D: Ctrl already down
-	padButton( SDL_GAMEPAD_BUTTON_BACK, false );						// D up; Ctrl stays for the shoulder
+	padButton( SDL_GAMEPAD_BUTTON_BACK, true );							// Ctrl+D on View's release (OnRelease): Ctrl already down
+	padButton( SDL_GAMEPAD_BUTTON_BACK, false );						// D down...
+	SdlGamepad_update( 22000 );															// ...and up on the next update; Ctrl stays for the shoulder
 	frame( pad );
 	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, false );
 	frame( pad );
