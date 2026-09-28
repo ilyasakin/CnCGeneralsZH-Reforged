@@ -2430,7 +2430,6 @@ static CommandLineParam params[] =
 	{ "-ReplayCRCInterval", parseReplayCRCInterval },
 
 #if (defined(_DEBUG) || defined(_INTERNAL))
-	{ "-noaudio", parseNoAudio },
 	{ "-nomusic", parseNoMusic },
 	{ "-novideo", parseNoVideo },
 	{ "-noLogOrCrash", parseNoLogOrCrash },
@@ -2511,6 +2510,9 @@ static CommandLineParam params[] =
 	{ "-notactics", parseNoTactics },
 	{ "-observer", parseObserver },
 	{ "-headless", parseHeadless },
+	/* -noaudio was in the Debug/Internal block above, so a Release build ignored it and a windowed run
+		 opened the audio device.  It turns every sound off as -headless does: the device is never opened. */
+	{ "-noaudio", parseNoAudio },
 	{ "-maxframes", parseMaxGameFrames },
 	{ "-screenshot", parseScreenShot },
 	{ "-video", parseVideo },
