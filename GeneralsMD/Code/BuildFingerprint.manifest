@@ -9,6 +9,7 @@ Data/Art/Textures/ReforgedBarGLACenter.tga
 Data/Art/Textures/ReforgedBarGLALeft.tga
 Data/Art/Textures/ReforgedBarGLARight.tga
 Data/Art/Textures/ReforgedLaserPink.tga
+Data/Art/Textures/ReforgedOrders.tga
 Data/Art/Textures/ReforgedSignalAttack.tga
 Data/Art/Textures/ReforgedSignalDefend.tga
 Data/Art/Textures/ReforgedSignalLook.tga
@@ -25,10 +26,10 @@ Data/Cinema/tr_palms.txt
 Data/Cinema/tr_watch.txt
 Data/INI/BalanceReforged.ini
 Data/INI/CommandMapReforged.ini
-Data/INI/CommandMapWASD.ini
 Data/INI/CommandSetReforged.ini
 Data/INI/FXListReforged.ini
 Data/INI/FixesReforged.ini
+Data/INI/MappedImages/HandCreated/ReforgedOrders.ini
 Data/INI/ObjectCreationListReforged.ini
 Data/INI/ParticleSystemReforged.ini
 Data/INI/ScienceReforged.ini
@@ -63,6 +64,7 @@ Data/Scenarios/reachshot.txt
 Data/Scenarios/shiftorders.txt
 Data/Scenarios/shiftqueue.txt
 Data/Scenarios/squad30.txt
+Data/Scenarios/stashbeside.txt
 Data/Scenarios/techrespawn.txt
 Data/Scenarios/towncross.txt
 Data/Scenarios/trailer_arrival.txt
@@ -3712,6 +3714,7 @@ Tools/matchbot/wnet/udp.h
 Tools/net-check.sh
 Tools/net_check.py
 Tools/optionsmenu_layout.py
+Tools/order_cameos.py
 Tools/overlay-crc-check.sh
 Tools/package-common.sh
 Tools/packaging-resolution-check.sh
