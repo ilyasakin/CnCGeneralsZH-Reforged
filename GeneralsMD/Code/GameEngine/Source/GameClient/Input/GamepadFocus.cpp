@@ -414,14 +414,14 @@ Bool GamepadFocus::isSettled( UnsignedInt stillMs )
 	static UnsignedInt lastSignature = 0, sameSince = 0;
 	Screen screen;
 	UnsignedInt signature = 2166136261u;		// FNV-1a over the screen, the focus, and each widget's id and rectangle
-	const Bool up = screenNow( screen );
+	std::vector<GameWindow *> widgets;
+	// a screen with nothing to focus yet (the shell still loading, a pane not yet shown) is not a menu to press on
+	const Bool up = screenNow( screen ) && (focusables( screen, widgets ), !widgets.empty());
 	if (up)
 	{
 		for (size_t i = 0; i < screen.key.size(); ++i)
 			signature = (signature ^ (UnsignedInt)(unsigned char)screen.key[i]) * 16777619u;
 		signature = (signature ^ (UnsignedInt)theFocusId) * 16777619u;
-		std::vector<GameWindow *> widgets;
-		focusables( screen, widgets );
 		for (size_t i = 0; i < widgets.size(); ++i)
 		{
 			Int x, y, width, height;
