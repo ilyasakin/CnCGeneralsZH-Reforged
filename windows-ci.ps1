@@ -71,6 +71,9 @@ param(
 	[string] $Bundle = "",
 	[string] $Ref = "",
 	[string] $WorkDir = (Join-Path $env:TEMP "zh-windows-ci"),
+	# the game's platform, x64 or ARM64; empty is this machine's own.  An ARM64 machine given x64 cross-builds
+	# the x64 game (build.bat's ZH_PLATFORM) and runs its tests and E1 under Windows' x64 emulation
+	[ValidateSet("", "x64", "ARM64")] [string] $Platform = "",
 	# internal: "desktop" when the script is running its desktop part, and where that part writes its result
 	[string] $Phase = "all",
 	[string] $CheckedOut = "",	# internal: what the -Bundle/-Ref hand-over checked out, for the summary
@@ -89,8 +92,11 @@ if ($Runs.Count -eq 0) { $Runs = @($Seeds | ForEach-Object { "$_@$MaxFrames" }) 
 $ExpectCrc = @($ExpectCrc | ForEach-Object { $_.Split(',') } | Where-Object { $_ -ne "" } |
 	ForEach-Object { $k, $v = $_.Split(':', 2); if ($k -notmatch '@') { $k = "$k@$MaxFrames" }; "${k}:$v" })
 $Root = $PSScriptRoot
-# build.bat's folder: an ARM64 machine builds ARM64 into build-arm64
-$Build = Join-Path $Root $(if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "build-arm64" } else { "build64" })
+# build.bat's folder: ARM64 builds into build-arm64 and x64 into build64; the platform is -Platform's, which
+# build.bat reads from ZH_PLATFORM, or else the machine's own
+if ($Platform -ne "") { $env:ZH_PLATFORM = $Platform }
+$arm64 = if ($Platform -ne "") { $Platform -eq "ARM64" } else { $env:PROCESSOR_ARCHITECTURE -eq "ARM64" }
+$Build = Join-Path $Root $(if ($arm64) { "build-arm64" } else { "build64" })
 $RunDir = Join-Path $Root "GeneralsMD\Run"
 $NoSound = "test_milesaudiomanager|miles_smoke|test_miles_miniaudio|test_binkvideo|bink_smoke"
 $GpuTests = "^(dx9_smoke|dx9_smoke_msaa|test_dx11device)$"
@@ -235,6 +241,7 @@ if ($Bundle -ne "" -or $Ref -ne "") {
 	exit $LASTEXITCODE
 }
 if ($CheckedOut -ne "") { $summary += "checked out: $CheckedOut" }
+if ($Platform -ne "") { $summary += "platform: $Platform, on an $($env:PROCESSOR_ARCHITECTURE) machine" }
 
 if (-not $SkipBuild) {
 	$futureOutputs = Remove-FutureOutputs $Root @($Build, $RunDir)
@@ -285,6 +292,7 @@ $resultFile = Join-Path $WorkDir "desktop-result.json"
 Remove-Item $resultFile, "$resultFile.partial" -ErrorAction SilentlyContinue
 $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Phase desktop -ResultFile `"$resultFile`" -Config $Config -MaxFrames $MaxFrames -WorkDir `"$WorkDir`" -Runs $($Runs -join ',')"
 if ($DataDir -ne "") { $argList += " -DataDir `"$DataDir`"" }
+if ($Platform -ne "") { $argList += " -Platform $Platform" }
 if ($session0) {
 	$user = (Get-CimInstance Win32_ComputerSystem).UserName
 	if (-not $user) { Write-Host "no user is logged on to a desktop: the GPU tests and E1 cannot run"; exit 1 }
@@ -299,7 +307,9 @@ if ($session0) {
 	Start-Sleep -Seconds 2
 	schtasks /delete /tn $task /f | Out-Null
 } else {
-	& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Phase desktop -ResultFile $resultFile -Config $Config -MaxFrames $MaxFrames -WorkDir $WorkDir -Runs ($Runs -join ',') -DataDir $DataDir
+	# -Platform only when given: Windows PowerShell drops an empty argument to a program, which would leave it bare
+	$platformArgs = @(if ($Platform -ne "") { "-Platform", $Platform })
+	& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Phase desktop -ResultFile $resultFile -Config $Config -MaxFrames $MaxFrames -WorkDir $WorkDir -Runs ($Runs -join ',') -DataDir $DataDir @platformArgs
 }
 $desktopTook = "$([int]$phaseClock.Elapsed.TotalSeconds) s"
 if (-not (Test-Path $resultFile)) {
