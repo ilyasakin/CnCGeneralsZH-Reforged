@@ -207,8 +207,9 @@ void movePointerTo( Int x, Int y, UnsignedInt time );
 Bool enterCommandBar( UnsignedInt time );
 void stepCommandBar( GamepadButtonType button, UnsignedInt time );
 
-/// The command bar's buttons shown now, by their centres (ControlBar.cpp's names for them)
-Int commandButtonCentres( ICoord2D *centres, Int max )
+/// The command bar's buttons shown now, by their centres and, given boxes, their rectangles, and, given slots,
+/// their slot numbers (ControlBar.cpp's names for them)
+Int commandButtonCentres( ICoord2D *centres, Int max, GamepadFocus::Box *boxes = NULL, Int *slots = NULL )
 {
 	Int count = 0;
 	for (Int i = 0; i < MAX_COMMANDS_PER_SET && count < max; ++i)
@@ -217,7 +218,19 @@ Int commandButtonCentres( ICoord2D *centres, Int max )
 		snprintf( name, sizeof( name ), "ControlBar.wnd:ButtonCommand%02d", i + 1 );
 		GameWindow *button = findShown( name );
 		if (button != NULL && windowCentre( button, centres[ count ].x, centres[ count ].y ))
+		{
+			if (boxes != NULL)
+			{
+				Int left = 0, top = 0, width = 0, height = 0;
+				button->winGetScreenPosition( &left, &top );
+				button->winGetSize( &width, &height );
+				const GamepadFocus::Box box = { left, top, left + width - 1, top + height - 1 };
+				boxes[ count ] = box;
+			}
+			if (slots != NULL)
+				slots[ count ] = i + 1;
 			++count;
+		}
 	}
 	return count;
 }
@@ -753,11 +766,14 @@ Bool enterCommandBar( UnsignedInt time )
 	return TRUE;
 }
 
-/// Command-bar mode's D-pad: the pointer to the nearest button that way
+/// Command-bar mode's D-pad: the pointer to the next button that way, the bar taken as rows and columns
+/// (GamepadFocus::pickNeighbourBox), its column kept going up and down and its row going left and right
 void stepCommandBar( GamepadButtonType button, UnsignedInt time )
 {
 	ICoord2D centres[ MAX_COMMANDS_PER_SET ];
-	const Int count = commandButtonCentres( centres, MAX_COMMANDS_PER_SET );
+	GamepadFocus::Box boxes[ MAX_COMMANDS_PER_SET ];
+	Int slots[ MAX_COMMANDS_PER_SET ];
+	const Int count = commandButtonCentres( centres, MAX_COMMANDS_PER_SET, boxes, slots );
 	if (count == 0)
 	{
 		theCommandBarMode = FALSE;		// the bar went away (a unit deselected): the D-pad is the D-pad again
@@ -765,9 +781,29 @@ void stepCommandBar( GamepadButtonType button, UnsignedInt time )
 	}
 	const Int dx = button == GAMEPAD_BUTTON_DPAD_LEFT ? -1 : (button == GAMEPAD_BUTTON_DPAD_RIGHT ? 1 : 0);
 	const Int dy = button == GAMEPAD_BUTTON_DPAD_UP ? -1 : (button == GAMEPAD_BUTTON_DPAD_DOWN ? 1 : 0);
-	const Int next = SdlGamepad_pickNeighbour( centres, count, thePointer.shownX, thePointer.shownY, dx, dy );
-	if (next >= 0)
-		movePointerTo( centres[next].x, centres[next].y, time );
+	// the button under the pointer, and the lanes, which start over when the pointer is elsewhere
+	Int from = -1;
+	for (Int i = 0; i < count && from < 0; ++i)
+		if (thePointer.shownX >= boxes[i].left && thePointer.shownX <= boxes[i].right
+				&& thePointer.shownY >= boxes[i].top && thePointer.shownY <= boxes[i].bottom)
+			from = i;
+	static Int laneX = 0, laneY = 0, laneSlot = -1;
+	if (from < 0 || slots[ from ] != laneSlot)
+	{
+		laneX = thePointer.shownX;
+		laneY = thePointer.shownY;
+	}
+	const GamepadFocus::Box point = { thePointer.shownX, thePointer.shownY, thePointer.shownX, thePointer.shownY };
+	const Int next = GamepadFocus::pickNeighbourBox( boxes, count, from >= 0 ? boxes[ from ] : point, dx, dy, dy != 0 ? laneX : laneY );
+	if (next < 0)
+		return;
+	if (dy != 0)
+		laneY = centres[ next ].y;
+	else
+		laneX = centres[ next ].x;
+	laneSlot = slots[ next ];
+	movePointerTo( centres[next].x, centres[next].y, time );
+	DEBUG_LOG(( "GAMEPAD BAR: ControlBar.wnd:ButtonCommand%02d\n", slots[ next ] ));
 }
 
 // GamepadFocus's hooks: the pointer, the left button and the keys, as this layer gives them to the world

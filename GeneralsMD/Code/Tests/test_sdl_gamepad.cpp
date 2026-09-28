@@ -51,6 +51,7 @@
 #include "Common/INI.h"
 #include "GameClient/GamepadAim.h"
 #include "GameClient/GamepadCycle.h"
+#include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadMap.h"
 #include "GameClient/GamepadRadial.h"
@@ -834,6 +835,86 @@ TEST(command_bar_mode_steps_to_the_nearest_button_that_way)
 	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 100, 500, -1, 0 ), -1 );	// nothing left of the first
 	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 250, 500, 0, 1 ), 9 );		// over the gap: the nearest below
 	CHECK_EQ( SdlGamepad_pickNeighbour( centres, count, 300, 550, -1, 0 ), 9 );		// left across the gap on its own row
+}
+
+namespace {
+GamepadFocus::Box box( Int left, Int top, Int width, Int height )
+{
+	const GamepadFocus::Box b = { left, top, left + width - 1, top + height - 1 };
+	return b;
+}
+Int centreX( const GamepadFocus::Box &b ) { return (b.left + b.right) / 2; }
+Int centreY( const GamepadFocus::Box &b ) { return (b.top + b.bottom) / 2; }
+}  // namespace
+
+TEST(the_dpad_takes_the_aligned_widget_before_a_nearer_diagonal_one_and_nothing_outside_the_cone)
+{
+	// a wide button at the top, a narrow one below its right end, and a far one straight below its middle
+	const GamepadFocus::Box boxes[] = { box( 100, 100, 200, 30 ), box( 280, 150, 60, 30 ), box( 150, 400, 100, 30 ),
+		box( 700, 120, 60, 30 ) };
+	// down from the top button, its column its middle (200): the far one in the column wins over the nearer diagonal
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[0], 0, 1, centreX( boxes[0] ) ), 2 );
+	// the same with the column at its right end (310): the narrow one below it is in the column now
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[0], 0, 1, 310 ), 1 );
+	// right from the narrow one (row 165): the far button at 700 is inside its row's reach, the cone
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[1], 1, 0, centreY( boxes[1] ) ), 3 );
+	// up from the far bottom one (column 200): the top button; nothing to its left or right at all
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[2], 0, -1, centreX( boxes[2] ) ), 0 );
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[2], -1, 0, centreY( boxes[2] ) ), -1 );
+	// right from the bottom one: the narrow button is above the 45 degree cone, the far one (28 degrees up) inside it
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[2], 1, 0, centreY( boxes[2] ) ), 3 );
+	// and with the far one moved up out of the cone, nothing
+	GamepadFocus::Box high[] = { boxes[0], boxes[1], boxes[2], box( 400, 60, 60, 30 ) };
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( high, 4, high[2], 1, 0, centreY( high[2] ) ), -1 );
+}
+
+TEST(the_dpad_keeps_its_column_through_a_shorter_row)
+{
+	// three rows: three buttons, one wide one on the left, three again; going down from the right-hand column
+	GamepadFocus::Box boxes[ 7 ];
+	for (Int c = 0; c < 3; ++c)
+	{
+		boxes[ c ] = box( 100 + 150 * c, 100, 120, 30 );
+		boxes[ 4 + c ] = box( 100 + 150 * c, 300, 120, 30 );
+	}
+	boxes[ 3 ] = box( 100, 200, 330, 30 );		// the short row: one wide button, ending 30 pixels short of the right column
+	const Int column = centreX( boxes[ 2 ] );	// the right-hand column, 459
+	const Int middle = GamepadFocus::pickNeighbourBox( boxes, 7, boxes[ 2 ], 0, 1, column );
+	CHECK_EQ( middle, 3 );										// the short row's button, nearer than the right column's next one
+	// from it, the column remembered: the right-hand button of the last row, not the one under the short button
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 7, boxes[ middle ], 0, 1, column ), 6 );
+	// with the lane taken from the short button itself, it would have gone to the middle column
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 7, boxes[ middle ], 0, 1, centreX( boxes[ middle ] ) ), 5 );
+}
+
+TEST(the_dpad_goes_left_and_right_along_its_row)
+{
+	// two rows of three, the lower row a little offset: right keeps the row, never jumping down to it
+	GamepadFocus::Box boxes[ 6 ];
+	for (Int c = 0; c < 3; ++c)
+	{
+		boxes[ c ] = box( 100 + 150 * c, 100, 120, 30 );
+		boxes[ 3 + c ] = box( 130 + 150 * c, 145, 120, 30 );
+	}
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 6, boxes[ 0 ], 1, 0, centreY( boxes[ 0 ] ) ), 1 );
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 6, boxes[ 1 ], 1, 0, centreY( boxes[ 1 ] ) ), 2 );
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 6, boxes[ 2 ], 1, 0, centreY( boxes[ 2 ] ) ), -1 );	// no wrap
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 6, boxes[ 3 ], -1, 0, centreY( boxes[ 3 ] ) ), -1 );	// its row ends
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 6, boxes[ 1 ], 0, 1, centreX( boxes[ 1 ] ) ), 4 );		// down: below it
+}
+
+TEST(the_command_cards_grid_keeps_its_column_going_down)
+{
+	// the command bar: 7 columns by 2 rows, 50 pixels apart, buttons 44 wide, one slot empty in the bottom row
+	GamepadFocus::Box boxes[ 13 ];
+	Int count = 0;
+	for (Int row = 0; row < 2; ++row)
+		for (Int column = 0; column < 7; ++column)
+			if (!(row == 1 && column == 3))
+				boxes[ count++ ] = box( 78 + column * 50, 478 + row * 50, 44, 44 );
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, count, boxes[ 2 ], 0, 1, centreX( boxes[ 2 ] ) ), 9 );	// column 2
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, count, boxes[ 3 ], 0, 1, centreX( boxes[ 3 ] ) ), 9 );	// over the gap: the nearest in the cone
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, count, boxes[ 9 ], 1, 0, centreY( boxes[ 9 ] ) ), 10 );	// across the gap on its row
 }
 
 TEST(aim_assist_picks_the_nearest_point_within_its_radius)

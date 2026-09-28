@@ -97,8 +97,18 @@ public:
 	/// How many times the focus has moved (each "GAMEPAD FOCUS" line): the input script sees whether a press took
 	static UnsignedInt focusChanges( void );
 
-	/** Of count centres, the nearest one from (x, y) in the direction (dx, dy) (one of them 0, the other 1 or
-		* -1), sideways distance counting double; -1 when none */
+	/// A widget's rectangle on the screen, edges inclusive
+	struct Box { Int left, top, right, bottom; };
+
+	/** Where the D-pad goes from the box from, in the direction (dx, dy) (one of them 0, the other 1 or -1): of the
+		* boxes wholly beyond its centre that way and inside the direction's 45 degree cone, the nearest, edge to edge,
+		* with each pixel the lane passes beside a box counting three - the lane being the remembered column's x for
+		* up and down, the row's y for left and right.  -1 when none.  So grids go by rows and columns, a box in the
+		* lane is never skipped for a diagonal one as near, a shorter row's wide box a short way off is passed
+		* through, and nothing outside the cone is picked. */
+	static Int pickNeighbourBox( const Box *boxes, Int count, const Box &from, Int dx, Int dy, Int lane );
+
+	/// pickNeighbourBox over points (the command bar's centres), the lane through (x, y)
 	static Int pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy );
 };
 

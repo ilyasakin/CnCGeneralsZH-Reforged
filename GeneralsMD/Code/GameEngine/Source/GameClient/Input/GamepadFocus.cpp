@@ -294,6 +294,8 @@ void pointAt( GameWindow *window )
 }
 
 UnsignedInt theFocusChanges = 0;
+Int theLaneX = 0, theLaneY = 0;		///< the D-pad's remembered column and row (GamepadFocus::pickNeighbourBox)
+Int theLaneFocus = 0;							///< the widget they were remembered on: the focus moved otherwise, they start over
 
 /// A press held through a transition (GamepadFocus::update)
 struct Held
@@ -561,24 +563,53 @@ GameWindow *GamepadFocus::getFocus( void )
 	return widgets.empty() ? NULL : currentFocus( screen, widgets );
 }
 
-Int GamepadFocus::pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy )
+Int GamepadFocus::pickNeighbourBox( const Box *boxes, Int count, const Box &from, Int dx, Int dy, Int lane )
 {
-	Int best = -1, bestScore = 0;
+	const Int fromX = (from.left + from.right) / 2, fromY = (from.top + from.bottom) / 2;
+	const Bool across = dx != 0;		// left or right: the lane is a row's y; up or down, a column's x
+	Int best = -1, bestScore = 0, bestTie = 0;
 	for (Int i = 0; i < count; ++i)
 	{
-		const Int ox = centres[i].x - x, oy = centres[i].y - y;
-		const Int along = ox * dx + oy * dy;
-		if (along <= 0)
+		const Box &b = boxes[i];
+		if (b.left == from.left && b.top == from.top && b.right == from.right && b.bottom == from.bottom)
+			continue;		// the box it starts from
+		// wholly beyond the start's centre that way: a box beside it, overlapping, is up or down of it, not left
+		const Bool beyond = dx > 0 ? b.left >= fromX : dx < 0 ? b.right <= fromX : dy > 0 ? b.top >= fromY : b.bottom <= fromY;
+		if (!beyond)
 			continue;
-		const Int across = abs( ox * dy - oy * dx );
-		const Int score = along + 2 * across;
-		if (best < 0 || score < bestScore)
+		const Int x = (b.left + b.right) / 2, y = (b.top + b.bottom) / 2;
+		const Int along = across ? (x - fromX) * dx : (y - fromY) * dy;
+		Int gap = dx > 0 ? b.left - from.right : dx < 0 ? from.left - b.right : dy > 0 ? b.top - from.bottom : from.top - b.bottom;
+		gap = gap < 0 ? 0 : gap;
+		// how far the lane passes beside the box (0: through it), and the cone: that no further than the box is along
+		const Int low = across ? b.top : b.left, high = across ? b.bottom : b.right;
+		const Int off = lane < low ? low - lane : (lane > high ? lane - high : 0);
+		if (off > along)
+			continue;		// outside the 45 degree cone
+		// a step aside costs three steps along: a box in the lane wins over any as near or nearer beside it, and a
+		// wide box a short way off (a shorter row) over one further on in the lane
+		const Int score = gap + 3 * off;
+		const Int sideways = abs( (across ? y : x) - lane );
+		if (best < 0 || score < bestScore || (score == bestScore && sideways < bestTie))
 		{
 			best = i;
 			bestScore = score;
+			bestTie = sideways;
 		}
 	}
 	return best;
+}
+
+Int GamepadFocus::pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy )
+{
+	std::vector<Box> boxes( count > 0 ? count : 0 );
+	for (Int i = 0; i < count; ++i)
+	{
+		boxes[i].left = boxes[i].right = centres[i].x;
+		boxes[i].top = boxes[i].bottom = centres[i].y;
+	}
+	const Box from = { x, y, x, y };
+	return count > 0 ? pickNeighbourBox( &boxes[0], count, from, dx, dy, dx != 0 ? y : x ) : -1;
 }
 
 Bool GamepadFocus::act( Action action )
@@ -635,15 +666,43 @@ Bool GamepadFocus::act( Action action )
 				keyTo( focus, key );
 				return TRUE;
 			}
+			// a closed combo box: left and right step its choice, as a player's pick from its list does (GCM_SELECTED)
+			const Bool isCombo = focus != NULL && (focus->winGetStyle() & GWS_COMBO_BOX);
+			if (isCombo && !vertical && !dropdownOpen)
+			{
+				Int pos = -1;
+				GadgetComboBoxGetSelectedPos( focus, &pos );
+				const Int next = pos + (action == NAV_RIGHT ? 1 : -1);
+				if (next >= 0 && next < GadgetComboBoxGetLength( focus ))
+					GadgetComboBoxSetSelectedPos( focus, next );
+				return TRUE;
+			}
 			if (focus == NULL)
 				return TRUE;
 			std::vector<ICoord2D> centres;
+			std::vector<Box> boxes;
 			for (size_t i = 0; i < widgets.size(); ++i)
+			{
 				centres.push_back( centreOf( widgets[i] ) );
+				Int x, y, width, height;
+				rectOf( widgets[i], x, y, width, height );
+				const Box box = { x, y, x + width - 1, y + height - 1 };
+				boxes.push_back( box );
+			}
 			const ICoord2D from = centreOf( focus );
+			Int fx, fy, fw, fh;
+			rectOf( focus, fx, fy, fw, fh );
+			const Box fromBox = { fx, fy, fx + fw - 1, fy + fh - 1 };
 			const Int dx = action == NAV_LEFT ? -1 : action == NAV_RIGHT ? 1 : 0;
 			const Int dy = action == NAV_UP ? -1 : action == NAV_DOWN ? 1 : 0;
-			Int next = pickNeighbour( &centres[0], (Int)centres.size(), from.x, from.y, dx, dy );
+			// the lanes: the column kept while going up and down, the row while going left and right, remembered
+			// through a shorter row or column, and taken afresh from the focus when it moved by other means
+			if (focus->winGetWindowId() != theLaneFocus)
+			{
+				theLaneX = from.x;
+				theLaneY = from.y;
+			}
+			Int next = pickNeighbourBox( &boxes[0], (Int)boxes.size(), fromBox, dx, dy, vertical ? theLaneX : theLaneY );
 			if (next < 0 && vertical && isMainMenu( screen ))
 			{
 				// the main menu's column wraps: the far end of the same column
@@ -654,7 +713,14 @@ Bool GamepadFocus::act( Action action )
 						next = (Int)i;
 			}
 			if (next >= 0)
+			{
 				setFocus( widgets[ next ] );
+				if (vertical)
+					theLaneY = centres[ next ].y;
+				else
+					theLaneX = centres[ next ].x;
+				theLaneFocus = widgets[ next ]->winGetWindowId();
+			}
 			return TRUE;
 		}
 
