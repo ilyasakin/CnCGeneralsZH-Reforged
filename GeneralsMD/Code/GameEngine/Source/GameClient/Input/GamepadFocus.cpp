@@ -568,7 +568,9 @@ Bool GamepadFocus::isSettled( UnsignedInt stillMs )
 		}
 	}
 	const UnsignedInt now = Clock_Milliseconds();
-	if (!up || signature != lastSignature)
+	// a press still held for the transition's end has not been answered yet: the menu is not standing still (at
+	// 10 frames a second the hold's 45 frames outlast a script's 2-second wait, and a press made then was dropped)
+	if (!up || signature != lastSignature || theHeld.held)
 	{
 		lastSignature = signature;
 		sameSince = now;

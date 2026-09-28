@@ -91,7 +91,8 @@ public:
 
 	/** TRUE once a menu is up and its screen, its focus and every focusable widget's place have stood still for
 		* stillMs: the input script's "s" lines wait for it, so a scripted press follows what the menu has done,
-		* not the clock (a pane still sliding in, or a focus change not yet made, under a loaded machine) */
+		* not the clock (a pane still sliding in, or a focus change not yet made, under a loaded machine).  Never
+		* while a press is held for a transition's end */
 	static Bool isSettled( UnsignedInt stillMs );
 
 	/// How many times the focus has moved (each "GAMEPAD FOCUS" line): the input script sees whether a press took
