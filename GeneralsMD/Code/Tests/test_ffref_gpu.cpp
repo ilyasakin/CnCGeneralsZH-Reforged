@@ -34,6 +34,9 @@
 
 #include "PosixDevice9.h"
 #include "SdlGpuFrame.h"
+#if defined(_WIN32)
+#undef DrawState	// winuser.h's, which windows.h brings first for the -d3d12 device (X1); FFRef has its own
+#endif
 #include "ffreference/ffreference.h"
 
 #include <SDL3/SDL.h>
@@ -43,7 +46,7 @@
 #include <string.h>
 #include <vector>
 
-static const int SIZE = 64;
+static const int TARGET_SIZE = 64;
 static int failures = 0;
 static int scenarios = 0;
 static int known_findings = 0;
@@ -123,7 +126,7 @@ public:
 		// the device's own defaults come back by setting every state the reference defaults to.  That is
 		// a copy of the reference's defaults into the device, which the scenarios' first draw (defaults
 		// only) checks from the other side.
-		State.setDefaults(SIZE, SIZE);
+		State.setDefaults(TARGET_SIZE, TARGET_SIZE);
 		for (int s = 0; s < 256; ++s) {
 			if (s == D3DRS_ZENABLE || known_render_state(s)) Device->SetRenderState((D3DRENDERSTATETYPE)s, State.renderState[s]);
 		}
@@ -146,7 +149,7 @@ public:
 		State.material.specular = colour(material.Specular);
 		State.material.emissive = colour(material.Emissive);
 		State.material.power = 0.0;
-		Reference.create(SIZE, SIZE, true);
+		Reference.create(TARGET_SIZE, TARGET_SIZE, true);
 		Reference.clear(FFRef::colorFromD3D(clear_argb), 1.0, 0);
 		Device->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, clear_argb, 1.0f, 0);
 	}
@@ -292,7 +295,7 @@ public:
 		++scenarios;
 		SdlGpuFrame *gpu = Device->Get_Gpu();
 		std::vector<uint8_t> bgra;
-		if (!gpu->Read_Back(gpu->Back_Buffer(), SIZE, SIZE, bgra)) {
+		if (!gpu->Read_Back(gpu->Back_Buffer(), TARGET_SIZE, TARGET_SIZE, bgra)) {
 			++failures;
 			printf("FAIL %s: no read-back\n", label);
 			return;
@@ -304,7 +307,7 @@ public:
 			rgba[i + 2] = bgra[i];
 			rgba[i + 3] = bgra[i + 3];
 		}
-		const FFRef::Comparison comparison = FFRef::compare(Reference, &rgba[0], SIZE * 4);
+		const FFRef::Comparison comparison = FFRef::compare(Reference, &rgba[0], TARGET_SIZE * 4);
 		if (getenv("FFREF_VERBOSE") != NULL || (comparison.passed() == expect_outside && known == NULL)) {
 			FFRef::print(comparison, stdout, label);
 		}
@@ -319,8 +322,8 @@ public:
 					comparison.worst * 255.0);
 				const int x = comparison.worstX, y = comparison.worstY;
 				if (x >= 0) {
-					const FFRef::Color &n = Reference.color[y * SIZE + x];
-					const uint8_t *g = &rgba[(y * SIZE + x) * 4];
+					const FFRef::Color &n = Reference.color[y * TARGET_SIZE + x];
+					const uint8_t *g = &rgba[(y * TARGET_SIZE + x) * 4];
 					printf(" at (%d, %d): gpu %u %u %u, reference %.0f %.0f %.0f", x, y, g[0], g[1], g[2], n.r * 255,
 						n.g * 255, n.b * 255);
 				}
@@ -332,8 +335,8 @@ public:
 			++failures;
 			const int x = comparison.worstX, y = comparison.worstY;
 			if (x >= 0) {
-				const FFRef::Color &n = Reference.color[y * SIZE + x];
-				const uint8_t *g = &rgba[(y * SIZE + x) * 4];
+				const FFRef::Color &n = Reference.color[y * TARGET_SIZE + x];
+				const uint8_t *g = &rgba[(y * TARGET_SIZE + x) * 4];
 				printf("FAIL %s%s: worst (%d, %d) gpu %u %u %u %u, reference %.1f %.1f %.1f %.1f\n", label,
 					expect_outside ? " (an armed control passed)" : "", x, y, g[0], g[1], g[2], g[3],
 					n.r * 255, n.g * 255, n.b * 255, n.a * 255);
@@ -819,14 +822,14 @@ static void lod_probe(Harness &h, float u_scale, float v_scale)
 	h.draw(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1, D3DPT_TRIANGLELIST, floor);
 	SdlGpuFrame *gpu = h.Device->Get_Gpu();
 	std::vector<uint8_t> bgra;
-	gpu->Read_Back(gpu->Back_Buffer(), SIZE, SIZE, bgra);
+	gpu->Read_Back(gpu->Back_Buffer(), TARGET_SIZE, TARGET_SIZE, bgra);
 	double worst = 0.0, sum = 0.0;
 	int count = 0, worst_x = -1, worst_y = -1;
-	for (int y = 0; y < SIZE; ++y) {
-		for (int x = 0; x < SIZE; ++x) {
-			const double reference = h.Reference.color[y * SIZE + x].r * 255.0 / 36.0;
-			const double measured = bgra[(y * SIZE + x) * 4 + 2] / 36.0;
-			if (h.Reference.color[y * SIZE + x].r <= 0.0 || h.Reference.color[y * SIZE + x].r >= 216.0 / 255.0) continue;
+	for (int y = 0; y < TARGET_SIZE; ++y) {
+		for (int x = 0; x < TARGET_SIZE; ++x) {
+			const double reference = h.Reference.color[y * TARGET_SIZE + x].r * 255.0 / 36.0;
+			const double measured = bgra[(y * TARGET_SIZE + x) * 4 + 2] / 36.0;
+			if (h.Reference.color[y * TARGET_SIZE + x].r <= 0.0 || h.Reference.color[y * TARGET_SIZE + x].r >= 216.0 / 255.0) continue;
 			const double d = measured - reference;
 			sum += d;
 			++count;
@@ -858,8 +861,8 @@ int main()
 	IDirect3D9 *d3d = Direct3DCreate9(D3D_SDK_VERSION);
 	D3DPRESENT_PARAMETERS parameters;
 	memset(&parameters, 0, sizeof(parameters));
-	parameters.BackBufferWidth = SIZE;
-	parameters.BackBufferHeight = SIZE;
+	parameters.BackBufferWidth = TARGET_SIZE;
+	parameters.BackBufferHeight = TARGET_SIZE;
 	parameters.BackBufferFormat = D3DFMT_A8R8G8B8;
 	parameters.Windowed = 1;
 	parameters.EnableAutoDepthStencil = 1;

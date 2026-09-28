@@ -86,7 +86,9 @@ const SdlProgram &SdlProgramCache::Make(std::map<std::string, SdlProgram> &cache
 		const Uint64 start = SDL_GetTicksNS();
 		std::vector<unsigned char> spirv;
 		std::string log;
-		if (!SDL3_Compile_HLSL_To_SPIRV(hlsl, vertex_stage, spirv, log)) {
+		const bool compiled = SDL3_Compile_HLSL_To_SPIRV(hlsl, vertex_stage, spirv, log);
+		Dump_Program(key, vertex_stage, hlsl, compiled ? &spirv : NULL);
+		if (!compiled) {
 			program.Refusal = "glslang: " + log;
 		}
 		else {
@@ -112,6 +114,40 @@ const SdlProgram &SdlProgramCache::Make(std::map<std::string, SdlProgram> &cache
 	Sdl_Read_Slot_Lines(hlsl, program.SamplerSlots, program.SlotTexture, program.SlotSampler);
 	++Built;
 	return program;
+}
+
+// ZH_GPU_DUMP_PROGRAMS=<folder>: every program as the generator wrote it (N-v.hlsl, N-p.hlsl) and, where
+// the build has SPIRV-Cross's HLSL (Windows, -d3d12), as d3dcompiler is given it (N-v.d3d.hlsl), with
+// programs.txt naming each N's key.  For reading what a backend refuses; off unless asked for.
+void SdlProgramCache::Dump_Program(const std::string &key, bool vertex_stage, const std::string &hlsl,
+	const std::vector<unsigned char> *spirv)
+{
+	static const char *const folder = getenv("ZH_GPU_DUMP_PROGRAMS");
+	if (folder == NULL || folder[0] == '\0') {
+		return;
+	}
+	static unsigned dumped = 0;
+	const unsigned index = ++dumped;
+	const char stage = vertex_stage ? 'v' : 'p';
+	char path[1024];
+	snprintf(path, sizeof(path), "%s/%u-%c.hlsl", folder, index, stage);
+	if (FILE *file = fopen(path, "wb")) {
+		fwrite(hlsl.data(), 1, hlsl.size(), file);
+		fclose(file);
+	}
+	std::string translated, log;
+	if (spirv != NULL && SDL3_Translate_SPIRV_To_HLSL(*spirv, vertex_stage, translated, log)) {
+		snprintf(path, sizeof(path), "%s/%u-%c.d3d.hlsl", folder, index, stage);
+		if (FILE *file = fopen(path, "wb")) {
+			fwrite(translated.data(), 1, translated.size(), file);
+			fclose(file);
+		}
+	}
+	snprintf(path, sizeof(path), "%s/programs.txt", folder);
+	if (FILE *file = fopen(path, "ab")) {
+		fprintf(file, "%u %c %s\n", index, stage, key.c_str());
+		fclose(file);
+	}
 }
 
 std::string SdlProgramCache::Key_Of(const SDL_GPUShader *shader) const
