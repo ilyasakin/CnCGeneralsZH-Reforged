@@ -2039,6 +2039,14 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(gamepad_menu_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # G1's D-pad: fixed paths over the main menu, every Options page, skirmish setup and a match's command card,
+  # and the focus must land where the recorded lists say (Tools/gamepad-dpad-check.sh).
+  add_test(NAME gamepad_dpad_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-dpad-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(gamepad_dpad_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1200)
+  if(ZH_GAME_DATA)
+    set_tests_properties(gamepad_dpad_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # P1 step 3: the staged overlay, <build>/overlay - what the app bundle will copy verbatim and what the
   # harnesses pass with -overlay - and <build>/overlay-dev, the -scenario and -cinema folders that never
   # ship.  Tools/stage-overlay.sh is the one place the list lives.  Small (10 MB; the art is linked).
