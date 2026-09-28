@@ -644,7 +644,7 @@ void GamepadFocus::draw( void )
 		GameFont *glyphFont = NULL;
 		UnicodeString glyph;
 		if (TheDisplayStringManager == NULL || wordFont == NULL
-				|| !GamepadHints::glyphFor( GamepadHints::getShown(), items[i].button, points * 3 / 2, glyphFont, glyph ))
+				|| !GamepadHints::glyphFor( GamepadHints::getShown(), items[i].button, points * 2, glyphFont, glyph ))
 			continue;
 		if (glyphs[i] == NULL)
 			glyphs[i] = TheDisplayStringManager->newDisplayString();

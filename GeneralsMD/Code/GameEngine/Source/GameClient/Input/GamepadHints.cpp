@@ -495,7 +495,7 @@ void GamepadHints::drawTooltipCorner( const IRegion2D &box )
 		return;
 	GameFont *font = NULL;
 	UnicodeString glyph;
-	const Int pointSize = TheDisplay->getHeight() / 40 > 12 ? TheDisplay->getHeight() / 40 : 12;
+	const Int pointSize = TheDisplay->getHeight() / 30 > 16 ? TheDisplay->getHeight() / 30 : 16;
 	if (!glyphFor( theShown, GAMEPAD_BUTTON_SOUTH, pointSize, font, glyph ))
 		return;
 	// one string, handed a new glyph only when the pad's family changes: a display string keeps the texture

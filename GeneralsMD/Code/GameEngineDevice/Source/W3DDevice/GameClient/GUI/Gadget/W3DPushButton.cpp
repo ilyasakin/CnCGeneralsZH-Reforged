@@ -185,7 +185,9 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	// answer (GamepadHints.h); with the keyboard and mouse in use every button reads as it always did
 	GameFont *glyphFont = NULL;
 	UnicodeString glyphText;
-	const Int glyphPoints = font != NULL ? font->pointSize * 3 / 2 : 12;
+	// twice the word's size: a glyph's ink is under half its em, so this puts it at about 1.3 times the word's
+	// capitals, where console games draw their button prompts
+	const Int glyphPoints = font != NULL ? font->pointSize * 2 : 16;
 	Int glyphButton = GAMEPAD_BUTTON_NONE;
 	const GamepadHints::Hint hint = GamepadHints::hintFor( window, glyphPoints, glyphFont, glyphText, &glyphButton );
 	if( hint == GamepadHints::HINT_HIDE )
