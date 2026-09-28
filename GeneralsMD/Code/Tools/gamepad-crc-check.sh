@@ -112,43 +112,47 @@ OVERLAY="$WORK/overlay"
 "$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
 
 # ---- the two scripts: the same commands on the same frames ----------------------------------------
+# A click's release follows its press in the same pass ("n", SdlInputScript.h), pad and hand alike: EA tells a
+# click from a drag by the wall-clock time between them (Mouse::isClick, m_dragToleranceMS), and a release two
+# logic frames later became a drag on a loaded worker, a different match (seen on Linux: every case at another
+# CRC, the no-input control unchanged).  The shoulders and RT stay held across frames: their holds are the input.
 cat > "$WORK/pad.txt" <<'SCRIPT'
 60 mouse move 512 384
 90 pad LeftPaddle1 down
-92 pad LeftPaddle1 up
+n pad LeftPaddle1 up
 120 pad West down
-122 pad West up
+n pad West up
 150 pad RightShoulder down
 152 pad DPadUp down
-154 pad DPadUp up
+n pad DPadUp up
 156 pad RightShoulder up
 200 mouse move 700 500
 205 pad North down
-207 pad North up
+n pad North up
 210 pad West down
-212 pad West up
+n pad West up
 298 pad LeftShoulder down
 300 pad RightShoulder down
-302 pad RightShoulder up
+n pad RightShoulder up
 304 pad LeftShoulder up
 SCRIPT
 cat > "$WORK/hand.txt" <<'SCRIPT'
 60 mouse move 512 384
 90 key I down
-92 key I up
+n key I up
 120 mouse right down 512 384
-122 mouse right up 512 384
+n mouse right up 512 384
 150 key Left_Ctrl down
 152 key 1 down
-154 key 1 up
+n key 1 up
 156 key Left_Ctrl up
 200 mouse move 700 500
 205 key F down
-207 key F up
+n key F up
 210 mouse left down 700 500
-212 mouse left up 700 500
+n mouse left up 700 500
 300 key S down
-302 key S up
+n key S up
 SCRIPT
 
 # Every run is compared at -maxframes' own frame, from the CRC the engine logs as the logic finishes it
@@ -177,6 +181,16 @@ run_game() {	# run_game <name> [script [frames]]: sets RUN_CRC and RUN_FRAME (at
 	RUN_FRAME="$(printf '%s' "$line" | sed -n 's/.*HEADLESS CRC AT LIMIT: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\2/p')"
 	RUN_STOP="$(grep -a 'HEADLESS CRC: 0x' "$log" | tail -1 | sed -n 's/.*HEADLESS CRC: 0x[0-9A-Fa-f]* at frame \([0-9]*\).*/\1/p')"
 	RUN_PLAYED="$(grep -a 'INPUT SCRIPT: frame ' "$log" | grep -a -c -v 'not understood')"
+	# every action keyed to a logic frame must have been played on that frame, loaded worker or not
+	RUN_OFF=0
+	if [ -n "$script" ]; then
+		local frame rest
+		while read -r frame rest; do
+			grep -a -q -F "INPUT SCRIPT: frame $frame: $frame $rest" "$log" || RUN_OFF=$(( RUN_OFF + 1 ))
+		done < <(grep -E '^[0-9]+ ' "$script")
+	fi
+	[ "$RUN_OFF" -eq 0 ] || echo "$1: $RUN_OFF scripted action(s) not played on their own logic frame"
+	OFF_TOTAL=$(( ${OFF_TOTAL:-0} + RUN_OFF ))
 }
 
 OVERSHOOT=1; run_game pad "$WORK/pad.txt";   PAD_CRC="$RUN_CRC"; PAD_FRAME="$RUN_FRAME"; PAD_STOP="$RUN_STOP"; PAD_PLAYED="$RUN_PLAYED"; PAD_STATUS="$RUN_STATUS"
@@ -215,7 +229,7 @@ fi
 336 pad axis RightTrigger -32768
 360 mouse move RADIAL_X RADIAL_Y
 370 pad South down
-372 pad South up
+n pad South up
 SCRIPT
 } | sed "s/RADIAL_X RADIAL_Y/$RADIAL_SITE/" > "$WORK/pad-radial.txt"
 run_game padradial "$WORK/pad-radial.txt"
@@ -224,8 +238,8 @@ PRESSED="$(grep -a 'GAMEPAD RADIAL: pressed' "$EXEDIR/${TAG}padradialDebugLogFil
 BUTTON_AT="$(printf '%s' "$PRESSED" | sed -n 's/.*centre \([0-9]*\),\([0-9]*\).*/\1 \2/p')"
 HR_CRC=""; HR_FRAME=""; HR_PLAYED=0; HR_STATUS=""
 if [ -n "$BUTTON_AT" ]; then
-	{ cat "$WORK/hand.txt"; printf '%s\n' "336 mouse move $BUTTON_AT" "336 mouse left down $BUTTON_AT" "338 mouse left up $BUTTON_AT" \
-		"360 mouse move $RADIAL_SITE" "370 mouse left down $RADIAL_SITE" "372 mouse left up $RADIAL_SITE"; } > "$WORK/hand-radial.txt"
+	{ cat "$WORK/hand.txt"; printf '%s\n' "336 mouse move $BUTTON_AT" "336 mouse left down $BUTTON_AT" "n mouse left up $BUTTON_AT" \
+		"360 mouse move $RADIAL_SITE" "370 mouse left down $RADIAL_SITE" "n mouse left up $RADIAL_SITE"; } > "$WORK/hand-radial.txt"
 	run_game handradial "$WORK/hand-radial.txt"
 	HR_CRC="$RUN_CRC"; HR_FRAME="$RUN_FRAME"; HR_PLAYED="$RUN_PLAYED"; HR_STATUS="$RUN_STATUS"
 fi
@@ -258,7 +272,7 @@ fi
 { cat "$WORK/pad-radial.txt"; cat <<'SCRIPT'
 400 pad Back down
 402 pad RightShoulder down
-404 pad RightShoulder up
+n pad RightShoulder up
 406 pad Back up
 420 pad axis RightTrigger 32767
 422 pad axis LeftY -32767
@@ -276,8 +290,8 @@ CC_BUTTON="$(grep -a 'GAMEPAD RADIAL: pressed' "$EXEDIR/${TAG}padcycleDebugLogFi
 	| sed -n 's/.*centre \([0-9]*\),\([0-9]*\).*/\1 \2/p')"
 HC_CRC=""; HC_FRAME=""; HC_PLAYED=0; HC_STATUS=""
 if [ -n "$CC_BUTTON" ] && [ -n "$CC_AT" ] && [ -f "$WORK/hand-radial.txt" ]; then
-	{ cat "$WORK/hand-radial.txt"; printf '%s\n' "400 mouse move $CC_AT" "402 mouse left down $CC_AT" "404 mouse left up $CC_AT" \
-		"426 mouse move $CC_BUTTON" "426 mouse left down $CC_BUTTON" "428 mouse left up $CC_BUTTON"; } > "$WORK/hand-cycle.txt"
+	{ cat "$WORK/hand-radial.txt"; printf '%s\n' "400 mouse move $CC_AT" "402 mouse left down $CC_AT" "n mouse left up $CC_AT" \
+		"426 mouse move $CC_BUTTON" "426 mouse left down $CC_BUTTON" "n mouse left up $CC_BUTTON"; } > "$WORK/hand-cycle.txt"
 	run_game handcycle "$WORK/hand-cycle.txt" "$CYCLE_FRAMES"
 	HC_CRC="$RUN_CRC"; HC_FRAME="$RUN_FRAME"; HC_PLAYED="$RUN_PLAYED"; HC_STATUS="$RUN_STATUS"
 fi
@@ -297,6 +311,11 @@ elif [ "$PC_CRC" = "$RC_CRC" ]; then
 	echo "FAIL: the dozer changed nothing (the radial run to the same frame ends the same), so the agreement proves nothing"; status=1
 else
 	echo "PASS: the base chord selects as a click on the building does"
+fi
+if [ "${OFF_TOTAL:-0}" -ne 0 ]; then
+	echo "FAIL: $OFF_TOTAL scripted action(s) were not played on the logic frame the script names"; status=1
+else
+	echo "every scripted action was played on the logic frame the script names"
 fi
 if ! verify_install; then exit 99; fi
 echo "the install is unchanged"
