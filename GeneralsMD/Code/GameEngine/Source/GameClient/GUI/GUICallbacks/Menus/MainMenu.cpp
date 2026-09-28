@@ -1712,6 +1712,12 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 
 }  // end MainMenuSystem
 
+/// G1 (GamepadFocus): the pad holds a press while this is FALSE, and presses it once it is TRUE again
+Bool MainMenuTakesPresses( void )
+{
+	return !dontAllowTransitions;
+}
+
 void diffReverseSide( void )
 {
 	switch (showSide) {

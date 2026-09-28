@@ -44,6 +44,7 @@
 // Main Menu --------------------------------------------------------------------------------------
 extern void MainMenuInit( WindowLayout *layout, void *userData );
 extern void MainMenuUpdate( WindowLayout *layout, void *userData );
+extern Bool MainMenuTakesPresses( void );		///< G1: FALSE while a transition makes the main menu drop its buttons' presses
 extern void MainMenuShutdown( WindowLayout *layout, void *userData );
 extern WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 extern WindowMsgHandledType MainMenuInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );

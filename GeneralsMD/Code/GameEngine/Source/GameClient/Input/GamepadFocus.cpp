@@ -33,6 +33,7 @@
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GameWindowTransitions.h"
+#include "GameClient/GUICallbacks.h"
 #include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/KeyDefs.h"
@@ -305,10 +306,13 @@ Held theHeld = { FALSE, GamepadFocus::BACK, std::string(), 0 };
 UnsignedInt theTransitionSince = 0;		///< when the shell's transition handler last began running, 0 while finished
 
 /// The shell is running a transition (the menus drop a press meanwhile), and began it under HOLD_MS ago: a
-/// transition that never reports finished (one of the main menu's panes) is not waited on
-Bool shellLocked( UnsignedInt now )
+/// transition that never reports finished (one of the main menu's panes) is not waited on.  On the main menu its
+/// own flag says it (MainMenuTakesPresses): it lets go as a pane's transition ends and starts the side's logo
+/// transition at once, so the transition handler seen from here would look busy past the moment presses work.
+Bool shellLocked( UnsignedInt now, Bool mainMenu )
 {
-	const Bool running = TheTransitionHandler != NULL && !TheTransitionHandler->isFinished();
+	const Bool running = mainMenu ? !MainMenuTakesPresses()
+		: (TheTransitionHandler != NULL && !TheTransitionHandler->isFinished());
 	if (!running)
 	{
 		theTransitionSince = 0;
@@ -463,7 +467,7 @@ void GamepadFocus::update( void )
 		DEBUG_LOG(( "GAMEPAD HELD: %s dropped, the transition outlasted %d ms\n", actionName( theHeld.action ), (Int)HOLD_MS ));
 		return;
 	}
-	if (shellLocked( now ))
+	if (shellLocked( now, isMainMenu( screen ) ))
 		return;
 	const Action action = theHeld.action;
 	theHeld.held = FALSE;
@@ -510,7 +514,8 @@ Bool GamepadFocus::isSettled( UnsignedInt stillMs )
 	// the menus ignore a press while a transition runs (MainMenu.cpp's dontAllowTransitions), even with every
 	// widget in its place; one pane's transition never reports finished, so a long enough stillness stands in
 	const UnsignedInt TRANSITION_GIVE_UP_MS = 3000;
-	const Bool moving = (TheTransitionHandler != NULL && !TheTransitionHandler->isFinished())
+	const Bool moving = (isMainMenu( screen ) ? !MainMenuTakesPresses()
+			: (TheTransitionHandler != NULL && !TheTransitionHandler->isFinished()))
 		|| (TheShell != NULL && !TheShell->isAnimFinished());
 	return now - sameSince >= (moving ? TRANSITION_GIVE_UP_MS : stillMs);
 }
@@ -567,7 +572,7 @@ Bool GamepadFocus::act( Action action )
 	if (!screenNow( screen ))
 		return FALSE;
 	const UnsignedInt now = Clock_Milliseconds();
-	if ((action == ACCEPT_DOWN || action == BACK) && !getenv( "ZH_TEST_NO_HOLD" ) && shellLocked( now ))
+	if ((action == ACCEPT_DOWN || action == BACK) && !getenv( "ZH_TEST_NO_HOLD" ) && shellLocked( now, isMainMenu( screen ) ))
 	{
 		theHeld.held = TRUE;
 		theHeld.action = action;
