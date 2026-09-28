@@ -23,6 +23,7 @@
 
 #include "GameClient/Color.h"
 #include "GameClient/Display.h"
+#include "GameClient/GameClient.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/Gadget.h"
@@ -300,26 +301,34 @@ struct Held
 	Bool held;
 	GamepadFocus::Action action;
 	std::string screen;
-	UnsignedInt at;
+	UnsignedInt atFrame, atMs;
 };
-Held theHeld = { FALSE, GamepadFocus::BACK, std::string(), 0 };
-UnsignedInt theTransitionSince = 0;		///< when the shell's transition handler last began running, 0 while finished
+Held theHeld = { FALSE, GamepadFocus::BACK, std::string(), 0, 0 };
+UnsignedInt theTransitionSince = 0;		///< the client frame the shell's transition handler last began running on, 0 while finished
+
+/** The client's frame: the shell's transitions step once a frame (WindowTransitions.ini counts FrameDelay in frames),
+	* so the waits on them are counted in frames too; on a slow machine a transition takes longer in wall time */
+UnsignedInt clientFrame( void )
+{
+	return TheGameClient != NULL ? TheGameClient->getFrame() + 1 : 1;		// never 0, which means "none"
+}
 
 /// The shell is running a transition (a pane's buttons still scaling in drop a press, and so does the main
-/// menu's own lock), and began it under HOLD_MS ago: a transition that never reports finished (one of the main
+/// menu's own lock), and began it under HOLD_FRAMES ago: a transition that never reports finished (one of the main
 /// menu's panes) is not waited on.  The main menu's flag alone (MainMenuTakesPresses) is not enough: measured,
 /// it was already clear while the difficulty pane's Back still dropped the click.
-Bool shellLocked( UnsignedInt now )
+Bool shellLocked( void )
 {
 	const Bool running = TheTransitionHandler != NULL && !TheTransitionHandler->isFinished();
+	const UnsignedInt frame = clientFrame();
 	if (!running)
 	{
 		theTransitionSince = 0;
 		return FALSE;
 	}
 	if (theTransitionSince == 0)
-		theTransitionSince = now;
-	return now - theTransitionSince < (UnsignedInt)GamepadFocus::HOLD_MS;
+		theTransitionSince = frame;
+	return frame - theTransitionSince < (UnsignedInt)GamepadFocus::HOLD_FRAMES;
 }
 
 const char *actionName( GamepadFocus::Action action )
@@ -460,16 +469,16 @@ void GamepadFocus::update( void )
 		DEBUG_LOG(( "GAMEPAD HELD: %s dropped, the screen changed\n", actionName( theHeld.action ) ));
 		return;
 	}
-	// pressed as the transition ends, or at HOLD_MS at the latest: the main menu starts a side's logo transition
-	// as its pane's ends, so the handler can stay busy past the moment a click works again (seen on the M3 Pro Mac: the
-	// held B pressed at the cap went through)
+	// pressed as the transition ends, or HOLD_FRAMES after the press at the latest: the main menu starts a side's
+	// logo transition as its pane's ends, so the handler can stay busy past the moment a click works again (seen on
+	// the M3 Pro Mac: the held B pressed at the cap went through)
 	const Bool running = TheTransitionHandler != NULL && !TheTransitionHandler->isFinished();
-	if (running && now - theHeld.at < (UnsignedInt)HOLD_MS)
+	if (running && clientFrame() - theHeld.atFrame < (UnsignedInt)HOLD_FRAMES)
 		return;
 	const Action action = theHeld.action;
 	theHeld.held = FALSE;
-	DEBUG_LOG(( "GAMEPAD HELD: %s pressed now, %u ms after the press, %s\n", actionName( action ), now - theHeld.at,
-		running ? "at the cap" : "the transition over" ));
+	DEBUG_LOG(( "GAMEPAD HELD: %s pressed now, %u frames (%u ms) after the press, %s\n", actionName( action ),
+		clientFrame() - theHeld.atFrame, now - theHeld.atMs, running ? "at the cap" : "the transition over" ));
 	act( action );
 	if (action == ACCEPT_DOWN)
 		act( ACCEPT_UP );
@@ -482,7 +491,7 @@ UnsignedInt GamepadFocus::focusChanges( void )
 
 Bool GamepadFocus::isSettled( UnsignedInt stillMs )
 {
-	static UnsignedInt lastSignature = 0, sameSince = 0;
+	static UnsignedInt lastSignature = 0, sameSince = 0, sameSinceFrame = 0;
 	Screen screen;
 	UnsignedInt signature = 2166136261u;		// FNV-1a over the screen, the focus, and each widget's id and rectangle
 	std::vector<GameWindow *> widgets;
@@ -507,15 +516,22 @@ Bool GamepadFocus::isSettled( UnsignedInt stillMs )
 	{
 		lastSignature = signature;
 		sameSince = now;
+		sameSinceFrame = clientFrame();
 		return FALSE;
 	}
 	// the menus ignore a press while a transition runs (MainMenu.cpp's dontAllowTransitions), even with every
 	// widget in its place; one pane's transition never reports finished, so a long enough stillness stands in
-	const UnsignedInt TRANSITION_GIVE_UP_MS = 3000;
+	// counted in frames as well as time: the shell's transitions step once a frame, so a slow machine (or a loaded
+	// worker) stands still in wall time between their steps (seen at 5 frames a second: presses dropped after a
+	// second of stillness)
+	const UnsignedInt STILL_FRAMES = 30, TRANSITION_GIVE_UP_FRAMES = 90;
+	const UnsignedInt frames = clientFrame() - sameSinceFrame;
 	const Bool moving = (isMainMenu( screen ) ? !MainMenuTakesPresses()
 			: (TheTransitionHandler != NULL && !TheTransitionHandler->isFinished()))
 		|| (TheShell != NULL && !TheShell->isAnimFinished());
-	return now - sameSince >= (moving ? TRANSITION_GIVE_UP_MS : stillMs);
+	if (moving)
+		return frames >= TRANSITION_GIVE_UP_FRAMES;
+	return now - sameSince >= stillMs && frames >= STILL_FRAMES;
 }
 
 Bool GamepadFocus::isActive( void )
@@ -569,13 +585,13 @@ Bool GamepadFocus::act( Action action )
 	Screen screen;
 	if (!screenNow( screen ))
 		return FALSE;
-	const UnsignedInt now = Clock_Milliseconds();
-	if ((action == ACCEPT_DOWN || action == BACK) && !getenv( "ZH_TEST_NO_HOLD" ) && shellLocked( now ))
+	if ((action == ACCEPT_DOWN || action == BACK) && !getenv( "ZH_TEST_NO_HOLD" ) && shellLocked())
 	{
 		theHeld.held = TRUE;
 		theHeld.action = action;
 		theHeld.screen = screen.key;
-		theHeld.at = now;
+		theHeld.atFrame = clientFrame();
+		theHeld.atMs = Clock_Milliseconds();
 		DEBUG_LOG(( "GAMEPAD HELD: %s, pressed during a transition on %s\n", actionName( action ), screen.key.c_str() ));
 		return TRUE;
 	}
