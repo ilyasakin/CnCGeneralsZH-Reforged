@@ -3231,7 +3231,15 @@ void ControlBar::update( void )
 
 		}  
 		else // get the first and only drawble in the selection list
-			drawToEvaluateFor = TheInGameUI->getAllSelectedDrawables()->front();
+		{
+			// none when nothing is selected, which is an observer's usual state: front() of an empty list
+			// is undefined.  What it gave: libstdc++ and libc++ read their element count, 0; MSVC's Release
+			// build reads the sentinel node's value slot, which is never written and was zeroed by the
+			// game's operator new (allocateBytes), so NULL too; MSVC's Debug STL checks, reports and ends
+			// the process.  NULL is the answer every Release build had: no drawable, no portrait.
+			const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+			drawToEvaluateFor = selected->empty() ? NULL : selected->front();
+		}
 		Object *obj = drawToEvaluateFor ? drawToEvaluateFor->getObject() : NULL;
 		setPortraitByObject( obj );
 		
