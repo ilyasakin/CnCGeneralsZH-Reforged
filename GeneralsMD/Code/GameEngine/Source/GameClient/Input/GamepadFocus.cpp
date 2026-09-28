@@ -294,6 +294,17 @@ void pointAt( GameWindow *window )
 }
 
 UnsignedInt theFocusChanges = 0;
+Bool theAwaitingPage = FALSE;						///< a tab was pressed and its page is not up yet
+UnsignedInt theAwaitingSignature = 0, theAwaitingSince = 0;
+
+/// The focusable widgets, as one number: FNV-1a over their ids, in order
+UnsignedInt widgetSignature( const std::vector<GameWindow *> &widgets )
+{
+	UnsignedInt signature = 2166136261u;
+	for (size_t i = 0; i < widgets.size(); ++i)
+		signature = (signature ^ (UnsignedInt)widgets[i]->winGetWindowId()) * 16777619u;
+	return signature;
+}
 Int theLaneX = 0, theLaneY = 0;		///< the D-pad's remembered column and row (GamepadFocus::pickNeighbourBox)
 Int theLaneFocus = 0;							///< the widget they were remembered on: the focus moved otherwise, they start over
 
@@ -391,6 +402,13 @@ GameWindow *currentFocus( const Screen &screen, const std::vector<GameWindow *> 
 			setFocus( restored );
 	}
 	GameWindow *focus = byId( widgets, theFocusId );
+	if (focus == NULL && theAwaitingPage)
+	{
+		// a tab was pressed: no default until its page's widgets are the ones up (or a second has gone)
+		if (widgetSignature( widgets ) == theAwaitingSignature && Clock_Milliseconds() - theAwaitingSince < 1000)
+			return NULL;
+		theAwaitingPage = FALSE;
+	}
 	if (focus == NULL)
 	{
 		// a pane moving in shows its buttons one by one, and some panes' transitions never report finished: the
@@ -454,6 +472,18 @@ Int tabButtons( const std::vector<GameWindow *> &widgets, std::vector<GameWindow
 	for (size_t i = 0; i < tabs.size(); ++i)
 		if (isChosen( tabs[i] ))
 			return (Int)i;
+	// the Options screen marks no tab chosen: the chosen one is the tab whose page (its name, Tab for Page) is shown
+	for (size_t i = 0; i < tabs.size() && TheWindowManager != NULL && TheNameKeyGenerator != NULL; ++i)
+	{
+		std::string name = nameOf( tabs[i] );
+		const size_t at = name.rfind( "Tab" );
+		if (at == std::string::npos)
+			continue;
+		name.replace( at, 3, "Page" );
+		GameWindow *page = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( AsciiString( name.c_str() ) ) );
+		if (page != NULL && !page->winIsHidden())
+			return (Int)i;
+	}
 	return -1;
 }
 
@@ -589,20 +619,26 @@ Int GamepadFocus::pickNeighbourBox( const Box *boxes, Int count, const Box &from
 		const Int along = across ? (x - fromX) * dx : (y - fromY) * dy;
 		Int gap = dx > 0 ? b.left - from.right : dx < 0 ? from.left - b.right : dy > 0 ? b.top - from.bottom : from.top - b.bottom;
 		gap = gap < 0 ? 0 : gap;
-		// how far the lane passes beside the box (0: through it), and the cone: that no further than the box is along
+		// how far the box is beside the way: 0 when it overlaps the start's own span (it is straight that way) or the
+		// lane passes through it; else the nearer of the two.  The cone: no further aside than the box is along
 		const Int low = across ? b.top : b.left, high = across ? b.bottom : b.right;
-		const Int off = lane < low ? low - lane : (lane > high ? lane - high : 0);
+		const Int fromLow = across ? from.top : from.left, fromHigh = across ? from.bottom : from.right;
+		const Int offLane = lane < low ? low - lane : (lane > high ? lane - high : 0);
+		const Int offSpan = high < fromLow ? fromLow - high : (low > fromHigh ? low - fromHigh : 0);
+		const Int off = offLane < offSpan ? offLane : offSpan;
 		if (off > along)
 			continue;		// outside the 45 degree cone
-		// a step aside costs three steps along: a box in the lane wins over any as near or nearer beside it, and a
-		// wide box a short way off (a shorter row) over one further on in the lane
+		// a step aside costs three steps along: a box in line wins over any as near or nearer beside it, and a wide
+		// box a short way off (a shorter row) over one further on; among boxes as good, the lane's (the remembered
+		// column or row) first, then the nearest to it
 		const Int score = gap + 3 * off;
 		const Int sideways = abs( (across ? y : x) - lane );
-		if (best < 0 || score < bestScore || (score == bestScore && sideways < bestTie))
+		const Int tie = offLane * 65536 + sideways;
+		if (best < 0 || score < bestScore || (score == bestScore && tie < bestTie))
 		{
 			best = i;
 			bestScore = score;
-			bestTie = sideways;
+			bestTie = tie;
 		}
 	}
 	return best;
@@ -789,6 +825,11 @@ Bool GamepadFocus::act( Action action )
 			theFocusId = 0;		// the new page's own first focus, found on the next action
 			theLastFocus.erase( screen.key );
 			theScreenKey.clear();
+			// and not before the page has changed: the tab's press takes effect later, and a default picked now
+			// would be the old page's first widget
+			theAwaitingPage = TRUE;
+			theAwaitingSignature = widgetSignature( widgets );
+			theAwaitingSince = Clock_Milliseconds();
 			return TRUE;
 		}
 

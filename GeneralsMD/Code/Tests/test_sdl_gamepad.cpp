@@ -852,10 +852,13 @@ TEST(the_dpad_takes_the_aligned_widget_before_a_nearer_diagonal_one_and_nothing_
 	// a wide button at the top, a narrow one below its right end, and a far one straight below its middle
 	const GamepadFocus::Box boxes[] = { box( 100, 100, 200, 30 ), box( 280, 150, 60, 30 ), box( 150, 400, 100, 30 ),
 		box( 700, 120, 60, 30 ) };
-	// down from the top button, its column its middle (200): the far one in the column wins over the nearer diagonal
-	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[0], 0, 1, centreX( boxes[0] ) ), 2 );
-	// the same with the column at its right end (310): the narrow one below it is in the column now
+	// down from the top button: the narrow one under its right end is straight below it (it overlaps the button's
+	// span) and nearest, whatever the remembered column
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[0], 0, 1, centreX( boxes[0] ) ), 1 );
 	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[0], 0, 1, 310 ), 1 );
+	// up from the far bottom one: the wide top button over it, not the narrow one off to its right, nearer
+	GamepadFocus::Box upward[] = { boxes[0], box( 300, 250, 60, 30 ), boxes[2] };
+	CHECK_EQ( GamepadFocus::pickNeighbourBox( upward, 3, upward[2], 0, -1, centreX( upward[2] ) ), 0 );
 	// right from the narrow one (row 165): the far button at 700 is inside its row's reach, the cone
 	CHECK_EQ( GamepadFocus::pickNeighbourBox( boxes, 4, boxes[1], 1, 0, centreY( boxes[1] ) ), 3 );
 	// up from the far bottom one (column 200): the top button; nothing to its left or right at all
