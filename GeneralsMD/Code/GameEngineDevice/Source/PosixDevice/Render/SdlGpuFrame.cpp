@@ -94,6 +94,10 @@ SdlGpuFrame::SdlGpuFrame() :
 	NotVisibleTotal(0),
 	NotShown(0),
 	NotShownTotal(0),
+	FlushLimit(3),
+	FlushesTotal(0),
+	FlushInFlightMost(0),
+	FlushWaits(0),
 	OffscreenMs(0.0),
 	OffscreenPresents(false),
 	OffscreenHz(0),
@@ -126,6 +130,11 @@ SdlGpuFrame::SdlGpuFrame() :
 	LastConstants[0] = LastConstants[1] = LastConstantsSize[0] = LastConstantsSize[1] = 0;
 	memset(ClearPipelines, 0, sizeof(ClearPipelines));
 	InFlight[0] = InFlight[1] = NULL;
+	// ZH_GPU_FLUSH_LIMIT=<n>: at most n mid-frame flushes in flight (default 3); 0 lets them pile up as before
+	// the ring, which is how the ring's effect is measured.
+	if (const char * limit = getenv("ZH_GPU_FLUSH_LIMIT")) {
+		FlushLimit = (unsigned int)strtoul(limit, NULL, 10);
+	}
 	memset(&CurrentTarget, 0, sizeof(CurrentTarget));
 	TargetSet = false;
 }
@@ -207,6 +216,11 @@ SdlGpuFrame::~SdlGpuFrame()
 			SDL_ReleaseGPUFence(GpuDevice, InFlight[i]);
 		}
 	}
+	for (size_t i = 0; i < FlushFences.size(); ++i) {
+		SDL_WaitForGPUFences(GpuDevice, true, &FlushFences[i], 1);
+		SDL_ReleaseGPUFence(GpuDevice, FlushFences[i]);
+	}
+	FlushFences.clear();
 	Release_Targets();
 	Commands.clear();
 	End_Batch();
@@ -296,11 +310,46 @@ bool SdlGpuFrame::Flush()
 		return false;
 	}
 	const bool recorded = Record_Batch(commands);
-	const bool submitted = Submit(commands);
+	const bool submitted = SerializeSubmits ? Submit(commands) : Submit_Flush(commands);
 	End_Batch();
 	FlushMs += (double)(SDL_GetTicksNS() - start) / 1.0e6;
 	++Flushes;
+	++FlushesTotal;
 	return submitted && recorded;
+}
+
+// A flush's submit, with a fence kept until the GPU is done: the ones done are let go, and past FlushLimit the
+// oldest is waited for.  Present needs none of this, as the swapchain already bounds the frames in flight;
+// flushes had no bound (a texture updated twice in one batch flushes, as does every restore after a reset).
+bool SdlGpuFrame::Submit_Flush(SDL_GPUCommandBuffer * commands)
+{
+	SDL_GPUFence * fence = SDL_SubmitGPUCommandBufferAndAcquireFence(commands);
+	if (fence == NULL) {
+		return false;
+	}
+	size_t kept = 0;
+	for (size_t i = 0; i < FlushFences.size(); ++i) {
+		if (SDL_QueryGPUFence(GpuDevice, FlushFences[i])) {
+			SDL_ReleaseGPUFence(GpuDevice, FlushFences[i]);
+		} else {
+			FlushFences[kept++] = FlushFences[i];
+		}
+	}
+	FlushFences.resize(kept);
+	FlushFences.push_back(fence);
+	if (FlushFences.size() > FlushInFlightMost) {
+		FlushInFlightMost = (unsigned int)FlushFences.size();
+		if (FlushInFlightMost >= 8 && (FlushInFlightMost & (FlushInFlightMost - 1)) == 0) {
+			fprintf(stderr, "SdlGpuFrame: %u mid-frame flushes in flight at once (flush %u)\n", FlushInFlightMost, FlushesTotal + 1);
+		}
+	}
+	if (FlushLimit > 0 && FlushFences.size() > FlushLimit) {
+		SDL_WaitForGPUFences(GpuDevice, true, &FlushFences[0], 1);	// counted in Flush's own time (device flush)
+		SDL_ReleaseGPUFence(GpuDevice, FlushFences[0]);
+		FlushFences.erase(FlushFences.begin());
+		++FlushWaits;
+	}
+	return true;
 }
 
 bool SdlGpuFrame::Submit(SDL_GPUCommandBuffer * commands)

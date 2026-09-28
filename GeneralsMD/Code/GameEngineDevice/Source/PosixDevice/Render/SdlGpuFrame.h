@@ -171,6 +171,12 @@ public:
 	/// Every windowed Present so far made to a window that was not visible, and with no drawable.
 	unsigned int Presents_Not_Visible() const { return NotVisibleTotal; }
 	unsigned int Presents_Not_Shown() const { return NotShownTotal; }
+	/// Mid-frame flushes (Flush) since the frame was made, the most that were ever submitted and not yet done
+	/// at once, and how many times a flush waited because the ring was full (Flush_Limit).
+	unsigned int Flushes_Total() const { return FlushesTotal; }
+	unsigned int Flushes_In_Flight_Most() const { return FlushInFlightMost; }
+	unsigned int Flush_Waits() const { return FlushWaits; }
+	unsigned int Flush_Limit() const { return FlushLimit; }
 
 	/// -offscreen, the game with no window: Present draws the gamma pass into a display texture of the back
 	/// buffer's size, as it would into a swapchain's, and keeps at most two frames on the GPU, which a
@@ -213,6 +219,14 @@ private:
 	unsigned int NotVisibleTotal;	///< and since the frame was made
 	unsigned int NotShown;			///< Presents with no drawable since the last Take_Timing
 	unsigned int NotShownTotal;		///< and since the frame was made
+	/// The mid-frame flushes still in flight, oldest first.  Each holds its command buffer, and on Direct3D 12
+	/// the two descriptor heaps SDL gives every command buffer, until the GPU is done with it.  Unbounded, a
+	/// slow GPU can let them pile up until the driver makes no more heaps; FlushLimit bounds them.
+	std::vector<struct SDL_GPUFence *> FlushFences;
+	unsigned int FlushLimit;			///< the most allowed in flight (ZH_GPU_FLUSH_LIMIT; 0: no limit)
+	unsigned int FlushesTotal;
+	unsigned int FlushInFlightMost;
+	unsigned int FlushWaits;
 	double OffscreenMs;		///< -offscreen's waits: frames in flight, and the pacer
 	bool OffscreenPresents;
 	unsigned int OffscreenHz;
@@ -221,6 +235,7 @@ private:
 	unsigned int InFlightNext;
 	uint64_t NextTickNs;
 	bool Submit_Offscreen(struct SDL_GPUCommandBuffer * commands);
+	bool Submit_Flush(struct SDL_GPUCommandBuffer * commands);
 
 	SdlGpuFrame();
 	bool Create_Targets(unsigned int width, unsigned int height);

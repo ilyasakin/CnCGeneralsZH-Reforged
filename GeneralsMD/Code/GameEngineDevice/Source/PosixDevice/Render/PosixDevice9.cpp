@@ -186,6 +186,8 @@ PosixDevice9::~PosixDevice9()
 		}
 		fprintf(stderr, "PosixDevice9: %u draws recorded, %u presents, %u of them to a window that was not visible, %u with"
 			" no drawable\n", DrawsRecorded, PresentCount, Gpu->Presents_Not_Visible(), Gpu->Presents_Not_Shown());
+		fprintf(stderr, "PosixDevice9: %u mid-frame flushes, at most %u in flight at once, %u waited for the ring (limit %u)\n",
+			Gpu->Flushes_Total(), Gpu->Flushes_In_Flight_Most(), Gpu->Flush_Waits(), Gpu->Flush_Limit());
 		unsigned shipped = 0, from_user = 0, compiled = 0;
 		SDL3_DXBC_Cache_Statistics(shipped, from_user, compiled);
 		if (shipped + from_user + compiled > 0) {		// Direct3D 12 (-d3d12) keeps its compiled programs
