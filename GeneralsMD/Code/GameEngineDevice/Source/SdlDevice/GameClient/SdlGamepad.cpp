@@ -804,6 +804,7 @@ void stepCommandBar( GamepadButtonType button, UnsignedInt time )
 	laneSlot = slots[ next ];
 	movePointerTo( centres[next].x, centres[next].y, time );
 	DEBUG_LOG(( "GAMEPAD BAR: ControlBar.wnd:ButtonCommand%02d\n", slots[ next ] ));
+	DEBUG_LOG(( "GAMEPAD BAR AT: %d,%d to %d,%d\n", boxes[ next ].left, boxes[ next ].top, boxes[ next ].right, boxes[ next ].bottom ));
 }
 
 // GamepadFocus's hooks: the pointer, the left button and the keys, as this layer gives them to the world

@@ -43,6 +43,7 @@ struct Action
 	UnsignedInt frame;		///< the logic frame it waits for, or with byPass the engine pass
 	Bool byPass;					///< "p<n>": in the shell the logic frame stands still, so passes count there
 	Bool settled;					///< "s": when the menu has stood still (GamepadFocus::isSettled), whatever the clock
+	Bool noAgain;					///< "w": as "s", never pressed again for moving nothing
 	Bool next;						///< "n": straight after the action before it, in the same pass
 	Bool relative;				///< "d<n>": n passes after the action before it
 	std::string line;
@@ -197,7 +198,9 @@ Bool SdlInputScript_start( void )
 		unsigned int frame = 0;
 		char kind[ 16 ] = "";
 		const Bool byPass = line[0] == 'p';
-		const Bool settled = line[0] == 's' && line[1] == ' ', next = line[0] == 'n' && line[1] == ' ';
+		// "w": settled as "s", but a step that may rightly move nothing (a D-pad press at an edge): never pressed again
+		const Bool noAgain = line[0] == 'w' && line[1] == ' ';
+		const Bool settled = (line[0] == 's' || noAgain) && line[1] == ' ', next = line[0] == 'n' && line[1] == ' ';
 		const Bool relative = line[0] == 'd' && line[1] >= '0' && line[1] <= '9';
 		if (line[0] == '#')
 			continue;
@@ -212,6 +215,7 @@ Bool SdlInputScript_start( void )
 		action.frame = frame;
 		action.byPass = byPass;
 		action.settled = settled;
+		action.noAgain = noAgain;
 		action.next = next;
 		action.relative = relative;
 		action.line = line;
@@ -280,7 +284,8 @@ void SdlInputScript_play( UnsignedInt logicFrame )
 			// every step of a menu walk moves the focus or the screen; one that moved nothing was dropped (the
 			// menus ignore a press while a transition runs), so once the menu has stood still a while it is pressed
 			// again, twice at most, and logged apart so that a walk's count of steps still checks
-			const Bool tookNothing = lastStep != (size_t)-1 && GamepadFocus::focusChanges() == changesAtStep;
+			const Bool tookNothing = lastStep != (size_t)-1 && !theActions[ lastStep ].noAgain
+				&& GamepadFocus::focusChanges() == changesAtStep;
 			if (tookNothing && again < MAX_AGAIN)
 			{
 				// measured from the press: the menu stood still before it too, since the press moved nothing

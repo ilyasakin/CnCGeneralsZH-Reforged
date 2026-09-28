@@ -349,6 +349,12 @@ void setFocus( GameWindow *window )
 		loggedScreen = theScreenKey;
 		++theFocusChanges;
 		DEBUG_LOG(( "GAMEPAD FOCUS: %s %s\n", theScreenKey.c_str(), window != NULL ? nameOf( window ) : "(none)" ));
+		if (window != NULL)
+		{
+			Int x, y, width, height;
+			rectOf( window, x, y, width, height );
+			DEBUG_LOG(( "GAMEPAD FOCUS AT: %d,%d %dx%d\n", x, y, width, height ));
+		}
 	}
 	if (!theScreenKey.empty())
 		theLastFocus[ theScreenKey ] = theFocusId;

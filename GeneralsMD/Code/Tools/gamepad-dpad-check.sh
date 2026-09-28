@@ -93,14 +93,14 @@ OVERLAY="$WORK/overlay"
 "$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
 
 
-tap() { echo "s pad $1 down"; echo "n pad $1 up"; }
+tap() { echo "w pad $1 down"; echo "n pad $1 up"; }		# "w": an edge rightly moves nothing
 taps() { local b="$1" n="$2"; for (( i = 0; i < n; ++i )); do tap "$b"; done; }
 # each Options page: down five, right, down two, up three, right, down three, left
 page() { taps DPadDown 5; tap DPadRight; taps DPadDown 2; taps DPadUp 3; tap DPadRight; taps DPadDown 3; tap DPadLeft; }
 {
 	taps DPadDown 6; taps DPadUp 3					# the main menu's column, round and back to Options
 	tap South; page							# Options, its first page
-	for p in 2 3 4 5 6 7; do tap RightShoulder; page; done		# and the other six
+	for p in 2 3 4 5 6 7; do tap RightShoulder; [ "$RECORD" -eq 1 ] && echo "w shot"; page; done		# and the other six
 	tap East; taps DPadUp 3; tap South				# back; up to Solo Play; its pane
 	taps DPadDown 4; tap South					# down to Skirmish; skirmish setup, on Start Game
 	taps DPadUp 4; taps DPadLeft 2; taps DPadDown 2; taps DPadRight 3; tap DPadUp

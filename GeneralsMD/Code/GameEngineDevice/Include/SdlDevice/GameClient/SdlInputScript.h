@@ -34,6 +34,8 @@
 //                                                         A step that moved no focus was dropped (a transition
 //                                                         was running): it is pressed again once the menu has
 //                                                         stood still 2 s, twice at most ("INPUT SCRIPT AGAIN")
+//   w <action...>                                         as "s", but never pressed again for moving nothing: a
+//                                                         D-pad press at an edge rightly moves nothing
 //   d<n> <action...>                                      n engine passes after the action before
 //   n <action...>                                         in the same pass as the action before: a tap's
 //                                                         release, so no wall-clock repeat can come between
