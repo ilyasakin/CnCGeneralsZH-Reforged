@@ -84,6 +84,7 @@
 #include "ffprobe.h"
 #include "ffshadercache.h"
 #include "dx11runtime.h"
+#include "d3d12runtime.h"
 #include "pot.h"
 #include "wwprofile.h"
 #include "ffactory.h"
@@ -524,12 +525,15 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 
 	if (!lite) {
 #if defined(_WIN32)
-		D3D9Lib = LoadLibrary("D3D9.DLL");
+		// -d3d12 (X1): zh_d3d12.dll, already loaded by W3DDisplay (d3d12runtime.h), is the Direct3D 9.
+		if (!Direct3D12_Is_Active()) {
+			D3D9Lib = LoadLibrary("D3D9.DLL");
 
-		if (D3D9Lib == NULL) return false;	// Return false at this point if init failed
+			if (D3D9Lib == NULL) return false;	// Return false at this point if init failed
 
-		Direct3DCreate9Ptr = (Direct3DCreate9Type) GetProcAddress(D3D9Lib, "Direct3DCreate9");
-		if (Direct3DCreate9Ptr == NULL) return false;
+			Direct3DCreate9Ptr = (Direct3DCreate9Type) GetProcAddress(D3D9Lib, "Direct3DCreate9");
+			if (Direct3DCreate9Ptr == NULL) return false;
+		}
 #endif
 
 		/*
@@ -537,7 +541,7 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 		*/
 		WWDEBUG_SAY(("Create Direct3D9\n"));
 #if defined(_WIN32)
-		D3DInterface = Direct3DCreate9Ptr(D3D_SDK_VERSION);
+		D3DInterface = Direct3D12_Is_Active() ? Direct3D12_Create(D3D_SDK_VERSION) : Direct3DCreate9Ptr(D3D_SDK_VERSION);
 #else
 		D3DInterface = Direct3DCreate9(D3D_SDK_VERSION);	// the device is linked in (posixd3d9): nothing to load
 #endif
@@ -599,12 +603,13 @@ void DX8Wrapper::Shutdown(void)
 		D3DInterface=NULL;
 	}
 
-#if defined(_WIN32)
-	if (D3D9Lib) {
-		FreeLibrary(D3D9Lib);
-		D3D9Lib = NULL;
-	}
-#endif
+	// D3D9.DLL stays loaded until the process ends: it is not freed here.  Textures outlive this call -
+	// the particle system manager is shut down after the game client that owns the display, and frees
+	// its point groups' textures then - and each Release is a call into this DLL.  This handle is the
+	// only reference to it (the exe and d3dx9_43.dll do not import it), so FreeLibrary unmapped the code
+	// those calls go to: a texture Released after it faults, on Windows as under Wine, and an exit with
+	// particle textures still alive faulted in ~TextureBaseClass.  Nothing is gained by unloading it
+	// moments before the process exits.
 
 	_RenderDeviceNameTable.Clear();		 // note - Delete_All() resizes the vector, causing a reallocation.  Clear is better. jba.
 	_RenderDeviceShortNameTable.Clear();

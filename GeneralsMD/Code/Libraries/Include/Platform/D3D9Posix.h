@@ -41,7 +41,8 @@
 #ifndef PLATFORM_D3D9POSIX_H
 #define PLATFORM_D3D9POSIX_H
 
-#if defined(_WIN32) && !defined(D3D9POSIX_CHECKER)
+// ZH_D3D12_DEVICE: the -d3d12 device's own targets on Windows (X1), which never include the SDK's d3d9.h.
+#if defined(_WIN32) && !defined(D3D9POSIX_CHECKER) && !defined(ZH_D3D12_DEVICE)
 #error "Platform/D3D9Posix.h is the POSIX side of Direct3D 9; Windows uses the SDK's d3d9.h"
 #endif
 

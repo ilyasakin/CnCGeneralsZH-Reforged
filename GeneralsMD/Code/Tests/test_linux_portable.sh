@@ -48,7 +48,11 @@ failures=0
 check() {	# check <condition> <what>
 	if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failures=$((failures + 1)); fi
 }
-T="$(mktemp -d "${TMPDIR:-/tmp}/test_linux_portable.XXXXXX")"
+T="$(mktemp -d "${TMPDIR:-/tmp}/test_linux_portable.XXXXXX")" || T=""
+if [ -z "$T" ] || [ ! -d "$T" ]; then
+	echo "test_linux_portable: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "$T"' EXIT
 PB="$BUILD_DIR/portable-build"
 OUT="$T/ZeroHourReforged-linux-x86_64"
@@ -63,6 +67,8 @@ check 'readelf -S "$OUT/bin/generals" | grep -q "\.gnu_debuglink" && ! readelf -
 check '[ -d "$OUT/share/zero-hour-reforged/overlay" ] && [ -n "$(ls "$OUT/share/zero-hour-reforged/overlay")" ]' "the overlay"
 check '[ -f "$OUT/share/zero-hour-reforged/licenses/Zero-Hour-Reforged-LICENSE.md" ] && [ -f "$OUT/share/zero-hour-reforged/licenses/SDL3-LICENSE.txt" ]' \
 	"the licences"
+check 'grep -q "this notice may not be removed or altered" "$OUT/share/zero-hour-reforged/licenses/LZH-Light-LICENSE.txt" && grep -q "GNU GPL option, version 2 or later" "$OUT/share/zero-hour-reforged/licenses/FreeType-OPTION.txt" && [ -f "$OUT/share/zero-hour-reforged/licenses/FreeType-GPLv2.txt" ]' \
+	"LZH-Light's notice, and FreeType's GPLv2-or-later option with its GPLv2 text"
 check 'python3 -c "import struct,sys; d=open(sys.argv[1],\"rb\").read(); sys.exit(0 if d[:8]==b\"\\x89PNG\\r\\n\\x1a\\n\" and struct.unpack(\">II\", d[16:24])==(48,48) else 1)" "$OUT/share/icons/hicolor/48x48/apps/zero-hour-reforged.png"' \
 	"the icon, a 48 px PNG"
 check 'grep -q "^Exec=" "$OUT/share/applications/zero-hour-reforged.desktop" && grep -q -- "-root" "$OUT/README.txt"' \

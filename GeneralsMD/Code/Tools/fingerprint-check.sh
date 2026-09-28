@@ -28,13 +28,19 @@
 #      listed file renamed (its path is hashed too).
 # What it cannot see: a real Windows checkout. The CRLF tree is made here the way git would make it.
 #
-# Exit status: 0 on a pass, 1 otherwise.
+# Exit status: 0 on a pass, 1 otherwise, 2 without a work folder.
 
 set -u
 TOOL="$1"; HEADER="$2"
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
 MANIFEST="$CODE/BuildFingerprint.manifest"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/fingerprint-check.XXXXXX")"
+# A work folder that could not be made is the end of the run: going on with WORK empty would put
+# "$WORK/..." at the file system's root.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/fingerprint-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "fingerprint-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${WORK:?}"' EXIT
 status=0
 

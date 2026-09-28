@@ -19,13 +19,18 @@
 # that needs data.  Rooted at an empty folder, PosixMain sets the root, starts the log, the memory
 # manager and the version, takes the one-copy lock in the user data directory, and runs GameMain;
 # SdlGameEngine starts GameEngine::init, which mounts no archives and stops, as generals.exe does on
-# Windows, with the "no base game" message and exit code 1.
+# Windows, with the "no base game" message on stderr and exit code 2: an unattended run (-headless here)
+# stops at that check rather than put up a box or carry on without the art.
 #
 # What it cannot see: anything past the archive check, which needs the game's data; a run with the
 # data is E1's harness's.  Usage: run_generals_smoke.sh <generals>
 set -u
 GENERALS="$1"
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/generals_smoke.XXXXXX")
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/generals_smoke.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "run_generals_smoke: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/root" "$WORK/user"
 failed=0
@@ -34,7 +39,7 @@ check() { if ! eval "$1"; then echo "FAIL: $2"; failed=1; else echo "ok: $2"; fi
 cd "$WORK"
 ZH_USER_DATA_DIR="$WORK/user" "$GENERALS" -headless -root "$WORK/root" > "$WORK/out.txt" 2> "$WORK/err.txt"
 status=$?
-check '[ $status -eq 1 ]' "rooted at an empty folder it exits 1 (was $status)"
+check '[ $status -eq 2 ]' "rooted at an empty folder it exits 2 (was $status)"
 check 'grep -q "none of the base game'"'"'s .big files could be found" "$WORK/err.txt"' "it stops at the base game check and says why"
 check '[ -e "$WORK/user/Generals-685EAFF2-3216-4265-B047-251C5F4B82F3.lock" ]' "the one-copy lock is in ZH_USER_DATA_DIR"
 

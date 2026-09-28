@@ -159,7 +159,9 @@ mkdir -p "$C/MacOS" "$C/Resources/Overlay" "$C/Resources/Licenses" || fail "cann
 rm -rf -- "${OUT:?}.dSYM"
 EXE="$GENERALS"
 if [ -n "$X86" ]; then
-	EXE="$(mktemp -d "${TMPDIR:-/tmp}/zh-universal.XXXXXX")/generals"
+	universal="$(mktemp -d "${TMPDIR:-/tmp}/zh-universal.XXXXXX")" || universal=""
+	[ -n "$universal" ] && [ -d "$universal" ] || fail "cannot make a work folder under ${TMPDIR:-/tmp}"
+	EXE="$universal/generals"
 	lipo -create "$GENERALS" "$X86" -output "$EXE" || fail "lipo -create failed"
 fi
 dsymutil "$EXE" -o "$OUT.dSYM" >/dev/null 2>&1 || fail "dsymutil failed"
@@ -204,7 +206,9 @@ plutil -lint "$C/Info.plist" >/dev/null || fail "Info.plist does not lint"
 printf 'APPL????' > "$C/PkgInfo"
 
 # the icon: the .ico's 48 px image scaled to every size an .icns holds
-iconset="$(mktemp -d "${TMPDIR:-/tmp}/zh-icon.XXXXXX")/AppIcon.iconset"
+icons="$(mktemp -d "${TMPDIR:-/tmp}/zh-icon.XXXXXX")" || icons=""
+[ -n "$icons" ] && [ -d "$icons" ] || fail "cannot make a work folder under ${TMPDIR:-/tmp}"
+iconset="$icons/AppIcon.iconset"
 mkdir -p "$iconset"
 sips -s format png "$CODE/Main/Generals.ico" --out "$iconset/base.png" >/dev/null 2>&1 || fail "cannot read Main/Generals.ico"
 for s in 16 32 128 256 512; do

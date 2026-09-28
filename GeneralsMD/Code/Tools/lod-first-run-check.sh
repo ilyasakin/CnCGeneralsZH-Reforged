@@ -71,7 +71,13 @@ RUNDIR="$(cd "$CODE/../Run" 2>/dev/null && pwd || true)"
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$GENERALS")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/lod-first-run-check.XXXXXX")"
+# A work folder that could not be made is the end of the run: going on with WORK empty would put
+# "$WORK/..." at the file system's root.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/lod-first-run-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "lod-first-run-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 TAG="lod$$_"
 
 cleanup() {

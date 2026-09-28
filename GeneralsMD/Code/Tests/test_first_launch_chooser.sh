@@ -46,7 +46,11 @@ failures=0
 check() {	# check <condition> <what>
 	if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failures=$((failures + 1)); fi
 }
-T="$(mktemp -d "${TMPDIR:-/tmp}/test_first_launch_chooser.XXXXXX")"
+T="$(mktemp -d "${TMPDIR:-/tmp}/test_first_launch_chooser.XXXXXX")" || T=""
+if [ -z "$T" ] || [ ! -d "$T" ]; then
+	echo "test_first_launch_chooser: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 T="$(cd "$T" && pwd -P)"
 TAG="chooser$$"
 trap 'rm -rf -- "$T"; rm -f -- "$EXEDIR/$TAG"*' EXIT

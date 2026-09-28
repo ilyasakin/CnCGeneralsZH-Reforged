@@ -114,6 +114,19 @@ const SdlProgram &SdlProgramCache::Make(std::map<std::string, SdlProgram> &cache
 	return program;
 }
 
+std::string SdlProgramCache::Key_Of(const SDL_GPUShader *shader) const
+{
+	for (int stage = 0; stage < 2; ++stage) {
+		const std::map<std::string, SdlProgram> &cache = stage == 0 ? VertexPrograms : PixelPrograms;
+		for (std::map<std::string, SdlProgram>::const_iterator it = cache.begin(); it != cache.end(); ++it) {
+			if (it->second.Shader == shader) {
+				return it->first;
+			}
+		}
+	}
+	return std::string();
+}
+
 static uint64_t bytes_hash(const void *bytes, size_t size)
 {
 	const uint8_t *b = (const uint8_t *)bytes;
