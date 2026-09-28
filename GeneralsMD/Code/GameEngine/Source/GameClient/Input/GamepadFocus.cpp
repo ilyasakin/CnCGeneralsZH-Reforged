@@ -304,7 +304,7 @@ struct Held
 	UnsignedInt atFrame, atMs;
 };
 Held theHeld = { FALSE, GamepadFocus::BACK, std::string(), 0, 0 };
-UnsignedInt theTransitionSince = 0;		///< the client frame the shell's transition handler last began running on, 0 while finished
+UnsignedInt theTransitionSince = 0;		///< when (ms) the shell's transition handler last began running, 0 while finished
 
 /** The client's frame: the shell's transitions step once a frame (WindowTransitions.ini counts FrameDelay in frames),
 	* so the waits on them are counted in frames too; on a slow machine a transition takes longer in wall time */
@@ -314,21 +314,21 @@ UnsignedInt clientFrame( void )
 }
 
 /// The shell is running a transition (a pane's buttons still scaling in drop a press, and so does the main
-/// menu's own lock), and began it under HOLD_FRAMES ago: a transition that never reports finished (one of the main
+/// menu's own lock), and began it under HOLD_MS ago: a transition that never reports finished (one of the main
 /// menu's panes) is not waited on.  The main menu's flag alone (MainMenuTakesPresses) is not enough: measured,
 /// it was already clear while the difficulty pane's Back still dropped the click.
 Bool shellLocked( void )
 {
 	const Bool running = TheTransitionHandler != NULL && !TheTransitionHandler->isFinished();
-	const UnsignedInt frame = clientFrame();
+	const UnsignedInt now = Clock_Milliseconds() | 1;		// never 0, which means "none"
 	if (!running)
 	{
 		theTransitionSince = 0;
 		return FALSE;
 	}
 	if (theTransitionSince == 0)
-		theTransitionSince = frame;
-	return frame - theTransitionSince < (UnsignedInt)GamepadFocus::HOLD_FRAMES;
+		theTransitionSince = now;
+	return now - theTransitionSince < (UnsignedInt)GamepadFocus::HOLD_MS;
 }
 
 const char *actionName( GamepadFocus::Action action )
@@ -469,11 +469,12 @@ void GamepadFocus::update( void )
 		DEBUG_LOG(( "GAMEPAD HELD: %s dropped, the screen changed\n", actionName( theHeld.action ) ));
 		return;
 	}
-	// pressed as the transition ends, or HOLD_FRAMES after the press at the latest: the main menu starts a side's
-	// logo transition as its pane's ends, so the handler can stay busy past the moment a click works again (seen on
-	// the M3 Pro Mac: the held B pressed at the cap went through)
+	// pressed as the transition ends, or HOLD_MS after the press at the latest: the main menu starts a side's logo
+	// transition as its pane's ends, so the handler can stay busy past the moment a click works again (seen on
+	// the M3 Pro Mac: the held B pressed at the cap went through).  Wall time, not frames: the Deck draws 60 to 90 frames a
+	// second, where 45 frames would come before EA's second-long lock ends
 	const Bool running = TheTransitionHandler != NULL && !TheTransitionHandler->isFinished();
-	if (running && clientFrame() - theHeld.atFrame < (UnsignedInt)HOLD_FRAMES)
+	if (running && now - theHeld.atMs < (UnsignedInt)HOLD_MS)
 		return;
 	const Action action = theHeld.action;
 	theHeld.held = FALSE;
