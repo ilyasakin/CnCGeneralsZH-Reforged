@@ -219,6 +219,9 @@ struct PlatformDisplays
 	int (*listMonitors)( MonitorEntry *entries, int capacity );
 	/** The sizes the named monitor can be set to, smallest first and each once; as listDisplayModes. */
 	int (*listDisplayModes)( const char *device, DisplayModeEntry *entries, int capacity );
+	/** The named monitor's panel, in its own pixels, where the desktop is drawn at another size and scaled
+		* to it (macOS's scaled modes); false where the platform cannot say.  May be NULL. */
+	bool (*panelSize)( const char *device, int *width, int *height );
 };
 inline const PlatformDisplays *ThePlatformDisplays = NULL;
 
@@ -279,7 +282,34 @@ inline int listDisplayModes( const char *device, DisplayModeEntry *entries, int 
 	return 1;
 }
 
-/** The resolution a first run starts at, when Options.ini names none: the monitor's own size, in pixels.
+/** A monitor's size, brought down to its panel's where the panel has fewer pixels.  A Mac in a scaled
+	* mode ("More Space") draws its desktop at 3420x2224 and shows it on a 2560x1664 panel: drawing the game
+	* at the larger size costs 1.8 times the pixels, which the scaler then throws away.  A panel of the same
+	* shape (within 1%) gives its own size, so the game's pixels are the panel's; another shape keeps the
+	* monitor's, scaled to fit the panel.  A panel no smaller, or none known (0), leaves the size as it is. */
+inline void fitToPanel( int monitorWidth, int monitorHeight, int panelWidth, int panelHeight, int *width, int *height )
+{
+	*width = monitorWidth;
+	*height = monitorHeight;
+	if (panelWidth <= 0 || panelHeight <= 0 || monitorWidth <= 0 || monitorHeight <= 0
+			|| (panelWidth >= monitorWidth && panelHeight >= monitorHeight))
+		return;
+	const double monitorShape = (double)monitorWidth / monitorHeight;
+	const double panelShape = (double)panelWidth / panelHeight;
+	if (panelShape > monitorShape * 0.99 && panelShape < monitorShape * 1.01)
+	{
+		*width = panelWidth;
+		*height = panelHeight;
+		return;
+	}
+	const double scaleX = (double)panelWidth / monitorWidth, scaleY = (double)panelHeight / monitorHeight;
+	const double scale = scaleX < scaleY ? scaleX : scaleY;
+	*width = (int)(monitorWidth * scale + 0.5);
+	*height = (int)(monitorHeight * scale + 0.5);
+}
+
+/** The resolution a first run starts at, when Options.ini names none: the monitor's own size, in pixels,
+	* or its panel's where that is smaller (fitToPanel).
 	* Windows starts at GameData's 800x600, and its fullscreen sets the monitor to that size.  Fullscreen
 	* here is the desktop at its own size, so 800x600 would be stretched over it, and a window would be
 	* a small box in the middle.  With no platform table (headless, the tests) this is the floor-sized
@@ -287,7 +317,11 @@ inline int listDisplayModes( const char *device, DisplayModeEntry *entries, int 
 inline void firstRunResolution( const char *device, int *width, int *height )
 {
 	const MonitorEntry monitor = findMonitor( device );
-	*width = (int)(monitor.rect.right - monitor.rect.left);
-	*height = (int)(monitor.rect.bottom - monitor.rect.top);
+	int panelWidth = 0, panelHeight = 0;
+	if (ThePlatformDisplays != NULL && ThePlatformDisplays->panelSize != NULL
+			&& !ThePlatformDisplays->panelSize( monitor.device, &panelWidth, &panelHeight ))
+		panelWidth = panelHeight = 0;
+	fitToPanel( (int)(monitor.rect.right - monitor.rect.left), (int)(monitor.rect.bottom - monitor.rect.top),
+		panelWidth, panelHeight, width, height );
 }
 #endif

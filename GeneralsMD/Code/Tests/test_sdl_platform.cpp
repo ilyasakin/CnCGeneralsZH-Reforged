@@ -32,6 +32,7 @@
 #include "Common/Monitors.h"
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
+#include "SdlDevice/Common/SdlPanel.h"
 
 #include <SDL3/SDL.h>
 
@@ -162,6 +163,29 @@ int fake_modes(const char *, DisplayModeEntry *entries, int capacity)
 
 const PlatformDisplays TheFakeDisplays = { fake_monitors, fake_modes };
 
+// The Air in its "More Space" mode, a 3420x2224 store on a 2560x1664 panel, and beside it a display whose
+// panel the platform cannot name.
+int fake_scaled_monitors(MonitorEntry *entries, int capacity)
+{
+	if (capacity < 2) return 0;
+	fake_monitors(entries, capacity);
+	entries[0].rect.right = 3420;
+	entries[0].rect.bottom = 2224;
+	entries[1].rect.left = 3420;
+	entries[1].rect.right = 3420 + 3024;
+	return 2;
+}
+
+bool fake_panel(const char *device, int *width, int *height)
+{
+	if (strcmp(device, "\\\\.\\DISPLAY1") != 0) return false;
+	*width = 2560;
+	*height = 1664;
+	return true;
+}
+
+const PlatformDisplays TheFakeScaledDisplays = { fake_scaled_monitors, fake_modes, fake_panel };
+
 } // namespace
 
 // Options.ini names no resolution on a first run: the game starts at the monitor's own size in pixels,
@@ -185,17 +209,64 @@ TEST(a_first_run_starts_at_the_monitors_own_size)
 	CHECK_EQ(width, 2560);
 	CHECK_EQ(height, 1440);
 
-	// Over SDL's own list: the offscreen driver's display, at its desktop size in pixels.
+	// Over SDL's own list: the offscreen driver's display, at its desktop size in pixels, brought down to a
+	// panel only where CoreGraphics has a display at the same place and size.
 	CHECK(start_offscreen_video());
 	ThePlatformDisplays = &TheSdlDisplays;
 	firstRunResolution(NULL, &width, &height);
 	const SDL_DisplayMode *desktop = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+	SDL_Rect bounds;
 	CHECK(desktop != NULL);
+	CHECK(SDL_GetDisplayBounds(SDL_GetPrimaryDisplay(), &bounds));
 	if (desktop != NULL) {
 		const double density = desktop->pixel_density > 0 ? desktop->pixel_density : 1.0;
-		CHECK_EQ(width, (int)lround(desktop->w * density));
-		CHECK_EQ(height, (int)lround(desktop->h * density));
+		int panelWidth = 0, panelHeight = 0, expectWidth = 0, expectHeight = 0;
+		if (!SdlPanel_nativePixels(bounds.x, bounds.y, bounds.w, bounds.h, &panelWidth, &panelHeight))
+			panelWidth = panelHeight = 0;
+		fitToPanel((int)lround(desktop->w * density), (int)lround(desktop->h * density), panelWidth, panelHeight,
+			&expectWidth, &expectHeight);
+		CHECK_EQ(width, expectWidth);
+		CHECK_EQ(height, expectHeight);
 	}
+	ThePlatformDisplays = NULL;
+}
+
+// A scaled Mac draws its desktop into a backing store bigger than the panel: a first run draws at the
+// panel's pixels instead, keeping the monitor's shape.
+TEST(a_first_run_on_a_scaled_display_starts_at_the_panels_pixels)
+{
+	int width = 0, height = 0;
+	fitToPanel(3420, 2224, 2560, 1664, &width, &height);		// the Air's "More Space": the panel itself
+	CHECK_EQ(width, 2560);
+	CHECK_EQ(height, 1664);
+	fitToPanel(2560, 1664, 2560, 1664, &width, &height);		// the default mode: the panel already
+	CHECK_EQ(width, 2560);
+	CHECK_EQ(height, 1664);
+	fitToPanel(2048, 1332, 2560, 1664, &width, &height);		// "Larger Text": a smaller store is kept
+	CHECK_EQ(width, 2048);
+	CHECK_EQ(height, 1332);
+	fitToPanel(3420, 2136, 2560, 1664, &width, &height);		// another shape (16:10): the monitor's, fitted
+	CHECK_EQ(width, 2560);
+	CHECK_EQ(height, 1599);
+	fitToPanel(3840, 2160, 0, 0, &width, &height);					// no panel known
+	CHECK_EQ(width, 3840);
+	CHECK_EQ(height, 2160);
+	fitToPanel(6016, 3384, 5120, 2880, &width, &height);		// a scaled 5K external, 16:9 on both
+	CHECK_EQ(width, 5120);
+	CHECK_EQ(height, 2880);
+
+	// Through the table: the monitor Options.ini names, and a platform that cannot say.
+	ThePlatformDisplays = &TheFakeScaledDisplays;
+	firstRunResolution("\\\\.\\DISPLAY1", &width, &height);
+	CHECK_EQ(width, 2560);
+	CHECK_EQ(height, 1664);
+	firstRunResolution("\\\\.\\DISPLAY2", &width, &height);
+	CHECK_EQ(width, 3024);
+	CHECK_EQ(height, 1964);
+	ThePlatformDisplays = &TheFakeDisplays;		// no panelSize: the monitor's pixels, as before
+	firstRunResolution("", &width, &height);
+	CHECK_EQ(width, 2560);
+	CHECK_EQ(height, 1440);
 	ThePlatformDisplays = NULL;
 }
 
