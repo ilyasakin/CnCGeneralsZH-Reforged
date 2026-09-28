@@ -1941,6 +1941,9 @@ if(ZH_PLATFORM_POSIX)
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
   target_link_libraries(sdldevice PUBLIC posixdevice w3ddevice SDL3::SDL3-static milesaudiomanager sdlinput)
+  if(APPLE)
+    target_link_libraries(sdldevice PRIVATE "-framework CoreGraphics")		# SdlDisplays' panel size
+  endif()
 
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
