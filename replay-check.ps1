@@ -69,6 +69,10 @@ function Invoke-Run([string[]] $extra, [string] $prefix)
 	# this script compares is unaffected either way.
 	$args = @("-headless", "-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit",
 						"-maxframes", $MaxFrames, "-logPrefix", $prefix) + $extra + $ExtraArgs
+	# the log's name says the build (Debug.cpp): DebugLogFile.txt Release, DebugLogFileD.txt Debug,
+	# DebugLogFileI.txt Internal.  None may be left from an earlier run to be read as this one's.
+	$logNames = @("DebugLogFile.txt", "DebugLogFileD.txt", "DebugLogFileI.txt") | ForEach-Object { Join-Path $RunDir "$prefix$_" }
+	$logNames | Where-Object { Test-Path $_ } | ForEach-Object { Remove-Item $_ -Force }
 	$proc = Start-Process -FilePath $exePath -ArgumentList $args -WorkingDirectory $RunDir -PassThru
 	$proc.PriorityClass = 'AboveNormal'
 	$null = $proc.Handle		# kept, so ExitCode is still there after the exit
@@ -84,8 +88,8 @@ function Invoke-Run([string[]] $extra, [string] $prefix)
 		2 { Write-Host ("exit 2: {0} stopped unattended (no base game, or a broken INI) " -f $prefix) -NoNewline }
 		3 { Write-Host ("exit 3: {0} asked for -d3d12 and zh_d3d12.dll could not be used " -f $prefix) -NoNewline }
 	}
-	$log = Join-Path $RunDir "$($prefix)DebugLogFile.txt"
-	if (-not (Test-Path $log)) { return $null }
+	$log = $logNames | Where-Object { Test-Path $_ } | Select-Object -First 1
+	if ($null -eq $log) { return $null }
 	$crcLine = Select-String -Path $log -Pattern "HEADLESS CRC: (0x[0-9A-F]+) at frame (\d+)" | Select-Object -Last 1
 	$resLine = Select-String -Path $log -Pattern "HEADLESS RESULT: (.+)$" | Select-Object -Last 1
 	if ($null -eq $crcLine) { return $null }
