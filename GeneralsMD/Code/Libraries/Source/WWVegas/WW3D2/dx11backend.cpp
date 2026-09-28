@@ -79,8 +79,39 @@ static D3DCompileFunction compiler_function()
 }
 
 // The cache file is this marker, then one record a program: the hash, the byte count, the bytes.
+// The shipped file (Load_Shipped_Programs) is the same format.
 static const char SHADER_CACHE_MAGIC[8] = { 'D', 'X', '1', '1', 'S', 'C', '1', '\0' };
 static const unsigned SHADER_CACHE_LARGEST_PROGRAM = 1u << 20;
+static const unsigned long SHADER_CACHE_SAVE_INTERVAL_MS = 10000;
+
+// Every record of a cache file into programs, a record whole or not at all: a file cut short by a
+// crash while it was written loses its last record and nothing else.  Returns how many were read.
+static unsigned read_program_file(const char * path,
+	std::map<unsigned long long, std::vector<unsigned char> > & programs)
+{
+	FILE * file = fopen(path, "rb");
+	if (file == NULL) {
+		return 0;
+	}
+	unsigned count = 0;
+	char magic[sizeof(SHADER_CACHE_MAGIC)];
+	if (fread(magic, sizeof(magic), 1, file) == 1
+		&& memcmp(magic, SHADER_CACHE_MAGIC, sizeof(magic)) == 0) {
+		unsigned long long hash = 0;
+		unsigned int size = 0;
+		while (fread(&hash, sizeof(hash), 1, file) == 1 && fread(&size, sizeof(size), 1, file) == 1
+			&& size > 0 && size <= SHADER_CACHE_LARGEST_PROGRAM) {
+			std::vector<unsigned char> bytecode(size);
+			if (fread(&bytecode[0], size, 1, file) != 1) {
+				break;
+			}
+			programs[hash].swap(bytecode);
+			++count;
+		}
+	}
+	fclose(file);
+	return count;
+}
 
 // FNV-1a over the profile and the source, which between them decide the bytecode.  The generated
 // text is the key rather than the pipeline's state key, so a build that changes what a state
@@ -199,6 +230,8 @@ DX11BackendClass::DX11BackendClass()
 	, FrameBuildMilliseconds(0.0)
 	, FrameBuildCount(0)
 	, ShaderCacheChanged(false)
+	, ShippedPrograms(0)
+	, LastShaderCacheSave(0)
 	, TracedUserStrip(false)
 	, MaskWhileTargeted(0)
 	, TargetsBound(0)
@@ -872,29 +905,28 @@ void DX11BackendClass::Set_Shader_Cache_Path(const char * path)
 	if (ShaderCachePath.empty()) {
 		return;
 	}
+	read_program_file(ShaderCachePath.c_str(), CompiledPrograms);
+}
 
-	FILE * file = fopen(ShaderCachePath.c_str(), "rb");
-	if (file == NULL) {
+void DX11BackendClass::Load_Shipped_Programs(const char * path)
+{
+	if (path != NULL && path[0] != '\0') {
+		ShippedPrograms = read_program_file(path, CompiledPrograms);
+	}
+}
+
+void DX11BackendClass::Save_Shader_Cache_If_Due()
+{
+	if (!ShaderCacheChanged) {
 		return;
 	}
-
-	// A file cut short by a crash while it was written loses its last record and nothing else:
-	// every record is read whole or not at all.
-	char magic[sizeof(SHADER_CACHE_MAGIC)];
-	if (fread(magic, sizeof(magic), 1, file) == 1
-		&& memcmp(magic, SHADER_CACHE_MAGIC, sizeof(magic)) == 0) {
-		unsigned long long hash = 0;
-		unsigned int size = 0;
-		while (fread(&hash, sizeof(hash), 1, file) == 1 && fread(&size, sizeof(size), 1, file) == 1
-			&& size > 0 && size <= SHADER_CACHE_LARGEST_PROGRAM) {
-			std::vector<unsigned char> bytecode(size);
-			if (fread(&bytecode[0], size, 1, file) != 1) {
-				break;
-			}
-			CompiledPrograms[hash].swap(bytecode);
-		}
+	const unsigned long now = GetTickCount();
+	if (LastShaderCacheSave != 0 && now - LastShaderCacheSave < SHADER_CACHE_SAVE_INTERVAL_MS) {
+		return;
 	}
-	fclose(file);
+	Save_Shader_Cache();
+	ShaderCacheChanged = false;
+	LastShaderCacheSave = now;
 }
 
 void DX11BackendClass::Save_Shader_Cache() const
@@ -903,7 +935,9 @@ void DX11BackendClass::Save_Shader_Cache() const
 		return;
 	}
 
-	FILE * file = fopen(ShaderCachePath.c_str(), "wb");
+	// Into a file beside it, then over it: a run killed while writing leaves the previous cache whole.
+	const std::string writing = ShaderCachePath + ".writing";
+	FILE * file = fopen(writing.c_str(), "wb");
 	if (file == NULL) {
 		return;
 	}
@@ -916,7 +950,11 @@ void DX11BackendClass::Save_Shader_Cache() const
 		fwrite(&size, sizeof(size), 1, file);
 		fwrite(&entry->second[0], size, 1, file);
 	}
+	const bool written = ferror(file) == 0;
 	fclose(file);
+	if (!written || !MoveFileExA(writing.c_str(), ShaderCachePath.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+		DeleteFileA(writing.c_str());
+	}
 }
 
 bool DX11BackendClass::Compile_Program(const std::string & source, const char * name,

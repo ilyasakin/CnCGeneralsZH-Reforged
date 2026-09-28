@@ -197,7 +197,7 @@ static Bool isUnattendedRun( void )
 {
 	static Int cached = -1;
 	if (cached < 0)
-		cached = findEarlyCommandLineOption( L"-headless" ) ? 1 : 0;
+		cached = isUnattendedProcess() ? 1 : 0;	// -headless or ZH_UNATTENDED (EarlyCommandLine.h)
 	return cached != 0;
 }
 
@@ -252,7 +252,7 @@ static const char *getCurrentTimeString(void)
 static const char *getCurrentTickString(void)
 {
 	static char TheTickString[32];
-	snprintf(TheTickString, ARRAY_SIZE(TheTickString), "(T=%08lx)",Clock_Milliseconds_Coarse());
+	snprintf(TheTickString, ARRAY_SIZE(TheTickString), "(T=%08x)",Clock_Milliseconds_Coarse());
 	return TheTickString;
 }
 

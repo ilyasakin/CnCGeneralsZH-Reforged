@@ -52,6 +52,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 
 $exePath = Join-Path $RunDir $Exe
 if (-not (Test-Path $exePath)) { throw "no $Exe in $RunDir" }
@@ -70,11 +71,18 @@ function Invoke-Run([string[]] $extra, [string] $prefix)
 						"-maxframes", $MaxFrames, "-logPrefix", $prefix) + $extra + $ExtraArgs
 	$proc = Start-Process -FilePath $exePath -ArgumentList $args -WorkingDirectory $RunDir -PassThru
 	$proc.PriorityClass = 'AboveNormal'
+	$null = $proc.Handle		# kept, so ExitCode is still there after the exit
 	if (-not $proc.WaitForExit($TimeoutMinutes * 60 * 1000)) {
 		$proc.Kill()
 		$proc.WaitForExit()
 		Write-Host ("KILLED ({0} wedged past {1} min) " -f $prefix, $TimeoutMinutes) -NoNewline
 		return $null
+	}
+	# The codes an unattended run (ZH_UNATTENDED, -headless) leaves by name instead of waiting on a box;
+	# the reason itself is on the game's stderr and in its log.
+	switch ($proc.ExitCode) {
+		2 { Write-Host ("exit 2: {0} stopped unattended (no base game, or a broken INI) " -f $prefix) -NoNewline }
+		3 { Write-Host ("exit 3: {0} asked for -d3d12 and zh_d3d12.dll could not be used " -f $prefix) -NoNewline }
 	}
 	$log = Join-Path $RunDir "$($prefix)DebugLogFile.txt"
 	if (-not (Test-Path $log)) { return $null }
@@ -89,6 +97,7 @@ function Invoke-Run([string[]] $extra, [string] $prefix)
 }
 
 $failures = 0
+$diverged = 0		# of the failures, the seeds whose two runs finished and disagreed
 foreach ($seed in $Seeds)
 {
 	Write-Host ("seed {0}: recording ... " -f $seed) -NoNewline
@@ -121,6 +130,7 @@ foreach ($seed in $Seeds)
 		Write-Host ("DIVERGED: live {0} at frame {1}, playback {2} at frame {3}" -f
 								$live.CRC, $live.Frame, $back.CRC, $back.Frame)
 		$failures++
+		$diverged++
 	}
 }
 
@@ -129,8 +139,13 @@ if ($failures -eq 0)
 {
 	Write-Host ("{0} of {0} replays played back to the same world." -f $Seeds.Count)
 }
-else
+elseif ($diverged -gt 0)
 {
 	Write-Host ("{0} of {1} did not. The logic is not deterministic; do not ship it." -f $failures, $Seeds.Count)
+}
+else
+{
+	# a run that crashed, wrote nothing or was killed at -TimeoutMinutes compared nothing: a failure, not a verdict
+	Write-Host ("{0} of {1} gave no result to compare (crashed, killed or wrote no replay); nothing was compared." -f $failures, $Seeds.Count)
 }
 exit $failures

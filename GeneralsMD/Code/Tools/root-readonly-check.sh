@@ -64,7 +64,11 @@ RUNDIR="$(cd "$CODE/../Run" 2>/dev/null && pwd || true)"
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$GENERALS")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/root-readonly-check.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/root-readonly-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "root-readonly-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 TAG="ro$$_"
 
 cleanup() {

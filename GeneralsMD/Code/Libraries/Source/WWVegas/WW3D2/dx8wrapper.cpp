@@ -44,7 +44,11 @@
 
 //#define CREATE_DX8_MULTI_THREADED
 //#define CREATE_DX8_FPU_PRESERVE
+#if defined(_WIN32)
+#define WW3D_DEVTYPE Requested_Device_Type()	// HAL unless ZH_D3D9_DEVTYPE says otherwise: see below
+#else
 #define WW3D_DEVTYPE D3DDEVTYPE_HAL
+#endif
 
 #include "dx8wrapper.h"
 #if defined(_WIN32)
@@ -94,6 +98,22 @@
 
 #include "shdlib.h"
 #include <string.h>	// memset, strcpy, strlen
+
+#if defined(_WIN32)
+#include <stdlib.h>	// getenv
+
+/* ZH_D3D9_DEVTYPE=nullref is for measuring, not playing: the reference rasterizer's NULL device
+	 takes every call and draws nothing, so a run times the game's own work in the Direct3D 9
+	 runtime with no driver or rasterizer under it.  It exists only where d3dref9.dll does (the
+	 DirectX SDK's debug runtime); without it CreateDevice fails as it would on a machine with no
+	 device.  Unset, or anything else, the device is the hardware one it has always been.  The
+	 Direct3D 11 side's counterpart is ZH_DX11_DRIVER (dx11device.cpp). */
+static D3DDEVTYPE Requested_Device_Type()
+{
+	const char * requested = getenv("ZH_D3D9_DEVTYPE");
+	return (requested != NULL && _stricmp(requested, "nullref") == 0) ? D3DDEVTYPE_NULLREF : D3DDEVTYPE_HAL;
+}
+#endif
 
 const int DEFAULT_RESOLUTION_WIDTH = 640;
 const int DEFAULT_RESOLUTION_HEIGHT = 480;
@@ -583,12 +603,13 @@ void DX8Wrapper::Shutdown(void)
 		D3DInterface=NULL;
 	}
 
-#if defined(_WIN32)
-	if (D3D9Lib) {
-		FreeLibrary(D3D9Lib);
-		D3D9Lib = NULL;
-	}
-#endif
+	// D3D9.DLL stays loaded until the process ends: it is not freed here.  Textures outlive this call -
+	// the particle system manager is shut down after the game client that owns the display, and frees
+	// its point groups' textures then - and each Release is a call into this DLL.  This handle is the
+	// only reference to it (the exe and d3dx9_43.dll do not import it), so FreeLibrary unmapped the code
+	// those calls go to: a texture Released after it faults, on Windows as under Wine, and an exit with
+	// particle textures still alive faulted in ~TextureBaseClass.  Nothing is gained by unloading it
+	// moments before the process exits.
 
 	_RenderDeviceNameTable.Clear();		 // note - Delete_All() resizes the vector, causing a reallocation.  Clear is better. jba.
 	_RenderDeviceShortNameTable.Clear();

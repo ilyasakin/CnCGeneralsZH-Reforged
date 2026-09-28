@@ -541,6 +541,11 @@ W3DDisplay::~W3DDisplay()
 			twinBuffers, twinBytes / 1024,
 			texturesMirrored, texturesReused, texturesRefused,
 			pipelines, drawsMade, drawsRefused));
+		unsigned programsShipped = 0;
+		unsigned programsHeld = 0;
+		Direct3D11_Program_Statistics( programsShipped, programsHeld );
+		DEBUG_LOG(("-dx11 programs: %u shipped with the game, %u held at the end\n",
+			programsShipped, programsHeld));
 
 		unsigned long long noBuffer = 0;
 		unsigned long long noStage = 0;
@@ -1170,6 +1175,9 @@ void W3DDisplay::init( void )
 	Direct3D11_Enable( TheGlobalData->m_direct3D11 != FALSE );
 	Direct3D11_Present_Enable( TheGlobalData->m_direct3D11 != FALSE );
 	Direct3D11_Dump_Programs_To( TheGlobalData->m_direct3D11DumpPath.str() );
+	// The compiled-program cache is the player's, like Options.ini: an installed game cannot write
+	// next to its exe, and the shipped programs there are read-only anyway.
+	Direct3D11_Set_Shader_Cache_Directory( TheGlobalData->getPath_UserData().str() );
 	pushDirect3D11PostChain();
 	// Classic graphics is read here once and not again: a texture that has looked for its normal
 	// map keeps the answer, and a tile size cannot change under a loaded map.  The menu says the
@@ -1254,7 +1262,15 @@ void W3DDisplay::init( void )
 	// multisampling is opt-in with "-msaa" / "-msaa N" and silently degrades to whatever the
 	// device supports, so log what was actually granted
 	DEBUG_LOG(("W3DDisplay::init - multisampling: %ux\n", DX8Wrapper::Get_MultiSample_Level()));
+#if defined(_WIN32)
 	DEBUG_LOG(("W3DDisplay::init - vsync: %s\n", DX8Wrapper::Get_Requested_VSync() ? "on" : "off"));
+#else
+	// The POSIX device never reads D3D9's presentation interval: SdlGpuFrame claims the window with SDL's
+	// defaults, whose present mode is VSYNC.  So "off" was only the request, and read as the truth it sent a
+	// 119 fps reading (a locked session: no drawable) looking for a vsync bug.
+	DEBUG_LOG(("W3DDisplay::init - vsync: always on (the SDL GPU swapchain's VSYNC; D3D9 asked for %s, which is not used;"
+		" -offscreen paces by ZH_OFFSCREEN_HZ instead)\n", DX8Wrapper::Get_Requested_VSync() ? "on" : "off"));
+#endif
 	DEBUG_LOG(("W3DDisplay::init - present: %s\n", DX8Wrapper::Is_Flip_Present() ? "flip" : "discard"));
 	DEBUG_LOG(("W3DDisplay::init - adapter: %s\n",
 						 WW3D::Get_Render_Device_Name(WW3D::Get_Render_Device())));

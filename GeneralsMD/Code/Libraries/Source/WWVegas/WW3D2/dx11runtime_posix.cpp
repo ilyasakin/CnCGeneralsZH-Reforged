@@ -81,6 +81,7 @@ void Direct3D11_Begin_Scene() {}
 void Direct3D11_Mirror_Clear(bool, bool, float, float, float, float) {}
 void Direct3D11_End_Scene(bool) {}
 void Direct3D11_Dump_Programs_To(const char *) {}
+void Direct3D11_Set_Shader_Cache_Directory(const char *) {}
 void Direct3D11_Present_Enable(bool) {}
 bool Direct3D11_Present_Is_Enabled() { return false; }
 void Direct3D11_Set_VSync(bool) {}
@@ -136,6 +137,12 @@ void Direct3D11_Statistics(unsigned & pipelines_built, unsigned long long & draw
 	pipelines_built = 0;
 	draws_made = 0;
 	draws_refused = 0;
+}
+
+void Direct3D11_Program_Statistics(unsigned & shipped, unsigned & held)
+{
+	shipped = 0;
+	held = 0;
 }
 void Direct3D11_Take_Frame_Cost(double & pipeline_milliseconds, unsigned & pipelines,
 	double & texture_milliseconds, unsigned & textures)

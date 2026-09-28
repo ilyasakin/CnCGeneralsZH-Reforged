@@ -69,16 +69,20 @@ if(ZH_PLATFORM_POSIX AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-fno-delete-null-pointer-checks)
 endif()
 
-# Linux links with LLD when it is there.  The engine's static libraries reference each other in cycles
-# (gameengine, ww3d2, wwsaveload, w3ddevice ...), which GNU ld resolves only in link order, so generals
-# failed to link with hundreds of undefined references; Apple's linker, and LLD, resolve archives in
-# any order.  Without LLD, GNU ld is left as it was and the cycles still need resolving (W1 records it).
+# Linux links with LLD when it is there, else mold.  The engine's static libraries reference each other in
+# cycles (gameengine, ww3d2, wwsaveload, w3ddevice ...), which GNU ld resolves only in link order, so
+# generals failed to link with hundreds of undefined references; Apple's linker, LLD and mold resolve
+# archives in any order.  mold is for the Steam Runtime's SDK (P3's portable build), which has it and no
+# LLD.  With neither, GNU ld is left as it was and the cycles still need resolving (W1 records it).
 if(ZH_PLATFORM_LINUX)
   find_program(ZH_LLD NAMES ld.lld)
+  find_program(ZH_MOLD NAMES ld.mold mold)
   if(ZH_LLD)
     add_link_options(-fuse-ld=lld)
+  elseif(ZH_MOLD)
+    add_link_options(-fuse-ld=mold)
   else()
-    message(WARNING "No ld.lld: GNU ld cannot resolve the engine's circular static libraries in link order")
+    message(WARNING "No ld.lld or mold: GNU ld cannot resolve the engine's circular static libraries in link order")
   endif()
 endif()
 
@@ -177,6 +181,15 @@ if(APPLE)
   if(NOT _zh_sdl3_patched)
     message(FATAL_ERROR "Libraries/Source/SDL3 lacks sdl3-metal-windowless.patch. ${VENDOR_HINT}")
   endif()
+endif()
+
+# LZH-Light's one patch (Libraries/Source/lzhl-clear-history.patch), on every platform: vendor.sh and
+# vendor.ps1 both apply it.  A tree fetched before it builds without it and compresses from whatever the
+# allocator left in the history buffer, so it is said here instead.
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/Compression/LZHCompress/CompLibHeader/_lz.h _zh_lzhl_patched
+     REGEX "Zero Hour Reforged: altered")
+if(NOT _zh_lzhl_patched)
+  message(FATAL_ERROR "LZH-Light lacks lzhl-clear-history.patch. ${VENDOR_HINT}")
 endif()
 
 # The _CRT_ pair only tells MSVC's own headers to stop deprecating the C library this code is
@@ -305,8 +318,10 @@ add_library(wwdebug STATIC
   ${WW}/WWDebug/wwdebug.cpp
   ${WW}/WWDebug/wwmemlog.cpp
   ${WW}/WWDebug/wwprofile.cpp)
+# GameEngine/Include for Common/EarlyCommandLine.h alone (-headless, which no box may wait on), as debuglib has it.
 target_include_directories(wwdebug PUBLIC ${WW}/WWDebug
-  PRIVATE ${WW}/WWLib ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+  PRIVATE ${WW}/WWLib ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
+          ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 
 # ---- wwutil ---------------------------------------------------------------
 add_library(wwutil STATIC
@@ -504,8 +519,10 @@ if(ZH_PLATFORM_POSIX)
   list(APPEND WWLIB_SOURCES ${WW}/WWLib/posixpath.cpp)
 endif()
 add_library(wwlib STATIC ${ZH_NOT_YET_PORTABLE} ${WWLIB_SOURCES})
+# GameEngine/Include for Common/EarlyCommandLine.h alone, as wwdebug has it.
 target_include_directories(wwlib PUBLIC ${WW}/WWLib
-  PRIVATE ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+  PRIVATE ${WW}/WWMath ${WW}/Wwutil ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
+          ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 target_link_libraries(wwlib PRIVATE wwdebug)
 if(ZH_PLATFORM_WINDOWS)
   # winmm: timeGetTime/timeBeginPeriod.  version: verchk.cpp's GetFileVersionInfo,
@@ -1882,6 +1899,14 @@ set(FFMPEG_RUNTIME
 add_custom_command(TARGET generals POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
           ${FFMPEG_RUNTIME} ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+# The Direct3D 11 programs that ship with the game, compiled by Microsoft's d3dcompiler_47 when they were
+# recorded (Tools/record-dx11-shaders.ps1): next to the exe, where the backend reads them before compiling
+# anything.  Without them a first start compiles every program, and under Wine that took minutes (X2).
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Data/dx11shaders.shipped)
+  add_custom_command(TARGET generals POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/Data/dx11shaders.shipped ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+endif()
 endif()  # ZH_PLATFORM_WINDOWS - GameEngineDevice, the backends and generals.exe
 
 # ===========================================================================
@@ -2070,6 +2095,30 @@ if(ZH_PLATFORM_POSIX)
     endif()
   endif()
 
+  # The first launch's folder question, headless (the user's rule: no run may need a human): the real generals
+  # through PosixMain's test stand-in for the dialog (ZH_TEST_CHOOSER_ANSWERS) - refusals and their reasons,
+  # asking again, accepting and remembering, cancelling, and the second start asking nothing.  Needs ZH_GAME_DATA.
+  add_test(NAME first_launch_chooser_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_first_launch_chooser.sh $<TARGET_FILE:generals> ${CMAKE_BINARY_DIR}/overlay)
+  set_tests_properties(first_launch_chooser_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(first_launch_chooser_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+
+  # P3: Tools/linux-portable.sh's folder for the Steam Deck, built inside the Steam Runtime's SDK, and E1 through
+  # its own launcher in the Steam Runtime's platform image.  Skipped (77) without docker, the SDK image, or a
+  # portable CMake (ZH_PORTABLE_CMAKE: 3.29 or later, running inside the container - Kitware's release tarball).
+  if(ZH_PLATFORM_LINUX)
+    set(ZH_PORTABLE_CMAKE "" CACHE FILEPATH "A Linux CMake (3.29+, Kitware's release) for linux_portable_check's container build (P3)")
+    add_test(NAME linux_portable_check
+             COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_linux_portable.sh ${CMAKE_BINARY_DIR})
+    set(_zh_portable_env "ZH_PORTABLE_CMAKE=${ZH_PORTABLE_CMAKE}")
+    if(ZH_GAME_DATA)
+      list(APPEND _zh_portable_env "ZH_DATA_DIR=${ZH_GAME_DATA}")
+    endif()
+    set_tests_properties(linux_portable_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 7200 ENVIRONMENT "${_zh_portable_env}")
+  endif()
+
   # P1 step 1: the fork's overlay as a read root gives the game what Windows' one folder gives it - the
   # EXE CRC, the INI CRC and the world state agree between the two layouts - with two armed controls.
   add_test(NAME overlay_crc_check
@@ -2094,6 +2143,10 @@ if(ZH_PLATFORM_POSIX)
   # The stager keeps the HUD overlay on: it refuses a staged ShowHudOverlay = No, loose or in an archive.
   add_test(NAME stage_overlay_hud_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_stage_overlay_hud.sh)
   add_test(NAME install_guard_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_guard.sh)
+  # Every harness stops when its work folder cannot be made, instead of going on with the name empty
+  # (Tests/test_workfolder_guard.sh): a lint of every tracked script, and the farm harnesses run with
+  # TMPDIR=/nonexistent.
+  add_test(NAME workfolder_guard_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_workfolder_guard.sh)
   # Decision 2 for the GPU: a first launch chooses the top detail preset (High), a later one keeps it, and
   # -noshaders (a Voodoo2, below every preset) chooses Low.  Read from Options.ini after real runs.
   add_test(NAME lod_first_run_check

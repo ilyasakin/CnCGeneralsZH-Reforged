@@ -62,6 +62,7 @@
 #include <signal.h>
 // The real spelling on disk; a case-sensitive volume takes only this one.
 #include "Except.h"
+#include "Common/EarlyCommandLine.h"	// -headless, which the assert box must not wait on
 
 
 static PrintFunc			_CurMessageHandler = NULL;
@@ -327,6 +328,14 @@ void WWDebug_Assert_Fail(const char * expr,const char * file, int line)
 		*/
 		if (Is_Trying_To_Exit()) {
 			ExitProcess(0);
+		}
+
+		// In an unattended run (-headless or ZH_UNATTENDED) there is nobody to answer: say it on stderr and
+		// take Ignore, which is what MessageBoxWrapper answers an unattended run's abort/retry/ignore box with.
+		if (isUnattendedProcess()) {
+			fprintf(stderr, "WWDebug_Assert_Fail (ignored, unattended run): %s (%d) Assert: %s\n", file, line, expr);
+			fflush(stderr);
+			return;
 		}
 
       char assertbuf[4096];

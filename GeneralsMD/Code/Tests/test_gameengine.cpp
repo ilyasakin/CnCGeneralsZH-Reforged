@@ -14486,3 +14486,4 @@ TEST(unsigned_text_parses_as_windows_32_bit_strtoul)
 #include "test_widechar_width.inc"
 #include "test_supply_center_save.inc"
 #include "test_cinema.inc"
+#include "test_game_results.inc"
