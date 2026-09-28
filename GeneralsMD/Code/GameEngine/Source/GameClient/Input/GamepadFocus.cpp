@@ -305,14 +305,13 @@ struct Held
 Held theHeld = { FALSE, GamepadFocus::BACK, std::string(), 0 };
 UnsignedInt theTransitionSince = 0;		///< when the shell's transition handler last began running, 0 while finished
 
-/// The shell is running a transition (the menus drop a press meanwhile), and began it under HOLD_MS ago: a
-/// transition that never reports finished (one of the main menu's panes) is not waited on.  On the main menu its
-/// own flag says it (MainMenuTakesPresses): it lets go as a pane's transition ends and starts the side's logo
-/// transition at once, so the transition handler seen from here would look busy past the moment presses work.
-Bool shellLocked( UnsignedInt now, Bool mainMenu )
+/// The shell is running a transition (a pane's buttons still scaling in drop a press, and so does the main
+/// menu's own lock), and began it under HOLD_MS ago: a transition that never reports finished (one of the main
+/// menu's panes) is not waited on.  The main menu's flag alone (MainMenuTakesPresses) is not enough: measured,
+/// it was already clear while the difficulty pane's Back still dropped the click.
+Bool shellLocked( UnsignedInt now )
 {
-	const Bool running = mainMenu ? !MainMenuTakesPresses()
-		: (TheTransitionHandler != NULL && !TheTransitionHandler->isFinished());
+	const Bool running = TheTransitionHandler != NULL && !TheTransitionHandler->isFinished();
 	if (!running)
 	{
 		theTransitionSince = 0;
@@ -461,17 +460,16 @@ void GamepadFocus::update( void )
 		DEBUG_LOG(( "GAMEPAD HELD: %s dropped, the screen changed\n", actionName( theHeld.action ) ));
 		return;
 	}
-	if (now - theHeld.at > (UnsignedInt)HOLD_MS)
-	{
-		theHeld.held = FALSE;
-		DEBUG_LOG(( "GAMEPAD HELD: %s dropped, the transition outlasted %d ms\n", actionName( theHeld.action ), (Int)HOLD_MS ));
-		return;
-	}
-	if (shellLocked( now, isMainMenu( screen ) ))
+	// pressed as the transition ends, or at HOLD_MS at the latest: the main menu starts a side's logo transition
+	// as its pane's ends, so the handler can stay busy past the moment a click works again (seen on the M3 Pro Mac: the
+	// held B pressed at the cap went through)
+	const Bool running = TheTransitionHandler != NULL && !TheTransitionHandler->isFinished();
+	if (running && now - theHeld.at < (UnsignedInt)HOLD_MS)
 		return;
 	const Action action = theHeld.action;
 	theHeld.held = FALSE;
-	DEBUG_LOG(( "GAMEPAD HELD: %s pressed now, %u ms after the press, the transition over\n", actionName( action ), now - theHeld.at ));
+	DEBUG_LOG(( "GAMEPAD HELD: %s pressed now, %u ms after the press, %s\n", actionName( action ), now - theHeld.at,
+		running ? "at the cap" : "the transition over" ));
 	act( action );
 	if (action == ACCEPT_DOWN)
 		act( ACCEPT_UP );
@@ -572,7 +570,7 @@ Bool GamepadFocus::act( Action action )
 	if (!screenNow( screen ))
 		return FALSE;
 	const UnsignedInt now = Clock_Milliseconds();
-	if ((action == ACCEPT_DOWN || action == BACK) && !getenv( "ZH_TEST_NO_HOLD" ) && shellLocked( now, isMainMenu( screen ) ))
+	if ((action == ACCEPT_DOWN || action == BACK) && !getenv( "ZH_TEST_NO_HOLD" ) && shellLocked( now ))
 	{
 		theHeld.held = TRUE;
 		theHeld.action = action;
