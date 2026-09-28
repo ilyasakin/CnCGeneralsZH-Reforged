@@ -52,6 +52,7 @@
 #include "GameClient/Image.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/GamepadFocus.h"
+#include "GameClient/GamepadRadial.h"
 #include "mutex.h"
 #include "thread.h"
 
@@ -626,7 +627,7 @@ void W3DMouse::draw(void)
 	{	
 		const Image *image=cursorImages[m_currentPolygonCursor];
 		// G1: while a pad moves a menu's focus the cursor is not drawn; the focus frame shows where it is
-		if (image && !GamepadFocus::hidesCursor())
+		if (image && !GamepadFocus::hidesCursor() && !GamepadRadial::isOpen())
 		{
 			TheDisplay->drawImage(image,m_currMouse.pos.x-m_currentHotSpot.x,m_currMouse.pos.y-m_currentHotSpot.y,
 				m_currMouse.pos.x+image->getImageWidth()-m_currentHotSpot.x, m_currMouse.pos.y+image->getImageHeight()-m_currentHotSpot.y);
@@ -690,12 +691,12 @@ void W3DMouse::draw(void)
 
 	//@todo: In DX8 mode the mouse is drawn in another thread which isn't allowed
 	//access to D3D so we can't do any drawing here.
-	// draw the cursor text
-	if (!isThread)
+	// draw the cursor text; G1: not while a pad's radial menu has the middle of the screen
+	if (!isThread && !GamepadRadial::isOpen())
 		drawCursorText();
 
 	// draw tooltip text
-	if (m_visible && !isThread)
+	if (m_visible && !isThread && !GamepadRadial::isOpen())
 		drawTooltip();
 
 	m_drawing = FALSE;

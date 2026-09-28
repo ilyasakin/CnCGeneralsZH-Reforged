@@ -71,13 +71,24 @@ Bool inMatch( void )
 	return TheGameLogic != NULL && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && TheControlBar != NULL;
 }
 
-/// The picked command's name, as the bar's tooltip names it
+/// The picked command's name, as the bar's tooltip names it, without its hotkey mark
 UnicodeString pickName( GameWindow *window )
 {
 	const CommandButton *command = window != NULL ? (const CommandButton *)GadgetButtonGetData( window ) : NULL;
 	if (command == NULL || command->getTextLabel().isEmpty() || TheGameText == NULL)
 		return UnicodeString::TheEmptyString;
-	return TheGameText->fetch( command->getTextLabel() );
+	// a label marks its hotkey with & ("&Barracks"), and && is an ampersand itself
+	const UnicodeString label = TheGameText->fetch( command->getTextLabel() );
+	UnicodeString name;
+	for (const WideChar *c = label.str(); *c != 0; ++c)
+	{
+		if (*c == L'&' && c[1] != L'&')
+			continue;
+		if (*c == L'&')
+			++c;
+		name.concat( *c );
+	}
+	return name;
 }
 
 }  // namespace
