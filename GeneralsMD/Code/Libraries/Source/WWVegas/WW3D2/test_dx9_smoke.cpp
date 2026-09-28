@@ -363,6 +363,14 @@ int main(int argument_count, char ** arguments)
 	// d3dx9runtime.cpp is what the renderer will bind, so the test binds the same thing
 	// rather than a copy of it: a missing entry point fails here before it fails in a match.
 	BoundD3DX9Runtime d3dx9;
+#if defined(_M_ARM64)
+	// There is no d3dx9_43.dll for ARM64, so the rest of this - the DLL's assembler, its math against the
+	// signatures, its CPU dispatch - has nothing to run against.  The device checks above have run.
+	if (!d3dx9.Is_Bound()) {
+		printf("SKIP: no d3dx9_43.dll exists for ARM64; the D3DX half of this check needs it\n");
+		return 77;
+	}
+#endif
 	if (!d3dx9.Is_Bound()) {
 		printf("FAIL: d3dx9_43.dll did not bind; all seventeen entry points are phase 1 dependencies\n");
 		return 1;
@@ -410,13 +418,19 @@ int main(int argument_count, char ** arguments)
 	// on purpose.  Pointed at the game's own function it would compare d3dxportable.h with itself
 	// and could no longer see the dispatch.
 	{
+		char vendor[13];
+#if defined(_M_ARM64)
+		// ARM64 has no CPUID and no d3dx9_43.dll: Microsoft shipped the DLL for x86 and x64 only,
+		// so an ARM64 build fails at the bind above and never gets here.  This only has to compile.
+		strcpy(vendor, "(arm64)");
+#else
 		int registers[4];
 		__cpuid(registers, 0);
-		char vendor[13];
 		memcpy(vendor + 0, &registers[1], 4);
 		memcpy(vendor + 4, &registers[3], 4);
 		memcpy(vendor + 8, &registers[2], 4);
 		vendor[12] = '\0';
+#endif
 
 		D3DXMATRIX basis;
 		memcpy(&basis, D3DX_GOLDEN_BASIS, sizeof(basis));

@@ -76,14 +76,20 @@ license_entry() {
 				"https://github.com/olcayseygan/CnCGeneralsZH-Reforged" > "$L/FFmpeg-SOURCE.txt";;
 		sdl3) cp "$s/SDL3/LICENSE.txt" "$L/SDL3-LICENSE.txt";;
 		shadercross) cp "$s/SDL_shadercross/LICENSE.txt" "$L/SDL_shadercross-LICENSE.txt";;
-		freetype)
-			cp "$s/freetype/LICENSE.TXT" "$L/FreeType-LICENSE.txt" && cp "$s/freetype/docs/FTL.TXT" "$L/FreeType-FTL.txt";;
+		freetype)		# dual-licensed; this game takes the GNU GPL (version 2 or later) option, as NOTICE.md says
+			cp "$s/freetype/LICENSE.TXT" "$L/FreeType-LICENSE.txt" && cp "$s/freetype/docs/GPLv2.TXT" "$L/FreeType-GPLv2.txt" &&
+			printf '%s\n' "FreeType is dual-licensed (FreeType-LICENSE.txt): the FreeType License or the GNU General Public" \
+				"License, version 2 or later.  This game uses it under the GNU GPL option, version 2 or later" \
+				"(FreeType-GPLv2.txt), as NOTICE.md in the game's source says." > "$L/FreeType-OPTION.txt";;
 		glslang) cp "$s/glslang/LICENSE.txt" "$L/glslang-LICENSE.txt";;
 		spirv-cross) cp "$s/SPIRV-Cross/LICENSE" "$L/SPIRV-Cross-LICENSE.txt";;
 		litehtml) cp "$s/litehtml/LICENSE" "$L/litehtml-LICENSE.txt";;
 		gumbo) cp "$s/litehtml/src/gumbo/LICENSE" "$L/gumbo-LICENSE.txt";;
 		miniaudio) cp "$s/miniaudio/LICENSE" "$L/miniaudio-LICENSE.txt";;
 		gamespy) cp "$s/GameSpy/LICENSE" "$L/GameSpy-LICENSE.txt";;
+		lzhl)		# LZH-Light's notice is the comment that opens lzhl.h (inside libcompression, unaltered)
+			awk 'NR == 1 && !/^\/\*/ { exit 1 } { print } /\*\// { exit }' "$s/Compression/LZHCompress/CompLibHeader/lzhl.h" > "$L/LZH-Light-LICENSE.txt" &&
+			grep -q "this notice may not be removed or altered" "$L/LZH-Light-LICENSE.txt";;
 		zlib)		# zlib's licence is the comment that opens zlib.h
 			awk 'NR == 1 && !/^\/\*/ { exit 1 } { print } /\*\// { exit }' "$s/Compression/ZLib/zlib.h" > "$L/zlib-LICENSE.txt" &&
 			grep -q "This notice may not be removed" "$L/zlib-LICENSE.txt";;

@@ -54,7 +54,11 @@ check() { if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failed=1; fi; 
 # 0. The firewall gate's control (macOS): fakes of socketfilterfw reporting the firewall on, stealth mode on
 #    and block-all on must each make the harness skip before anything listens - no copy, no probe.
 if [ "$(uname -s)" = "Darwin" ]; then
-	FAKE="$(mktemp -d "${TMPDIR:-/tmp}/net-check-fw.XXXXXX")"
+	FAKE="$(mktemp -d "${TMPDIR:-/tmp}/net-check-fw.XXXXXX")" || FAKE=""
+	if [ -z "$FAKE" ] || [ ! -d "$FAKE" ]; then
+		echo "run_net_check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+		exit 2
+	fi
 	fake() {	# fake <name> <global> <stealth> <blockall>
 		printf '#!/bin/sh\ncase "$1" in --getglobalstate) echo "%s";; --getstealthmode) echo "%s";; --getblockall) echo "%s";; esac\n' \
 			"$2" "$3" "$4" > "$FAKE/$1"; chmod +x "$FAKE/$1"
@@ -73,7 +77,11 @@ fi
 
 # L. the lock.  A private lock file for the case where nothing starts; the real one for the case that
 #    goes on to start copies, so those still take their turn on the machine.
-LT="$(mktemp -d "${TMPDIR:-/tmp}/net-check-lock.XXXXXX")"
+LT="$(mktemp -d "${TMPDIR:-/tmp}/net-check-lock.XXXXXX")" || LT=""
+if [ -z "$LT" ] || [ ! -d "$LT" ]; then
+	echo "run_net_check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 hold() {	# hold <lock file> <seconds>: holds it (waiting for it first) in the background; prints once held
 	python3 - "$1" "$2" <<'HOLD_EOF' &
 import fcntl, sys, time

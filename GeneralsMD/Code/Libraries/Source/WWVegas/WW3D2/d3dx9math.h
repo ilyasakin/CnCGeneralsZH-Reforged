@@ -53,7 +53,7 @@
 #ifndef D3DX9MATH_H
 #define D3DX9MATH_H
 
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(ZH_D3D12_DEVICE)
 
 #include <d3d9.h>
 

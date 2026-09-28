@@ -25,7 +25,8 @@
 
 #pragma once
 
-#if defined(_WIN32)
+// On Windows only the -d3d12 device's own targets (X1) may reach it: CMake defines ZH_D3D12_DEVICE for them.
+#if defined(_WIN32) && !defined(ZH_D3D12_DEVICE)
 #error "Platform/PosixD3D9 is the POSIX build's <d3d9caps.h>; a Windows build must reach the SDK's"
 #endif
 

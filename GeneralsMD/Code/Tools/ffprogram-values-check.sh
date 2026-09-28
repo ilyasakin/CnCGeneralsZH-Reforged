@@ -30,7 +30,7 @@
 #      assertions ran.
 # MinGW-w64's headers are compiled against, never copied.
 #
-# Exit status: 0 on a pass; 1 on a failure; 77 without x86_64-w64-mingw32-g++.
+# Exit status: 0 on a pass; 1 on a failure; 2 without a work folder; 77 without x86_64-w64-mingw32-g++.
 
 set -u
 COMPILER=x86_64-w64-mingw32-g++
@@ -39,7 +39,13 @@ if ! command -v "$COMPILER" >/dev/null 2>&1; then
 	exit 77
 fi
 TESTS="$(cd "$(dirname "$0")/../Tests" && pwd)"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/ffprogram-values-check.XXXXXX")"
+# A work folder that could not be made is the end of the run: going on with WORK empty would put
+# "$WORK/..." at the file system's root.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/ffprogram-values-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "ffprogram-values-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${WORK:?}"' EXIT
 
 cat > "$WORK/d3d8.cpp" <<'EOF'

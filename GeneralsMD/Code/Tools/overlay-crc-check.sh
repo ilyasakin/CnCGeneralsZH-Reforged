@@ -78,7 +78,11 @@ RUNDIR="$(cd "$CODE/../Run" 2>/dev/null && pwd || true)"	# the fork's art archiv
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$GENERALS")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/overlay-crc-check.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/overlay-crc-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "overlay-crc-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 TAG="oc$$_"
 
 cleanup() {

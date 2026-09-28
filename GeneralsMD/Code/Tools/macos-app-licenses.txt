@@ -55,6 +55,7 @@ gamespy               gamespy
 
 # compiled into another library
 + zlib                # Compression/ZLib, inside libcompression
++ lzhl                # Compression/LZHCompress (LZH-Light, Sergey Ignatchenko), inside libcompression
 + nanosvg             # compiled into HtmlOverlay.cpp, inside libgameengine
 
 # shipped in the overlay, not linked

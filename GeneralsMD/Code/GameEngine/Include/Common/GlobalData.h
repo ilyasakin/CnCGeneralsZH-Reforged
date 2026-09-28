@@ -115,6 +115,13 @@ public:
 
 	Bool setTimeOfDay( TimeOfDay tod );		///< Use this function to set the Time of day;
 
+	/// Whether the dynamic LOD follows the frame rate this run: the player's (or the preset's) setting,
+	/// unless -noDynamicLOD turned it off.  Read this, not m_enableDynamicLOD, wherever the running game
+	/// acts on it; m_enableDynamicLOD is the preference the options menu shows and saves.
+	Bool isDynamicLODEnabled() const { return m_enableDynamicLOD && !m_noDynamicLODOverride; }
+	/// The particle ceiling in force: -particlecap's, or the options slider's MaxParticleCount.
+	Int getEffectiveParticleCap() const { return (m_particleCapOverride > 0) ? m_particleCapOverride : m_maxParticleCount; }
+
 	static void parseGameDataDefinition( INI* ini );
 
 	//-----------------------------------------------------------------------------------------------
@@ -147,6 +154,7 @@ public:
 	Int m_msaaLevel;					///< multisampling, as an index into the levels the options menu offers
 	Bool m_vsync;						///< wait for the monitor; off is the uncapped picture the frame-rate cap removal shipped
 	Bool m_direct3D11;			///< draw and present through the Direct3D 11 backend; -d3d9 and -headless turn it off
+	Bool m_direct3D12;			///< -d3d12, Windows: draw through zh_d3d12.dll, the SDL3 GPU device on Direct3D 12
 	AsciiString m_direct3D11DumpPath;	///< -dx11dump: where to write each generated program
 	AsciiString m_direct3D11PostChain;	///< -dx11post: the effects run over the finished D3D11 frame
 	Int m_xResolution;
@@ -164,6 +172,7 @@ public:
 	Bool m_drawEntireTerrain;
 	_TerrainLOD m_terrainLOD;
 	Bool m_enableDynamicLOD;
+	Bool m_noDynamicLODOverride;	// "-noDynamicLOD": off for this run, whatever the static preset or Options.ini set
 	Bool m_enableStaticLOD;
 	Int m_terrainLODTargetTimeMS;
 	Bool m_clientRetaliationModeEnabled;

@@ -601,14 +601,6 @@ Int parseLowDetail(char *args[], int num)
 
 //=============================================================================
 //=============================================================================
-Int parseNoDynamicLOD(char *args[], int num)
-{
-	if (TheWritableGlobalData)
-	{
-		TheWritableGlobalData->m_enableDynamicLOD = FALSE;
-	}
-	return 1;
-}
 
 //=============================================================================
 //=============================================================================
@@ -900,6 +892,23 @@ Int parseSmoke(char *args[], int num)
 			return 2;
 		}
 		TheWritableGlobalData->m_smokeThickness = DEFAULT_THICKNESS;
+	}
+	return 1;
+}
+
+/* -noDynamicLOD: the detail level does not follow the frame rate, and every effect draws at the highest
+	 level (W3DDisplay::draw forces it).  EA had it in the Debug and Internal builds only, so a Release build
+	 ignored it (measured: a Release run with it still dropped to Medium); it is for every build now, like
+	 -particlecap, because a comparison of two renderers or two machines has to draw the same effects.
+	 GameLODManager::init applies the static preset after the command line is parsed and sets
+	 m_enableDynamicLOD from it, so the switch is a flag of its own, read where the game acts on dynamic LOD
+	 (GlobalData::isDynamicLODEnabled).  m_enableDynamicLOD, the setting the options menu shows and saves, is
+	 not touched, so a run with the switch never saves it as the player's choice. */
+Int parseNoDynamicLOD(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_noDynamicLODOverride = TRUE;
 	}
 	return 1;
 }
@@ -1640,6 +1649,18 @@ Int parseDirect3D9(char *args[], int num)
 	return 1;
 }
 
+/* -d3d12: draw through zh_d3d12.dll (X1), the SDL3 GPU device macOS and Linux draw with, on Direct3D 12.
+	 * Windows only, and opt-in while it is proved against -d3d9 and -dx11.  W3DDisplay decides whether it
+	 * happens: a zh_d3d12.dll that does not load keeps the default renderer, and says so in the log. */
+Int parseDirect3D12(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_direct3D12 = TRUE;
+	}
+	return 1;
+}
+
 /* -language <english|turkish>: the language the game's words are in for this run, over whatever
 	 * the Options menu saved.  The string table is built once, while the game starts and after this
 	 * line is read, so this is how the launcher lets a player pick a language before the first menu.
@@ -2371,6 +2392,7 @@ static CommandLineParam params[] =
 	{ "-particlebounce", parseParticleBounce },
 	{ "-smoke", parseSmoke },
 	{ "-particlecap", parseParticleCap },
+	{ "-noDynamicLOD", parseNoDynamicLOD },
 	{ "-nochroma", parseNoChroma },
 	{ "-shadowmapreport", parseShadowMapReport },
 	{ "-shadowmapboth", parseShadowMapBoth },
@@ -2415,7 +2437,6 @@ static CommandLineParam params[] =
 	{ "-nocinematic", parseNoCinematic },
 	{ "-noViewLimit", parseNoViewLimit },
 	{ "-lowDetail", parseLowDetail },
-	{ "-noDynamicLOD", parseNoDynamicLOD },
 	{ "-noStaticLOD", parseNoStaticLOD },
 	{ "-useWaveEditor", parseUseWaveEditor },
 	{ "-wireframe", parseWireframe },
@@ -2483,6 +2504,7 @@ static CommandLineParam params[] =
 	{ "-turbo", parseTurbo },
 	{ "-msaa", parseMSAA },
 	{ "-d3d9", parseDirect3D9 },
+	{ "-d3d12", parseDirect3D12 },
 	{ "-language", parseTextLanguage },
 	{ "-dx11dump", parseDirect3D11Dump },
 	{ "-dx11post", parseDirect3D11Post },

@@ -31,7 +31,7 @@
 #ifndef PLATFORM_D3D9POSIXMATH_H
 #define PLATFORM_D3D9POSIXMATH_H
 
-#if defined(_WIN32) && !defined(D3D9POSIX_CHECKER)
+#if defined(_WIN32) && !defined(D3D9POSIX_CHECKER) && !defined(ZH_D3D12_DEVICE)
 #error "Platform/D3D9PosixMath.h is the POSIX side of Direct3D 9; Windows uses the SDK's d3d9types.h"
 #endif
 

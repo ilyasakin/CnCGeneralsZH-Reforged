@@ -27,6 +27,7 @@
 #include "PreRTS.h"
 #include "Common/EarlyCommandLine.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 namespace {
@@ -66,6 +67,36 @@ TEST(early_command_line_options_match_on_word_boundaries_in_any_case)
 	CHECK( findEarlyCommandLineOption( L"-head" ) == NULL );
 	CHECK( findEarlyCommandLineOption( L"-multiInstance" ) == NULL );
 	CHECK( findEarlyCommandLineOption( L"-last" ) != NULL );
+}
+
+// ZH_UNATTENDED marks a scripted run that draws (-headless is the one that does not): set to anything but
+// "" or "0".  This test's own command line carries -headless, so isUnattendedProcess() is true either way.
+static void set_unattended( const char *value )
+{
+#if defined(_WIN32)
+	_putenv_s( "ZH_UNATTENDED", value != NULL ? value : "" );
+#else
+	if (value != NULL)
+		setenv( "ZH_UNATTENDED", value, 1 );
+	else
+		unsetenv( "ZH_UNATTENDED" );
+#endif
+}
+
+TEST(early_command_line_zh_unattended_marks_a_scripted_run)
+{
+	set_unattended( NULL );
+	CHECK( !unattendedByEnvironment() );
+	set_unattended( "" );
+	CHECK( !unattendedByEnvironment() );
+	set_unattended( "0" );
+	CHECK( !unattendedByEnvironment() );
+	set_unattended( "1" );
+	CHECK( unattendedByEnvironment() );
+	set_unattended( "yes" );
+	CHECK( unattendedByEnvironment() );
+	set_unattended( NULL );
+	CHECK( isUnattendedProcess() );		// -headless, from the command line
 }
 
 TEST(early_command_line_values_are_the_bytes_given)

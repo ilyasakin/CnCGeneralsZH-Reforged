@@ -26,7 +26,11 @@
 set -u
 GUARD="$(cd "$(dirname "$0")/../Tools" && pwd)/install-guard.sh"
 . "$GUARD"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/test_install_guard.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/test_install_guard.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "test_install_guard: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${WORK:?}"' EXIT
 failed=0
 check() { if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failed=1; fi; }

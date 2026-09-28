@@ -1049,8 +1049,12 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	// that has FMA3 and a plain SSE2 one on a CPU that does not, and the two differ in the last bit.
 	// Logic routes its trig through DetTrig, but the computer player's matchup score takes a log(),
 	// and one bit there is a different unit bought and a network game that falls apart.  One path
-	// for every machine; v1.1.4 was a 32-bit build and never had the choice.
+	// for every machine; v1.1.4 was a 32-bit build and never had the choice.  Windows on Arm's
+	// runtime has no FMA3 routine to choose: whether its libm answers that log() as x64 does is E1's
+	// question, as it is off Windows (PosixMain.cpp).
+#if defined(_M_X64)
 	_set_FMA3_enable( 0 );
+#endif
 
 	// Without this Windows scales the whole window by the display's scaling setting, so at 125% a
 	// 1920x1080 game on a 1920x1080 screen is drawn 2400x1350 and hangs off the bottom right.  The

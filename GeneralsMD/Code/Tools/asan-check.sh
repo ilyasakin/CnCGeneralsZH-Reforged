@@ -75,7 +75,13 @@ CODE="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$GENERALS")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/asan-check.XXXXXX")"
+# A work folder that could not be made is the end of the run: going on with WORK empty would put
+# "$WORK/..." at the file system's root.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/asan-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "asan-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 ROOT="$WORK/root"
 TAG="ac$$_"
 

@@ -358,7 +358,11 @@ CODE="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 abs() { echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; }
 EXE[0]="$(abs "$GENERALS")"; EXE[1]="$(abs "$PEER1")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/net-check.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/net-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "net-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 ROOT="$WORK/root"
 TAG="nc$$_"
 
