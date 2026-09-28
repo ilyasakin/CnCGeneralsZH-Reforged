@@ -102,7 +102,7 @@ public:
 
 	/** Where the D-pad goes from the box from, in the direction (dx, dy) (one of them 0, the other 1 or -1): of the
 		* boxes wholly beyond its centre that way and inside the direction's 45 degree cone, the nearest, edge to edge,
-		* with each pixel a box lies aside of the line counting three and being aside at all 64 more - in line meaning
+		* with each pixel a box lies aside of the line counting three and being aside at all 128 more - in line meaning
 		* it overlaps the focus's own span or the lane passes through it, the lane being the remembered column's x
 		* for up and down, the row's y for left and right.  -1 when none.  So grids go by rows and columns, a box in the
 		* lane is never skipped for a diagonal one as near, a shorter row's wide box a short way off is passed
