@@ -115,6 +115,13 @@ public:
 
 	Bool setTimeOfDay( TimeOfDay tod );		///< Use this function to set the Time of day;
 
+	/// Whether the dynamic LOD follows the frame rate this run: the player's (or the preset's) setting,
+	/// unless -noDynamicLOD turned it off.  Read this, not m_enableDynamicLOD, wherever the running game
+	/// acts on it; m_enableDynamicLOD is the preference the options menu shows and saves.
+	Bool isDynamicLODEnabled() const { return m_enableDynamicLOD && !m_noDynamicLODOverride; }
+	/// The particle ceiling in force: -particlecap's, or the options slider's MaxParticleCount.
+	Int getEffectiveParticleCap() const { return (m_particleCapOverride > 0) ? m_particleCapOverride : m_maxParticleCount; }
+
 	static void parseGameDataDefinition( INI* ini );
 
 	//-----------------------------------------------------------------------------------------------
@@ -164,6 +171,7 @@ public:
 	Bool m_drawEntireTerrain;
 	_TerrainLOD m_terrainLOD;
 	Bool m_enableDynamicLOD;
+	Bool m_noDynamicLODOverride;	// "-noDynamicLOD": off for this run, whatever the static preset or Options.ini set
 	Bool m_enableStaticLOD;
 	Int m_terrainLODTargetTimeMS;
 	Bool m_clientRetaliationModeEnabled;

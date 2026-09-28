@@ -1227,16 +1227,17 @@ void W3DDisplay::init( void )
 						 WW3D::Get_Render_Device_Name(WW3D::Get_Render_Device())));
 	{
 		const char *lodName = "off";
-		if (TheGameLODManager && TheGlobalData && TheGlobalData->m_enableDynamicLOD)
+		if (TheGameLODManager && TheGlobalData && TheGlobalData->isDynamicLODEnabled())
 		{
 			const DynamicGameLODLevel lod = TheGameLODManager->getDynamicLODLevel();
 			if (lod >= DYNAMIC_GAME_LOD_LOW && lod < DYNAMIC_GAME_LOD_COUNT)
 				lodName = TheGameLODManager->getDynamicGameLODLevelName(lod);
 		}
-		DEBUG_LOG(("W3DDisplay::init - quality: filter %d aniso %d particles %d shadows vol %d decal %d trees %d heat %d dynamicLOD %s\n",
+		DEBUG_LOG(("W3DDisplay::init - quality: filter %d aniso %d particles %d (in force %d) shadows vol %d decal %d trees %d heat %d dynamicLOD %s\n",
 							 TheGlobalData ? TheGlobalData->m_textureFilterMode : -1,
 							 TheGlobalData ? TheGlobalData->m_anisotropyLevel : -1,
 							 TheGlobalData ? TheGlobalData->m_maxParticleCount : -1,
+							 TheGlobalData ? TheGlobalData->getEffectiveParticleCap() : -1,
 							 TheGlobalData ? (Int)TheGlobalData->m_useShadowVolumes : -1,
 							 TheGlobalData ? (Int)TheGlobalData->m_useShadowDecals : -1,
 							 TheGlobalData ? (Int)TheGlobalData->m_useTrees : -1,
@@ -2290,7 +2291,7 @@ void W3DDisplay::draw( void )
 	}
 
 	updateAverageFPS();
-	if (TheGlobalData->m_enableDynamicLOD && TheGameLogic->getShowDynamicLOD())
+	if (TheGlobalData->isDynamicLODEnabled() && TheGameLogic->getShowDynamicLOD())
 	{
 		DynamicGameLODLevel lod=TheGameLODManager->findDynamicLODLevel(m_averageFPS);
 		TheGameLODManager->setDynamicLODLevel(lod);

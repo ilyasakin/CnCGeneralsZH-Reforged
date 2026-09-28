@@ -930,6 +930,7 @@ GlobalData::GlobalData()
 	m_particleGroundBounce = FALSE;
 	m_smokeThickness = 0.0f;
 	m_particleCapOverride = 0;
+	m_noDynamicLODOverride = FALSE;
 	m_maxFieldParticleCount = 30;
 	
 	// End Add
