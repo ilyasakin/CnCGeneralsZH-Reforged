@@ -1166,6 +1166,15 @@ void SdlGamepad_update( UnsignedInt nowMs )
 	}
 	GamepadHints::setCommandBarMode( theCommandBarMode );		// before this frame's drawing reads it
 
+	// the modifier held, for the prompt strip: the left trigger, the right shoulder or the left shoulder, on any pad
+	Int layer = GAMEPAD_BUTTON_NONE;
+	static const GamepadButtonType layers[] = { GAMEPAD_BUTTON_LEFT_TRIGGER, GAMEPAD_BUTTON_RIGHT_SHOULDER, GAMEPAD_BUTTON_LEFT_SHOULDER };
+	for (size_t i = 0; i < thePads.size() && layer == GAMEPAD_BUTTON_NONE; ++i)
+		for (Int k = 0; k < 3 && layer == GAMEPAD_BUTTON_NONE; ++k)
+			if (thePads[i].held[ layers[k] ] && !thePads[i].menuPress[ layers[k] ])
+				layer = layers[k];
+	GamepadHints::setLayer( layer );
+
 	for (size_t i = 0; i < thePads.size(); ++i)
 	{
 		Pad &pad = thePads[i];

@@ -84,6 +84,7 @@ static void drawFramerateBar(void);
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/Water.h"
 #include "GameClient/GamepadFocus.h"
+#include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadRadial.h"
 
 #include "GameNetwork/NetworkInterface.h"
@@ -2620,6 +2621,7 @@ AGAIN:
 				// G1: a pad's menu focus and its hint bar, and its radial command menu, over the GUI and under the cursor
 				GamepadFocus::draw();
 				GamepadRadial::draw();
+				GamepadHints::drawMatchStrip();
 
 				// draw the mouse
 				if( TheMouse )

@@ -32,8 +32,12 @@
 #include "GameClient/GameFont.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/GameText.h"
+#include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadHints.h"
+#include "GameClient/GamepadRadial.h"
 #include "GameClient/GlobalLanguage.h"
+#include "GameLogic/GameLogic.h"
 #include "GameClient/Mouse.h"
 
 #include <math.h>
@@ -131,6 +135,7 @@ LoadedFont theLoaded[ GAMEPAD_GLYPHS_COUNT ];
 GamepadGlyphSet theShown = GAMEPAD_GLYPHS_NONE;
 Bool theConfirmSwapped = FALSE;
 Bool theCommandBarMode = FALSE;
+Int theLayer = GAMEPAD_BUTTON_NONE;
 
 /// Kenney's map: one "glyph_name: U+E004" a line
 Bool readMap( const char *path, std::map<std::string, WideChar> &codes )
@@ -487,6 +492,101 @@ GamepadHints::Hint GamepadHints::hintFor( GameWindow *window, Int pointSize, Gam
 	if (commandSlotOf( id ) == firstShownSlot() && bar != GAMEPAD_BUTTON_NONE && glyphFor( theShown, bar, pointSize, font, glyph ))
 		return HINT_INSTEAD;
 	return HINT_HIDE;
+}
+
+void GamepadHints::setLayer( Int button )
+{
+	theLayer = button;
+}
+
+Int GamepadHints::getLayer( void )
+{
+	return theLayer;
+}
+
+void GamepadHints::drawMatchStrip( void )
+{
+	if (theShown == GAMEPAD_GLYPHS_NONE || TheDisplay == NULL || TheDisplayStringManager == NULL || TheFontLibrary == NULL
+			|| TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame()
+			|| GamepadFocus::isActive() || GamepadRadial::isOpen())
+		return;
+	struct Prompt { Int button; const char *label; };
+	static const Prompt plain[] = { { GAMEPAD_BUTTON_SOUTH, "GUI:GamepadSelect" }, { GAMEPAD_BUTTON_WEST, "GUI:GamepadOrder" },
+		{ GAMEPAD_BUTTON_EAST, "GUI:GamepadBack" }, { GAMEPAD_BUTTON_NORTH, "GUI:GamepadAttackMove" },
+		{ GAMEPAD_BUTTON_RIGHT_TRIGGER, "GUI:GamepadCommands" }, { GAMEPAD_BUTTON_LEFT_SHOULDER, "GUI:GamepadIdleWorker" } };
+	static const Prompt queue[] = { { GAMEPAD_BUTTON_SOUTH, "GUI:GamepadAdd" }, { GAMEPAD_BUTTON_WEST, "GUI:GamepadQueue" },
+		{ GAMEPAD_BUTTON_DPAD_UP, "GUI:GamepadGroupsHigh" } };
+	static const Prompt ctrl[] = { { GAMEPAD_BUTTON_SOUTH, "GUI:GamepadForceFire" }, { GAMEPAD_BUTTON_DPAD_UP, "GUI:GamepadMakeGroup" },
+		{ GAMEPAD_BUTTON_EAST, "GUI:GamepadScatter" }, { GAMEPAD_BUTTON_LEFT_SHOULDER, "GUI:GamepadStop" } };
+	static const Prompt camera[] = { { GAMEPAD_BUTTON_RIGHT_STICK, "GUI:GamepadZoomTurn" }, { GAMEPAD_BUTTON_NORTH, "GUI:GamepadArmy" },
+		{ GAMEPAD_BUTTON_RIGHT_SHOULDER, "GUI:GamepadStop" } };
+	const Prompt *items = plain;
+	Int count = sizeof( plain ) / sizeof( plain[0] );
+	if (theLayer == GAMEPAD_BUTTON_LEFT_TRIGGER) { items = queue; count = sizeof( queue ) / sizeof( queue[0] ); }
+	else if (theLayer == GAMEPAD_BUTTON_RIGHT_SHOULDER) { items = ctrl; count = sizeof( ctrl ) / sizeof( ctrl[0] ); }
+	else if (theLayer == GAMEPAD_BUTTON_LEFT_SHOULDER) { items = camera; count = sizeof( camera ) / sizeof( camera[0] ); }
+
+	// one glyph string and one word string a slot, handed new text only when it changes (a display string keeps the
+	// texture its text was built into)
+	enum { SLOTS = 6 };
+	static DisplayString *glyphs[ SLOTS ] = { NULL }, *words[ SLOTS ] = { NULL };
+	const Int points = TheDisplay->getHeight() / 55 > 11 ? TheDisplay->getHeight() / 55 : 11;
+	GameFont *wordFont = TheFontLibrary->getFont( AsciiString( "Arial" ), points, TRUE );
+	if (wordFont == NULL)
+		return;
+	Int widths[ SLOTS ], total = 0, rowHeight = 0;
+	Bool shown[ SLOTS ];
+	for (Int i = 0; i < count && i < SLOTS; ++i)
+	{
+		GameFont *glyphFont = NULL;
+		UnicodeString glyph;
+		shown[i] = FALSE;
+		if (!glyphFor( theShown, items[i].button, points * 2, glyphFont, glyph ))
+			continue;
+		if (glyphs[i] == NULL)
+			glyphs[i] = TheDisplayStringManager->newDisplayString();
+		if (words[i] == NULL)
+			words[i] = TheDisplayStringManager->newDisplayString();
+		if (glyphs[i] == NULL || words[i] == NULL)
+			continue;
+		const UnicodeString word = TheGameText != NULL ? TheGameText->fetch( items[i].label ) : UnicodeString::TheEmptyString;
+		if (glyphs[i]->getFont() != glyphFont)
+			glyphs[i]->setFont( glyphFont );
+		if (glyphs[i]->getText() != glyph)
+			glyphs[i]->setText( glyph );
+		if (words[i]->getFont() != wordFont)
+			words[i]->setFont( wordFont );
+		if (words[i]->getText() != word)
+			words[i]->setText( word );
+		Int gw, gh, ww, wh;
+		glyphs[i]->getSize( &gw, &gh );
+		words[i]->getSize( &ww, &wh );
+		Int inkTop, inkBottom;
+		inkRows( theShown, items[i].button, gh, inkTop, inkBottom );
+		rowHeight = inkBottom - inkTop > rowHeight ? inkBottom - inkTop : rowHeight;
+		rowHeight = wh > rowHeight ? wh : rowHeight;
+		widths[i] = gw + 4 + ww;
+		total += widths[i] + (total > 0 ? points : 0);
+		shown[i] = TRUE;
+	}
+	if (total == 0)
+		return;
+	// along the top from the left, on a plate: right of the menu button in the corner, and clear of the diagnostic
+	// text on the right
+	const Int pad = points / 2, centreY = pad + rowHeight / 2 + 2;
+	Int x = 34 + pad;
+	TheDisplay->drawFillRect( x - pad, 2, total + 2 * pad, rowHeight + 2 * pad, GameMakeColor( 0, 0, 0, 150 ) );
+	for (Int i = 0; i < count && i < SLOTS; ++i)
+	{
+		if (!shown[i])
+			continue;
+		Int gw, gh, ww, wh;
+		glyphs[i]->getSize( &gw, &gh );
+		words[i]->getSize( &ww, &wh );
+		glyphs[i]->draw( x, glyphTop( theShown, items[i].button, gh, centreY ), GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+		words[i]->draw( x + gw + 4, centreY - wh / 2, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+		x += widths[i] + points;
+	}
 }
 
 void GamepadHints::drawTooltipCorner( const IRegion2D &box )

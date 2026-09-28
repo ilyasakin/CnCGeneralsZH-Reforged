@@ -15429,8 +15429,60 @@ GUI:GamepadTabs
 "Sekmeler"
 END
 
+GUI:GamepadOrder
+"Emir"
+END
+
+GUI:GamepadAttackMove
+"Saldırarak ilerle"
+END
+
+GUI:GamepadCommands
+"Komutlar"
+END
+
+GUI:GamepadIdleWorker
+"Boştaki işçi"
+END
+
+GUI:GamepadAdd
+"Ekle"
+END
+
+GUI:GamepadQueue
+"Sıraya al"
+END
+
+GUI:GamepadGroupsHigh
+"Gruplar 5-8"
+END
+
+GUI:GamepadForceFire
+"Zorla ateş"
+END
+
+GUI:GamepadMakeGroup
+"Grup kur"
+END
+
+GUI:GamepadScatter
+"Dağıl"
+END
+
+GUI:GamepadStop
+"Dur"
+END
+
+GUI:GamepadZoomTurn
+"Yakınlaştır ve döndür"
+END
+
+GUI:GamepadArmy
+"Tüm ordu"
+END
+
 TOOLTIP:Gamepad
-"Kumandayla oyna: sol çubuk imleci gezdirir, alttaki yüz düğmesi tıklar, üstteki komut çubuğuna götürür. Kapalıyken bağlı bir kumanda yok sayılır."
+"Kumandayla oyna: sol çubuk imleci gezdirir, A seçer, X emri verir, B geri alır, RT basılı tutulunca komut menüsü açılır. Gerisini üstteki şerit gösterir. Kapalıyken bağlı bir kumanda yok sayılır."
 END
 
 GUI:GamepadAim

@@ -107,6 +107,16 @@ public:
 	/// the glyph is (for inkRows)
 	static Hint hintFor( GameWindow *window, Int pointSize, GameFont *&font, UnicodeString &glyph, Int *button = NULL );
 
+	/** The modifier the pad holds in a match (LeftTrigger, RightShoulder or LeftShoulder, or GAMEPAD_BUTTON_NONE):
+		* the prompt strip shows what the buttons do while it is held (SdlGamepad sets it every update) */
+	static void setLayer( Int button );
+	static Int getLayer( void );
+
+	/** In a match, with a pad in use and no menu or ring up: a strip along the top left of the screen naming what the
+		* buttons do now - the face buttons and RT, or with LT, RB or LB held what that layer does - as console
+		* strategy games prompt their layers.  Client drawing only. */
+	static void drawMatchStrip( void );
+
 	/// In command-bar mode, South's glyph in the bottom right corner of the build card's box (InGameUI)
 	static void drawTooltipCorner( const IRegion2D &box );
 

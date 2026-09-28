@@ -870,8 +870,60 @@ GUI:GamepadTabs
 "Tabs"
 END
 
+GUI:GamepadOrder
+"Order"
+END
+
+GUI:GamepadAttackMove
+"Attack move"
+END
+
+GUI:GamepadCommands
+"Commands"
+END
+
+GUI:GamepadIdleWorker
+"Idle worker"
+END
+
+GUI:GamepadAdd
+"Add"
+END
+
+GUI:GamepadQueue
+"Queue"
+END
+
+GUI:GamepadGroupsHigh
+"Groups 5-8"
+END
+
+GUI:GamepadForceFire
+"Force fire"
+END
+
+GUI:GamepadMakeGroup
+"Make group"
+END
+
+GUI:GamepadScatter
+"Scatter"
+END
+
+GUI:GamepadStop
+"Stop"
+END
+
+GUI:GamepadZoomTurn
+"Zoom and turn"
+END
+
+GUI:GamepadArmy
+"Whole army"
+END
+
 TOOLTIP:Gamepad
-"Play with a controller: the left stick moves the pointer, the bottom face button clicks, and the top one takes you to the command bar. Off, a connected controller is ignored."
+"Play with a controller: the left stick moves the pointer, A selects, X gives the order, B takes back, and RT held opens the command menu. The strip at the top shows the rest. Off, a connected controller is ignored."
 END
 
 GUI:GamepadAim
