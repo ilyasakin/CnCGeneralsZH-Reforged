@@ -2001,7 +2001,9 @@ if(ZH_PLATFORM_POSIX)
   # and an edited replay is reported DIVERGED.  Same-machine determinism only: see the script.
   add_test(NAME replay_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_replay_check.sh $<TARGET_FILE:generals>)
-  set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1200)	# four 12000-frame matches since #34
+  # Four 12000-frame matches since #34.  The cap is there for a hang, not for speed: replay_check takes 279-392 s
+  # alone, and up to 991 s inside a full suite on a loaded 8-core Linux worker, where 1200 s had begun to cut it off.
+  set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 2400)
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
