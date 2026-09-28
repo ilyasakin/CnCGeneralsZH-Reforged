@@ -638,7 +638,7 @@ void GamepadFocus::draw( void )
 	const Int points = TheDisplay->getHeight() / 45 > 11 ? TheDisplay->getHeight() / 45 : 11;
 	GameFont *wordFont = TheFontLibrary != NULL ? TheFontLibrary->getFont( AsciiString( "Arial" ), points, TRUE ) : NULL;
 	Int x = TheDisplay->getWidth() - 12;
-	const Int y = TheDisplay->getHeight() - points * 2 - 8;
+	const Int centreY = TheDisplay->getHeight() - points - 10;		// the row's middle: glyph ink and word centred on it
 	for (Int i = count - 1; i >= 0; --i)
 	{
 		GameFont *glyphFont = NULL;
@@ -666,9 +666,10 @@ void GamepadFocus::draw( void )
 		glyphs[i]->getSize( &gw, &gh );
 		words[i]->getSize( &ww, &wh );
 		x -= ww;
-		words[i]->draw( x, y + (gh - wh) / 2, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+		words[i]->draw( x, centreY - wh / 2, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
 		x -= gw + 4;
-		glyphs[i]->draw( x, y, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+		glyphs[i]->draw( x, GamepadHints::glyphTop( GamepadHints::getShown(), items[i].button, gh, centreY ),
+			GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
 		x -= 18;
 	}
 }

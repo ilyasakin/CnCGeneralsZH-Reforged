@@ -95,8 +95,17 @@ public:
 		* what the button does (South is confirm): the glyph is physicalFor's, the one that does it */
 	static Bool glyphFor( GamepadGlyphSet set, Int button, Int pointSize, GameFont *&font, UnicodeString &glyph );
 
-	/// What window shows now, with the glyph's font and character for HINT_INSTEAD and HINT_BESIDE
-	static Hint hintFor( GameWindow *window, Int pointSize, GameFont *&font, UnicodeString &glyph );
+	/** The rows of a glyph string cellHeight high (its DisplayString's height) that button's glyph's ink covers,
+		* from the string's top: the glyphs sit on the baseline and are shorter than their line, and some (the
+		* shoulders, View) much shorter, so centring the string centres none of them.  The whole cell when the
+		* font's outlines were not read. */
+	static void inkRows( GamepadGlyphSet set, Int button, Int cellHeight, Int &top, Int &bottom );
+	/// Where to draw a glyph string cellHeight high so that its ink is centred on centreY
+	static Int glyphTop( GamepadGlyphSet set, Int button, Int cellHeight, Int centreY );
+
+	/// What window shows now, with the glyph's font and character for HINT_INSTEAD and HINT_BESIDE, and the button
+	/// the glyph is (for inkRows)
+	static Hint hintFor( GameWindow *window, Int pointSize, GameFont *&font, UnicodeString &glyph, Int *button = NULL );
 
 	/// In command-bar mode, South's glyph in the bottom right corner of the build card's box (InGameUI)
 	static void drawTooltipCorner( const IRegion2D &box );

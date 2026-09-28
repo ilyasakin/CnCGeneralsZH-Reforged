@@ -186,7 +186,8 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	GameFont *glyphFont = NULL;
 	UnicodeString glyphText;
 	const Int glyphPoints = font != NULL ? font->pointSize * 3 / 2 : 12;
-	const GamepadHints::Hint hint = GamepadHints::hintFor( window, glyphPoints, glyphFont, glyphText );
+	Int glyphButton = GAMEPAD_BUTTON_NONE;
+	const GamepadHints::Hint hint = GamepadHints::hintFor( window, glyphPoints, glyphFont, glyphText, &glyphButton );
 	if( hint == GamepadHints::HINT_HIDE )
 		return;
 	DisplayString *glyph = hint != GamepadHints::HINT_TEXT ? badgeString( glyphText, glyphFont ) : NULL;
@@ -196,25 +197,32 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	// get text size
 	text->getSize( &width, &height );
 
+	// a glyph's ink is shorter than its line and sits on the baseline: it is placed by its ink (GamepadHints::inkRows)
+	const Bool glyphInstead = hint == GamepadHints::HINT_INSTEAD && glyph != NULL;
+	Int inkTop = 0, inkBottom = height;
+	if( glyphInstead )
+		GamepadHints::inkRows( GamepadHints::getShown(), glyphButton, height, inkTop, inkBottom );
+
 	// where to draw
 	if( BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON ) )
 	{
 		// Oh god... this is a total hack for shortcut buttons to handle rendering text top left corner...
 		textPos.x = origin.x + 2;
-		textPos.y = origin.y + 0;
+		textPos.y = origin.y + (glyphInstead ? 2 - inkTop : 0);		// a glyph's ink two pixels in, as the letter's
 	}
 	else
 	{
 		textPos.x = origin.x + (size.x / 2) - (width / 2);
-		textPos.y = origin.y + (size.y / 2) - (height / 2);
+		textPos.y = origin.y + (size.y / 2) - (inkTop + inkBottom) / 2;
 	}
 
 	// Shortcut text sits on top of the button's own art, which can be any colour at all -
-	// a light unit portrait swallowed the letter.  Lay a translucent black plate under it.
+	// a light unit portrait swallowed the letter.  Lay a translucent black plate under it,
+	// around a glyph's ink rather than its line.
 	if( BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON ) && width > 0 && height > 0 )
 	{
-		TheDisplay->drawFillRect( textPos.x - 2, textPos.y, width + 4, height,
-														GameMakeColor( 0, 0, 0, 160 ) );
+		TheDisplay->drawFillRect( textPos.x - 2, textPos.y + inkTop - (glyphInstead ? 1 : 0), width + 4,
+														inkBottom - inkTop + (glyphInstead ? 2 : 0), GameMakeColor( 0, 0, 0, 160 ) );
 	}
 
 	// draw it
@@ -225,7 +233,8 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	{
 		Int glyphWidth, glyphHeight;
 		glyph->getSize( &glyphWidth, &glyphHeight );
-		glyph->draw( textPos.x - glyphWidth - 4, origin.y + (size.y / 2) - (glyphHeight / 2), textColor, dropColor );
+		glyph->draw( textPos.x - glyphWidth - 4,
+			GamepadHints::glyphTop( GamepadHints::getShown(), glyphButton, glyphHeight, origin.y + (size.y / 2) ), textColor, dropColor );
 	}
 
 }  // end drawButtonText

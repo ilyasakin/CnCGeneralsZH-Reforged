@@ -36,6 +36,7 @@
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/Mouse.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -110,12 +111,20 @@ const GlyphFont theFonts[ GAMEPAD_GLYPHS_COUNT ] =
 	{ "Data\\Fonts\\Gamepad\\kenney_input_steam_deck.ttf", "Data\\Fonts\\Gamepad\\kenney_input_steam_deck_map.txt", "Kenney Input Steam Deck" }
 };
 
+/// Where a glyph's ink is, in font units above the baseline
+struct Ink
+{
+	Int yMin, yMax;
+};
+
 /// A family's font once it is installed, and its code points by glyph name
 struct LoadedFont
 {
 	Bool tried;
 	Bool ok;
 	std::map<std::string, WideChar> codes;
+	Int winAscent, winDescent;		///< OS/2's: the line the engine's rasteriser lays a glyph in (glyphrasteriser.cpp)
+	std::map<WideChar, Ink> ink;		///< each code's ink, from the font's own outlines
 };
 
 LoadedFont theLoaded[ GAMEPAD_GLYPHS_COUNT ];
@@ -147,6 +156,100 @@ Bool readMap( const char *path, std::map<std::string, WideChar> &codes )
 	return !codes.empty();
 }
 
+UnsignedInt be16( const std::vector<unsigned char> &b, size_t at )
+{
+	return at + 2 <= b.size() ? (UnsignedInt)((b[at] << 8) | b[at + 1]) : 0;
+}
+
+Int be16s( const std::vector<unsigned char> &b, size_t at )
+{
+	return (Int)(short)be16( b, at );
+}
+
+UnsignedInt be32( const std::vector<unsigned char> &b, size_t at )
+{
+	return (be16( b, at ) << 16) | be16( b, at + 2 );
+}
+
+/** The ink of each glyph the family's map names, and the font's line, from the TrueType file itself (its head,
+	* OS/2, cmap format 4, loca and glyf tables).  Kenney's glyphs sit on the baseline and are shorter than the line
+	* the rasteriser gives them (a face button 983 units of a 1389-unit line, LB 655, View 410), so a glyph centred
+	* by its line sits low, and a short one lower: the draw sites centre the ink instead (inkRows). */
+Bool readInk( const char *path, LoadedFont &font )
+{
+	if (TheFileSystem == NULL)
+		return FALSE;
+	File *file = TheFileSystem->openFile( path, File::READ | File::BINARY );
+	if (file == NULL)
+		return FALSE;
+	const Int size = file->size();
+	std::vector<unsigned char> b( size > 0 ? size : 0 );
+	const Bool read = size > 0 && file->read( &b[0], size ) == size;
+	file->close();
+	if (!read)
+		return FALSE;
+	size_t head = 0, os2 = 0, cmap = 0, loca = 0, glyf = 0;
+	for (UnsignedInt i = 0, tables = be16( b, 4 ); i < tables; ++i)
+	{
+		const size_t record = 12 + 16 * i;
+		const UnsignedInt tag = be32( b, record ), offset = be32( b, record + 8 );
+		if (tag == 0x68656164) head = offset;						// 'head'
+		else if (tag == 0x4F532F32) os2 = offset;				// 'OS/2'
+		else if (tag == 0x636D6170) cmap = offset;			// 'cmap'
+		else if (tag == 0x6C6F6361) loca = offset;			// 'loca'
+		else if (tag == 0x676C7966) glyf = offset;			// 'glyf'
+	}
+	if (head == 0 || os2 == 0 || cmap == 0 || loca == 0 || glyf == 0)
+		return FALSE;
+	const Bool longLoca = be16s( b, head + 50 ) != 0;
+	font.winAscent = (Int)be16( b, os2 + 74 );
+	font.winDescent = (Int)be16( b, os2 + 76 );
+	// the Unicode BMP subtable, format 4
+	size_t sub = 0;
+	for (UnsignedInt i = 0, count = be16( b, cmap + 2 ); i < count && sub == 0; ++i)
+	{
+		const size_t record = cmap + 4 + 8 * i;
+		const UnsignedInt platform = be16( b, record ), encoding = be16( b, record + 2 );
+		const size_t at = cmap + be32( b, record + 4 );
+		if (((platform == 3 && encoding == 1) || platform == 0) && be16( b, at ) == 4)
+			sub = at;
+	}
+	if (sub == 0)
+		return FALSE;
+	const UnsignedInt segments = be16( b, sub + 6 ) / 2;
+	const size_t ends = sub + 14, starts = ends + 2 * segments + 2, deltas = starts + 2 * segments, ranges = deltas + 2 * segments;
+	for (std::map<std::string, WideChar>::const_iterator it = font.codes.begin(); it != font.codes.end(); ++it)
+	{
+		const UnsignedInt code = (UnsignedInt)it->second;
+		UnsignedInt glyph = 0;
+		for (UnsignedInt seg = 0; seg < segments; ++seg)
+		{
+			if (code > be16( b, ends + 2 * seg ) || code < be16( b, starts + 2 * seg ))
+				continue;
+			const UnsignedInt range = be16( b, ranges + 2 * seg );
+			if (range == 0)
+				glyph = (code + be16( b, deltas + 2 * seg )) & 0xFFFF;
+			else
+			{
+				const UnsignedInt at = be16( b, ranges + 2 * seg + range + 2 * (code - be16( b, starts + 2 * seg )) );
+				glyph = at != 0 ? (at + be16( b, deltas + 2 * seg )) & 0xFFFF : 0;
+			}
+			break;
+		}
+		if (glyph == 0)
+			continue;
+		const size_t from = longLoca ? be32( b, loca + 4 * glyph ) : 2 * be16( b, loca + 2 * glyph );
+		const size_t to = longLoca ? be32( b, loca + 4 * glyph + 4 ) : 2 * be16( b, loca + 2 * glyph + 2 );
+		if (to <= from)
+			continue;		// an empty glyph: no ink
+		Ink ink;
+		ink.yMin = be16s( b, glyf + from + 4 );
+		ink.yMax = be16s( b, glyf + from + 8 );
+		font.ink[ it->second ] = ink;
+	}
+	return font.winAscent + font.winDescent > 0;
+}
+
 LoadedFont &loaded( GamepadGlyphSet set )
 {
 	LoadedFont &font = theLoaded[ set ];
@@ -155,6 +258,8 @@ LoadedFont &loaded( GamepadGlyphSet set )
 		font.tried = TRUE;
 		font.ok = theFonts[ set ].file != NULL && readMap( theFonts[ set ].map, font.codes )
 			&& GlobalLanguage_installFontFile( AsciiString( theFonts[ set ].file ) );
+		if (font.ok && !readInk( theFonts[ set ].file, font ))
+			DEBUG_LOG(( "GamepadHints: %s's outlines not read: its glyphs are centred by their line\n", theFonts[ set ].file ));
 		if (!font.ok)
 			DEBUG_LOG(( "GamepadHints: no %s (vendor.sh fetches the hint fonts): that pad's hints stay off\n", theFonts[ set ].file ));
 	}
@@ -316,8 +421,43 @@ Bool GamepadHints::glyphFor( GamepadGlyphSet set, Int button, Int pointSize, Gam
 	return TRUE;
 }
 
-GamepadHints::Hint GamepadHints::hintFor( GameWindow *window, Int pointSize, GameFont *&font, UnicodeString &glyph )
+void GamepadHints::inkRows( GamepadGlyphSet set, Int button, Int cellHeight, Int &top, Int &bottom )
 {
+	top = 0;
+	bottom = cellHeight;
+	const char *name = glyphName( set, physicalFor( button ) );
+	if (name == NULL || set <= GAMEPAD_GLYPHS_NONE || set >= GAMEPAD_GLYPHS_COUNT || cellHeight <= 0)
+		return;
+	const LoadedFont &font = loaded( set );
+	std::map<std::string, WideChar>::const_iterator code = font.codes.find( name );
+	if (!font.ok || code == font.codes.end() || font.winAscent + font.winDescent <= 0)
+		return;
+	std::map<WideChar, Ink>::const_iterator ink = font.ink.find( code->second );
+	if (ink == font.ink.end())
+		return;
+	// the rasteriser's line is the font's win ascent over its win descent, each rounded: the baseline sits at the
+	// ascent's share of the cell, and the ink rises from there
+	const Real scale = (Real)cellHeight / (Real)(font.winAscent + font.winDescent);
+	const Int baseline = (Int)floorf( font.winAscent * scale + 0.5f );
+	top = baseline - (Int)floorf( ink->second.yMax * scale + 0.5f );
+	bottom = baseline - (Int)floorf( ink->second.yMin * scale + 0.5f );
+	if (top < 0) top = 0;
+	if (bottom > cellHeight) bottom = cellHeight;
+	if (bottom <= top) { top = 0; bottom = cellHeight; }
+}
+
+Int GamepadHints::glyphTop( GamepadGlyphSet set, Int button, Int cellHeight, Int centreY )
+{
+	Int top, bottom;
+	inkRows( set, button, cellHeight, top, bottom );
+	return centreY - (top + bottom) / 2;
+}
+
+GamepadHints::Hint GamepadHints::hintFor( GameWindow *window, Int pointSize, GameFont *&font, UnicodeString &glyph, Int *button )
+{
+	Int unused;
+	Int &which = button != NULL ? *button : unused;
+	which = GAMEPAD_BUTTON_NONE;
 	if (theShown == GAMEPAD_GLYPHS_NONE || window == NULL)
 		return HINT_TEXT;
 	const Int id = window->winGetWindowId();
@@ -325,8 +465,10 @@ GamepadHints::Hint GamepadHints::hintFor( GameWindow *window, Int pointSize, Gam
 	// a message box's answers: South's glyph beside OK or Yes, East's beside Cancel or No
 	const Int answer = answerOf( id );
 	if (answer != 0)
-		return glyphFor( theShown, answer > 0 ? GAMEPAD_BUTTON_SOUTH : GAMEPAD_BUTTON_EAST, pointSize, font, glyph )
-			? HINT_BESIDE : HINT_TEXT;
+	{
+		which = answer > 0 ? GAMEPAD_BUTTON_SOUTH : GAMEPAD_BUTTON_EAST;
+		return glyphFor( theShown, which, pointSize, font, glyph ) ? HINT_BESIDE : HINT_TEXT;
+	}
 
 	// the command bar: its letters are keys the pad has not
 	if (commandSlotOf( id ) < 0)
@@ -334,12 +476,14 @@ GamepadHints::Hint GamepadHints::hintFor( GameWindow *window, Int pointSize, Gam
 	if (theCommandBarMode)
 	{
 		const MouseIO *mouse = TheMouse != NULL ? TheMouse->getMouseStatus() : NULL;
+		which = GAMEPAD_BUTTON_SOUTH;
 		if (mouse != NULL && window->winPointInWindow( mouse->pos.x, mouse->pos.y )
-				&& glyphFor( theShown, GAMEPAD_BUTTON_SOUTH, pointSize, font, glyph ))
+				&& glyphFor( theShown, which, pointSize, font, glyph ))
 			return HINT_INSTEAD;
 		return HINT_HIDE;
 	}
 	const GamepadButtonType bar = TheGamepadMap != NULL ? TheGamepadMap->buttonFor( GAMEPAD_ACTION_COMMAND_BAR ) : GAMEPAD_BUTTON_NONE;
+	which = bar;
 	if (commandSlotOf( id ) == firstShownSlot() && bar != GAMEPAD_BUTTON_NONE && glyphFor( theShown, bar, pointSize, font, glyph ))
 		return HINT_INSTEAD;
 	return HINT_HIDE;
@@ -367,5 +511,7 @@ void GamepadHints::drawTooltipCorner( const IRegion2D &box )
 		theCorner->setText( glyph );
 	Int width = 0, height = 0;
 	theCorner->getSize( &width, &height );
-	theCorner->draw( box.hi.x - width - 4, box.hi.y - height - 2, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+	Int inkTop, inkBottom;
+	inkRows( theShown, GAMEPAD_BUTTON_SOUTH, height, inkTop, inkBottom );
+	theCorner->draw( box.hi.x - width - 4, box.hi.y - 4 - inkBottom, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
 }
