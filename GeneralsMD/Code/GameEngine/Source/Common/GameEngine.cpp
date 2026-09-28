@@ -1618,6 +1618,13 @@ Bool GameEngine_mayStartAnotherCatchupTick( Int ticksSoFar, Int maxTicks, Real e
 static Int64 s_lastLogicTickTicks = 0;
 static Real s_msPerLogicTick = 0.0f;
 
+static Bool s_oneLogicFramePerPass = FALSE;
+
+void GameEngine_setOneLogicFramePerPass( Bool one )
+{
+	s_oneLogicFramePerPass = one;
+}
+
 void GameEngine_noteLogicTickDone( Int logicFps, Bool fastMode )
 {
 	s_lastLogicTickTicks = Clock_Ticks();
@@ -2732,7 +2739,7 @@ void GameEngine::update( void )
 				if (noteFrameLimit() && frameLimitOvershoot() == 0)
 					break;
 
-				if (!mayCatchUp)
+				if (!mayCatchUp || s_oneLogicFramePerPass)
 					break;
 				tCatchupNow = Clock_Ticks();
 				if (!GameEngine_mayStartAnotherCatchupTick( logicTicksThisPass, maxTicksThisPass,
