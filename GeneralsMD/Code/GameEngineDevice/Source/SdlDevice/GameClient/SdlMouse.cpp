@@ -31,6 +31,10 @@
 
 #include <SDL3/SDL.h>
 
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <vector>
 
 SdlMouse *SdlMouse::s_active = NULL;
@@ -64,6 +68,52 @@ Bool readWholeFile( const char *path, std::vector<UnsignedByte> &bytes )
 	return ok;
 }
 
+/* ZH_POINTER_CHECK=<seconds>: a check that clicks land where the pointer is, in the real window, with no
+	 human and no accessibility permission.  That many seconds after the mouse is made, the pointer is warped
+	 to five places in the window and a right click is pushed at each (right: the menus take no action on it).
+	 stderr gets, for each, the place in window points and in the drawable's pixels, and the game pixel under
+	 it worked out from the drawable (pixel * game size / drawable size), independently of
+	 SdlInput_toGamePixels' points; then every move and click the mouse receives, in game pixels. */
+Real thePointerCheckAt = -1.0f;		///< seconds, or negative when off or done
+Int thePointerCheckEvents = 0;		///< events still to print
+
+void runPointerCheck( SDL_Window *window )
+{
+	Int pointsW = 0, pointsH = 0, pixelsW = 0, pixelsH = 0;
+	SDL_GetWindowSize( window, &pointsW, &pointsH );
+	SDL_GetWindowSizeInPixels( window, &pixelsW, &pixelsH );
+	const Int gameW = TheDisplay != NULL ? (Int)TheDisplay->getWidth() : 0;
+	const Int gameH = TheDisplay != NULL ? (Int)TheDisplay->getHeight() : 0;
+	fprintf( stderr, "pointer check: window %dx%d points, %dx%d pixels; the game %dx%d\n", pointsW, pointsH, pixelsW,
+		pixelsH, gameW, gameH );
+	if (pointsW <= 0 || pointsH <= 0 || pixelsW <= 0 || pixelsH <= 0 || gameW <= 0 || gameH <= 0)
+		return;
+	static const Real places[5][2] = { { 0.1f, 0.1f }, { 0.9f, 0.1f }, { 0.5f, 0.5f }, { 0.1f, 0.9f }, { 0.9f, 0.9f } };
+	for (Int i = 0; i < 5; ++i)
+	{
+		const Real x = floorf( places[i][0] * pointsW ) + 0.5f, y = floorf( places[i][1] * pointsH ) + 0.5f;
+		const Real px = x * pixelsW / pointsW, py = y * pixelsH / pointsH;
+		fprintf( stderr, "pointer check: place %d at %.1f,%.1f points = %.1f,%.1f pixels; expected game %d,%d\n", i, x, y,
+			px, py, (Int)floorf( px * gameW / pixelsW ), (Int)floorf( py * gameH / pixelsH ) );
+		SDL_WarpMouseInWindow( window, x, y );
+		for (Int down = 1; down >= 0; --down)
+		{
+			SDL_Event event;
+			SDL_zero( event );
+			event.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+			event.button.windowID = SDL_GetWindowID( window );
+			event.button.button = SDL_BUTTON_RIGHT;
+			event.button.down = down != 0;
+			event.button.clicks = 1;
+			event.button.x = x;
+			event.button.y = y;
+			event.button.timestamp = SDL_GetTicksNS();
+			SDL_PushEvent( &event );
+		}
+	}
+	thePointerCheckEvents = 40;
+}
+
 }  // namespace
 
 SdlMouse::SdlMouse( void )
@@ -79,6 +129,9 @@ SdlMouse::SdlMouse( void )
 	m_cursorConfined = FALSE;
 	s_active = this;
 	SdlInput_install();
+	const char *check = getenv( "ZH_POINTER_CHECK" );
+	if (check != NULL && atof( check ) > 0.0)
+		thePointerCheckAt = (Real)(SDL_GetTicks() / 1000.0 + atof( check ));
 }
 
 void SdlMouse_releaseCursors( void )
@@ -121,6 +174,11 @@ void SdlMouse::update( void )
 	SDL_Window *window = SdlInput_gameWindow();
 	if (window != NULL)
 	{
+		if (thePointerCheckAt >= 0.0f && SDL_GetTicks() / 1000.0 >= thePointerCheckAt)
+		{
+			thePointerCheckAt = -1.0f;
+			runPointerCheck( window );
+		}
 		/* WndProc's WM_ACTIVATEAPP: without the focus the pointer is left alone, and with it back the
 			 game's cursor is put back.  SdlGameEngine's pump keeps the focus events, so ask SDL each frame. */
 		const Bool hasFocus = (SDL_GetWindowFlags( window ) & SDL_WINDOW_INPUT_FOCUS) != 0;
@@ -183,6 +241,12 @@ void SdlMouse::addEvent( EventKind kind, Int x, Int y, Button button, Int clicks
 	if (kind == EVENT_NONE || m_eventBuffer[ m_nextFreeIndex ].kind != EVENT_NONE)
 		return;
 	m_positionReported = TRUE;
+	if (thePointerCheckEvents > 0)
+	{
+		--thePointerCheckEvents;
+		static const char *const kinds[] = { "none", "move", "down", "up", "wheel" };
+		fprintf( stderr, "pointer check: the mouse got %s (button %d) at game %d,%d\n", kinds[kind], (Int)button, x, y );
+	}
 	SdlMouseEvent &slot = m_eventBuffer[ m_nextFreeIndex ];
 	slot.kind = kind;
 	slot.x = x;

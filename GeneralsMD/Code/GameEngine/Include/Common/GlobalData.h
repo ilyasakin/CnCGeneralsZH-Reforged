@@ -155,6 +155,7 @@ public:
 	Bool m_vsync;						///< wait for the monitor; off is the uncapped picture the frame-rate cap removal shipped
 	Bool m_direct3D11;			///< draw and present through the Direct3D 11 backend; -d3d9 and -headless turn it off
 	Bool m_direct3D12;			///< -d3d12, Windows: draw through zh_d3d12.dll, the SDL3 GPU device on Direct3D 12
+	Bool m_direct3D12Refused;	///< -d3d9 or -dx11: not -d3d12 by default (Windows ARM64, where it is the default)
 	AsciiString m_direct3D11DumpPath;	///< -dx11dump: where to write each generated program
 	AsciiString m_direct3D11PostChain;	///< -dx11post: the effects run over the finished D3D11 frame
 	Int m_xResolution;

@@ -28,6 +28,7 @@
 
 #include "d3dx9runtime.h"
 #include "Platform/EngineShaderName.h"
+#include "sdl3shadercompile.h"
 
 static bool bind_once()
 {
@@ -142,4 +143,9 @@ extern "C" void ZHP_Name_Shader(const void * shader, const char * name)
 extern "C" void ZHP_Keep_D3D8_Declaration(void * declaration, const unsigned int * d3d8_tokens)
 {
 	PosixDevice_Keep_D3D8_Declaration(declaration, d3d8_tokens);
+}
+
+extern "C" void ZHP_Set_Shader_Cache_Directory(const char * directory)
+{
+	SDL3_Set_DXBC_Cache_Directory(directory);
 }

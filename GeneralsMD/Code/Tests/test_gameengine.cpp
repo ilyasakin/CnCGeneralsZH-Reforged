@@ -9082,6 +9082,83 @@ TEST(the_slow_frame_bar_moves_only_for_a_positive_number)
 	TheWritableGlobalData = saved;
 }
 
+/* -noaudio turns every sound off in every build.  It was registered in the Debug and Internal builds only,
+   so a Release build ignored it and a windowed run with it opened the audio device.  ctest runs this in
+   the configuration it built, which is Release on every gate. */
+TEST(noaudio_switch_turns_every_sound_off_in_every_build)
+{
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+	CHECK( TheGlobalData->m_audioOn );
+	CHECK( TheGlobalData->m_musicOn );
+	CHECK( TheGlobalData->m_soundsOn );
+	CHECK( TheGlobalData->m_speechOn );
+
+	char exe[] = "generals.exe";
+	char noAudio[] = "-noaudio";
+	char *argv[] = { exe, noAudio };
+	parseCommandLine( 2, argv );
+	CHECK( !TheGlobalData->m_audioOn );
+	CHECK( !TheGlobalData->m_musicOn );
+	CHECK( !TheGlobalData->m_soundsOn );
+	CHECK( !TheGlobalData->m_speechOn );
+
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = saved;
+}
+
+/* -nologo and -novideo: a Release build honours them only in a run with ZH_UNATTENDED set (our harnesses), so a
+   player's Release run always shows the EA logo, as EA's parseQuickStart keeps it "for legal reasons".  A Debug
+   or Internal build takes them as EA's did.  The CI scripts export ZH_UNATTENDED to the tests, so this sets and
+   clears it itself, and puts back what it found. */
+static void setUnattendedForTest( const char *value )
+{
+#if defined(_WIN32)
+	_putenv_s( "ZH_UNATTENDED", value != NULL ? value : "" );
+#else
+	if (value != NULL)
+		setenv( "ZH_UNATTENDED", value, 1 );
+	else
+		unsetenv( "ZH_UNATTENDED" );
+#endif
+}
+
+TEST(nologo_and_novideo_skip_videos_in_release_only_when_unattended)
+{
+	const char *was = getenv( "ZH_UNATTENDED" );
+	char saved[ 64 ] = "";
+	const Bool hadIt = (was != NULL);
+	if (hadIt)
+		snprintf( saved, sizeof( saved ), "%s", was );
+	GlobalData *savedData = TheWritableGlobalData;
+
+	char exe[] = "generals.exe";
+	char noLogo[] = "-nologo";
+	char noVideo[] = "-novideo";
+	char *argv[] = { exe, noLogo, noVideo };
+#if defined(_DEBUG) || defined(_INTERNAL)
+	const Bool playerRunSkips = TRUE;
+#else
+	const Bool playerRunSkips = FALSE;
+#endif
+
+	for (Int unattended = 0; unattended < 2; ++unattended) {
+		setUnattendedForTest( unattended ? "1" : NULL );
+		TheWritableGlobalData = NEW GlobalData;
+		CHECK( TheGlobalData->m_playIntro );
+		CHECK( TheGlobalData->m_videoOn );
+		parseCommandLine( 3, argv );
+		const Bool skips = unattended ? TRUE : playerRunSkips;
+		CHECK_EQ( (Int)TheGlobalData->m_playIntro, skips ? 0 : 1 );
+		CHECK_EQ( (Int)TheGlobalData->m_playSizzle, skips ? 0 : 1 );
+		CHECK_EQ( (Int)TheGlobalData->m_videoOn, skips ? 0 : 1 );
+		delete TheWritableGlobalData;
+	}
+
+	TheWritableGlobalData = savedData;
+	setUnattendedForTest( hadIt ? saved : NULL );
+}
+
 TEST(a_netgame_slot_list_is_the_player_order_on_every_machine)
 {
 	/* -netgame carries what the LAN lobby otherwise agrees on: who plays, at which address, in

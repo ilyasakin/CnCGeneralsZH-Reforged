@@ -29,6 +29,7 @@
 
 #include "Common/ArchiveFileSystem.h"
 #include "Common/CommandLine.h"
+#include "Common/EarlyCommandLine.h"	// unattendedByEnvironment, for -nologo and -novideo in Release
 #include "Common/CRCDebug.h"
 #include "Common/LocalFileSystem.h"
 #include "Common/OptionsCatalog.h"
@@ -188,10 +189,31 @@ Int parseNoMusic(char *args[], int)
 }
 
 
+/* -nologo and -novideo in a Release build are for our harnesses only.  EA kept both switches in the Debug and
+	 Internal builds, and made Release's -quickstart skip the sizzle movie "but still force the EA logo to show
+	 up.  This is for legal reasons." (parseQuickStart).  A player's Release run keeps that: the logo plays
+	 whatever the command line says.  A run with ZH_UNATTENDED set - the CI scripts and the test harnesses,
+	 never a player - may skip the videos, the logo included, so a visible test run does not spend its first
+	 minute on movies.  Debug and Internal builds take both switches as EA's did. */
+static Bool videoSkipAllowed( const char *which )
+{
+#if defined(_DEBUG) || defined(_INTERNAL)
+	(void)which;
+	return TRUE;
+#else
+	if (unattendedByEnvironment())
+		return TRUE;
+	DEBUG_LOG(("%s ignored: a Release build skips videos only in a run with ZH_UNATTENDED set; the EA logo stays for players\n", which));
+	return FALSE;
+#endif
+}
+
 //=============================================================================
 //=============================================================================
 Int parseNoVideo(char *args[], int)
 {
+	if (!videoSkipAllowed( "-novideo" ))
+		return 1;
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_videoOn = false;
@@ -995,9 +1017,10 @@ Int parseNoShaders(char *args[], int)
 	return 1;
 }
 
-#if (defined(_DEBUG) || defined(_INTERNAL))
 Int parseNoLogo(char *args[], int)
 {
+	if (!videoSkipAllowed( "-nologo" ))
+		return 1;
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_playIntro = FALSE;
@@ -1006,7 +1029,6 @@ Int parseNoLogo(char *args[], int)
 	}
 	return 1;
 }
-#endif
 
 Int parseNoSizzle( char *args[], int )
 {
@@ -1645,13 +1667,27 @@ Int parseDirect3D9(char *args[], int num)
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_direct3D11 = FALSE;
+		TheWritableGlobalData->m_direct3D12Refused = TRUE;	// on Windows ARM64, not -d3d12's default either
+	}
+	return 1;
+}
+
+/* -dx11: the Direct3D 11 frame over Direct3D 9, which is the default everywhere but Windows ARM64, where
+	 * -d3d12 is (W3DDisplay::init).  So this is the way to the Direct3D 11 frame on ARM64. */
+Int parseDirect3D11(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_direct3D11 = TRUE;
+		TheWritableGlobalData->m_direct3D12Refused = TRUE;
 	}
 	return 1;
 }
 
 /* -d3d12: draw through zh_d3d12.dll (X1), the SDL3 GPU device macOS and Linux draw with, on Direct3D 12.
-	 * Windows only, and opt-in while it is proved against -d3d9 and -dx11.  W3DDisplay decides whether it
-	 * happens: a zh_d3d12.dll that does not load keeps the default renderer, and says so in the log. */
+	 * Windows only; opt-in on x64 while it is proved against -d3d9 and -dx11, and the default on ARM64.
+	 * W3DDisplay decides whether it happens: a zh_d3d12.dll that does not load keeps the old renderer, and
+	 * says so in the log. */
 Int parseDirect3D12(char *args[], int num)
 {
 	if (TheWritableGlobalData)
@@ -2398,6 +2434,10 @@ static CommandLineParam params[] =
 	{ "-shadowmapboth", parseShadowMapBoth },
 	{ "-noparticleshadows", parseNoParticleShadows },
 	{ "-quickstart", parseQuickStart },
+	/* In every build, but a Release build honours them only with ZH_UNATTENDED set (videoSkipAllowed): the
+		 EA logo stays for players. */
+	{ "-nologo", parseNoLogo },
+	{ "-novideo", parseNoVideo },
 
 	{ "-packetloss", parsePacketLoss },
 	{ "-latAvg", parseLatencyAverage },
@@ -2416,9 +2456,7 @@ static CommandLineParam params[] =
 	{ "-ReplayCRCInterval", parseReplayCRCInterval },
 
 #if (defined(_DEBUG) || defined(_INTERNAL))
-	{ "-noaudio", parseNoAudio },
 	{ "-nomusic", parseNoMusic },
-	{ "-novideo", parseNoVideo },
 	{ "-noLogOrCrash", parseNoLogOrCrash },
 	{ "-FPUPreserve", parseFPUPreserve },
 	{ "-benchmark", parseBenchmark },
@@ -2466,7 +2504,6 @@ static CommandLineParam params[] =
 	{ "-noshadowvolumes", parseNoShadows },
 	{ "-nofx", parseNoFX },
 	{ "-ignoresync", parseSync },
-	{ "-nologo", parseNoLogo },
 	{ "-shellmap", parseShellMap },
 	{ "-noShellAnim", parseNoWindowAnimation },
 	{ "-winCursors", parseWinCursors },
@@ -2497,6 +2534,9 @@ static CommandLineParam params[] =
 	{ "-notactics", parseNoTactics },
 	{ "-observer", parseObserver },
 	{ "-headless", parseHeadless },
+	/* -noaudio was in the Debug/Internal block above, so a Release build ignored it and a windowed run
+		 opened the audio device.  It turns every sound off as -headless does: the device is never opened. */
+	{ "-noaudio", parseNoAudio },
 	{ "-maxframes", parseMaxGameFrames },
 	{ "-screenshot", parseScreenShot },
 	{ "-video", parseVideo },
@@ -2508,6 +2548,8 @@ static CommandLineParam params[] =
 	{ "-language", parseTextLanguage },
 	{ "-dx11dump", parseDirect3D11Dump },
 	{ "-dx11post", parseDirect3D11Post },
+	// After every longer -dx11 name: a parameter matches by its prefix, and the first in this table wins.
+	{ "-dx11", parseDirect3D11 },
 	{ "-autocamera", parseAutoCamera },
 	{ "-camera", parseCameraLook },
 	{ "-tracemove", parseTraceMove },

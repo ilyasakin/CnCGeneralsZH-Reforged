@@ -101,6 +101,9 @@ unsigned int ZHP_D3DX_FVF_Vertex_Size(unsigned long fvf);
 void ZHP_Name_Shader(const void * shader, const char * name);
 void ZHP_Keep_D3D8_Declaration(void * declaration, const unsigned int * d3d8_tokens);
 
+// Where the device keeps the Direct3D 12 programs it compiles (the user data folder; sdl3shadercompile.h).
+void ZHP_Set_Shader_Cache_Directory(const char * directory);
+
 }
 
 #endif // D3D12DEVICE_D3D12BRIDGE_H
