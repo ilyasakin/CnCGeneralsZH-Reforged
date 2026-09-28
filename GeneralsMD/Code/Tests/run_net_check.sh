@@ -146,6 +146,16 @@ printf '%s\n' "$out"
 check '[ $status -eq 1 ]' "the control (the second copy on another seed) fails the harness (exit $status)"
 check 'printf "%s" "$out" | grep -q "logged [1-9][0-9]* CRC mismatches"' "through the game's own CRC mismatch"
 
+# The frame comparison's control: copies that run past the limit, as two did under load (1801 and 1802),
+# are still compared at the limit's own frame, and still agree.
+out="$(bash "$HARNESS" --generals "$GENERALS" --frames 1800 --overshoot-control 2>&1)"
+status=$?
+printf '%s\n' "$out"
+check '[ $status -eq 0 ] && printf "%s" "$out" | grep -q "^AGREED: .* to frame 1800"' \
+	"copies that ran one and two frames past the limit still agree at frame 1800 (exit $status)"
+check 'printf "%s" "$out" | grep -q "copy 0: HEADLESS CRC AT LIMIT 0x[0-9A-Fa-f]* at frame 1800, stopped at frame 1801" && printf "%s" "$out" | grep -q "copy 1: HEADLESS CRC AT LIMIT 0x[0-9A-Fa-f]* at frame 1800, stopped at frame 1802"' \
+	"and they did stop on 1801 and 1802, so the comparison was at the limit and not where they stopped"
+
 out="$(bash "$HARNESS" --generals "$GENERALS" --frames 1800 --corrupt-at 1500 --legacy-replay 2>&1)"
 status=$?
 printf '%s\n' "$out"
