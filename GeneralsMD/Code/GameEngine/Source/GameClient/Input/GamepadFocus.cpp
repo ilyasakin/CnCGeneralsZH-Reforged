@@ -19,6 +19,7 @@
 // GamepadFocus.cpp: see GamepadFocus.h.
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 
 #include "GameClient/Color.h"
 #include "GameClient/Display.h"
@@ -313,7 +314,7 @@ Bool hasSettled( const std::vector<GameWindow *> &widgets )
 	UnsignedInt signature = 2166136261u;		// FNV-1a over the widgets' ids, in order
 	for (size_t i = 0; i < widgets.size(); ++i)
 		signature = (signature ^ (UnsignedInt)widgets[i]->winGetWindowId()) * 16777619u;
-	const UnsignedInt now = timeGetTime();
+	const UnsignedInt now = Clock_Milliseconds();
 	if (signature != lastSignature)
 	{
 		lastSignature = signature;
