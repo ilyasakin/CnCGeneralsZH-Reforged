@@ -66,6 +66,18 @@ Bool shown( GameWindow *window )
 	return TRUE;
 }
 
+/// TRUE when slot a's button comes before slot b's reading the bar: an upper row first, then left to right
+Bool readsBefore( Int a, Int b )
+{
+	Int ax, ay, bx, by, w, h;
+	commandWindow( a )->winGetScreenPosition( &ax, &ay );
+	commandWindow( b )->winGetScreenPosition( &bx, &by );
+	commandWindow( a )->winGetSize( &w, &h );
+	if (ay + h / 2 <= by || by + h / 2 <= ay)
+		return ay < by;
+	return ax < bx;
+}
+
 Bool inMatch( void )
 {
 	return TheGameLogic != NULL && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && TheControlBar != NULL;
@@ -101,6 +113,14 @@ Bool GamepadRadial::open( void )
 	for (Int slot = 0; slot < MAX_COMMANDS_PER_SET; ++slot)
 		if (shown( commandWindow( slot ) ))
 			theSlots.push_back( slot );
+	// the bar numbers its buttons down each column; the ring goes the way the bar reads, row by row
+	for (size_t i = 1; i < theSlots.size(); ++i)
+		for (size_t j = i; j > 0 && readsBefore( theSlots[j], theSlots[j - 1] ); --j)
+		{
+			const Int swap = theSlots[j];
+			theSlots[j] = theSlots[j - 1];
+			theSlots[j - 1] = swap;
+		}
 	theOpen = !theSlots.empty();
 	return theOpen;
 }
