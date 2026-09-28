@@ -2027,7 +2027,7 @@ if(ZH_PLATFORM_POSIX)
   # (Tools/gamepad-crc-check.sh).  -offscreen, no sound; skipped without data.
   add_test(NAME gamepad_crc_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-crc-check.sh --generals $<TARGET_FILE:generals>)
-  set_tests_properties(gamepad_crc_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 2400)	# eight matches: plain, radial, base chord
+  set_tests_properties(gamepad_crc_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 3600)	# eight matches: plain, radial, base chord
   if(ZH_GAME_DATA)
     set_tests_properties(gamepad_crc_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()

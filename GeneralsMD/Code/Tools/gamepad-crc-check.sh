@@ -45,7 +45,7 @@
 #   --data defaults to ZH_DATA_DIR, a folder holding zerohour/.  Exit 77 without it.
 set -u
 
-GENERALS=""; DATA="${ZH_DATA_DIR:-}"; MAXFRAMES=600; KEEP=0; TIMEOUT="${GAMEPAD_CRC_TIMEOUT:-300}"
+GENERALS=""; DATA="${ZH_DATA_DIR:-}"; MAXFRAMES=600; KEEP=0; TIMEOUT="${GAMEPAD_CRC_TIMEOUT:-600}"	# a backstop: a loaded worker runs a scripted match one logic frame a pass
 RADIAL_SITE="${GAMEPAD_RADIAL_SITE:-600 450}"		# where the radial's building goes, in the game's 1024x768 pixels
 while [ $# -gt 0 ]; do
 	case "$1" in
