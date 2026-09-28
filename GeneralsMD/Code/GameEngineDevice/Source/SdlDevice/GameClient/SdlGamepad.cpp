@@ -1030,6 +1030,7 @@ void SdlGamepad_update( UnsignedInt nowMs )
 	// the camera and the wheel wait for the world (GamepadFocus.h)
 	if (GamepadFocus::isActive())
 	{
+		GamepadFocus::update();		// a press held through a transition goes when it ends
 		GamepadRadial::close();		// a menu or a box came up over the match: the ring goes
 		static UnsignedInt stickNext = 0, triggerNext = 0;
 		if (theNavAction >= 0 && nowMs >= theNavNext)

@@ -293,6 +293,37 @@ void pointAt( GameWindow *window )
 
 UnsignedInt theFocusChanges = 0;
 
+/// A press held through a transition (GamepadFocus::update)
+struct Held
+{
+	Bool held;
+	GamepadFocus::Action action;
+	std::string screen;
+	UnsignedInt at;
+};
+Held theHeld = { FALSE, GamepadFocus::BACK, std::string(), 0 };
+UnsignedInt theTransitionSince = 0;		///< when the shell's transition handler last began running, 0 while finished
+
+/// The shell is running a transition (the menus drop a press meanwhile), and began it under HOLD_MS ago: a
+/// transition that never reports finished (one of the main menu's panes) is not waited on
+Bool shellLocked( UnsignedInt now )
+{
+	const Bool running = TheTransitionHandler != NULL && !TheTransitionHandler->isFinished();
+	if (!running)
+	{
+		theTransitionSince = 0;
+		return FALSE;
+	}
+	if (theTransitionSince == 0)
+		theTransitionSince = now;
+	return now - theTransitionSince < (UnsignedInt)GamepadFocus::HOLD_MS;
+}
+
+const char *actionName( GamepadFocus::Action action )
+{
+	return action == GamepadFocus::ACCEPT_DOWN ? "A" : action == GamepadFocus::BACK ? "B" : "?";
+}
+
 void setFocus( GameWindow *window )
 {
 	static Int loggedId = 0;
@@ -413,6 +444,35 @@ void GamepadFocus::setHooks( const Hooks &hooks )
 	theHooks = hooks;
 }
 
+void GamepadFocus::update( void )
+{
+	if (!theHeld.held)
+		return;
+	const UnsignedInt now = Clock_Milliseconds();
+	Screen screen;
+	const Bool up = screenNow( screen );
+	if (!up || screen.key != theHeld.screen)
+	{
+		theHeld.held = FALSE;
+		DEBUG_LOG(( "GAMEPAD HELD: %s dropped, the screen changed\n", actionName( theHeld.action ) ));
+		return;
+	}
+	if (now - theHeld.at > (UnsignedInt)HOLD_MS)
+	{
+		theHeld.held = FALSE;
+		DEBUG_LOG(( "GAMEPAD HELD: %s dropped, the transition outlasted %d ms\n", actionName( theHeld.action ), (Int)HOLD_MS ));
+		return;
+	}
+	if (shellLocked( now ))
+		return;
+	const Action action = theHeld.action;
+	theHeld.held = FALSE;
+	DEBUG_LOG(( "GAMEPAD HELD: %s pressed now, %u ms after the press, the transition over\n", actionName( action ), now - theHeld.at ));
+	act( action );
+	if (action == ACCEPT_DOWN)
+		act( ACCEPT_UP );
+}
+
 UnsignedInt GamepadFocus::focusChanges( void )
 {
 	return theFocusChanges;
@@ -506,6 +566,23 @@ Bool GamepadFocus::act( Action action )
 	Screen screen;
 	if (!screenNow( screen ))
 		return FALSE;
+	const UnsignedInt now = Clock_Milliseconds();
+	if ((action == ACCEPT_DOWN || action == BACK) && !getenv( "ZH_TEST_NO_HOLD" ) && shellLocked( now ))
+	{
+		theHeld.held = TRUE;
+		theHeld.action = action;
+		theHeld.screen = screen.key;
+		theHeld.at = now;
+		DEBUG_LOG(( "GAMEPAD HELD: %s, pressed during a transition on %s\n", actionName( action ), screen.key.c_str() ));
+		return TRUE;
+	}
+	if (action == ACCEPT_UP && theHeld.held && theHeld.action == ACCEPT_DOWN)
+		return TRUE;		// the held press's release: the held press is a whole click when it is pressed
+	if (theHeld.held && action >= NAV_UP && action <= NAV_RIGHT)
+	{
+		theHeld.held = FALSE;		// the player moved on
+		DEBUG_LOG(( "GAMEPAD HELD: %s dropped, the focus moved\n", actionName( theHeld.action ) ));
+	}
 	std::vector<GameWindow *> widgets;
 	focusables( screen, widgets );
 	GameWindow *focus = widgets.empty() ? NULL : currentFocus( screen, widgets );

@@ -174,6 +174,45 @@ elif [ "$GOT" != "$EXPECTED" ]; then
 else
 	echo "PASS: the pad walked the menus and the focus landed where the list of screens says, every step"
 fi
+
+# ---- a press held through a transition (GamepadFocus::update): EA's main menu drops a press for about a second
+# after a pane opens; the pad's B pressed then is held and pressed when the transition ends.  The walk opens the
+# difficulty pane and presses B three passes later: the log must show B held, then pressed, and the focus back on
+# the Solo Play pane.  The control (ZH_TEST_NO_HOLD=1) makes the same press, dropped as a mouse's click is: the
+# focus stays on the difficulty pane.
+run_hold() {	# run_hold <name> [VAR=value]: sets HOLD_LOG, HOLD_STATUS
+	local name="$1"; shift
+	HOLD_LOG="$EXEDIR/${TAG}${name}DebugLogFile.txt"
+	rm -f -- "$HOLD_LOG"
+	( cd "$ROOT" && env "$@" ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_OFFSCREEN_HZ="$HZ" ZH_INPUT_SCRIPT="$WORK/hold.txt" ZH_AUDIO_BACKEND=null \
+		perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
+		"$GENERALS" -offscreen -noaudio -win -xres 1280 -yres 800 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
+		-multiInstance -logPrefix "${TAG}${name}" > "$WORK/$name.out" 2> "$WORK/$name.err" )
+	HOLD_STATUS=$?
+}
+{
+	tap South; tap South						# the Solo Play pane, then a side's difficulty pane
+	echo "d3 pad East down"; echo "n pad East up"			# B three passes later, while the pane is still opening
+	echo "s quit"
+} > "$WORK/hold.txt"
+run_hold hold
+HELD="$(grep -a -c 'GAMEPAD HELD: B, pressed during a transition' "$HOLD_LOG" 2>/dev/null)"
+APPLIED="$(grep -a 'GAMEPAD HELD: B pressed now' "$HOLD_LOG" 2>/dev/null | tail -1 | sed 's/.*pressed now, //')"
+LAST="$(grep -a 'GAMEPAD FOCUS: ' "$HOLD_LOG" 2>/dev/null | tail -1 | sed 's/.*GAMEPAD FOCUS: //; s|^Menus/||')"
+run_hold holdcontrol ZH_TEST_NO_HOLD=1
+CONTROL_LAST="$(grep -a 'GAMEPAD FOCUS: ' "$HOLD_LOG" 2>/dev/null | tail -1 | sed 's/.*GAMEPAD FOCUS: //; s|^Menus/||')"
+CONTROL_HELD="$(grep -a -c 'GAMEPAD HELD' "$HOLD_LOG" 2>/dev/null)"
+echo "hold: exit $HOLD_STATUS; B held ${HELD:-0} time(s), pressed ${APPLIED:-never}; the focus ended on ${LAST:-nothing}"
+echo "hold control (no holding): the focus ended on ${CONTROL_LAST:-nothing}, ${CONTROL_HELD:-0} hold(s)"
+case "$LAST" in *ButtonUSA|*ButtonGLA|*ButtonChina|*ButtonTraining|*ButtonChallenge|*ButtonSkirmish|*ButtonSingleBack) back_ok=1;; *) back_ok=0;; esac
+case "$CONTROL_LAST" in *ButtonEasy|*ButtonMedium|*ButtonHard|*ButtonDiffBack) control_ok=1;; *) control_ok=0;; esac
+if [ "${HELD:-0}" -lt 1 ] || [ -z "$APPLIED" ] || [ "$back_ok" -ne 1 ]; then
+	echo "FAIL: B pressed while the difficulty pane opened was not held and pressed when it could be"; status=1
+elif [ "$control_ok" -ne 1 ] || [ "${CONTROL_HELD:-0}" != "0" ]; then
+	echo "FAIL: the control: without holding the same press must be dropped, as a mouse's click is (the focus stays on the difficulty pane)"; status=1
+else
+	echo "PASS: B pressed during the pane's transition was held and pressed after it; without holding it is dropped"
+fi
 if ! verify_install; then exit 99; fi
 echo "the install is unchanged"
 exit $status

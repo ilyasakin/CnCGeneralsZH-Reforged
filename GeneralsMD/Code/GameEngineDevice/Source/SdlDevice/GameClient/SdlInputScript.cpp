@@ -44,6 +44,7 @@ struct Action
 	Bool byPass;					///< "p<n>": in the shell the logic frame stands still, so passes count there
 	Bool settled;					///< "s": when the menu has stood still (GamepadFocus::isSettled), whatever the clock
 	Bool next;						///< "n": straight after the action before it, in the same pass
+	Bool relative;				///< "d<n>": n passes after the action before it
 	std::string line;
 };
 
@@ -197,6 +198,7 @@ Bool SdlInputScript_start( void )
 		char kind[ 16 ] = "";
 		const Bool byPass = line[0] == 'p';
 		const Bool settled = line[0] == 's' && line[1] == ' ', next = line[0] == 'n' && line[1] == ' ';
+		const Bool relative = line[0] == 'd' && line[1] >= '0' && line[1] <= '9';
 		if (line[0] == '#')
 			continue;
 		if (settled || next)
@@ -204,13 +206,14 @@ Bool SdlInputScript_start( void )
 			if (sscanf( line + 2, "%15s", kind ) != 1)
 				continue;
 		}
-		else if (sscanf( byPass ? line + 1 : line, "%u %15s", &frame, kind ) != 2)
+		else if (sscanf( (byPass || relative) ? line + 1 : line, "%u %15s", &frame, kind ) != 2)
 			continue;
 		Action action;
 		action.frame = frame;
 		action.byPass = byPass;
 		action.settled = settled;
 		action.next = next;
+		action.relative = relative;
 		action.line = line;
 		theActions.push_back( action );
 		padLines = padLines || strcmp( kind, "pad" ) == 0;
@@ -288,7 +291,9 @@ void SdlInputScript_play( UnsignedInt logicFrame )
 			if (!GamepadFocus::isSettled( SETTLED_MS ))
 				break;
 		}
-		else if (!due.settled && !due.next && due.frame > (due.byPass ? thePasses : logicFrame))
+		else if (due.relative && thePasses < lastPlayedPass + due.frame)
+			break;
+		else if (!due.settled && !due.next && !due.relative && due.frame > (due.byPass ? thePasses : logicFrame))
 			break;
 		lastPlayedPass = thePasses;
 		if (due.settled)
