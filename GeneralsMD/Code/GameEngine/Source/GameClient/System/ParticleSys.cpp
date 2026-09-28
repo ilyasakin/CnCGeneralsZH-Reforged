@@ -1963,9 +1963,7 @@ Particle *ParticleSystem::createParticle( const ParticleInfo *info,
 		{
 			// "-particlecap" stands in for the options slider, which the LOD manager applies long
 			// after the command line is parsed
-			Int shippedCap = (TheGlobalData->m_particleCapOverride > 0)
-												 ? TheGlobalData->m_particleCapOverride
-												 : TheGlobalData->m_maxParticleCount;
+			Int shippedCap = TheGlobalData->getEffectiveParticleCap();
 			Int particleCap = particleSmokeParticleCap( shippedCap, TheGlobalData->m_smokeThickness );
 			int numInExcess = TheParticleSystemManager->getParticleCount() - (UnsignedInt)particleCap;
 			if ( numInExcess > 0)

@@ -14430,6 +14430,45 @@ TEST(dynamic_lod_never_reaches_what_the_simulation_reads)
 	}
 }
 
+/* -noDynamicLOD is its own flag.  GameLODManager::init applies the static preset after the command line is
+   parsed, and the preset sets m_enableDynamicLOD, so the switch, when it only cleared that flag, was undone
+   before the first frame (a -noDynamicLOD run on a slow machine still dropped to Medium).  The preset still
+   decides the player's setting; the switch decides this run. */
+TEST(no_dynamic_lod_switch_outlives_the_static_preset)
+{
+	GlobalData *saved = TheWritableGlobalData;
+	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
+	CHECK( TheGlobalData->m_enableStaticLOD );
+
+	for (Int withSwitch = 0; withSwitch < 2; ++withSwitch) {
+		scratch->m_noDynamicLODOverride = withSwitch ? TRUE : FALSE;
+		GameLODManager lod;
+		lod.m_staticGameLODInfo[STATIC_GAME_LOD_HIGH].m_enableDynamicLOD = TRUE;		// as the shipped High preset says
+		CHECK( lod.setStaticLODLevel( STATIC_GAME_LOD_HIGH ) );
+		CHECK( TheGlobalData->m_enableDynamicLOD );								// the preference: the preset's
+		CHECK_EQ( (Int)TheGlobalData->isDynamicLODEnabled(), withSwitch ? 0 : 1 );	// this run: the switch's
+	}
+
+	delete scratch;					// while it is the current one: ~GlobalData reads TheWritableGlobalData
+	TheWritableGlobalData = saved;
+}
+
+/* The particle ceiling in force is -particlecap's when it is given, and the slider's otherwise. */
+TEST(particle_cap_in_force_is_the_switch_else_the_slider)
+{
+	GlobalData *saved = TheWritableGlobalData;
+	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
+	scratch->m_maxParticleCount = 3000;
+	scratch->m_particleCapOverride = 0;
+	CHECK_EQ( scratch->getEffectiveParticleCap(), 3000 );
+	scratch->m_particleCapOverride = 20000;
+	CHECK_EQ( scratch->getEffectiveParticleCap(), 20000 );
+	delete scratch;
+	TheWritableGlobalData = saved;
+}
+
 // A veterancy level's or death type's flag bit is bit (value - 1) with the count taken modulo 32, which is
 // what EA's `1UL << (dt - 1)` gave on Windows, where unsigned long is 32 bits and shl reads five bits of the
 // count.  REGULAR and NORMAL are 0: bit 31, inside ALL.  With a 64-bit unsigned long it was bit 63, outside

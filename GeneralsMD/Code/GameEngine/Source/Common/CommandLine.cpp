@@ -601,14 +601,6 @@ Int parseLowDetail(char *args[], int num)
 
 //=============================================================================
 //=============================================================================
-Int parseNoDynamicLOD(char *args[], int num)
-{
-	if (TheWritableGlobalData)
-	{
-		TheWritableGlobalData->m_enableDynamicLOD = FALSE;
-	}
-	return 1;
-}
 
 //=============================================================================
 //=============================================================================
@@ -900,6 +892,23 @@ Int parseSmoke(char *args[], int num)
 			return 2;
 		}
 		TheWritableGlobalData->m_smokeThickness = DEFAULT_THICKNESS;
+	}
+	return 1;
+}
+
+/* -noDynamicLOD: the detail level does not follow the frame rate, and every effect draws at the highest
+	 level (W3DDisplay::draw forces it).  EA had it in the Debug and Internal builds only, so a Release build
+	 ignored it (measured: a Release run with it still dropped to Medium); it is for every build now, like
+	 -particlecap, because a comparison of two renderers or two machines has to draw the same effects.
+	 GameLODManager::init applies the static preset after the command line is parsed and sets
+	 m_enableDynamicLOD from it, so the switch is a flag of its own, read where the game acts on dynamic LOD
+	 (GlobalData::isDynamicLODEnabled).  m_enableDynamicLOD, the setting the options menu shows and saves, is
+	 not touched, so a run with the switch never saves it as the player's choice. */
+Int parseNoDynamicLOD(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_noDynamicLODOverride = TRUE;
 	}
 	return 1;
 }
@@ -2383,6 +2392,7 @@ static CommandLineParam params[] =
 	{ "-particlebounce", parseParticleBounce },
 	{ "-smoke", parseSmoke },
 	{ "-particlecap", parseParticleCap },
+	{ "-noDynamicLOD", parseNoDynamicLOD },
 	{ "-nochroma", parseNoChroma },
 	{ "-shadowmapreport", parseShadowMapReport },
 	{ "-shadowmapboth", parseShadowMapBoth },
@@ -2427,7 +2437,6 @@ static CommandLineParam params[] =
 	{ "-nocinematic", parseNoCinematic },
 	{ "-noViewLimit", parseNoViewLimit },
 	{ "-lowDetail", parseLowDetail },
-	{ "-noDynamicLOD", parseNoDynamicLOD },
 	{ "-noStaticLOD", parseNoStaticLOD },
 	{ "-useWaveEditor", parseUseWaveEditor },
 	{ "-wireframe", parseWireframe },
