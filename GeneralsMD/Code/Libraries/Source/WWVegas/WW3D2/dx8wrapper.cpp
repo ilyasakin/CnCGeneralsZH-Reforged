@@ -607,9 +607,11 @@ void DX8Wrapper::Shutdown(void)
 	// the particle system manager is shut down after the game client that owns the display, and frees
 	// its point groups' textures then - and each Release is a call into this DLL.  This handle is the
 	// only reference to it (the exe and d3dx9_43.dll do not import it), so FreeLibrary unmapped the code
-	// those calls go to: a texture Released after it faults, on Windows as under Wine, and an exit with
-	// particle textures still alive faulted in ~TextureBaseClass.  Nothing is gained by unloading it
-	// moments before the process exits.
+	// those calls go to.  Required under Proton/Wine: an exit with particle textures still alive faulted
+	// in ~TextureBaseClass with the unload and exits cleanly without it (measured both ways).  Harmless on
+	// native Windows: two real scenes exited cleanly there before and after this change.  A synthetic
+	// probe in this order (texture alive, FreeLibrary, then its Release) shows the mechanism can fault on
+	// Windows too.  Nothing is gained by unloading it moments before the process exits.
 
 	_RenderDeviceNameTable.Clear();		 // note - Delete_All() resizes the vector, causing a reallocation.  Clear is better. jba.
 	_RenderDeviceShortNameTable.Clear();
