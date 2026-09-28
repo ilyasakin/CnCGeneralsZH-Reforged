@@ -30,6 +30,8 @@
 # Then the radial menu (GamepadRadial.h), in two more runs of the same match: the pad builds from the ring's
 # top sector, the hand by clicking the command button the pad's run logged.  PASS: the ring pressed the bar's
 # first button, the two agree, and both differ from the plain pad run (the building is the difference).
+# Then the base chord (GamepadCycle.h): View and RB select the command centre and the radial queues a dozer,
+# against the hand's clicks on the command centre and on that button.  PASS: they agree, and the dozer shows.
 # Aim assist is off throughout: it would move a resting pad's pointer off the hand's pixel.
 #
 # Rule 9: the install is only read, through a farm of links, and listed before and after
@@ -222,6 +224,51 @@ elif [ "$PR_CRC" = "$PAD_CRC" ]; then
 	echo "FAIL: the radial's building changed nothing (the plain pad run ends the same), so the agreement proves nothing"; status=1
 else
 	echo "PASS: a building from the radial menu is the building a click on the command bar makes"
+fi
+
+# ---- the base chord (GamepadCycle.h): View held with RB selects the command centre, then a dozer from it ----
+# The pad steps to its first production building (the command centre, the only one at the start) and queues
+# its first command (a dozer) from the radial; the hand clicks the command centre where the starting camera
+# has it, in the middle of the screen, and clicks that command button.  They must agree, and differ from the
+# radial run above: the difference is the dozer.
+{ cat "$WORK/pad-radial.txt"; cat <<'SCRIPT'
+400 pad Back down
+402 pad RightShoulder down
+404 pad RightShoulder up
+406 pad Back up
+420 pad North down
+422 pad axis LeftY -32767
+424 pad axis LeftY 0
+426 pad North up
+SCRIPT
+} > "$WORK/pad-cycle.txt"
+run_game padcycle "$WORK/pad-cycle.txt"
+PC_CRC="$RUN_CRC"; PC_FRAME="$RUN_FRAME"; PC_PLAYED="$RUN_PLAYED"; PC_STATUS="$RUN_STATUS"
+CYCLED="$(grep -a 'GAMEPAD STRUCTURES: selected' "$EXEDIR/${TAG}padcycleDebugLogFile.txt" 2>/dev/null | tail -1)"
+CC_BUTTON="$(grep -a 'GAMEPAD RADIAL: pressed' "$EXEDIR/${TAG}padcycleDebugLogFile.txt" 2>/dev/null | tail -1 \
+	| sed -n 's/.*centre \([0-9]*\),\([0-9]*\).*/\1 \2/p')"
+HC_CRC=""; HC_FRAME=""; HC_PLAYED=0; HC_STATUS=""
+if [ -n "$CC_BUTTON" ] && [ -f "$WORK/hand-radial.txt" ]; then
+	{ cat "$WORK/hand-radial.txt"; printf '%s\n' "400 mouse move 512 384" "402 mouse left down 512 384" "404 mouse left up 512 384" \
+		"426 mouse move $CC_BUTTON" "426 mouse left down $CC_BUTTON" "428 mouse left up $CC_BUTTON"; } > "$WORK/hand-cycle.txt"
+	run_game handcycle "$WORK/hand-cycle.txt"
+	HC_CRC="$RUN_CRC"; HC_FRAME="$RUN_FRAME"; HC_PLAYED="$RUN_PLAYED"; HC_STATUS="$RUN_STATUS"
+fi
+echo "cycle: ${CYCLED#*GAMEPAD STRUCTURES: }"
+echo "pad, cycle:   CRC ${PC_CRC:-none} at frame ${PC_FRAME:-none}, $PC_PLAYED of 29 actions played (exit $PC_STATUS)"
+echo "hand, clicks: CRC ${HC_CRC:-none} at frame ${HC_FRAME:-none}, $HC_PLAYED of 26 actions played (exit $HC_STATUS)"
+if ! printf '%s' "$CYCLED" | grep -q 'CommandCenter'; then
+	echo "FAIL: View and RB did not select the command centre"; status=1
+elif [ -z "$PC_CRC" ] || [ -z "$HC_CRC" ]; then
+	echo "FAIL: a cycle run gave no result"; status=1
+elif [ "$PC_PLAYED" != "29" ] || [ "$HC_PLAYED" != "26" ]; then
+	echo "FAIL: the cycle scripts were not played whole"; status=1
+elif [ "$PC_CRC" != "$HC_CRC" ] || [ "$PC_FRAME" != "$HC_FRAME" ]; then
+	echo "FAIL: the base chord's selection and the hand's click on the command centre disagree"; status=1
+elif [ "$PC_CRC" = "$PR_CRC" ]; then
+	echo "FAIL: the dozer changed nothing (the radial run ends the same), so the agreement proves nothing"; status=1
+else
+	echo "PASS: the base chord selects as a click on the building does"
 fi
 if ! verify_install; then exit 99; fi
 echo "the install is unchanged"
