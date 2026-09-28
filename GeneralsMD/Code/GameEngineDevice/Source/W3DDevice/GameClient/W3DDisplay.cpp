@@ -56,6 +56,7 @@ static void drawFramerateBar(void);
 #include "ffprobe.h"
 #include "ffshadercache.h"
 #include "dx11runtime.h"
+#include "d3d12runtime.h"
 #include "Common/PerfTimer.h"
 #include "Common/JobSystem.h"
 #include "Common/FileSystem.h"
@@ -540,6 +541,11 @@ W3DDisplay::~W3DDisplay()
 			twinBuffers, twinBytes / 1024,
 			texturesMirrored, texturesReused, texturesRefused,
 			pipelines, drawsMade, drawsRefused));
+		unsigned programsShipped = 0;
+		unsigned programsHeld = 0;
+		Direct3D11_Program_Statistics( programsShipped, programsHeld );
+		DEBUG_LOG(("-dx11 programs: %u shipped with the game, %u held at the end\n",
+			programsShipped, programsHeld));
 
 		unsigned long long noBuffer = 0;
 		unsigned long long noStage = 0;
@@ -1080,6 +1086,35 @@ void W3DDisplay::init( void )
 	{
 		SortingRendererClass::SetMinVertexBufferSize(1);
 	}
+#if defined(_WIN32)
+	// -d3d12 (X1) is decided here, before WW3D::Init makes the Direct3D 9 interface and binds D3DX from
+	// wherever d3d12runtime.h says.  Its device draws and presents alone: there is no Direct3D 9 behind it for
+	// the Direct3D 11 twin to mirror, so that is off, as under -d3d9.  A zh_d3d12.dll that will not load keeps
+	// the default renderer and says why; under ZH_UNATTENDED the run ends instead, since a harness that asked
+	// for -d3d12 would otherwise measure the wrong renderer without knowing it.
+	if( TheGlobalData->m_direct3D12 )
+	{
+		char why[ 256 ] = "";
+		if( Direct3D12_Activate( why, sizeof( why ) ) )
+		{
+			TheWritableGlobalData->m_direct3D11 = FALSE;
+			DEBUG_LOG(( "-d3d12: drawing through zh_d3d12.dll\n" ));
+		}
+		else
+		{
+			DEBUG_LOG(( "-d3d12: %s; the default renderer draws instead\n", why ));
+			// a contributor's rule (Common/EarlyCommandLine.h, unattendedByEnvironment, batch5): set when present and
+			// neither empty nor "0".  To be replaced by that helper once both branches are in.
+			const char *unattended = getenv( "ZH_UNATTENDED" );
+			if( unattended != NULL && unattended[ 0 ] != '\0' && strcmp( unattended, "0" ) != 0 )
+			{
+				const int D3D12_UNAVAILABLE_EXIT = 3;
+				fprintf( stderr, "-d3d12: %s; ZH_UNATTENDED is set, so the run ends (exit code %d)\n", why, D3D12_UNAVAILABLE_EXIT );
+				exit( D3D12_UNAVAILABLE_EXIT );
+			}
+		}
+	}
+#endif
 	if (WW3D::Init( ApplicationHWnd ) != WW3D_ERROR_OK)
 		throw ERROR_INVALID_D3D;	//failed to initialize.  User probably doesn't have DX 8.1
 
@@ -1129,6 +1164,9 @@ void W3DDisplay::init( void )
 	Direct3D11_Enable( TheGlobalData->m_direct3D11 != FALSE );
 	Direct3D11_Present_Enable( TheGlobalData->m_direct3D11 != FALSE );
 	Direct3D11_Dump_Programs_To( TheGlobalData->m_direct3D11DumpPath.str() );
+	// The compiled-program cache is the player's, like Options.ini: an installed game cannot write
+	// next to its exe, and the shipped programs there are read-only anyway.
+	Direct3D11_Set_Shader_Cache_Directory( TheGlobalData->getPath_UserData().str() );
 	pushDirect3D11PostChain();
 	// Classic graphics is read here once and not again: a texture that has looked for its normal
 	// map keeps the answer, and a tile size cannot change under a loaded map.  The menu says the
@@ -4239,10 +4277,16 @@ void W3DDisplay::toggleMovieCapture(void)
 
 /** Asks the device rather than the switch: a machine that cannot make a Direct3D 11 device carries
 	* on with Direct3D 9 whatever -d3d9 said, and the corner has to name what is actually drawing.
-	* A 64-bit exe says so beside it. */
+	* A 64-bit exe says so beside it; -d3d12, which is also the native ARM64 renderer, names its architecture. */
 const WideChar *W3DDisplay::getRendererName(void) const
 {
 #if defined(_WIN32)
+	if( Direct3D12_Is_Active() )
+#if defined(_M_ARM64)
+		return u"D3D12 arm64";
+#else
+		return u"D3D12 x64";
+#endif
 #ifdef _WIN64
 	return Direct3D11_Is_Active() ? u"DX11 x64" : u"DX9 x64";
 #else

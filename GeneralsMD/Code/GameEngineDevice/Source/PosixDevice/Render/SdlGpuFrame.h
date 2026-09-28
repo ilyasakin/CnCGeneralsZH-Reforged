@@ -238,6 +238,7 @@ private:
 
 	SDL_GPUDevice * GpuDevice;
 	SDL_Window * Window;				///< C2's, claimed; null for an offscreen frame
+	bool OwnsWindow;					///< -d3d12 on Windows (X1): an SDL window of ours around the game's HWND
 	SDL_GPUTexture * BackBuffer;
 	SDL_GPUTexture * DepthStencil;
 	SDL_GPUTexture * FrontCopy;			///< the last presented picture

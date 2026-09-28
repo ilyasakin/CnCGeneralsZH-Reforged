@@ -81,6 +81,8 @@
 # VERIFY", never a change. Either fails the run whatever the matches said.
 
 set -u
+# Every game this starts is unattended: no box, chooser or crash report may wait on a person (EarlyCommandLine.h).
+export ZH_UNATTENDED=1
 
 GENERALS=""
 APP=""
@@ -131,7 +133,13 @@ CODE="$(cd "$(dirname "$0")/.." && pwd)"		# GeneralsMD/Code: its Data/ is the ov
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$GENERALS")"		# absolute: every run starts in the root
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/replay-check.XXXXXX")"
+# A work folder that could not be made is the end of the run: going on with WORK empty would put
+# "$WORK/..." at the file system's root.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/replay-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "replay-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="rc$$_"		# every log this run writes starts with it

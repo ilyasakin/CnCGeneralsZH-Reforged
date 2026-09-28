@@ -24,7 +24,11 @@
 #   4. "ShowHudOverlay = 0" and "= false", in any case     -> refused
 set -u
 STAGE="$(cd "$(dirname "$0")/../Tools" && pwd)/stage-overlay.sh"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/test_stage_overlay_hud.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/test_stage_overlay_hud.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "test_stage_overlay_hud: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${WORK:?}"' EXIT
 failed=0
 check() { if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failed=1; fi; }

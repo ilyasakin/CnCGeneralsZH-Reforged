@@ -16,3 +16,6 @@ GeneralsMD/Code/Libraries/Source/FFmpeg/dist/** -text
 
 # The build fingerprint's list of tracked files (N1): one form everywhere, whatever autocrlf does.
 GeneralsMD/Code/BuildFingerprint.manifest text eol=lf
+
+# Compiled Direct3D 11 programs, recorded by Tools/record-dx11-shaders.ps1: binary, never converted.
+GeneralsMD/Code/Data/dx11shaders.shipped -text

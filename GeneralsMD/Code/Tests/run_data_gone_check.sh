@@ -53,7 +53,11 @@ CODE="$(cd "$TOOLS/.." && pwd)"
 INSTALL="$(cd "$ZH_DATA_DIR/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$1")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$1")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/data-gone-check.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/data-gone-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "run_data_gone_check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 WORK="$(cd "$WORK" && pwd -P)"		# mount lists real paths, and the detach check compares with it
 TAG="dg$$_"
 STOP_AT=2000		# logic frame to stop at, well before the match ends

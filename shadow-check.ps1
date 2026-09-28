@@ -7,6 +7,7 @@
 #   .\shadow-check.ps1 -Only 3    # one view, while a knob is being turned
 
 param([int]$Only = 0)
+$env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 
 Add-Type -AssemblyName System.Drawing
 $run = Join-Path $PSScriptRoot "GeneralsMD\Run"

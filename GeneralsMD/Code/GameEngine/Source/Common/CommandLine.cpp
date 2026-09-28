@@ -1640,6 +1640,18 @@ Int parseDirect3D9(char *args[], int num)
 	return 1;
 }
 
+/* -d3d12: draw through zh_d3d12.dll (X1), the SDL3 GPU device macOS and Linux draw with, on Direct3D 12.
+	 * Windows only, and opt-in while it is proved against -d3d9 and -dx11.  W3DDisplay decides whether it
+	 * happens: a zh_d3d12.dll that does not load keeps the default renderer, and says so in the log. */
+Int parseDirect3D12(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_direct3D12 = TRUE;
+	}
+	return 1;
+}
+
 /* -language <english|turkish>: the language the game's words are in for this run, over whatever
 	 * the Options menu saved.  The string table is built once, while the game starts and after this
 	 * line is read, so this is how the launcher lets a player pick a language before the first menu.
@@ -2483,6 +2495,7 @@ static CommandLineParam params[] =
 	{ "-turbo", parseTurbo },
 	{ "-msaa", parseMSAA },
 	{ "-d3d9", parseDirect3D9 },
+	{ "-d3d12", parseDirect3D12 },
 	{ "-language", parseTextLanguage },
 	{ "-dx11dump", parseDirect3D11Dump },
 	{ "-dx11post", parseDirect3D11Post },
