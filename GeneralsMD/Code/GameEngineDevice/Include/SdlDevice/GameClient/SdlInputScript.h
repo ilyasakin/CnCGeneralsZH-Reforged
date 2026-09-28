@@ -33,7 +33,11 @@
 //   <frame> mouse move <x> <y>                              the game's pixels
 //   <frame> mouse <left|middle|right> down|up <x> <y>
 //   <frame> key <SDL's scancode name, _ for a space: Left_Ctrl> down|up
+//   <frame> shot                                            a screenshot of the next frame drawn (sshotNNN.bmp)
 //   <frame> quit                                            ends the run, as a menu's run has no -maxframes
+//
+// ZH_INPUT_SCRIPT_PAD=xbox|playstation|nintendo|deck gives the virtual pad that family's USB ids, so SDL takes
+// it for one: its glyphs, and a Nintendo pad's confirm on the right.  Unset, it is SDL's plain layout.
 //
 // Each action goes to the debug log as it is played ("INPUT SCRIPT: frame F: ..."), so two runs show they
 // played the same script on the same frames.

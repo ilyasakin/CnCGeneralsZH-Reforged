@@ -21,6 +21,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/GameEngine.h"
+#include "GameClient/Display.h"
 #include "GameClient/GamepadMap.h"
 #include "SdlDevice/GameClient/SdlInput.h"
 #include "SdlDevice/GameClient/SdlInputScript.h"
@@ -101,6 +102,11 @@ Bool play( const char *line )
 	if (strcmp( kind, "quit" ) == 0 && TheGameEngine != NULL)
 	{
 		TheGameEngine->setQuitting( TRUE );
+		return TRUE;
+	}
+	if (strcmp( kind, "shot" ) == 0 && TheDisplay != NULL)
+	{
+		TheDisplay->takeScreenShot();		// written out of the back buffer on the next draw
 		return TRUE;
 	}
 	if (strcmp( kind, "pad" ) == 0 && thePad != NULL)
@@ -198,6 +204,22 @@ Bool SdlInputScript_start( void )
 		desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
 		desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
 		desc.name = "ZH_INPUT_SCRIPT pad";
+		// ZH_INPUT_SCRIPT_PAD: which family the pad is, by the USB ids SDL knows it by; none is SDL's own layout
+		struct Family { const char *name; Uint16 vendor, product; const char *padName; };
+		static const Family families[] = {
+			{ "xbox", 0x045e, 0x0b12, "Xbox Series X Controller" },
+			{ "playstation", 0x054c, 0x0ce6, "DualSense Wireless Controller" },
+			{ "nintendo", 0x057e, 0x2009, "Nintendo Switch Pro Controller" },
+			{ "deck", 0x28de, 0x1205, "Steam Deck" },
+			{ NULL, 0, 0, NULL } };
+		const char *family = getenv( "ZH_INPUT_SCRIPT_PAD" );
+		for (const Family *f = families; family != NULL && f->name != NULL; ++f)
+			if (strcasecmp( family, f->name ) == 0)
+			{
+				desc.vendor_id = f->vendor;
+				desc.product_id = f->product;
+				desc.name = f->padName;
+			}
 		const SDL_JoystickID id = SDL_AttachVirtualJoystick( &desc );
 		thePad = id != 0 ? SDL_OpenJoystick( id ) : NULL;
 		if (thePad != NULL)
