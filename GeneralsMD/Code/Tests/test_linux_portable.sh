@@ -48,7 +48,11 @@ failures=0
 check() {	# check <condition> <what>
 	if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failures=$((failures + 1)); fi
 }
-T="$(mktemp -d "${TMPDIR:-/tmp}/test_linux_portable.XXXXXX")"
+T="$(mktemp -d "${TMPDIR:-/tmp}/test_linux_portable.XXXXXX")" || T=""
+if [ -z "$T" ] || [ ! -d "$T" ]; then
+	echo "test_linux_portable: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "$T"' EXIT
 PB="$BUILD_DIR/portable-build"
 OUT="$T/ZeroHourReforged-linux-x86_64"
