@@ -315,6 +315,7 @@ GameEngine/Include/GameClient/GameWindowID.h
 GameEngine/Include/GameClient/GameWindowManager.h
 GameEngine/Include/GameClient/GameWindowTransitions.h
 GameEngine/Include/GameClient/GamepadAim.h
+GameEngine/Include/GameClient/GamepadCancel.h
 GameEngine/Include/GameClient/GamepadCycle.h
 GameEngine/Include/GameClient/GamepadFocus.h
 GameEngine/Include/GameClient/GamepadHints.h
@@ -974,6 +975,7 @@ GameEngine/Source/GameClient/HtmlOverlay.cpp
 GameEngine/Source/GameClient/HtmlTemplate.cpp
 GameEngine/Source/GameClient/InGameUI.cpp
 GameEngine/Source/GameClient/Input/GamepadAim.cpp
+GameEngine/Source/GameClient/Input/GamepadCancel.cpp
 GameEngine/Source/GameClient/Input/GamepadCycle.cpp
 GameEngine/Source/GameClient/Input/GamepadFocus.cpp
 GameEngine/Source/GameClient/Input/GamepadHints.cpp
