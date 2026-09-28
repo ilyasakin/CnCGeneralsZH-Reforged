@@ -31,11 +31,13 @@
  * Command bindings resolve through a command map: here a made-up one that binds each command the file
  * uses as the game's maps do (the game's own CommandMap.ini is in the retail archives).
  *
- * Cases: a click and a double click; a drag box; the right and middle buttons; a Command's key; a chord
- * with a held modifier (Ctrl + the D-pad makes a group); a With chord (the left shoulder's Shift let go
- * for the D-pad's group 5, then held again); one Ctrl held by two things goes down once; the triggers as
- * the wheel; the right stick as the arrow keys with hysteresis; a pad pulled out mid-press lets go of all
- * it held; and every binding in the shipped file parsed, each Command bound.
+ * Cases: a click and a double click; a drag box; X as the order button and B taking back; a Command's key;
+ * a chord with a held modifier (Ctrl + the D-pad makes a group); a With chord (the left trigger's Shift let
+ * go for the D-pad's group 5, then held again); one Ctrl held by two things goes down once; LB's tap (the
+ * idle worker) and its layer (the right stick zooms and turns, and spends the tap); both shoulders stop,
+ * LB+Y the army, RB+B scatter; the right stick as the arrow keys with hysteresis; confirm and cancel on a
+ * Nintendo and a PlayStation pad and with the swap option; a pad pulled out mid-press lets go of all it
+ * held; and every binding in the shipped file parsed, each Command bound.
  *
  * What it cannot see: a real pad's feel, and Steam Input's virtual pad (the Deck, G1's step 1).
  */
