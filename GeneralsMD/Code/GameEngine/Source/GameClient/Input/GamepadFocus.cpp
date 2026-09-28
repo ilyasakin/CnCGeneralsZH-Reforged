@@ -291,6 +291,8 @@ void pointAt( GameWindow *window )
 	}
 }
 
+UnsignedInt theFocusChanges = 0;
+
 void setFocus( GameWindow *window )
 {
 	static Int loggedId = 0;
@@ -300,6 +302,7 @@ void setFocus( GameWindow *window )
 	{
 		loggedId = theFocusId;
 		loggedScreen = theScreenKey;
+		++theFocusChanges;
 		DEBUG_LOG(( "GAMEPAD FOCUS: %s %s\n", theScreenKey.c_str(), window != NULL ? nameOf( window ) : "(none)" ));
 	}
 	if (!theScreenKey.empty())
@@ -408,6 +411,11 @@ Int tabButtons( const std::vector<GameWindow *> &widgets, std::vector<GameWindow
 void GamepadFocus::setHooks( const Hooks &hooks )
 {
 	theHooks = hooks;
+}
+
+UnsignedInt GamepadFocus::focusChanges( void )
+{
+	return theFocusChanges;
 }
 
 Bool GamepadFocus::isSettled( UnsignedInt stillMs )

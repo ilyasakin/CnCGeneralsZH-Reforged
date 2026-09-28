@@ -51,6 +51,8 @@ struct Action
 /// because a pane can hold its widgets still while its hover and focus are still catching up (seen on the M3 Pro Mac: a
 /// Back that came 250 ms after the difficulty pane stood still moved the focus to Hard instead)
 const UnsignedInt SETTLED_MS = 1000;
+const UnsignedInt AGAIN_MS = 2000;		///< how long a menu that a press did not move must stand still before it is pressed again
+const Int MAX_AGAIN = 2;
 
 std::vector<Action> theActions;
 size_t theNext = 0;
@@ -256,20 +258,52 @@ void SdlInputScript_play( UnsignedInt logicFrame )
 {
 	++thePasses;
 	static UnsignedInt lastPlayedPass = 0;
+	// the last "s" step played, the focus changes counted then, and how often it has been pressed again
+	static size_t lastStep = (size_t)-1;
+	static UnsignedInt changesAtStep = 0;
+	static Int again = 0;
+	Bool repeating = FALSE;
 	while (theNext < theActions.size())
 	{
 		const Action &due = theActions[ theNext ];
-		if (due.settled)
+		if (due.settled && !repeating)
 		{
 			// a menu step: after the step before has had a pass, and the menu has stood still since
-			if (lastPlayedPass == thePasses || !GamepadFocus::isSettled( SETTLED_MS ))
+			if (lastPlayedPass == thePasses)
+				break;
+			// every step of a menu walk moves the focus or the screen; one that moved nothing was dropped (the
+			// menus ignore a press while a transition runs), so once the menu has stood still a while it is pressed
+			// again, twice at most, and logged apart so that a walk's count of steps still checks
+			const Bool tookNothing = lastStep != (size_t)-1 && GamepadFocus::focusChanges() == changesAtStep;
+			if (tookNothing && again < MAX_AGAIN)
+			{
+				if (!GamepadFocus::isSettled( AGAIN_MS ))
+					break;
+				++again;
+				theNext = lastStep;
+				repeating = TRUE;
+				continue;
+			}
+			if (!GamepadFocus::isSettled( SETTLED_MS ))
 				break;
 		}
-		else if (!due.next && due.frame > (due.byPass ? thePasses : logicFrame))
+		else if (!due.settled && !due.next && due.frame > (due.byPass ? thePasses : logicFrame))
 			break;
 		lastPlayedPass = thePasses;
+		if (due.settled)
+		{
+			if (!repeating)
+				again = 0;
+			lastStep = theNext;
+			changesAtStep = GamepadFocus::focusChanges();
+		}
 		const Action &action = theActions[ theNext++ ];
 		const Bool known = play( action.line.c_str() );
-		DEBUG_LOG(( "INPUT SCRIPT: frame %u: %s%s\n", logicFrame, action.line.c_str(), known ? "" : " (not understood)" ));
+		if (repeating)
+			DEBUG_LOG(( "INPUT SCRIPT AGAIN: frame %u: %s (the press before changed nothing)\n", logicFrame, action.line.c_str() ));
+		else
+			DEBUG_LOG(( "INPUT SCRIPT: frame %u: %s%s\n", logicFrame, action.line.c_str(), known ? "" : " (not understood)" ));
+		if (repeating && (theNext >= theActions.size() || !theActions[ theNext ].next))
+			repeating = FALSE;		// the step and its "n" release, pressed again
 	}
 }

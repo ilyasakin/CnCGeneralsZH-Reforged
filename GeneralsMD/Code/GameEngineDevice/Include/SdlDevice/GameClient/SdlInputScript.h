@@ -30,7 +30,10 @@
 //                                                         where the logic frame stands still
 //   s <action...>                                         when the menu has stood still for a second since the
 //                                                         action before (GamepadFocus::isSettled): a menu
-//                                                         walk that follows what the menus did, not the clock
+//                                                         walk that follows what the menus did, not the clock.
+//                                                         A step that moved no focus was dropped (a transition
+//                                                         was running): it is pressed again once the menu has
+//                                                         stood still 2 s, twice at most ("INPUT SCRIPT AGAIN")
 //   n <action...>                                         in the same pass as the action before: a tap's
 //                                                         release, so no wall-clock repeat can come between
 //   <frame> pad <South|East|...|DPadUp|...> down|up         GamepadMap's button names

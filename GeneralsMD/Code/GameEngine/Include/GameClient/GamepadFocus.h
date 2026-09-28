@@ -86,6 +86,9 @@ public:
 		* not the clock (a pane still sliding in, or a focus change not yet made, under a loaded machine) */
 	static Bool isSettled( UnsignedInt stillMs );
 
+	/// How many times the focus has moved (each "GAMEPAD FOCUS" line): the input script sees whether a press took
+	static UnsignedInt focusChanges( void );
+
 	/** Of count centres, the nearest one from (x, y) in the direction (dx, dy) (one of them 0, the other 1 or
 		* -1), sideways distance counting double; -1 when none */
 	static Int pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy );
