@@ -571,10 +571,11 @@ void GamepadHints::drawMatchStrip( void )
 	}
 	if (total == 0)
 		return;
-	// along the top from the left, on a plate: right of the menu button in the corner, and clear of the diagnostic
-	// text on the right
+	// along the top from the left, on a plate: right of the menu button in the corner (it grows with the screen: 24
+	// pixels at 600 lines, 40 at 1080), and clear of the diagnostic text on the right
 	const Int pad = points / 2, centreY = pad + rowHeight / 2 + 2;
-	Int x = 34 + pad;
+	const Int menuEdge = (Int)TheDisplay->getHeight() / 24 + 6;
+	Int x = (menuEdge > 34 ? menuEdge : 34) + pad;
 	TheDisplay->drawFillRect( x - pad, 2, total + 2 * pad, rowHeight + 2 * pad, GameMakeColor( 0, 0, 0, 150 ) );
 	for (Int i = 0; i < count && i < SLOTS; ++i)
 	{
