@@ -60,7 +60,7 @@ OUT="$T/ZeroHourReforged-linux-x86_64"
 # 1. the folder
 out="$(bash "$CODE/Tools/linux-portable.sh" --build "$PB" --out "$OUT" --cmake "$ZH_PORTABLE_CMAKE" --no-art --no-tar 2>&1)"; status=$?
 check '[ $status -eq 0 ]' "linux-portable.sh makes the folder (exit $status: $(printf '%s' "$out" | tail -3))"
-check '[ -x "$OUT/zero-hour-reforged" ] && [ -x "$OUT/bin/generals" ] && [ -s "$OUT/bin/generals.debug" ]' \
+check '[ -x "$OUT/zero-hour-reforged.sh" ] && [ -x "$OUT/bin/generals" ] && [ -s "$OUT/bin/generals.debug" ]' \
 	"the launcher, generals and its debug file"
 check 'readelf -S "$OUT/bin/generals" | grep -q "\.gnu_debuglink" && ! readelf -S "$OUT/bin/generals" | grep -q "\.debug_info"' \
 	"generals is stripped and names its debug file"

@@ -20,9 +20,12 @@
 # copy's replay is played back alone.  The match passes when:
 #   - both copies started the network game and neither log holds "CRC Mismatch" (the copies compare
 #     their CRCs over the network every interval, so this is the game's own desync detector);
-#   - both stop on the same HEADLESS CRC at the same frame, --frames;
+#   - both logged the same CRC on the frame --frames names ("HEADLESS CRC AT LIMIT": the engine logs it as
+#     the logic finishes that frame, and a catch-up burst stops there), and neither stopped before it;
 #   - the AI built something after frame 0 on both (an idle world agrees with itself and proves little);
-#   - each copy's replay, played back alone, stops on that same CRC at that frame.
+#   - each copy's replay, played back alone, logs that same CRC at that frame.
+# It compares at that one frame, never at the frame a copy happened to stop on: two copies under load once
+# stopped on 1801 and 1802, and a comparison there can only disagree.
 #
 # WHAT THIS PROVES, AND WHAT IT DOES NOT.  Two processes of POSIX builds on ONE machine keep one world
 # over the real network code (Transport, the lockstep, the CRC exchange) through the kernel's own
@@ -63,7 +66,8 @@
 # (Tools/install-guard.sh), exit 99 if it changed or could not be checked.
 #
 # Usage: net-check.sh --generals <path> [--peer1 <path>] [--data <dir>] [--seed 3] [--frames 3000]
-#          [--netai 2] [--map "Maps\Golden Oasis\Golden Oasis.map"] [--control] [--corrupt-at <frame>] [--legacy-replay] [--keep]
+#          [--netai 2] [--map "Maps\Golden Oasis\Golden Oasis.map"] [--control] [--corrupt-at <frame>] [--legacy-replay]
+#          [--overshoot-control] [--keep]
 #   --peer1     the executable for the second copy (default: --generals); an x86_64 build runs under
 #               Rosetta as it is
 #   --corrupt-at <frame>
@@ -76,6 +80,10 @@
 #               frame that carries CRCs are removed, which leaves it shaped like a replay recorded
 #               before d9eccdda or by the retail game (no frame 0 CRC).  Its playback must say
 #               "legacy: frame 0 missing" and stay in sync
+#   --overshoot-control
+#               the frame comparison's control: copy 0 runs one frame past --frames and copy 1 two
+#               (ZH_TEST_FRAME_LIMIT_OVERSHOOT), as load once made them; the match must still agree at
+#               --frames, and the report names where each stopped
 #   --control   the armed control: the second copy is given the next seed, so the two copies start
 #               different worlds from one command stream; the match must be reported FAILED with a CRC
 #               mismatch, so a pass means the check can see one
@@ -113,6 +121,7 @@ MAP='Maps\Golden Oasis\Golden Oasis.map'
 CONTROL=0
 CORRUPT_AT=""
 LEGACY=0
+OVERSHOOT=0
 KEEP=0
 PEER=""
 HOSTS_ARG=""
@@ -131,6 +140,7 @@ while [ $# -gt 0 ]; do
 		--control) CONTROL=1; shift;;
 		--corrupt-at) CORRUPT_AT="$2"; shift 2;;
 		--legacy-replay) LEGACY=1; shift;;
+		--overshoot-control) OVERSHOOT=1; shift;;
 		--keep) KEEP=1; shift;;
 		--peer) PEER="$2"; shift 2;;
 		--hosts) HOSTS_ARG="$2"; shift 2;;
@@ -409,7 +419,12 @@ start_copy() {
 	local exe="${EXE[$1]}" name="$2"; shift 2
 	mkdir -p "$WORK/user-$name"
 	rm -f -- "$(dirname "$exe")/${TAG}${name}DebugLogFile.txt"
-	( cd "$ROOT" && ulimit -n "$FD_LIMIT" && exec env ZH_HIDDEN_WINDOW=1 ZH_USER_DATA_DIR="$WORK/user-$name" "$exe" -headless -root "$ROOT" \
+	local overshoot=0		# --overshoot-control: the live copies run past --frames, one frame and two
+	if [ "$OVERSHOOT" -eq 1 ]; then
+		case "$name" in live0) overshoot=1;; live1) overshoot=2;; esac
+	fi
+	( cd "$ROOT" && ulimit -n "$FD_LIMIT" && exec env ZH_HIDDEN_WINDOW=1 ZH_USER_DATA_DIR="$WORK/user-$name" \
+		ZH_TEST_FRAME_LIMIT_OVERSHOOT="$overshoot" "$exe" -headless -root "$ROOT" \
 		-overlay "$OVERLAY" -quickstart -noshellmap -multiInstance -noFPSLimit -maxframes "$FRAMES" \
 		-logPrefix "${TAG}${name}" "$@" > "$WORK/$name.out" 2> "$WORK/$name.err" ) &
 	LAST_PID=$!
@@ -417,6 +432,8 @@ start_copy() {
 }
 log_of() { echo "$(dirname "${EXE[$1]}")/${TAG}$2DebugLogFile.txt"; }
 crc_of() { grep -a 'HEADLESS CRC: 0x' "$1" 2>/dev/null | tail -1 | sed -n 's/.*HEADLESS CRC: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\1 \2/p'; }
+# the CRC of --frames' own frame, logged as the logic finished it (GameEngine.cpp, noteFrameLimit)
+limit_of() { grep -a 'HEADLESS CRC AT LIMIT: 0x' "$1" 2>/dev/null | tail -1 | sed -n 's/.*HEADLESS CRC AT LIMIT: \(0x[0-9A-Fa-f]*\) at frame \([0-9]*\).*/\1 \2/p'; }
 # wait_all <seconds> <pids...>: 0 when every copy ended by itself; 1 when the time ran out; 2 when a log
 # in WATCH_LOGS showed a CRC mismatch first; 3 when a copy held FD_ALARM descriptors or more (FD_REPORT
 # says which).  In the last three cases the copies are killed: a copy that has seen a mismatch waits on
@@ -456,7 +473,7 @@ if [ -n "$PLAY" ]; then
 	start_copy 0 play -replay netcheckplay
 	wait_all "$LIVE_TIMEOUT" "$LAST_PID"; ended=$?
 	log="$(log_of 0 play)"
-	read -r crc frame <<< "$(crc_of "$log")"
+	read -r crc frame <<< "$(limit_of "$log")"
 	aligned="$(grep -a -m1 'Replay CRCs: ' "$log" 2>/dev/null | sed 's/.*Replay CRCs: //')"
 	oos="$(grep -a -m1 'Replay has gone out of sync' "$log" 2>/dev/null | sed 's/.*Replay has gone //')"
 	echo "PLAY-RESULT crc=${crc:-none} frame=${frame:-none} ended=$ended aligned=\"$aligned\" oos=\"$oos\""
@@ -480,7 +497,7 @@ if [ -n "$PEER" ]; then
 	mism=$(grep -a -c 'CRC Mismatch' "$log" 2>/dev/null); mism=${mism:-0}
 	dropped=$(grep -a -c 'ConnectionManager::disconnectPlayer - disconnecting slot' "$log" 2>/dev/null); dropped=${dropped:-0}
 	built=$(grep -a -c 'AI BUILT frame [1-9]' "$log" 2>/dev/null); built=${built:-0}
-	read -r crc frame <<< "$(crc_of "$log")"
+	read -r crc frame <<< "$(limit_of "$log")"
 	rep="$WORK/user-live$S/Replays/00000000.rep"
 	back_crc=none; back_frame=none; aligned=""; oos=""
 	if [ -f "$rep" ]; then
@@ -491,7 +508,7 @@ if [ -n "$PEER" ]; then
 			start_copy 0 "back$S" -replay "netcheck$S"
 			wait_all "$LIVE_TIMEOUT" "$LAST_PID"
 			blog="$(log_of 0 "back$S")"
-			read -r back_crc back_frame <<< "$(crc_of "$blog")"
+			read -r back_crc back_frame <<< "$(limit_of "$blog")"
 			aligned="$(grep -a -m1 'Replay CRCs: ' "$blog" 2>/dev/null | sed 's/.*Replay CRCs: //')"
 			oos="$(grep -a -m1 'Replay has gone out of sync' "$blog" 2>/dev/null | sed 's/.*Replay has gone //')"
 		fi
@@ -534,12 +551,13 @@ for s in 0 1; do
 	grep -a -q -e '-netgame: .* we are slot' "$log" || bad="$bad copy $s did not start the network game;"
 	mism=$(grep -a -c 'CRC Mismatch' "$log")
 	built=$(grep -a -c 'AI BUILT frame [1-9]' "$log")
-	read -r crc frame <<< "$(crc_of "$log")"
+	read -r crc frame <<< "$(limit_of "$log")"
+	read -r end_crc stopped <<< "$(crc_of "$log")"
 	eval "LIVE_CRC$s=\${crc:-none}; LIVE_FRAME$s=\${frame:-none}"
-	echo "  copy $s: HEADLESS CRC ${crc:-none} at frame ${frame:-none}; $mism CRC Mismatch lines; $built AI structures after frame 0"
+	echo "  copy $s: HEADLESS CRC AT LIMIT ${crc:-none} at frame ${frame:-none}, stopped at frame ${stopped:-none}; $mism CRC Mismatch lines; $built AI structures after frame 0"
 	[ "$mism" -eq 0 ] || bad="$bad copy $s logged $mism CRC mismatches;"
 	[ "$built" -gt 0 ] || bad="$bad IDLE: copy $s saw the AI build nothing after frame 0;"
-	[ "${frame:-}" = "$FRAMES" ] || bad="$bad copy $s stopped at frame ${frame:-none}, not $FRAMES;"
+	[ "${frame:-}" = "$FRAMES" ] || bad="$bad copy $s logged no CRC at frame $FRAMES (it stopped at frame ${stopped:-none});"
 done
 if [ "$LIVE_CRC0" != "$LIVE_CRC1" ] || [ "$LIVE_FRAME0" != "$LIVE_FRAME1" ]; then
 	bad="$bad the copies ended apart ($LIVE_CRC0 at $LIVE_FRAME0 against $LIVE_CRC1 at $LIVE_FRAME1);"
@@ -602,10 +620,10 @@ for s in 0 1; do
 		*) bad="$bad the playback of copy $s's replay was STOPPED after $LIVE_TIMEOUT s;";;
 	esac
 	log="$(log_of "$s" "back$s")"
-	read -r crc frame <<< "$(crc_of "$log")"
+	read -r crc frame <<< "$(limit_of "$log")"
 	oos="$(grep -a -m1 'Replay has gone out of sync' "$log" 2>/dev/null)"
 	aligned="$(grep -a -m1 'Replay CRCs: ' "$log" 2>/dev/null | sed 's/.*Replay CRCs: //')"
-	echo "  copy $s's replay played back: HEADLESS CRC ${crc:-none} at frame ${frame:-none}; its CRCs: ${aligned:-no alignment logged}${oos:+; it logged: $oos}"
+	echo "  copy $s's replay played back: HEADLESS CRC AT LIMIT ${crc:-none} at frame ${frame:-none}; its CRCs: ${aligned:-no alignment logged}${oos:+; it logged: $oos}"
 	if [ "${crc:-none}" != "$LIVE_CRC0" ] || [ "${frame:-none}" != "$LIVE_FRAME0" ]; then
 		bad="$bad copy $s's replay played back to ${crc:-none} at frame ${frame:-none};"
 	fi

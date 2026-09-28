@@ -1873,16 +1873,17 @@ static void reportFrameTimeStats( void )
 	if (TheGlobalData)
 	{
 		const char *lodName = "off";
-		if (TheGameLODManager && TheGlobalData->m_enableDynamicLOD)
+		if (TheGameLODManager && TheGlobalData->isDynamicLODEnabled())
 		{
 			const DynamicGameLODLevel lod = TheGameLODManager->getDynamicLODLevel();
 			if (lod >= DYNAMIC_GAME_LOD_LOW && lod < DYNAMIC_GAME_LOD_COUNT)
 				lodName = TheGameLODManager->getDynamicGameLODLevelName(lod);
 		}
-		DEBUG_LOG(("QUALITY: filter %d aniso %d particles %d msaaLevel %d vsync %d shadows vol %d decal %d trees %d heat %d dynamicLOD %s\n",
+		DEBUG_LOG(("QUALITY: filter %d aniso %d particles %d (in force %d) msaaLevel %d vsync %d shadows vol %d decal %d trees %d heat %d dynamicLOD %s\n",
 							 TheGlobalData->m_textureFilterMode,
 							 TheGlobalData->m_anisotropyLevel,
 							 TheGlobalData->m_maxParticleCount,
+							 TheGlobalData->getEffectiveParticleCap(),
 							 TheGlobalData->m_msaaLevel,
 							 (Int)TheGlobalData->m_vsync,
 							 (Int)TheGlobalData->m_useShadowVolumes,
@@ -2262,6 +2263,44 @@ const char *GameEngine_headlessRunResult( UnsignedInt frame, UnsignedInt victory
 extern void AIUpdate_resetMoveTrace( void );	///< -tracemove: forget the unit the last match followed
 
 /** -----------------------------------------------------------------------------------------------
+ * -maxframes' own frame.  One engine pass can run several logic frames to catch up with the clock, and
+ * the end of an unattended run is only looked at after the pass, so under load a run could end a frame
+ * or two past its limit: two copies of a network game stopped on 1801 and 1802 and were compared
+ * there, which can only disagree.  So the catch-up stops on the limit's frame, and that frame's CRC is
+ * logged the moment the logic finishes it ("HEADLESS CRC AT LIMIT"), whatever happens after.
+ *
+ * ZH_TEST_FRAME_LIMIT_OVERSHOOT=<n>, a test's switch and never a player's: the run goes on n frames
+ * past the limit, so a harness can show that it compares at the limit however far a run went.
+ */
+static Int frameLimitOvershoot( void )
+{
+	static Int overshoot = -1;
+	if (overshoot < 0)
+	{
+		const char *value = getenv( "ZH_TEST_FRAME_LIMIT_OVERSHOOT" );
+		overshoot = value != NULL ? atoi( value ) : 0;
+		if (overshoot < 0)
+			overshoot = 0;
+	}
+	return overshoot;
+}
+
+/// TRUE once the logic has finished -maxframes' frame; on that frame itself, its CRC goes to the log
+static Bool noteFrameLimit( void )
+{
+	static Bool logged = FALSE;
+	const Int limit = TheGlobalData->m_maxGameFrames;
+	if (limit <= 0 || TheGameLogic->getFrame() < (UnsignedInt)limit)
+		return FALSE;
+	if (!logged && TheGameLogic->getFrame() == (UnsignedInt)limit)
+	{
+		logged = TRUE;
+		DEBUG_LOG(("HEADLESS CRC AT LIMIT: 0x%08X at frame %d\n", TheGameLogic->getCRC( CRC_RECALC ), limit));
+	}
+	return TRUE;
+}
+
+/** -----------------------------------------------------------------------------------------------
  * -headless: decide whether the unattended run is finished, and if it is, write down how it went
  * and quit.  Two ways to finish: the match is decided, or -maxframes ran out.
  */
@@ -2399,6 +2438,8 @@ static void updateHeadlessRun( void )
 	Int maxGameFrames = TheGlobalData->m_maxGameFrames;
 	if (maxGameFrames > 0 && !TheGlobalData->m_headless && TheGlobalData->m_videoEndFrame >= maxGameFrames)
 		maxGameFrames = TheGlobalData->m_videoEndFrame + 1;
+	if (maxGameFrames > 0)
+		maxGameFrames += frameLimitOvershoot();		// a test's overshoot: 0 for every real run
 
 	const char *why = GameEngine_headlessRunResult( frame, TheVictoryConditions->getEndFrame(),
 																									maxGameFrames );
@@ -2681,6 +2722,10 @@ void GameEngine::update( void )
 			{
 				TheGameLogic->UPDATE();
 				++logicTicksThisPass;
+
+				// -maxframes' frame ends the burst, its CRC logged as it finishes (noteFrameLimit)
+				if (noteFrameLimit() && frameLimitOvershoot() == 0)
+					break;
 
 				if (!mayCatchUp)
 					break;
