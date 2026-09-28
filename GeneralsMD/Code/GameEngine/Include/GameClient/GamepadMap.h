@@ -31,8 +31,11 @@
 //
 //   GamepadBinding DPadUp             ; the button
 //     With = LeftShoulder             ; optional: only while this button is held
-//     Action = Command                ; MouseLeft, MouseMiddle, MouseRight, Modifier, Key, Command or CommandBar
+//     Action = Command                ; MouseLeft, MouseMiddle, MouseRight, Modifier, Key, Command, CommandBar
+//                                     ; or Structures
 //     Command = SELECT_TEAM5          ; for Command: a command map's name for a command
+//     Step = Next                     ; for Structures: Next or Previous
+//     OnRelease = Yes                 ; optional: act on the release, and only if no chord used the button
 //   End
 //
 // Modifier holds modifiers alone (`Modifiers = SHIFT`), as a hand holds Shift.  Key presses a named key
@@ -40,8 +43,13 @@
 // presses whatever key, with whatever modifiers, the player's input scheme binds that command to at the
 // moment of the press: S for STOP under Modern, G under W A S D.  Either way what arrives is a key.
 //
+// Structures selects the local player's next or previous production building and looks at it
+// (GamepadCycle.h): the selection message is the one a click on that building sends.
+//
 // A binding with a With replaces its button's own binding while the other button is held.  The held
-// button's own keys are let go for as long as the chord lasts (SdlGamepad.h).  Loaded with no CRC, as
+// button's own keys are let go for as long as the chord lasts (SdlGamepad.h).  OnRelease suits a button
+// that is also a chord's With and whose own action cannot be taken back (a command): it acts only on a
+// release with no chord made while it was held.  Loaded with no CRC, as
 // the command maps are: it is the player's input, not the game's rules.
 
 #pragma once
@@ -97,7 +105,8 @@ enum GamepadActionType
 	GAMEPAD_ACTION_MODIFIER,
 	GAMEPAD_ACTION_KEY,
 	GAMEPAD_ACTION_COMMAND,
-	GAMEPAD_ACTION_COMMAND_BAR		///< in and out of command-bar mode (SdlGamepad.h)
+	GAMEPAD_ACTION_COMMAND_BAR,		///< in and out of command-bar mode (SdlGamepad.h)
+	GAMEPAD_ACTION_STRUCTURES			///< the next or previous production building (GamepadCycle.h)
 };
 
 extern const LookupListRec TheGamepadActionNames[];
@@ -110,6 +119,8 @@ struct GamepadBinding
 	MappableKeyType				m_key;				///< for GAMEPAD_ACTION_KEY
 	MappableKeyModState		m_modState;		///< for GAMEPAD_ACTION_MODIFIER, and held around GAMEPAD_ACTION_KEY's key
 	GameMessage::Type			m_command;		///< for GAMEPAD_ACTION_COMMAND: a meta message the maps bind
+	Int										m_step;				///< for GAMEPAD_ACTION_STRUCTURES: 1 the next, -1 the previous
+	Bool									m_onRelease;	///< act on the release, only if no chord used the button
 };
 
 class GamepadMap : public SubsystemInterface

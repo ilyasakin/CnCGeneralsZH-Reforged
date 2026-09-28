@@ -48,6 +48,7 @@
 #include "Common/GlobalData.h"
 #include "Common/INI.h"
 #include "GameClient/GamepadAim.h"
+#include "GameClient/GamepadCycle.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadMap.h"
 #include "GameClient/GamepadRadial.h"
@@ -361,7 +362,7 @@ TEST(every_shipped_binding_parses_and_each_command_is_bound)
 {
 	CHECK( start() );
 	CHECK( TheGamepadMap != NULL );
-	CHECK_EQ( TheGamepadMap->getCount(), 22 );		// the mouse 3, modifiers 2, command bar 1, orders 4, groups 8, back buttons 4
+	CHECK_EQ( TheGamepadMap->getCount(), 24 );		// the mouse 3, modifiers 2, command bar 1, orders 4, groups 8, back buttons 4, base 2
 	for (Int i = 0; i < TheGamepadMap->getCount(); ++i)
 	{
 		const GamepadBinding &binding = TheGamepadMap->get( i );
@@ -449,9 +450,11 @@ TEST(a_command_presses_the_key_the_players_map_binds_it_to)
 	frame( pad );
 	padButton( SDL_GAMEPAD_BUTTON_WEST, false );
 	frame( pad );
-	padButton( SDL_GAMEPAD_BUTTON_BACK, true );		// SELECT_MATCHING_UNITS: Ctrl+D
+	padButton( SDL_GAMEPAD_BUTTON_BACK, true );		// SELECT_MATCHING_UNITS: Ctrl+D, on the release (OnRelease)
 	frame( pad );
 	padButton( SDL_GAMEPAD_BUTTON_BACK, false );
+	frame( pad );
+	SdlGamepad_update( 20000 );									// ...let go on the next update, a tap over two frames
 	frame( pad );
 	pushKey( SDL_SCANCODE_S, true );
 	frame( hand );
@@ -464,6 +467,38 @@ TEST(a_command_presses_the_key_the_players_map_binds_it_to)
 	pushKey( SDL_SCANCODE_LCTRL, false );
 	frame( hand );
 	CHECK( same( pad, hand ) );
+}
+
+TEST(view_held_with_a_shoulder_is_the_base_chord_and_its_own_command_does_not_follow)
+{
+	CHECK( start() );
+	clear();
+	Output pad;
+	padButton( SDL_GAMEPAD_BUTTON_BACK, true );
+	frame( pad );
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, true );		// the next production building: none outside a match
+	frame( pad );
+	padButton( SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, false );
+	padButton( SDL_GAMEPAD_BUTTON_BACK, false );
+	SdlGamepad_update( 21000 );
+	frame( pad );
+	CHECK( pad.events.empty() );		// no Ctrl from the shoulder, and no Ctrl+D from View's release
+	const GamepadBinding *next = TheGamepadMap->find( GAMEPAD_BUTTON_RIGHT_SHOULDER, GAMEPAD_BUTTON_BACK );
+	const GamepadBinding *previous = TheGamepadMap->find( GAMEPAD_BUTTON_LEFT_SHOULDER, GAMEPAD_BUTTON_BACK );
+	CHECK( next != NULL && next->m_action == GAMEPAD_ACTION_STRUCTURES && next->m_step == 1 );
+	CHECK( previous != NULL && previous->m_action == GAMEPAD_ACTION_STRUCTURES && previous->m_step == -1 );
+}
+
+TEST(the_base_chord_steps_round_the_buildings_both_ways)
+{
+	CHECK_EQ( GamepadCycle::stepFrom( -1, 3, 1 ), 0 );		// none selected: the first...
+	CHECK_EQ( GamepadCycle::stepFrom( -1, 3, -1 ), 2 );		// ...or the last
+	CHECK_EQ( GamepadCycle::stepFrom( 0, 3, 1 ), 1 );
+	CHECK_EQ( GamepadCycle::stepFrom( 2, 3, 1 ), 0 );			// round from the last to the first
+	CHECK_EQ( GamepadCycle::stepFrom( 0, 3, -1 ), 2 );		// and back from the first to the last
+	CHECK_EQ( GamepadCycle::stepFrom( 0, 1, 1 ), 0 );			// one building: itself
+	CHECK_EQ( GamepadCycle::stepFrom( 0, 0, 1 ), -1 );		// none
+	CHECK_EQ( GamepadCycle::stepFrom( 5, 3, 1 ), 0 );			// a stale index starts over
 }
 
 TEST(ctrl_held_on_the_right_shoulder_makes_the_dpads_group)

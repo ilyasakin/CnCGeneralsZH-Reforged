@@ -61,6 +61,14 @@ const LookupListRec TheGamepadActionNames[] =
 	{ "Key",						GAMEPAD_ACTION_KEY },
 	{ "Command",				GAMEPAD_ACTION_COMMAND },
 	{ "CommandBar",			GAMEPAD_ACTION_COMMAND_BAR },
+	{ "Structures",			GAMEPAD_ACTION_STRUCTURES },
+	{ NULL, 0 }
+};
+
+static const LookupListRec TheGamepadStepNames[] =
+{
+	{ "Next",						1 },
+	{ "Previous",				-1 },
 	{ NULL, 0 }
 };
 
@@ -71,6 +79,8 @@ static const FieldParse TheGamepadBindingFieldParseTable[] =
 	{ "Key",						INI::parseLookupList,		KeyNames,								offsetof( GamepadBinding, m_key ) },
 	{ "Modifiers",			INI::parseLookupList,		ModifierNames,					offsetof( GamepadBinding, m_modState ) },
 	{ "Command",				GamepadMap::parseCommandName,	NULL,							offsetof( GamepadBinding, m_command ) },
+	{ "Step",						INI::parseLookupList,		TheGamepadStepNames,		offsetof( GamepadBinding, m_step ) },
+	{ "OnRelease",			INI::parseBool,					NULL,										offsetof( GamepadBinding, m_onRelease ) },
 	{ NULL,							NULL,										0,											0 }
 };
 
@@ -144,13 +154,16 @@ void GamepadMap::set( const GamepadBinding &binding )
 	binding.m_key = MK_NONE;
 	binding.m_modState = NONE;
 	binding.m_command = GameMessage::MSG_INVALID;
+	binding.m_step = 0;
+	binding.m_onRelease = FALSE;
 	ini->initFromINI( &binding, TheGamepadBindingFieldParseTable );
 
-	// a modifier action with no modifier, a key action with no key, a command action with no command, or
-	// a chord with itself, can only be a mistake in the file
+	// a modifier action with no modifier, a key action with no key, a command action with no command, a
+	// structures action with no step, or a chord with itself, can only be a mistake in the file
 	if ((binding.m_action == GAMEPAD_ACTION_MODIFIER && binding.m_modState == NONE)
 			|| (binding.m_action == GAMEPAD_ACTION_KEY && binding.m_key == MK_NONE)
 			|| (binding.m_action == GAMEPAD_ACTION_COMMAND && binding.m_command == GameMessage::MSG_INVALID)
+			|| (binding.m_action == GAMEPAD_ACTION_STRUCTURES && binding.m_step == 0)
 			|| binding.m_with == binding.m_button)
 		throw INI_INVALID_DATA;
 

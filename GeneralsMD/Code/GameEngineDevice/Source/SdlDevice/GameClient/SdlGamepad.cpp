@@ -27,6 +27,7 @@
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GamepadAim.h"
+#include "GameClient/GamepadCycle.h"
 #include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadRadial.h"
 #include "GameClient/GamepadHints.h"
@@ -87,6 +88,9 @@ struct Pad
 	Int suspended[ GAMEPAD_BUTTON_COUNT ];							///< chords that have let this held button's keys go
 	Bool menuPress[ GAMEPAD_BUTTON_COUNT ];							///< pressed while a menu had the pad: its release is the menu's
 	Bool radialPress[ GAMEPAD_BUTTON_COUNT ];						///< pressed for the radial menu, or while it was open: its release is the radial's
+	Bool deferred[ GAMEPAD_BUTTON_COUNT ];							///< an OnRelease binding waiting for its release, no chord made yet
+	Pressed tap[ GAMEPAD_BUTTON_COUNT ];								///< an OnRelease action pressed on the release, let go next update
+	Bool tapHeld[ GAMEPAD_BUTTON_COUNT ];
 	Real axis[ SDL_GAMEPAD_AXIS_COUNT ];
 	Bool cameraKey[ 4 ];
 	Real wheelCarry;
@@ -316,6 +320,9 @@ Pressed apply( const GamepadBinding &binding, UnsignedInt time )
 		case GAMEPAD_ACTION_COMMAND_BAR:
 			theCommandBarMode = theCommandBarMode ? FALSE : enterCommandBar( time );
 			break;
+		case GAMEPAD_ACTION_STRUCTURES:
+			GamepadCycle::structure( binding.m_step );
+			break;
 		default:
 			break;
 	}
@@ -437,12 +444,20 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	const GamepadButtonType with = pad.chordWith[ button ];
 	if (with != GAMEPAD_BUTTON_NONE && pad.suspended[ with ]++ == 0)
 		unapply( pad.pressed[ with ], time );
+	if (with != GAMEPAD_BUTTON_NONE)
+		pad.deferred[ with ] = FALSE;		// a chord spent it: its OnRelease action does not follow
 	// Y's command-bar binding, held, opens the radial menu instead; its release decides (releaseButton)
 	if (pad.bound[ button ] && pad.binding[ button ].m_action == GAMEPAD_ACTION_COMMAND_BAR && with == GAMEPAD_BUTTON_NONE
 			&& !theCommandBarMode && GamepadRadial::open())
 	{
 		pad.radialPress[ button ] = TRUE;
 		theRadialButton = button;
+		return;
+	}
+	// OnRelease: nothing yet; the release acts, if no chord has used the button by then
+	if (pad.bound[ button ] && pad.binding[ button ].m_onRelease && with == GAMEPAD_BUTTON_NONE)
+	{
+		pad.deferred[ button ] = TRUE;
 		return;
 	}
 	if (pad.bound[ button ])
@@ -478,6 +493,14 @@ void releaseButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 			theNavAction = -1;
 		return;
 	}
+	if (pad.deferred[ button ])
+	{
+		// an OnRelease binding with no chord made while it was held: its action now, let go on the next
+		// update, as a hand's tap spans two frames
+		pad.deferred[ button ] = FALSE;
+		pad.tap[ button ] = apply( pad.binding[ button ], time );
+		pad.tapHeld[ button ] = TRUE;
+	}
 	unapply( pad.pressed[ button ], time );		// nothing left in it while a chord has it let go
 	// chords made with this button no longer give anything back to it
 	pad.suspended[ button ] = 0;
@@ -488,12 +511,22 @@ void releaseButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	const GamepadButtonType with = pad.chordWith[ button ];
 	pad.chordWith[ button ] = GAMEPAD_BUTTON_NONE;
 	if (with != GAMEPAD_BUTTON_NONE && pad.suspended[ with ] > 0 && --pad.suspended[ with ] == 0
-			&& pad.held[ with ] && pad.bound[ with ])
+			&& pad.held[ with ] && pad.bound[ with ] && !pad.binding[ with ].m_onRelease)		// an OnRelease one is spent
 		pad.pressed[ with ] = apply( pad.binding[ with ], time );
 }
 
 void releasePad( Pad &pad, UnsignedInt time )
 {
+	// a pad let go of all at once acts on nothing: no OnRelease action waiting fires, and a tap ends
+	for (Int button = 0; button < GAMEPAD_BUTTON_COUNT; ++button)
+	{
+		pad.deferred[ button ] = FALSE;
+		if (pad.tapHeld[ button ])
+		{
+			pad.tapHeld[ button ] = FALSE;
+			unapply( pad.tap[ button ], time );
+		}
+	}
 	for (Int button = 0; button < GAMEPAD_BUTTON_COUNT; ++button)
 		releaseButton( pad, (GamepadButtonType)button, time );
 	for (Int i = 0; i < 4; ++i)
@@ -872,6 +905,15 @@ Bool SdlGamepad_dispatch( const SDL_Event &event )
 
 void SdlGamepad_update( UnsignedInt nowMs )
 {
+	// the OnRelease taps pressed since the last update let go now, whatever else this update does
+	for (size_t i = 0; i < thePads.size(); ++i)
+		for (Int button = 0; button < GAMEPAD_BUTTON_COUNT; ++button)
+			if (thePads[i].tapHeld[ button ])
+			{
+				thePads[i].tapHeld[ button ] = FALSE;
+				unapply( thePads[i].tap[ button ], nowMs );
+			}
+
 	Real seconds = theUpdated ? (nowMs - theLastUpdate) / 1000.0f : 0.0f;
 	if (seconds < 0.0f || seconds > 0.1f)
 		seconds = seconds < 0.0f ? 0.0f : 0.1f;		// a stall is not a long zoom
