@@ -141,14 +141,14 @@ cat > "$WORK/hand.txt" <<'SCRIPT'
 302 key S up
 SCRIPT
 
-run_game() {	# run_game <name> [script]: sets RUN_CRC, RUN_FRAME, RUN_PLAYED, RUN_STATUS
-	local prefix="$TAG$1" script="${2:-}"
+run_game() {	# run_game <name> [script [frames]]: sets RUN_CRC, RUN_FRAME, RUN_PLAYED, RUN_STATUS
+	local prefix="$TAG$1" script="${2:-}" frames="${3:-$MAXFRAMES}"
 	local log="$EXEDIR/${prefix}DebugLogFile.txt"
 	rm -f -- "$log"
 	( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_INPUT_SCRIPT="$script" \
 		perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
 		"$GENERALS" -offscreen -noaudio -win -xres 1024 -yres 768 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
-		-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" \
+		-multiInstance -noFPSLimit -maxframes "$frames" -logPrefix "$prefix" \
 		-randommap 0 2 -autoskirmish 2 -aidiff brutal -seed 0 \
 		> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
 	RUN_STATUS=$?
@@ -229,8 +229,9 @@ fi
 # ---- the base chord (GamepadCycle.h): View held with RB selects the command centre, then a dozer from it ----
 # The pad steps to its first production building (the command centre, the only one at the start) and queues
 # its first command (a dozer) from the radial; the hand clicks the command centre where the starting camera
-# has it, in the middle of the screen, and clicks that command button.  They must agree, and differ from the
-# radial run above: the difference is the dozer.
+# has it, in the middle of the screen, and clicks that command button.  A dozer takes about 330 frames to come
+# out, so these runs go on to frame CYCLE_FRAMES, and the radial run's script to the same frame is the
+# control.  They must agree, and differ from the control: the difference is the dozer.
 { cat "$WORK/pad-radial.txt"; cat <<'SCRIPT'
 400 pad Back down
 402 pad RightShoulder down
@@ -242,7 +243,9 @@ fi
 426 pad North up
 SCRIPT
 } > "$WORK/pad-cycle.txt"
-run_game padcycle "$WORK/pad-cycle.txt"
+CYCLE_FRAMES=900
+run_game radialcontrol "$WORK/pad-radial.txt" "$CYCLE_FRAMES"; RC_CRC="$RUN_CRC"
+run_game padcycle "$WORK/pad-cycle.txt" "$CYCLE_FRAMES"
 PC_CRC="$RUN_CRC"; PC_FRAME="$RUN_FRAME"; PC_PLAYED="$RUN_PLAYED"; PC_STATUS="$RUN_STATUS"
 CYCLED="$(grep -a 'GAMEPAD STRUCTURES: selected' "$EXEDIR/${TAG}padcycleDebugLogFile.txt" 2>/dev/null | tail -1)"
 CC_BUTTON="$(grep -a 'GAMEPAD RADIAL: pressed' "$EXEDIR/${TAG}padcycleDebugLogFile.txt" 2>/dev/null | tail -1 \
@@ -251,22 +254,23 @@ HC_CRC=""; HC_FRAME=""; HC_PLAYED=0; HC_STATUS=""
 if [ -n "$CC_BUTTON" ] && [ -f "$WORK/hand-radial.txt" ]; then
 	{ cat "$WORK/hand-radial.txt"; printf '%s\n' "400 mouse move 512 384" "402 mouse left down 512 384" "404 mouse left up 512 384" \
 		"426 mouse move $CC_BUTTON" "426 mouse left down $CC_BUTTON" "428 mouse left up $CC_BUTTON"; } > "$WORK/hand-cycle.txt"
-	run_game handcycle "$WORK/hand-cycle.txt"
+	run_game handcycle "$WORK/hand-cycle.txt" "$CYCLE_FRAMES"
 	HC_CRC="$RUN_CRC"; HC_FRAME="$RUN_FRAME"; HC_PLAYED="$RUN_PLAYED"; HC_STATUS="$RUN_STATUS"
 fi
 echo "cycle: ${CYCLED#*GAMEPAD STRUCTURES: }"
 echo "pad, cycle:   CRC ${PC_CRC:-none} at frame ${PC_FRAME:-none}, $PC_PLAYED of 29 actions played (exit $PC_STATUS)"
 echo "hand, clicks: CRC ${HC_CRC:-none} at frame ${HC_FRAME:-none}, $HC_PLAYED of 26 actions played (exit $HC_STATUS)"
+echo "control, the radial run to frame $CYCLE_FRAMES: CRC ${RC_CRC:-none}"
 if ! printf '%s' "$CYCLED" | grep -q 'CommandCenter'; then
 	echo "FAIL: View and RB did not select the command centre"; status=1
-elif [ -z "$PC_CRC" ] || [ -z "$HC_CRC" ]; then
+elif [ -z "$PC_CRC" ] || [ -z "$HC_CRC" ] || [ -z "$RC_CRC" ]; then
 	echo "FAIL: a cycle run gave no result"; status=1
 elif [ "$PC_PLAYED" != "29" ] || [ "$HC_PLAYED" != "26" ]; then
 	echo "FAIL: the cycle scripts were not played whole"; status=1
 elif [ "$PC_CRC" != "$HC_CRC" ] || [ "$PC_FRAME" != "$HC_FRAME" ]; then
 	echo "FAIL: the base chord's selection and the hand's click on the command centre disagree"; status=1
-elif [ "$PC_CRC" = "$PR_CRC" ]; then
-	echo "FAIL: the dozer changed nothing (the radial run ends the same), so the agreement proves nothing"; status=1
+elif [ "$PC_CRC" = "$RC_CRC" ]; then
+	echo "FAIL: the dozer changed nothing (the radial run to the same frame ends the same), so the agreement proves nothing"; status=1
 else
 	echo "PASS: the base chord selects as a click on the building does"
 fi
