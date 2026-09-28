@@ -23,6 +23,7 @@
 #include "Common/MessageStream.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/ThingTemplate.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GamepadCycle.h"
 #include "GameClient/InGameUI.h"
