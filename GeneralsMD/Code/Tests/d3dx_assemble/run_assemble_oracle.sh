@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # A3e-asm: Microsoft's own D3DXAssembleShader against FFReference's ps.1.1 assembler, on the game's four
 # water programs.  assemble_oracle.cpp explains the mechanism and its one departure (three C-runtime
@@ -39,7 +54,11 @@ COMPILER_SHA256=44c3a7e330b54a35a9efa015831392593aa02e7da1460be429d17c3644850e8a
 
 here="$(cd "$(dirname "$0")" && pwd)"
 code_root="${1:-$(cd "$here/../.." && pwd)}"
-work="$(mktemp -d "${TMPDIR:-/tmp}/assemble-oracle.XXXXXX")"
+work="$(mktemp -d "${TMPDIR:-/tmp}/assemble-oracle.XXXXXX")" || work=""
+if [ -z "$work" ] || [ ! -d "$work" ]; then
+	echo "run_assemble_oracle: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${work:?}"' EXIT
 d3dx_source="${ZH_D3DX9_X64:-}"
 

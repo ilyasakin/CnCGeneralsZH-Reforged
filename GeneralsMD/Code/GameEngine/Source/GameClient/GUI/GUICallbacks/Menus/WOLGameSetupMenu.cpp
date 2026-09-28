@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -1141,7 +1142,7 @@ void WOLDisplayGameOptions( void )
 
 
   Int itemCount = GadgetComboBoxGetLength(comboBoxStartingCash);
-  Int index;	// read by the assert after the loop (VC6 scoped it to the function)
+  Int index;
   for ( index = 0; index < itemCount; index++ )
   {
     Int value  = (Int)(intptr_t)GadgetComboBoxGetItemData(comboBoxStartingCash, index);
@@ -1157,7 +1158,9 @@ void WOLDisplayGameOptions( void )
     }
   }
   
-  DEBUG_ASSERTCRASH( index < itemCount, ("Could not find new starting cash amount %d in list", theGame->getStartingCash().countMoney() ) );
+  // see LanGameOptionsMenu: an amount from the player's INI that the list does not carry
+  if ( index == itemCount )
+    PopulateStartingCashComboBox( comboBoxStartingCash, theGame );
 
   // UpdatePeaceTimeComboBox only writes when the selection actually changes, which is what keeps
   // this out of the same recursion the two above are guarding against

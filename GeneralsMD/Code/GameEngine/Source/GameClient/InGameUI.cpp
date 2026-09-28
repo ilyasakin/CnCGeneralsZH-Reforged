@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -618,7 +619,7 @@ void InGameUI::xfer( Xfer *xfer )
 					xfer->xferBool(&swInfo->m_hiddenByScript);
 					xfer->xferBool(&swInfo->m_hiddenByScience);
 					xfer->xferBool(&swInfo->m_ready);
-          if ( currentVersion >= 3 )
+          if ( version >= 3 )
           {
             xfer->xferBool( &swInfo->m_evaReadyPlayed );
           }
@@ -665,7 +666,7 @@ void InGameUI::xfer( Xfer *xfer )
 			xfer->xferBool(&hiddenByScript);
 			xfer->xferBool(&hiddenByScience);
 			xfer->xferBool(&ready);
-      if ( currentVersion >= 3 )
+      if ( version >= 3 )
       {
         xfer->xferBool( &evaReadyPlayed );
       }
@@ -1193,6 +1194,7 @@ InGameUI::InGameUI()
 	m_peaceTimeLabelDisplayString = NULL;
 	m_peaceCountdownDisplayString = NULL;
 	m_lastMoneyDisplayed = -1;
+	m_lastEarningDisplayed = 0;
 	m_hudDrawCount = 0;
 	m_hudLastSampleFrame = 0;
 	m_hudLastSampleMs = 0;
@@ -3936,14 +3938,16 @@ void InGameUI::update( void )
 	if( moneyPlayer)
 	{
 		Int currentMoney = moneyPlayer->getMoney()->countMoney();
+		Int currentEarning = earnedPerSecond( moneyPlayer->getPlayerIndex() );
 
-		if( m_lastMoneyDisplayed != currentMoney )
+		if( m_lastMoneyDisplayed != currentMoney || m_lastEarningDisplayed != currentEarning )
 		{
 			UnicodeString buffer;
 
-			buffer.format( TheGameText->fetch( "GUI:ControlBarMoneyDisplay" ), currentMoney );
+			buffer.format( TheGameText->fetch( "GUI:ControlBarMoneyEarning" ), currentMoney, currentEarning );
 			GadgetStaticTextSetText( moneyWin, buffer );
 			m_lastMoneyDisplayed = currentMoney;
+			m_lastEarningDisplayed = currentEarning;
 
 		}  // end if
 
@@ -10965,17 +10969,6 @@ static void putPowerBar( HtmlValues &values, std::vector< HtmlValues > &cells )
 		values[ "power.state" ] = "green";
 }
 
-/** How far `player` is from this rank to the next, 0 to 100.  A script can disable a level, which
-	* leaves its points required at -1: a rank with no way on counts as full, where the bar's own
-	* drawing divided by it. */
-static Int experiencePercent( const Player *player )
-{
-	enum { FULL = 100 };
-	const Int span = player->getSkillPointsLevelUp() - player->getSkillPointsLevelDown();
-	const Int progress = span > 0 ? ( player->getSkillPoints() - player->getSkillPointsLevelDown() ) * FULL / span : FULL;
-	return min( (Int)FULL, max( 0, progress ) );
-}
-
 //-------------------------------------------------------------------------------------------------
 /** The general's experience as the page draws it, in the groove {{expframe.x}} ... puts down the
 	* right panel: `cells` from the bottom up, each {{lit}} "lit" up to the way from this rank to the
@@ -11000,7 +10993,7 @@ static void putExperienceBar( HtmlValues &values, std::vector< HtmlValues > &cel
 	if( player == NULL )
 		return;
 
-	const Int lit = experiencePercent( player ) * EXPERIENCE_CELLS / FULL;
+	const Int lit = player->getRankProgressPercent() * EXPERIENCE_CELLS / FULL;
 	const Int column = height - 2 * FRAME_LIP;
 	for( Int cell = 0; cell < EXPERIENCE_CELLS && column > 0; cell++ )
 	{
@@ -12138,7 +12131,7 @@ void InGameUI::drawPromotionPage( GameWindow *parent, Bool front )
 																																 : ThePlayerList->getLocalPlayer();
 	// its rungs cut from the bar's width in page pixels so they add up to it exactly, as the power
 	// bar's cells are
-	const Int lit = player ? experiencePercent( player ) * EXPERIENCE_RUNGS / FULL : 0;
+	const Int lit = player ? player->getRankProgressPercent() * EXPERIENCE_RUNGS / FULL : 0;
 	const Int barWidth = atoi( values[ "ProgressBarExperience.w" ].c_str() );
 	std::vector< HtmlValues > &rungs = lists[ "exprungs" ];
 	for( Int rung = 0; rung < EXPERIENCE_RUNGS && barWidth > 0; rung++ )

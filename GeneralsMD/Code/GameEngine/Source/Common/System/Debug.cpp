@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -210,7 +211,7 @@ static Bool isUnattendedRun( void )
 {
 	static Int cached = -1;
 	if (cached < 0)
-		cached = findEarlyCommandLineOption( L"-headless" ) ? 1 : 0;
+		cached = isUnattendedProcess() ? 1 : 0;	// -headless or ZH_UNATTENDED (EarlyCommandLine.h)
 	return cached != 0;
 }
 
@@ -265,7 +266,7 @@ static const char *getCurrentTimeString(void)
 static const char *getCurrentTickString(void)
 {
 	static char TheTickString[32];
-	snprintf(TheTickString, ARRAY_SIZE(TheTickString), "(T=%08lx)",Clock_Milliseconds_Coarse());
+	snprintf(TheTickString, ARRAY_SIZE(TheTickString), "(T=%08x)",Clock_Milliseconds_Coarse());
 	return TheTickString;
 }
 
@@ -930,9 +931,12 @@ void ReleaseCrash(const char *reason)
 //	::MessageBox(NULL, "You have encountered a serious error.  Serious errors can be caused by many things including viruses, overheated hardware and hardware that does not meet the minimum specifications for the game. Please visit the forums at www.generals.ea.com for suggested courses of action or consult your manual for Technical Support contact information.", "Technical Difficulties...", MB_OK|MB_TASKMODAL|MB_ICONERROR);
 
 // crash error message changed again 8/22/03 M Lorenzen... made this message box modal to the system so it will appear on top of any task-modal windows, splash-screen, etc.
-  ::MessageBox(NULL, "You have encountered a serious error.  Serious errors can be caused by many things including viruses, overheated hardware and hardware that does not meet the minimum specifications for the game. Please visit the forums at www.generals.ea.com for suggested courses of action or consult your manual for Technical Support contact information.", 
-   "Technical Difficulties...", 
-   MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
+// The 2003 text sent the player to forums at generals.ea.com that no longer exist, and never said
+// that a report had just been written or where. Name the file instead.
+	char buff[ 2 * _MAX_PATH ];
+	_snprintf(buff, ARRAY_SIZE(buff), "You have encountered a serious error and the game has to close.\n\nA crash report was written to:\n%s\n\nPlease include that file when you report the problem.", curbuf);
+	buff[ARRAY_SIZE(buff) - 1] = 0;
+	::MessageBox(NULL, buff, "Technical Difficulties...", MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
 
 
 #endif

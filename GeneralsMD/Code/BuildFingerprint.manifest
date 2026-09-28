@@ -42,6 +42,8 @@ Data/Scenarios/bridgecross.txt
 Data/Scenarios/bridgelong.txt
 Data/Scenarios/chokeprobe.txt
 Data/Scenarios/crowdbattle.txt
+Data/Scenarios/inferno30.txt
+Data/Scenarios/mappers.txt
 Data/Scenarios/mass420x2.txt
 Data/Scenarios/mass840.txt
 Data/Scenarios/massmove.txt
@@ -98,6 +100,7 @@ Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/LanGameOptionsMenu.wnd
 Data/Window/Menus/OptionsMenu.wnd
 Data/Window/Menus/SkirmishGameOptionsMenu.wnd
+Data/dx11shaders.shipped
 GameEngine/GameEngine.dsp
 GameEngine/Include/Common/AcademyStats.h
 GameEngine/Include/Common/ActionManager.h
@@ -1432,6 +1435,13 @@ GameEngineDevice/Include/Win32Device/Common/Win32LocalFileSystem.h
 GameEngineDevice/Include/Win32Device/GameClient/Win32DIKeyboard.h
 GameEngineDevice/Include/Win32Device/GameClient/Win32DIMouse.h
 GameEngineDevice/Include/Win32Device/GameClient/Win32Mouse.h
+GameEngineDevice/Source/D3D12Device/D3D12Adapter.cpp
+GameEngineDevice/Source/D3D12Device/D3D12Adapter.h
+GameEngineDevice/Source/D3D12Device/D3D12Bridge.h
+GameEngineDevice/Source/D3D12Device/D3D12Exports.cpp
+GameEngineDevice/Source/D3D12Device/D3D12ShimBridge.cpp
+GameEngineDevice/Source/D3D12Device/D3D12ShimUndefs.h
+GameEngineDevice/Source/D3D12Device/zh_d3d12.def
 GameEngineDevice/Source/MilesAudioDevice/MilesAudioManager.cpp
 GameEngineDevice/Source/PosixDevice/Common/PosixCDManager.cpp
 GameEngineDevice/Source/PosixDevice/Common/PosixFileResolutionDump.cpp
@@ -1730,9 +1740,13 @@ Libraries/Source/WWVegas/WW3D2/coltest.h
 Libraries/Source/WWVegas/WW3D2/coltype.h
 Libraries/Source/WWVegas/WW3D2/composite.cpp
 Libraries/Source/WWVegas/WW3D2/composite.h
+Libraries/Source/WWVegas/WW3D2/d3d12runtime.cpp
+Libraries/Source/WWVegas/WW3D2/d3d12runtime.h
 Libraries/Source/WWVegas/WW3D2/d3d8shadertranslate.cpp
 Libraries/Source/WWVegas/WW3D2/d3d8shadertranslate.h
 Libraries/Source/WWVegas/WW3D2/d3dx9math.h
+Libraries/Source/WWVegas/WW3D2/d3dx9portable.cpp
+Libraries/Source/WWVegas/WW3D2/d3dx9portable.h
 Libraries/Source/WWVegas/WW3D2/d3dx9posix.cpp
 Libraries/Source/WWVegas/WW3D2/d3dx9posix.h
 Libraries/Source/WWVegas/WW3D2/d3dx9posix_texture.cpp
@@ -2291,6 +2305,7 @@ Libraries/Source/WWVegas/WWLib/tgatodxt.cpp
 Libraries/Source/WWVegas/WWLib/tgatodxt.h
 Libraries/Source/WWVegas/WWLib/thread.cpp
 Libraries/Source/WWVegas/WWLib/thread.h
+Libraries/Source/WWVegas/WWLib/threadwake.h
 Libraries/Source/WWVegas/WWLib/timer.h
 Libraries/Source/WWVegas/WWLib/trackwin.h
 Libraries/Source/WWVegas/WWLib/trackxy.h
@@ -2579,6 +2594,7 @@ Libraries/Source/gamespy-strlwr-c-only.patch
 Libraries/Source/glslang/.gitignore
 Libraries/Source/litehtml-parsed-css.patch
 Libraries/Source/litehtml/.gitignore
+Libraries/Source/lzhl-clear-history.patch
 Libraries/Source/max4sdk/.gitignore
 Libraries/Source/miniaudio/.gitignore
 Libraries/Source/nanosvg/.gitignore
@@ -2667,7 +2683,9 @@ Tests/test_cinema.inc
 Tests/test_clock.cpp
 Tests/test_compression.cpp
 Tests/test_crash_reporting.cpp
+Tests/test_d3d12_slice.cpp
 Tests/test_d3d9device.h
+Tests/test_d3dx9portable_oracle.cpp
 Tests/test_d3dx9posix.cpp
 Tests/test_d3dx_assemble_stub.cpp
 Tests/test_d3dxportable.cpp
@@ -2694,8 +2712,10 @@ Tests/test_ffvertex.cpp
 Tests/test_ffvertexcompile.cpp
 Tests/test_ffvertexd3d9.cpp
 Tests/test_fingerprint_manifest.sh
+Tests/test_first_launch_chooser.sh
 Tests/test_fontchars.cpp
 Tests/test_fpucontrol.cpp
+Tests/test_game_results.inc
 Tests/test_gameengine.cpp
 Tests/test_gameengine_stubs.cpp
 Tests/test_gametext_csf.cpp
@@ -2705,6 +2725,7 @@ Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
 Tests/test_lan_broadcast.cpp
+Tests/test_linux_portable.sh
 Tests/test_macos_app.sh
 Tests/test_main.cpp
 Tests/test_miles_miniaudio.cpp
@@ -2745,6 +2766,7 @@ Tests/test_widechar_crc_gate.cpp
 Tests/test_widechar_file.cpp
 Tests/test_widechar_format.cpp
 Tests/test_widechar_width.inc
+Tests/test_workfolder_guard.sh
 Tests/test_ww3d2.cpp
 Tests/test_wwdownload.cpp
 Tests/test_wwdownload_registry.cpp
@@ -3566,7 +3588,9 @@ Tools/gdi-font-metrics.ps1
 Tools/gentrigtables.py
 Tools/include_case_check.py
 Tools/install-guard.sh
+Tools/license-headers.py
 Tools/linux-check.sh
+Tools/linux-portable.sh
 Tools/lobbyroom_layout.py
 Tools/lobbysettings_layout.py
 Tools/lod-first-run-check.sh
@@ -3689,9 +3713,11 @@ Tools/net-check.sh
 Tools/net_check.py
 Tools/optionsmenu_layout.py
 Tools/overlay-crc-check.sh
+Tools/package-common.sh
 Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
 Tools/pink_laser.py
+Tools/record-dx11-shaders.ps1
 Tools/replay-check.sh
 Tools/root-readonly-check.sh
 Tools/signal_marks.py
@@ -3718,6 +3744,7 @@ Tools/vfx_tune.py
 Tools/water_grid_oracle_extract.py
 Tools/widechar_check.py
 Tools/widechar_check_allow.txt
+Tools/windows-d3d12-licenses.txt
 Tools/windows_view_diff.py
 Tools/wndlayout.py
 Tools/wolSetup/StdAfx.cpp

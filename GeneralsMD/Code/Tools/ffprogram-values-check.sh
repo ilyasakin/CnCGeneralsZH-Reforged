@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # FFReference's shader token values (Tests/ffreference/ffprogram.h) against MinGW-w64's d3d8types.h and
 # d3d9types.h: a second source for the numbers the reference pages leave out.  ffprogram.h writes them as
@@ -15,7 +30,7 @@
 #      assertions ran.
 # MinGW-w64's headers are compiled against, never copied.
 #
-# Exit status: 0 on a pass; 1 on a failure; 77 without x86_64-w64-mingw32-g++.
+# Exit status: 0 on a pass; 1 on a failure; 2 without a work folder; 77 without x86_64-w64-mingw32-g++.
 
 set -u
 COMPILER=x86_64-w64-mingw32-g++
@@ -24,7 +39,13 @@ if ! command -v "$COMPILER" >/dev/null 2>&1; then
 	exit 77
 fi
 TESTS="$(cd "$(dirname "$0")/../Tests" && pwd)"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/ffprogram-values-check.XXXXXX")"
+# A work folder that could not be made is the end of the run: going on with WORK empty would put
+# "$WORK/..." at the file system's root.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/ffprogram-values-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "ffprogram-values-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${WORK:?}"' EXIT
 
 cat > "$WORK/d3d8.cpp" <<'EOF'

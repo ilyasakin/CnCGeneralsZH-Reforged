@@ -1,0 +1,17 @@
+; zh_d3d12.dll (X1, -d3d12): the device, and D3DX's entry points under the API's names, which is how the
+; engine's binder finds them (D3D12Exports.cpp says whose implementations they are).
+LIBRARY zh_d3d12
+EXPORTS
+	ZH_D3D12_Direct3DCreate9
+	ZH_D3D12_Name_Shader
+	ZH_D3D12_Keep_D3D8_Declaration
+	D3DXAssembleShader = ZH_D3D12_D3DXAssembleShader
+	D3DXCompileShader = ZH_D3D12_D3DXCompileShader
+	D3DXDisassembleShader = ZH_D3D12_D3DXDisassembleShader
+	D3DXCreateTexture = ZH_D3D12_D3DXCreateTexture
+	D3DXCreateCubeTexture = ZH_D3D12_D3DXCreateCubeTexture
+	D3DXCreateVolumeTexture = ZH_D3D12_D3DXCreateVolumeTexture
+	D3DXCreateTextureFromFileExA = ZH_D3D12_D3DXCreateTextureFromFileExA
+	D3DXFilterTexture = ZH_D3D12_D3DXFilterTexture
+	D3DXLoadSurfaceFromSurface = ZH_D3D12_D3DXLoadSurfaceFromSurface
+	D3DXGetFVFVertexSize = ZH_D3D12_D3DXGetFVFVertexSize

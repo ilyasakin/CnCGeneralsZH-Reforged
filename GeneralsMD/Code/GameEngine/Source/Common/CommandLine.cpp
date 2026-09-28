@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -1336,8 +1337,9 @@ Int parseStats(char *args[], int num)
 {
 	if (TheWritableGlobalData && num > 1)
 	{
-		TheWritableGlobalData->m_dumpStatsAtInterval = TRUE;
 		TheWritableGlobalData->m_statsInterval  = atoi(args[1]);
+		// W3DDisplay takes the frame modulo this; -stats 0 or a word divided by zero
+		TheWritableGlobalData->m_dumpStatsAtInterval = TheWritableGlobalData->m_statsInterval > 0;
 	}
 	return 2;
 }
@@ -1634,6 +1636,18 @@ Int parseDirect3D9(char *args[], int num)
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_direct3D11 = FALSE;
+	}
+	return 1;
+}
+
+/* -d3d12: draw through zh_d3d12.dll (X1), the SDL3 GPU device macOS and Linux draw with, on Direct3D 12.
+	 * Windows only, and opt-in while it is proved against -d3d9 and -dx11.  W3DDisplay decides whether it
+	 * happens: a zh_d3d12.dll that does not load keeps the default renderer, and says so in the log. */
+Int parseDirect3D12(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_direct3D12 = TRUE;
 	}
 	return 1;
 }
@@ -2481,6 +2495,7 @@ static CommandLineParam params[] =
 	{ "-turbo", parseTurbo },
 	{ "-msaa", parseMSAA },
 	{ "-d3d9", parseDirect3D9 },
+	{ "-d3d12", parseDirect3D12 },
 	{ "-language", parseTextLanguage },
 	{ "-dx11dump", parseDirect3D11Dump },
 	{ "-dx11post", parseDirect3D11Post },

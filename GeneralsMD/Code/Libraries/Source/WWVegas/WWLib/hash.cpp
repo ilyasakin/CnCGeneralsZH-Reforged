@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /* $Header: /VSS_Sync/wwlib/hash.cpp 3     10/17/00 4:48p Vss_sync $ */
 /*********************************************************************************************** 
@@ -138,7 +139,7 @@ int	HashTableClass::Hash( const char * key )
 void	HashTableIteratorClass::First(void)
 {
 	Index = 0;
-	NextEntry = Table.HashTable[ Index ];
+	NextEntry = NULL;
 	Advance_Next();
 	Next();		// Accept the next we found, and go to the next next
 }
@@ -155,11 +156,11 @@ void	HashTableIteratorClass::Next(void)
 void	HashTableIteratorClass::Advance_Next(void)
 {
 	while ( NextEntry == NULL ) {
-		Index++;
 		if ( Index >= Table.HashTableSize ) {
 			return;	// Done!
 		}
 		NextEntry = Table.HashTable[ Index ];
+		++Index;
 	}
 }
 

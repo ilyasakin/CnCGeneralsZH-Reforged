@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /***********************************************************************************************
  ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
@@ -111,6 +112,7 @@
 #include	"trect.h"
 #include	"wwfile.h"
 #include	"pk.h"
+#include "Common/EarlyCommandLine.h"	// -headless, which DuplicateCRCError must not wait on
 #include	"pipe.h"
 #include	"wwstring.h"
 #if defined(_WIN32)
@@ -2377,6 +2379,13 @@ void INIClass::DuplicateCRCError(const char *message, const char *section, const
 
 #ifdef NDEBUG
 #ifdef _WINDOWS
+	// Never in an unattended run (-headless or ZH_UNATTENDED), which has nobody to press OK: the line
+	// above has said it, and a run with a broken INI stops with it rather than wait on a box.
+	if (isUnattendedProcess()) {
+		fputs(buffer, stderr);
+		fflush(stderr);
+		_exit(2);
+	}
 	MessageBox(0, buffer, "Duplicate CRC in INI file.", MB_ICONSTOP | MB_OK);
 #endif
 #endif

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /////////////////////////////////////////////////////////////////////////EA-V1
 // $File: //depot/GeneralsMD/Staging/code/Libraries/Source/debug/debug_debug.cpp $
@@ -698,7 +699,7 @@ bool Debug::CrashDone(bool die)
     {
       // A -headless run has nobody to click OK: it waited on this box forever (W2, a purecall under
       // #32's old loop).  The text goes where a harness can read it, and the run ends as the box would.
-      if (findEarlyCommandLineOption(L"-headless")!=NULL)
+      if (isUnattendedProcess())	// -headless or ZH_UNATTENDED
       {
         fputs("Game crash: ",stderr);
         fputs(help,stderr);

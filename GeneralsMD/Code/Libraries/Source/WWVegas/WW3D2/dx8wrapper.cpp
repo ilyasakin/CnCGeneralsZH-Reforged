@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /***********************************************************************************************
  ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
@@ -43,7 +44,11 @@
 
 //#define CREATE_DX8_MULTI_THREADED
 //#define CREATE_DX8_FPU_PRESERVE
+#if defined(_WIN32)
+#define WW3D_DEVTYPE Requested_Device_Type()	// HAL unless ZH_D3D9_DEVTYPE says otherwise: see below
+#else
 #define WW3D_DEVTYPE D3DDEVTYPE_HAL
+#endif
 
 #include "dx8wrapper.h"
 #if defined(_WIN32)
@@ -79,6 +84,7 @@
 #include "ffprobe.h"
 #include "ffshadercache.h"
 #include "dx11runtime.h"
+#include "d3d12runtime.h"
 #include "pot.h"
 #include "wwprofile.h"
 #include "ffactory.h"
@@ -92,6 +98,22 @@
 
 #include "shdlib.h"
 #include <string.h>	// memset, strcpy, strlen
+
+#if defined(_WIN32)
+#include <stdlib.h>	// getenv
+
+/* ZH_D3D9_DEVTYPE=nullref is for measuring, not playing: the reference rasterizer's NULL device
+	 takes every call and draws nothing, so a run times the game's own work in the Direct3D 9
+	 runtime with no driver or rasterizer under it.  It exists only where d3dref9.dll does (the
+	 DirectX SDK's debug runtime); without it CreateDevice fails as it would on a machine with no
+	 device.  Unset, or anything else, the device is the hardware one it has always been.  The
+	 Direct3D 11 side's counterpart is ZH_DX11_DRIVER (dx11device.cpp). */
+static D3DDEVTYPE Requested_Device_Type()
+{
+	const char * requested = getenv("ZH_D3D9_DEVTYPE");
+	return (requested != NULL && _stricmp(requested, "nullref") == 0) ? D3DDEVTYPE_NULLREF : D3DDEVTYPE_HAL;
+}
+#endif
 
 const int DEFAULT_RESOLUTION_WIDTH = 640;
 const int DEFAULT_RESOLUTION_HEIGHT = 480;
@@ -503,12 +525,15 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 
 	if (!lite) {
 #if defined(_WIN32)
-		D3D9Lib = LoadLibrary("D3D9.DLL");
+		// -d3d12 (X1): zh_d3d12.dll, already loaded by W3DDisplay (d3d12runtime.h), is the Direct3D 9.
+		if (!Direct3D12_Is_Active()) {
+			D3D9Lib = LoadLibrary("D3D9.DLL");
 
-		if (D3D9Lib == NULL) return false;	// Return false at this point if init failed
+			if (D3D9Lib == NULL) return false;	// Return false at this point if init failed
 
-		Direct3DCreate9Ptr = (Direct3DCreate9Type) GetProcAddress(D3D9Lib, "Direct3DCreate9");
-		if (Direct3DCreate9Ptr == NULL) return false;
+			Direct3DCreate9Ptr = (Direct3DCreate9Type) GetProcAddress(D3D9Lib, "Direct3DCreate9");
+			if (Direct3DCreate9Ptr == NULL) return false;
+		}
 #endif
 
 		/*
@@ -516,7 +541,7 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 		*/
 		WWDEBUG_SAY(("Create Direct3D9\n"));
 #if defined(_WIN32)
-		D3DInterface = Direct3DCreate9Ptr(D3D_SDK_VERSION);
+		D3DInterface = Direct3D12_Is_Active() ? Direct3D12_Create(D3D_SDK_VERSION) : Direct3DCreate9Ptr(D3D_SDK_VERSION);
 #else
 		D3DInterface = Direct3DCreate9(D3D_SDK_VERSION);	// the device is linked in (posixd3d9): nothing to load
 #endif
@@ -578,12 +603,13 @@ void DX8Wrapper::Shutdown(void)
 		D3DInterface=NULL;
 	}
 
-#if defined(_WIN32)
-	if (D3D9Lib) {
-		FreeLibrary(D3D9Lib);
-		D3D9Lib = NULL;
-	}
-#endif
+	// D3D9.DLL stays loaded until the process ends: it is not freed here.  Textures outlive this call -
+	// the particle system manager is shut down after the game client that owns the display, and frees
+	// its point groups' textures then - and each Release is a call into this DLL.  This handle is the
+	// only reference to it (the exe and d3dx9_43.dll do not import it), so FreeLibrary unmapped the code
+	// those calls go to: a texture Released after it faults, on Windows as under Wine, and an exit with
+	// particle textures still alive faulted in ~TextureBaseClass.  Nothing is gained by unloading it
+	// moments before the process exits.
 
 	_RenderDeviceNameTable.Clear();		 // note - Delete_All() resizes the vector, causing a reallocation.  Clear is better. jba.
 	_RenderDeviceShortNameTable.Clear();
@@ -3588,8 +3614,10 @@ IDirect3DSurface9 * DX8Wrapper::_Create_DX8_Surface(const char *filename_)
 			// else create a surface with missing texture in it
 			char compressed_name[200];
 			strncpy(compressed_name,filename_, 200);
-			char *ext = strstr(compressed_name, ".");
-			if ( (strlen(ext)==4) && 
+			compressed_name[199] = 0;
+			// the last dot: the first one turned "a.b.tga" into nothing, and a name without one was a strlen of NULL
+			char *ext = strrchr(compressed_name, '.');
+			if ( ext && (strlen(ext)==4) &&
 				  ( (ext[1] == 't') || (ext[1] == 'T') ) && 
 				  ( (ext[2] == 'g') || (ext[2] == 'G') ) && 
 				  ( (ext[3] == 'a') || (ext[3] == 'A') ) ) {

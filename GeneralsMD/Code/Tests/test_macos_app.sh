@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Tools/make-macos-app.sh checked on itself (P1 step 5), with a bundle built from the real inputs (this
 # build's generals, staged overlay and link line) into a temporary folder, without the art:
@@ -31,7 +46,11 @@ if [ "$(uname -s)" != "Darwin" ] || ! command -v codesign >/dev/null 2>&1; then
 	exit 77
 fi
 SCRIPT="$(cd "$(dirname "$0")/../Tools" && pwd)/make-macos-app.sh"
-T="$(mktemp -d "${TMPDIR:-/tmp}/macos-app-check.XXXXXX")"
+T="$(mktemp -d "${TMPDIR:-/tmp}/macos-app-check.XXXXXX")" || T=""
+if [ -z "$T" ] || [ ! -d "$T" ]; then
+	echo "test_macos_app: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${T:?}"' EXIT
 failed=0
 check() { if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failed=1; fi; }
@@ -65,6 +84,8 @@ check '[ -f "$APP/Contents/Resources/Overlay/Install_Final.bmp" ] && [ -d "$APP/
 nlic=$(ls "$APP/Contents/Resources/Licenses" | wc -l | tr -d ' ')
 check '[ "$nlic" -ge 13 ] && [ -f "$APP/Contents/Resources/Licenses/Zero-Hour-Reforged-LICENSE.md" ] && [ -f "$APP/Contents/Resources/Licenses/FFmpeg-SOURCE.txt" ] && grep -q "may not be removed" "$APP/Contents/Resources/Licenses/zlib-LICENSE.txt"' \
 	"the licences ($nlic files: the game, FFmpeg with its source pointer, zlib from its header, ...)"
+check 'grep -q "this notice may not be removed or altered" "$APP/Contents/Resources/Licenses/LZH-Light-LICENSE.txt" && grep -q "GNU GPL option, version 2 or later" "$APP/Contents/Resources/Licenses/FreeType-OPTION.txt" && [ -f "$APP/Contents/Resources/Licenses/FreeType-GPLv2.txt" ]' \
+	"LZH-Light's notice, and FreeType's GPLv2-or-later option with its GPLv2 text"
 check 'codesign --verify --deep --strict "$APP" 2>/dev/null && codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc"' "signed ad hoc, and it verifies --deep --strict"
 check '[ -z "$(find -L "$APP" -type f -exec grep -a -i -l -E "^[[:space:]]*ShowHudOverlay[[:space:]]*=[[:space:]]*(no|false|0)([^[:alnum:]]|$)" -- {} + 2>/dev/null)" ]' \
 	"and nothing in it turns the HUD overlay off"

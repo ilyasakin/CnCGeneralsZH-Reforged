@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 // D3DX9 for the native Direct3D 9 renderer.
 //
@@ -33,7 +34,8 @@
 
 #include <d3d9.h>
 
-#if defined(_WIN32)
+// ZH_D3D12_DEVICE: the -d3d12 device's targets on Windows (X1) take the POSIX half, as its <d3d9.h> does.
+#if defined(_WIN32) && !defined(ZH_D3D12_DEVICE)
 
 // D3DX filter and default values, from the DirectX SDK's d3dx9tex.h.  They are plain
 // constants: the DLL reads them, it does not define them.

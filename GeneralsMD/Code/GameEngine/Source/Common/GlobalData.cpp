@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -654,6 +655,7 @@ GlobalData::GlobalData()
 	m_msaaLevel = 0;
 	m_vsync = FALSE;
 	m_direct3D11 = TRUE;
+	m_direct3D12 = FALSE;
 	m_direct3D11DumpPath.clear();
 	// The Direct3D 11 frame gets every effect the backend has unless -dx11post names a chain of its
 	// own; "-dx11post off" is the faithful 2003 picture that dx11-check.ps1 compares against.
@@ -1409,6 +1411,24 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	// asks for a window still gets one, and let Options.ini and then the command line refine it.
 	TheWritableGlobalData->m_windowMode = TheWritableGlobalData->m_windowed
 			? WINDOW_MODE_WINDOWED : WINDOW_MODE_FULLSCREEN;
+
+	// These are loop bounds into fixed arrays, allocation sizes and divisors, and a mod's GameData
+	// can hold anything.  The road buffers index with 16 bits and allocate four past the maximum.
+	const Int maxRoadBufferSize = 65535 - 4;
+	GlobalData *data = TheWritableGlobalData;
+	data->m_numGlobalLights = clamp( 0, data->m_numGlobalLights, MAX_GLOBAL_LIGHTS );
+	data->m_maxVisibleTranslucentObjects = max( data->m_maxVisibleTranslucentObjects, 0 );
+	data->m_maxVisibleOccluderObjects = max( data->m_maxVisibleOccluderObjects, 0 );
+	data->m_maxVisibleOccludeeObjects = max( data->m_maxVisibleOccludeeObjects, 0 );
+	data->m_maxVisibleNonOccluderOrOccludeeObjects = max( data->m_maxVisibleNonOccluderOrOccludeeObjects, 0 );
+	data->m_maxLineBuildObjects = max( data->m_maxLineBuildObjects, 0 );
+	data->m_maxRoadSegments = max( data->m_maxRoadSegments, 0 );
+	data->m_maxRoadVertex = clamp( 0, data->m_maxRoadVertex, maxRoadBufferSize );
+	data->m_maxRoadIndex = clamp( 0, data->m_maxRoadIndex, maxRoadBufferSize );
+	data->m_maxRoadTypes = max( data->m_maxRoadTypes, 0 );
+	data->m_networkFPSHistoryLength = max( data->m_networkFPSHistoryLength, 1u );
+	data->m_networkLatencyHistoryLength = max( data->m_networkLatencyHistoryLength, 1u );
+	data->m_networkCushionHistoryLength = max( data->m_networkCushionHistoryLength, 1u );
 
 
 	// override INI values with user preferences

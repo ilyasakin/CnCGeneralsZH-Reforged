@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -770,11 +771,14 @@ void AudioManager::set3DVolumeAdjustment( Real volumeAdjustment )
 	if (m_sound3DVolume < 0.0f) 
 		m_sound3DVolume = 0.0f;
 
-	if (m_sound3DVolume > 1.0f) 
+	if (m_sound3DVolume > 1.0f)
 		m_sound3DVolume = 1.0f;
 
-  if ( ! has3DSensitiveStreamsPlaying() )
-  	m_volumeHasChanged = TRUE;
+	// Flagged every frame, changed or not: MilesAudioManager::getEffectiveVolume folds the listener's
+	// distance into a 3D sound's volume, so a playing sound needs it recomputed as the camera moves.
+	// EA skipped this while any speech stream played, against a hang inside the Miles DLL that the
+	// XAudio2 implementation does not have, and 3D volumes froze for as long as an EVA line lasted.
+	m_volumeHasChanged = TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------

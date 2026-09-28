@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -678,51 +679,22 @@ void W3DView::stopDoingScriptedCamera( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-// Where a descending ray from the eye first meets the terrain, walked a cell at a time and then
-// halved down to a tenth of a unit.  Terrain never goes below zero, so a ray that gets there
-// without meeting it stops there.  The terrain's own Cast_Ray tests every triangle under the
-// ray's bounding rectangle, which for a shallow ray across the screen is thousands of them.
-static Vector3 groundUnderRay( const Vector3& eye, const Vector3& direction )
-{
-	const Real step = MAP_XY_FACTOR;
-	const Int halvings = 7;
-	Real below = 0.0f;
-	Real above = 0.0f;
-	for( ;; )
-	{
-		const Vector3 point = eye + direction * below;
-		if( point.Z <= 0.0f || point.Z <= TheTerrainLogic->getGroundHeight( point.X, point.Y ) )
-			break;
-		above = below;
-		below += step;
-	}
-	for( Int halving = 0; halving < halvings; ++halving )
-	{
-		const Real middle = ( above + below ) * 0.5f;
-		const Vector3 point = eye + direction * middle;
-		if( point.Z <= TheTerrainLogic->getGroundHeight( point.X, point.Y ) )
-			below = middle;
-		else
-			above = middle;
-	}
-	return eye + direction * below;
-}
-
-//-------------------------------------------------------------------------------------------------
 // The isometric camera's frame, fitted to what the perspective camera sees.  The perspective
-// frame's four corners, the middles of its four edges and its centre are cast onto the terrain,
-// and the isometric frame is the one that puts those nine points closest to the same places on
+// frame's four corners, the middles of its four edges and its centre are cast onto a flat plane at
+// the view's ground level, and the isometric frame is the one that puts those nine points closest to the same places on
 // its own screen, measured in world units.  An orthographic frame is a rectangle on the view plane
 // and the perspective one lands on the ground as a trapezoid, so the corners cannot all meet: the
 // fit leaves the perspective frame a little more at the far corners and the isometric one the
 // same amount more at the near corners, and neither camera reaches further than the other.  The
-// heading is the player's; the fit picks the look-at point, the width and the elevation.
+// heading is the player's; the fit picks the look-at point, the width and the elevation.  The
+// plane is flat on purpose: cast onto the terrain, a hill passing under the frame changed the
+// width and the elevation, and the picture jumped in and out while the player panned over it.
 class IsometricFrameFit
 {
 public:
 	enum { POINT_COUNT = 9 };
 
-	IsometricFrameFit( const Matrix3D& perspective, Real tanHalfWidth, Real heightOverWidth )
+	IsometricFrameFit( const Matrix3D& perspective, Real groundLevel, Real tanHalfWidth, Real heightOverWidth )
 		: m_heightOverWidth( heightOverWidth )
 	{
 		// a corner ray at the horizon would reach no ground at all
@@ -751,7 +723,7 @@ public:
 					flat.Normalize();
 					direction = flat * cos( shallowestRay ) + Vector3( 0.0f, 0.0f, -sin( shallowestRay ) );
 				}
-				const Vector3 ground = groundUnderRay( eye, direction );
+				const Vector3 ground = eye + direction * ( ( groundLevel - eye.Z ) / direction.Z );
 				m_screenX[ point ] = (Real)column;
 				m_screenY[ point ] = (Real)row;
 				m_acrossScreen[ point ] = Vector3::Dot_Product( ground, m_right );
@@ -941,7 +913,7 @@ void W3DView::setCameraTransform( void )
 		// the tallest thing standing on the frame's ground, above and below the depth it spans
 		const Real depthMargin = 1000.0f;
 
-		const IsometricFrameFit fit(cameraTransform, tan(perspectiveFov * 0.5f), (Real)getHeight() / (Real)getWidth());
+		const IsometricFrameFit fit(cameraTransform, m_groundLevel, tan(perspectiveFov * 0.5f), (Real)getHeight() / (Real)getWidth());
 		const Vector3 target = fit.getTarget();
 		const Real distance = fit.getHalfWidth() / tan(isometricFov * 0.5f);
 		const Real depthSpread = fit.getDepthSpread();
@@ -1763,7 +1735,13 @@ void W3DView::update(void)
 	// highest of the five samples jumped, and the settle went the other way.  Zoomed in on uneven
 	// ground that never stopped, and the camera rocked forward and back.
 	//
-	m_terrainHeightUnderCamera = m_zoomAnchorValid ? m_zoomAnchorTerrainHeight : getHeightAroundPos(m_pos.x, m_pos.y);
+	// The isometric camera holds its height over the view's ground level instead, for the reason
+	// IsometricFrameFit gives: following the hills made the picture grow and shrink under the pan.
+	//
+	if (TheGlobalData->m_isometricCamera)
+		m_terrainHeightUnderCamera = m_groundLevel;
+	else
+		m_terrainHeightUnderCamera = m_zoomAnchorValid ? m_zoomAnchorTerrainHeight : getHeightAroundPos(m_pos.x, m_pos.y);
 	m_currentHeightAboveGround = m_cameraOffset.z * m_zoom - m_terrainHeightUnderCamera;
 	const Real zoomBeforeSettle = m_zoom;
 	//

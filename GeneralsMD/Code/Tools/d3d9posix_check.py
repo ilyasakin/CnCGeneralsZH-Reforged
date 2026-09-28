@@ -1,4 +1,19 @@
 #!/usr/bin/env python3
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """Check Platform/D3D9Posix.h (and D3D9PosixMath.h) against MinGW-w64's d3d9.h (decision 7, phase A1).
 
 The POSIX header is written from Direct3D 9's published values, not copied from any header.  This
@@ -18,6 +33,7 @@ added, which must fail - so a pass means the assertions ran.  MinGW-w64's header
 against here, never copied: they are Wine's work, under the LGPL.
 
   d3d9posix_check.py [--keep FILE]      exit 0 when every check holds
+  d3d9posix_check.py --write-undefs     rewrite D3D12Device/D3D12ShimUndefs.h, and do nothing else
 """
 import os
 import re
@@ -185,8 +201,37 @@ def compile_unit(source):
     return result.returncode, result.stderr
 
 
+UNDEFS = os.path.join(CODE, 'GameEngineDevice', 'Source', 'D3D12Device', 'D3D12ShimUndefs.h')
+
+
+def write_undefs(text):
+    """The -d3d12 adapter (X1) includes the SDK's d3d9.h and then these headers inside a namespace, as the
+    unit above does; every macro the two headers define is undefined between the two, or the SDK's would
+    stand in for the POSIX headers' own.  The adapter builds with C4005 as an error, so a macro added to
+    the headers without rerunning this stops its build."""
+    body = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+    names = []
+    for name in re.findall(r'^\s*#\s*define\s+(\w+)', body, re.M):
+        if not OWN.match(name) and name not in names:
+            names.append(name)
+    port = open(os.path.abspath(__file__), encoding='utf-8').read().split('\n')
+    notice = [line.replace('#\t', '**\t', 1) if line.startswith('#\t') else '**' for line in port[1:16]]
+    lines = ['/*'] + notice + ['*/', '',
+             '// Written by Tools/d3d9posix_check.py --write-undefs from Platform/D3D9Posix.h and D3D9PosixMath.h;',
+             '// rerun it after changing either.  Every macro those headers define, undefined after the SDK\'s',
+             '// d3d9.h so that the POSIX headers can define them again inside namespace zhposix (D3D12Bridge.h).',
+             '']
+    lines += [f'#undef {name}' for name in names]
+    with open(UNDEFS, 'w', encoding='utf-8', newline='\n') as out:
+        out.write('\n'.join(lines) + '\n')
+    print(f'd3d9posix_check: {len(names)} macros written to {os.path.relpath(UNDEFS, CODE)}')
+    return 0
+
+
 def main():
     text = ''.join(open(h).read() for h in HEADERS)
+    if '--write-undefs' in sys.argv:
+        return write_undefs(text)
     macros, enumerators, structs, unchecked = parse(text)
     ours = guids(text)
     theirs_path = mingw_d3d9()

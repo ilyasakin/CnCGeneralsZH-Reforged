@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -414,6 +415,34 @@ void LANEnableStartButton(Bool enabled)
 {
 	buttonStart->winEnable(enabled);
 	buttonSelectMap->winEnable(enabled);
+}
+
+// The countdown's last second: shutting the menu down clears every gadget pointer below, and a
+// click that lands after that dereferences one of them.
+void LANDisableButtons()
+{
+	buttonStart->winEnable(false);
+	buttonBack->winEnable(false);
+	buttonSelectMap->winEnable(false);
+	comboBoxStartingCash->winEnable(false);
+
+	GameWindow *optionalGadgets[] = { comboBoxSuperweapons, comboBoxPeaceTime, checkBoxUnitLimit,
+		checkBoxProRules, comboBoxIncomeSharing, comboBoxTechRespawn };
+	for (Int i = 0; i < (Int)ARRAY_SIZE(optionalGadgets); ++i)
+	{
+		if (optionalGadgets[i])
+			optionalGadgets[i]->winEnable(false);
+	}
+
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		comboBoxPlayer[i]->winEnable(false);
+		comboBoxColor[i]->winEnable(false);
+		comboBoxPlayerTemplate[i]->winEnable(false);
+		comboBoxTeam[i]->winEnable(false);
+		buttonAccept[i]->winEnable(false);
+		buttonMapStartPosition[i]->winEnable(false);
+	}
 }
 
 static void handleColorSelection(int index)
@@ -1113,7 +1142,7 @@ void updateGameOptions( void )
 		if (comboBoxSuperweapons)
 			UpdateSuperweaponComboBox( comboBoxSuperweapons, theGame, TheLAN->AmIHost() );
 		Int itemCount = GadgetComboBoxGetLength(comboBoxStartingCash);
-    Int index;	// read by the assert after the loop (VC6 scoped it to the function)
+    Int index;
     for ( index = 0; index < itemCount; index++ )
     {
       Int value  = (Int)(intptr_t)GadgetComboBoxGetItemData(comboBoxStartingCash, index);
@@ -1124,7 +1153,10 @@ void updateGameOptions( void )
       }
     }
 
-    DEBUG_ASSERTCRASH( index < itemCount, ("Could not find new starting cash amount %d in list", theGame->getStartingCash().countMoney() ) );
+    // the preferences set the cash after the box was filled, so an amount the list does not carry
+    // (StartingCash in the player's INI) was in force but never shown
+    if ( index == itemCount )
+      PopulateStartingCashComboBox( comboBoxStartingCash, theGame );
 
 		if (comboBoxPeaceTime)
 			UpdatePeaceTimeComboBox( comboBoxPeaceTime, theGame, TheLAN->AmIHost() );

@@ -1,4 +1,20 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# Portions adapted from GeneralsMD/Code/Tools/vendor.ps1 by Olcay Seygan (upstream CnCGeneralsZH-Reforged), GPL-3.0-or-later.
 #
 # Fetches the third-party sources the build needs and this repository does not carry.
 #
@@ -158,10 +174,29 @@ install_zlib() {
 # Windows is unaffected either way - neither name is ever defined there, so the typedef happens
 # before and after. It does mean vendor.ps1 and vendor.sh now leave different bytes in zconf.h;
 # that is in WINDOWS-DEBT.md.
+# zlib's licence, clause 2: "Altered source versions must be plainly marked as such".  Each of the two
+# patches below leaves a comment on the line before the one it changed, and a tree patched before the
+# comment existed gets it on the next run: mark_zlib_altered <file> <awk regex of the changed line> <text>.
+ZLIB_ALTERED='Altered for Zero Hour Reforged by GeneralsMD/Code/Tools/vendor.sh'
+mark_zlib_altered() {
+  local file="$1" line="$2" text="$3"
+  [ -e "$file" ] || return 0
+  grep -qF "$ZLIB_ALTERED" "$file" && return 0
+  grep -qE "$line" "$file" || return 0
+  awk -v re="$line" -v mark="/* $ZLIB_ALTERED: $text */" '
+    !done && $0 ~ re { print mark; done = 1 }
+    { print }
+  ' "$file" > "$file.marked" && mv -f "$file.marked" "$file"
+  grep -qF "$ZLIB_ALTERED" "$file" || { echo "[vendor] ERROR: could not mark $file as altered" >&2; exit 1; }
+}
+
 patch_zlib_for_apple() {
   local zconf="$1/zconf.h"
   [ -e "$zconf" ] || return 0
-  grep -q 'TARGET_OS_MAC' "$zconf" || return 0   # already patched, or a zlib that dropped it
+  if ! grep -q 'TARGET_OS_MAC' "$zconf"; then   # already patched, or a zlib that dropped it
+    mark_zlib_altered "$zconf" '^typedef unsigned char  Byte;' 'the Classic Mac OS guard around this typedef removed, as zlib 1.2.0 did'
+    return 0
+  fi
 
   awk '
     /^#if !defined\(MACOS\) && !defined\(TARGET_OS_MAC\)$/ { dropping = 1; next }
@@ -177,6 +212,7 @@ patch_zlib_for_apple() {
     exit 1
   fi
   mv -f "$zconf.patched" "$zconf"
+  mark_zlib_altered "$zconf" '^typedef unsigned char  Byte;' 'the Classic Mac OS guard around this typedef removed, as zlib 1.2.0 did'
   step 'unguarded zlib Byte typedef for Apple (see the comment in this script)'
 }
 
@@ -215,7 +251,10 @@ patch_zlib_zutil_for_apple() {
   # Matched on meaning rather than on spacing: any #if that tests TARGET_OS_MAC and does not
   # already exclude __APPLE__.  An exact-text match would silently do nothing if the upstream line
   # were ever respelled, which is the same quiet failure this whole patch exists to avoid.
-  grep -nE '^[[:space:]]*#[[:space:]]*if.*TARGET_OS_MAC' "$zutil" | grep -qv '__APPLE__' || return 0
+  if ! grep -nE '^[[:space:]]*#[[:space:]]*if.*TARGET_OS_MAC' "$zutil" | grep -qv '__APPLE__'; then
+    mark_zlib_altered "$zutil" 'TARGET_OS_MAC.*__APPLE__' '&& !defined(__APPLE__) added, so Darwin is not taken for Classic Mac OS'
+    return 0
+  fi
 
   awk '
     /^[[:space:]]*#[[:space:]]*if/ && /TARGET_OS_MAC/ && !/__APPLE__/ {
@@ -232,6 +271,7 @@ patch_zlib_zutil_for_apple() {
     exit 1
   fi
   mv -f "$zutil.patched" "$zutil"
+  mark_zlib_altered "$zutil" 'TARGET_OS_MAC.*__APPLE__' '&& !defined(__APPLE__) added, so Darwin is not taken for Classic Mac OS'
   step 'narrowed zlib Classic Mac branch to Classic Mac (see the comment in this script)'
 }
 
@@ -247,6 +287,26 @@ install_lzhl() {
   copy_files "$header" $(list_top_level "$source" '.h')
   copy_files "$source_folder" $(list_top_level "$source" '.cpp,.tbl' 'Lzhl_tcp.cpp,Test.c')
   step "LZH-Light 1.0 -> Libraries/Source/Compression/LZHCompress"
+}
+
+# --- The fork's one change to LZH-Light, Libraries/Source/lzhl-clear-history.patch: LZBuffer's history
+# starts cleared.  The compressor's backward match reads history it has not written yet (MemorySanitizer,
+# Lz.cpp), so the output depended on what the allocator left there.  The game's operator new zero-fills,
+# so the game compresses the same bytes as before; anything on another allocator now does too.  The
+# licence asks for altered copies to be marked, and the marker is what this checks, as the others do.
+install_lzhl_patch() {
+  local destination="$libraries/Source/Compression/LZHCompress/CompLibHeader"
+  local header="$destination/_lz.h"
+  if grep -q 'Zero Hour Reforged: altered' "$header" 2>/dev/null; then return 0; fi
+  local patch="$libraries/Source/lzhl-clear-history.patch"
+  GIT_CEILING_DIRECTORIES="$libraries/Source" \
+    git -C "$destination" -c core.autocrlf=false apply "$patch" || true
+  if ! grep -q 'Zero Hour Reforged: altered' "$header" 2>/dev/null; then
+    echo "[vendor] lzhl-clear-history.patch did not apply to Libraries/Source/Compression/LZHCompress" >&2
+    echo "[vendor] ($header still lacks its marker)" >&2
+    exit 1
+  fi
+  step "lzhl-clear-history.patch -> Libraries/Source/Compression/LZHCompress"
 }
 
 # --- The DirectX 8 headers and import libraries are Windows-only and vendor.ps1 keeps them. Nothing
@@ -697,6 +757,7 @@ EOF
 mkdir -p "$work"
 install_zlib
 install_lzhl
+install_lzhl_patch
 report_directx
 install_gamespy
 install_gamespy_patch

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /*
 ** The one Direct3D 11 device and backend the process has, and the switch that asks for them.
@@ -166,6 +167,9 @@ void Direct3D11_End_Scene(bool flip_frames);
 // screenshots back from it.  Without it nothing on screen changes when -dx11 is passed.
 // -dx11dump: write every generated program to this directory as it is built.
 void Direct3D11_Dump_Programs_To(const char * directory);
+// Where the user's compiled programs are kept (the game's user data folder); before the device exists.
+// Unset, the working directory.
+void Direct3D11_Set_Shader_Cache_Directory(const char * directory);
 
 void Direct3D11_Present_Enable(bool enabled);
 bool Direct3D11_Present_Is_Enabled();
@@ -267,6 +271,10 @@ const char * Direct3D11_Texture_Copy_Shape(unsigned index);
 // says nothing about it otherwise.
 void Direct3D11_Statistics(unsigned & pipelines_built, unsigned long long & draws_made,
 	unsigned long long & draws_refused);
+
+// How many compiled programs came with the game (dx11shaders.shipped) and how many the backend holds now,
+// shipped, cached and compiled together: a run whose held count exceeds the shipped one compiled something.
+void Direct3D11_Program_Statistics(unsigned & shipped, unsigned & held);
 
 // What the frame since the last call spent building pipelines and copying textures, and how many
 // of each.  Taking it resets it.

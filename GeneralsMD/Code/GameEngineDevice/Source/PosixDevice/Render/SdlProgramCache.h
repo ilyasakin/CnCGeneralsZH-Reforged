@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -78,6 +78,8 @@ public:
 	const SdlProgram &Engine_Pixel_Program(int program, const struct PixelPipelineDescription &pipeline);
 
 	unsigned int Programs_Built() const { return Built; }
+	/// The key a program was made under, for a refusal's log line: "" for a shader this cache did not make.
+	std::string Key_Of(const SDL_GPUShader *shader) const;
 	unsigned int Programs_Refused() const { return Refused; }
 	double Milliseconds_Compiling() const { return CompileMilliseconds; }
 

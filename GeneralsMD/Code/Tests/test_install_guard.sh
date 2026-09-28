@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Tools/install-guard.sh on a made-up install, no game data: each of its three verdicts is reached,
 # and the one that cannot verify is never reported as a change.
@@ -11,7 +26,11 @@
 set -u
 GUARD="$(cd "$(dirname "$0")/../Tools" && pwd)/install-guard.sh"
 . "$GUARD"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/test_install_guard.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/test_install_guard.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "test_install_guard: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${WORK:?}"' EXIT
 failed=0
 check() { if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failed=1; fi; }

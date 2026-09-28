@@ -46,12 +46,18 @@
 # -MeanMargin is the pass threshold in levels a channel, and 1.0 is the frame buffer's own step: two
 # frames that agree to within the smallest value the buffer can hold are the same frame.
 #
+# -Backend d3d12 photographs -d3d12 (X1: zh_d3d12.dll, the SDL3 GPU device on Direct3D 12) in the
+# Direct3D 11 backend's place, against the same Direct3D 9 shots and by the same rule.  -d3d12 turns the
+# Direct3D 11 twin off by itself, so the switch is the only difference between the two launches here too.
+#
 # -dx11post off is on every launch and must stay there.  The post chain runs by default since
 # v1.0.0, and it changes the finished frame on purpose, so a run with it on disagrees with Direct3D 9
 # by design and this script would be measuring the effect rather than the backend.  Its own before
 # and after is a pair of pictures.
 param([double]$Margin = 1.0, [double]$MeanMargin = 1.0, [string]$Map = '',
-  [switch]$BackendNoise, [switch]$CountRule, [string[]]$Extra = @())
+  [switch]$BackendNoise, [switch]$CountRule, [string[]]$Extra = @(), [ValidateSet('dx11','d3d12')][string]$Backend = 'dx11')
+$env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
+$backendSwitch = if ($Backend -eq 'd3d12') { @('-d3d12') } else { @() }
 
 Add-Type -AssemblyName System.Drawing
 $run = Join-Path $PSScriptRoot "GeneralsMD\Run"
@@ -136,9 +142,9 @@ $fail = 0
 foreach ($c in $cases) {
   $tag = ($c.map -replace '[^A-Za-z]','') + "_$($c.x)_$($c.f)"
   $nine = Shoot $c "d3d9a_$tag" @('-d3d9')
-  $eleven = Shoot $c "dx11_$tag" @()
+  $eleven = Shoot $c "$($Backend)_$tag" $backendSwitch
   if ($BackendNoise) {
-    $again = Shoot $c "dx11b_$tag" @()
+    $again = Shoot $c "$($Backend)b_$tag" $backendSwitch
     $noise = DiffPct $eleven $again
   } else {
     $again = Shoot $c "d3d9b_$tag" @('-d3d9')
@@ -151,8 +157,8 @@ foreach ($c in $cases) {
     if ($signal[1] -le $MeanMargin) { 'ok' } else { 'DIFFERENT' }
   }
   if ($verdict -ne 'ok') { $fail++ }
-  "{0,-20} cam {1,5},{2,-5} frame {3,-5} noise {4,5}% {5,5}  dx11 {6,5}% {7,5}  {8}" -f `
-    $c.map, $c.x, $c.y, $c.f, $noise[0], $noise[1], $signal[0], $signal[1], $verdict
+  "{0,-20} cam {1,5},{2,-5} frame {3,-5} noise {4,5}% {5,5}  {9} {6,5}% {7,5}  {8}" -f `
+    $c.map, $c.x, $c.y, $c.f, $noise[0], $noise[1], $signal[0], $signal[1], $verdict, $Backend
 }
 "---"
 "pictures in $tmp"

@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # N1's check: the build fingerprint is the same for two checkouts of one commit that differ only in
 # line endings, changes with any one byte of a source, and is what the build put in its header.
@@ -13,13 +28,19 @@
 #      listed file renamed (its path is hashed too).
 # What it cannot see: a real Windows checkout. The CRLF tree is made here the way git would make it.
 #
-# Exit status: 0 on a pass, 1 otherwise.
+# Exit status: 0 on a pass, 1 otherwise, 2 without a work folder.
 
 set -u
 TOOL="$1"; HEADER="$2"
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
 MANIFEST="$CODE/BuildFingerprint.manifest"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/fingerprint-check.XXXXXX")"
+# A work folder that could not be made is the end of the run: going on with WORK empty would put
+# "$WORK/..." at the file system's root.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/fingerprint-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "fingerprint-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${WORK:?}"' EXIT
 status=0
 

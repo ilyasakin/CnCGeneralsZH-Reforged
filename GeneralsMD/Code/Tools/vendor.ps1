@@ -5,12 +5,14 @@
 # is in place costs one directory check per library and nothing else.
 #
 #   -Force   re-fetch even what is already there
+#   -D3D12   also fetch what the -d3d12 renderer builds on Windows (X1): SDL3, glslang, SPIRV-Cross and
+#            SDL_shadercross, for a configure with -DZH_D3D12=ON
 #
 # What it cannot get is the game itself: the .big files from a Zero Hour install go next to
 # generals.exe in GeneralsMD\Run, and the base game's in Run\ZH_Generals. The game says so on
 # startup when they are missing.
 [CmdletBinding()]
-param([switch] $Force)
+param([switch] $Force, [switch] $D3D12)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -52,6 +54,21 @@ function Copy-Files($sourceFiles, $destination) {
   foreach ($file in $sourceFiles) { Copy-Item $file.FullName (Join-Path $destination $file.Name) -Force }
 }
 
+# vendor.sh's copy_entries: the named files and folders of $source, and nothing else, into a $destination
+# emptied first. Its committed .gitignore goes aside and comes back, as the other installers keep theirs.
+function Copy-Entries($source, $destination, [string[]] $entries) {
+  $keep = Join-Path $destination '.gitignore'
+  $kept = if (Test-Path $keep) { Get-Content $keep -Raw } else { $null }
+  if (Test-Path $destination) { Remove-Item -Recurse -Force $destination }
+  New-Item -ItemType Directory -Force -Path $destination | Out-Null
+  foreach ($entry in $entries) {
+    $from = Join-Path $source $entry
+    if (-not (Test-Path $from)) { throw "$(Split-Path -Leaf $destination) unpacked without $entry" }
+    Copy-Item $from (Join-Path $destination $entry) -Recurse -Force
+  }
+  if ($null -ne $kept) { Set-Content -Path $keep -Value $kept -NoNewline }
+}
+
 # The files directly in a folder with one of these extensions. Get-ChildItem -Include is not that:
 # without -Recurse it silently matches nothing, which is how the first run of this copied no zlib.
 function Get-TopLevel($folder, [string[]] $extensions) {
@@ -79,6 +96,29 @@ function Install-Lzhl {
   Copy-Files (Get-TopLevel $source @('.cpp', '.tbl') |
     Where-Object { $_.Name -notin @('Lzhl_tcp.cpp', 'Test.c') }) $sourceFolder
   Step "LZH-Light 1.0 -> Libraries\Source\Compression\LZHCompress"
+}
+
+# --- The fork's one change to LZH-Light, Libraries\Source\lzhl-clear-history.patch: LZBuffer's history
+# starts cleared (vendor.sh says why).  Windows compiles LZH-Light too, so it gets the same patch, and a
+# copy fetched before the patch existed gets it on the next build.
+function Install-LzhlPatch {
+  $destination = Join-Path $libraries 'Source\Compression\LZHCompress\CompLibHeader'
+  $header = Join-Path $destination '_lz.h'
+  if (Select-String -LiteralPath $header -Pattern 'Zero Hour Reforged: altered' -SimpleMatch -Quiet) { return }
+  # The patch with the header's own line endings: the fetched header is LF, and a checkout made before
+  # .gitattributes pinned the patch to LF holds a CRLF copy of it (core.autocrlf), which matches no line.
+  $text = [IO.File]::ReadAllText((Join-Path $libraries 'Source\lzhl-clear-history.patch')) -replace "`r`n", "`n"
+  if ([IO.File]::ReadAllText($header).Contains("`r`n")) { $text = $text -replace "`n", "`r`n" }
+  $patch = Join-Path $work 'lzhl-clear-history.patch'
+  [IO.File]::WriteAllText($patch, $text)
+  # without the ceiling git finds this checkout around the folder and skips the patch as outside it
+  $env:GIT_CEILING_DIRECTORIES = Join-Path $libraries 'Source'
+  try { git -C $destination -c core.autocrlf=false apply $patch }
+  finally { Remove-Item Env:GIT_CEILING_DIRECTORIES }
+  if (-not (Select-String -LiteralPath $header -Pattern 'Zero Hour Reforged: altered' -SimpleMatch -Quiet)) {
+    throw "lzhl-clear-history.patch did not apply to Libraries\Source\Compression\LZHCompress"
+  }
+  Step "lzhl-clear-history.patch -> Libraries\Source\Compression\LZHCompress"
 }
 
 # --- DirectX 8 headers and import libraries. extra\ is not wholesale-copyable: basetsd.h, d3d.h,
@@ -259,9 +299,63 @@ function Install-Art {
   }
 }
 
+# --- The -d3d12 renderer's stack (X1): our SDL3 GPU device on SDL_GPU's D3D12 backend, its shaders through
+# glslang, SPIRV-Cross and SDL_shadercross, as vendor.sh fetches them for macOS and Linux, at the same commits.
+# SDL3's one patch (sdl3-metal-windowless.patch) is Metal's, so there is nothing of it to apply here.
+function Install-Sdl3 {
+  $destination = Join-Path $libraries 'Source\SDL3'
+  if ((Test-Path (Join-Path $destination 'CMakeLists.txt')) -and -not $Force) { return }
+  $archive = Get-File 'https://github.com/libsdl-org/SDL/archive/fa2c02bb6e21974a89ea9824bc53c9932abe5f9c.zip' (Join-Path $work 'SDL3-3.4.16.zip')
+  $source = Expand-Source $archive 'SDL3'
+  $keep = Join-Path $destination '.gitignore'
+  $kept = if (Test-Path $keep) { Get-Content $keep -Raw } else { $null }
+  if (Test-Path $destination) { Remove-Item -Recurse -Force $destination }
+  New-Item -ItemType Directory -Force -Path $destination | Out-Null
+  Copy-Item (Join-Path $source '*') $destination -Recurse -Force
+  if ($null -ne $kept) { Set-Content -Path $keep -Value $kept -NoNewline }
+  if (-not (Test-Path (Join-Path $destination 'include\SDL3\SDL_gpu.h'))) { throw "SDL3 unpacked without include\SDL3\SDL_gpu.h" }
+  Step "SDL3 3.4.16 -> Libraries\Source\SDL3"
+}
+
+function Install-Glslang {
+  $destination = Join-Path $libraries 'Source\glslang'
+  if ((Test-Path (Join-Path $destination 'glslang\HLSL\hlslParseHelper.cpp')) -and -not $Force) { return }
+  $archive = Get-File 'https://github.com/KhronosGroup/glslang/archive/168d452a4f460d24b588fed08477a81c44ee27a1.zip' (Join-Path $work 'glslang-vulkan-sdk-1.4.357.0.zip')
+  $source = Expand-Source $archive 'glslang'
+  Copy-Entries $source $destination @('CMakeLists.txt', 'parse_version.cmake', 'CHANGES.md', 'build_info.h.tmpl',
+    'build_info.py', 'LICENSE.txt', 'LICENSES', 'README.md', 'glslang', 'SPIRV', 'StandAlone')
+  Step "glslang vulkan-sdk-1.4.357.0 -> Libraries\Source\glslang"
+}
+
+function Install-SpirvCross {
+  $destination = Join-Path $libraries 'Source\SPIRV-Cross'
+  if ((Test-Path (Join-Path $destination 'spirv_msl.cpp')) -and -not $Force) { return }
+  $archive = Get-File 'https://github.com/KhronosGroup/SPIRV-Cross/archive/1a6169566c73d3da552748fc372fe2bbb856e46e.zip' (Join-Path $work 'SPIRV-Cross-1a616956.zip')
+  $source = Expand-Source $archive 'SPIRV-Cross'
+  $entries = @('CMakeLists.txt', 'cmake', 'include', 'pkg-config', 'LICENSE', 'LICENSES', 'README.md', 'GLSL.std.450.h',
+    'NonSemanticShaderDebugInfo100.h')
+  $entries += @(Get-ChildItem $source -File | Where-Object { $_.Name -like 'spirv*' -and @('.cpp', '.hpp', '.h') -contains $_.Extension } |
+    ForEach-Object { $_.Name })
+  Copy-Entries $source $destination $entries
+  Step "SPIRV-Cross 1a616956 -> Libraries\Source\SPIRV-Cross"
+}
+
+function Install-Shadercross {
+  $destination = Join-Path $libraries 'Source\SDL_shadercross'
+  if ((Test-Path (Join-Path $destination 'src\SDL_shadercross.c')) -and -not $Force) { return }
+  $archive = Get-File 'https://github.com/libsdl-org/SDL_shadercross/archive/1ff05bec573988a98ef9e0260b4da44f512b8367.zip' (Join-Path $work 'SDL_shadercross-1ff05bec.zip')
+  $source = Expand-Source $archive 'SDL_shadercross'
+  Copy-Entries $source $destination @('LICENSE.txt', 'README.txt')
+  New-Item -ItemType Directory -Force -Path (Join-Path $destination 'src'), (Join-Path $destination 'include\SDL3_shadercross') | Out-Null
+  Copy-Item (Join-Path $source 'src\SDL_shadercross.c') (Join-Path $destination 'src') -Force
+  Copy-Item (Join-Path $source 'include\SDL3_shadercross\SDL_shadercross.h') (Join-Path $destination 'include\SDL3_shadercross') -Force
+  Step "SDL_shadercross 1ff05bec -> Libraries\Source\SDL_shadercross"
+}
+
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 Install-Zlib
 Install-Lzhl
+Install-LzhlPatch
 Install-DirectX
 Install-GameSpy
 Install-Litehtml
@@ -271,10 +365,18 @@ Install-Nanosvg
 # docs/mac-port/README.md). Windows keeps Win32Device and Miles, so they are not fetched here;
 # vendor.sh fetches them, and says it skips DirectX the same way. The same holds for SDL3's one patch,
 # Libraries\Source\sdl3-metal-windowless.patch: vendor.sh applies it, and there is nothing here to apply.
-Step 'skipping SDL3 (and its patch) and miniaudio: not Windows, and vendor.sh is what fetches them'
+# With -D3D12 (X1, the scoped amendment to decision 3) SDL3 comes too, for the -d3d12 renderer only: Win32
+# stays the platform layer, and miniaudio is still not fetched.
+if ($D3D12) { Install-Sdl3 } else { Step 'skipping SDL3 (and its patch) and miniaudio: not Windows, and vendor.sh is what fetches them' }
 # glslang, SPIRV-Cross and SDL_shadercross compile the shader generators' SDL3 GPU target (decision 4).
-# Windows compiles the D3D11 target with d3dcompiler_47.dll, so they are not fetched here either.
-Step 'skipping glslang, SPIRV-Cross and SDL_shadercross: the SDL3 GPU shader path, vendor.sh fetches them'
+# Windows compiles the D3D11 target with d3dcompiler_47.dll, so they are fetched only for -d3d12.
+if ($D3D12) {
+  Install-Glslang
+  Install-SpirvCross
+  Install-Shadercross
+} else {
+  Step 'skipping glslang, SPIRV-Cross and SDL_shadercross: the SDL3 GPU shader path, vendor.sh fetches them'
+}
 # FreeType rasterises text off Windows (decision 6); Windows draws it with GDI, so it is not fetched here.
 Step 'skipping FreeType: text off Windows, vendor.sh fetches it'
 # FFmpeg's source is built only off Windows (V1); Windows links the committed dist/ that

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -128,7 +129,8 @@ class ControlBarScheme
 public:
 	ControlBarScheme( void );
 	~ControlBarScheme( void );
-	
+
+	void validate( void ) const;
 	void init( void );
 	void update( void );
 	void drawForeground( Coord2D multi, ICoord2D offset );	///< draw function to be called within a w3d draw procedure for the foreground 

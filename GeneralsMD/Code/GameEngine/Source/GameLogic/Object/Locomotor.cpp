@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -648,11 +649,11 @@ void LocomotorStore::reset()
 		Overridable *locoTemp = it->second->deleteOverrides();
 		if (!locoTemp)
 		{
-			// Defect #32: erase(it) left it dangling, and the loop went on from the freed node.  A locomotor
-			// defined only by a map's map.ini (the shipped test map Hovercraft; any custom map, whose map.ini
-			// travels with a map transfer) is itself an override, so it lands here, and the game hung at
-			// the end of the match.  Step past the node before it goes.
-			m_locomotorTemplates.erase(it++);
+			// Defect #32 (fixed the same way upstream): erase(it) left it dangling, and the loop went on from
+			// the freed node. A locomotor a map.ini made from nothing (the shipped test map Hovercraft; any
+			// custom map, whose map.ini travels with a map transfer) lands here: the game hung (Mac), crashed
+			// (Windows, Linux) at the end of the match, and upstream saw the heap damage crash a save load.
+			it = m_locomotorTemplates.erase(it);
 		}
 		else
 		{

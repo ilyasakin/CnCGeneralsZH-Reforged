@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /*************************************************************************** 
  ***    C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S     *** 
@@ -856,14 +857,11 @@ ParticleEmitterClass::Save (ChunkSaveClass &chunk_save) const
 void
 ParticleEmitterClass::Set_Name (const char *pname)
 {
-	// Free the old name if necessary
-	if (NameString != NULL) {
-		::free (NameString);
-		NameString = NULL;
-	}
-
-	// Copy the provided name
-	NameString = strdupAsWindows(pname);
+	// Copy before freeing the old name: pname may point into it (upstream). strdupAsWindows: a NULL
+	// name copies as NULL, as the UCRT's _strdup does (defect #31's class).
+	char *name = strdupAsWindows(pname);
+	::free (NameString);
+	NameString = name;
 	return ;
 }
 

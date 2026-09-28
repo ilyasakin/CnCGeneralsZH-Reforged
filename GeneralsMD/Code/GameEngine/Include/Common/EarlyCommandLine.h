@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 #pragma once
 
@@ -30,7 +31,10 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include "Platform/MSVCCompat.h"	// _wcsnicmp, which its other includers happened to bring in first
 #endif
+#include <stdlib.h>	// getenv
 #include <wchar.h>
 #include <wctype.h>
 
@@ -180,3 +184,20 @@ inline bool findEarlyCommandLineValue( const wchar_t *option, char *out, size_t 
 	return findCommandLineValueIn( processCommandLineW(), option, out, outSize );
 }
 #endif
+
+/** ZH_UNATTENDED in the environment, set to anything but "" or "0": the CI scripts and the test harnesses set
+	 it for every run they start, drawing or not.  Players never do. */
+inline bool unattendedByEnvironment( void )
+{
+	const char *value = getenv( "ZH_UNATTENDED" );
+	return value != NULL && value[0] != 0 && !(value[0] == '0' && value[1] == 0);
+}
+
+/** A run nobody is watching: -headless, or ZH_UNATTENDED (above).  Such a run never waits on a message box,
+	 a crash report or a folder chooser: it says why on stderr or in the log and exits, or takes the box's
+	 default.  Every box the game can raise asks this (Debug.cpp's isUnattendedRun, the missing base game,
+	 WWLib's INI and WWDebug's assert, the debug library, PosixMain). */
+inline bool isUnattendedProcess( void )
+{
+	return findEarlyCommandLineOption( L"-headless" ) != NULL || unattendedByEnvironment();
+}

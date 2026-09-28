@@ -19,14 +19,41 @@
 **	(https://github.com/crosire/d3d8to9, BSD 3-clause), vendored in this tree at
 **	Libraries/Source/d3d8to9, with its proxy-object plumbing removed.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 #include "d3d8shadertranslate.h"
 #include "d3dx9runtime.h"
-#if !defined(_WIN32)
+#if !defined(_WIN32) || defined(ZH_D3D12_DEVICE)
 #include "Platform/EngineShaderName.h"
+#else
+#include "d3d12runtime.h"
 #endif
 
 #include <regex>
+
+// Whether the device takes the shipped D3D8 tokens as they are, never running them (A3e): the POSIX device,
+// off Windows and inside zh_d3d12.dll, and so this executable under -d3d12 (X1), where that device draws.
+static bool device_takes_shipped_tokens(void)
+{
+#if !defined(_WIN32) || defined(ZH_D3D12_DEVICE)
+	return true;
+#else
+	return Direct3D12_Is_Active();
+#endif
+}
+
+// The engine's D3D8 declaration a vertex declaration was decoded from, kept on the POSIX device's
+// declaration for capture version 3 (Platform/EngineShaderName.h); through zh_d3d12.dll under -d3d12.
+static void keep_d3d8_declaration(IDirect3DVertexDeclaration9 * declaration, const RenderUInt32 * d3d8_declaration)
+{
+#if !defined(_WIN32) || defined(ZH_D3D12_DEVICE)
+	// RenderUInt32 is DWORD on Windows (the -d3d12 device, X1) and uint32_t elsewhere: 32 bits either way.
+	static_assert(sizeof(*d3d8_declaration) == sizeof(unsigned int), "the D3D8 tokens are 32-bit words");
+	PosixDevice_Keep_D3D8_Declaration(declaration, reinterpret_cast<const unsigned int *>(d3d8_declaration));
+#else
+	Direct3D12_Keep_D3D8_Declaration(declaration, d3d8_declaration);
+#endif
+}
 #include <string>
 
 // The register file a vs_1_1 shader can name, which bounds both the initialisation pass
@@ -145,24 +172,24 @@ RenderResult Create_Translated_Pixel_Shader(IDirect3DDevice9 * device, const Ren
 	}
 	*shader = NULL;
 
-#if defined(_WIN32)
-	if (D3DXDisassembleShader == NULL || D3DXAssembleShader == NULL) {
+#if defined(_WIN32) && !defined(ZH_D3D12_DEVICE)
+	if (!device_takes_shipped_tokens() && (D3DXDisassembleShader == NULL || D3DXAssembleShader == NULL)) {
 		return D3DERR_INVALIDCALL;
 	}
 #endif
 	if (*function < D3DPS_VERSION(1, 0) || *function > D3DPS_VERSION(1, 4)) {
 		return D3DERR_INVALIDCALL;
 	}
-#if !defined(_WIN32)
-	// Off Windows (A3e) the device never runs D3D bytecode: it draws the engine's programs from D3's
-	// transcriptions (engineshader.cpp), recognised by the name each is registered under, as the
-	// Direct3D 11 backend does.  There is no D3DX to translate with either, so the shipped D3D8 tokens go
-	// to the device as they are.
-	if (translated_source != NULL) {
-		translated_source->clear();
+	if (device_takes_shipped_tokens()) {
+		// Off Windows (A3e) the device never runs D3D bytecode: it draws the engine's programs from D3's
+		// transcriptions (engineshader.cpp), recognised by the name each is registered under, as the
+		// Direct3D 11 backend does.  There is no D3DX to translate with either, so the shipped D3D8 tokens
+		// go to the device as they are.
+		if (translated_source != NULL) {
+			translated_source->clear();
+		}
+		return device->CreatePixelShader(function, shader);
 	}
-	return device->CreatePixelShader(function, shader);
-#endif
 
 	ID3DXBuffer * disassembly = NULL;
 	RenderResult result = D3DXDisassembleShader(function, false, NULL, &disassembly);
@@ -223,8 +250,8 @@ RenderResult Create_Translated_Vertex_Shader(IDirect3DDevice9 * device, const Re
 	*shader = NULL;
 	*vertex_declaration = NULL;
 
-#if defined(_WIN32)
-	if (D3DXDisassembleShader == NULL || D3DXAssembleShader == NULL) {
+#if defined(_WIN32) && !defined(ZH_D3D12_DEVICE)
+	if (!device_takes_shipped_tokens() && (D3DXDisassembleShader == NULL || D3DXAssembleShader == NULL)) {
 		return D3DERR_INVALIDCALL;
 	}
 #endif
@@ -281,25 +308,25 @@ RenderResult Create_Translated_Vertex_Shader(IDirect3DDevice9 * device, const Re
 	const D3DVERTEXELEMENT9 terminator = D3DDECL_END();
 	elements[element_count] = terminator;
 
-#if !defined(_WIN32)
-	// Off Windows (A3e): the shipped tokens as they are, for the reason Create_Translated_Pixel_Shader
-	// gives, and the declaration decoded above, which the device does read.
-	if (translated_source != NULL) {
-		translated_source->clear();
-	}
-	RenderResult created = device->CreateVertexShader(function, shader);
-	if (Render_Failed(created)) {
+	if (device_takes_shipped_tokens()) {
+		// Off Windows (A3e): the shipped tokens as they are, for the reason Create_Translated_Pixel_Shader
+		// gives, and the declaration decoded above, which the device does read.
+		if (translated_source != NULL) {
+			translated_source->clear();
+		}
+		RenderResult created = device->CreateVertexShader(function, shader);
+		if (Render_Failed(created)) {
+			return created;
+		}
+		created = device->CreateVertexDeclaration(elements, vertex_declaration);
+		if (Render_Failed(created)) {
+			(*shader)->Release();
+			*shader = NULL;
+			return created;
+		}
+		keep_d3d8_declaration(*vertex_declaration, d3d8_declaration);	// for capture version 3
 		return created;
 	}
-	created = device->CreateVertexDeclaration(elements, vertex_declaration);
-	if (Render_Failed(created)) {
-		(*shader)->Release();
-		*shader = NULL;
-		return created;
-	}
-	PosixDevice_Keep_D3D8_Declaration(*vertex_declaration, d3d8_declaration);	// for capture version 3
-	return created;
-#endif
 
 	ID3DXBuffer * disassembly = NULL;
 	RenderResult result = D3DXDisassembleShader(function, false, NULL, &disassembly);

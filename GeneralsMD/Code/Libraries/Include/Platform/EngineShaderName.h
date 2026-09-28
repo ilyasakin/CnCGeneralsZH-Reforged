@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@
 #ifndef ENGINESHADERNAME_H
 #define ENGINESHADERNAME_H
 
-#if !defined(_WIN32)
+#if !defined(_WIN32) || defined(ZH_D3D12_DEVICE)
 void PosixDevice_Name_Shader(const void *shader, const char *name);
 /// The engine's own D3D8 declaration a vertex declaration of the device's was decoded from
 /// (d3d8shadertranslate), through its D3DVSD_END: kept on the declaration for capture version 3, so

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /***********************************************************************************************
  ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
@@ -45,6 +46,7 @@
 #include "Lib/Clock.h"
 #include "mutex.h"
 #include "thread.h"
+#include "threadwake.h"
 #include "wwdebug.h"
 #include "texture.h"
 #include "ffactory.h"
@@ -243,6 +245,13 @@ static TextureLoadTaskListClass					_CubeTexLoadFreeList;
 static TextureLoadTaskListClass					_VolTexLoadFreeList;
 
 
+// What the loader thread sleeps on until Begin_Load_And_Queue gives it a task, or Deinit ends it.  It looked at
+// _BackgroundQueue every millisecond (Switch_Thread) for the whole session instead: about 950 wakeups a
+// second, measured, for a queue the shipped game never fills - W3DDisplay turns thumbnails off, so every
+// texture finishes in the foreground (a skirmish under gdb: 1,425 foreground loads, no background request).
+// Defined before _TextureLoadThread, so it outlives the thread object at exit.
+static ThreadWakeClass								_LoaderWake;
+
 // The background texture loading thread.
 static class LoaderThreadClass : public ThreadClass
 {
@@ -252,6 +261,9 @@ public:
 #else
 	LoaderThreadClass(const char *thread_name = "Texture loader thread") : ThreadClass(thread_name) {}
 #endif
+	// A process that ends without Deinit destroys this with the thread asleep in _LoaderWake, where it never
+	// looks at `running`: wake it for good before ~ThreadClass stops and joins it.
+	~LoaderThreadClass() { _LoaderWake.Stop(); }
 
 	void Thread_Function();
 } _TextureLoadThread;
@@ -341,6 +353,7 @@ void TextureLoader::Init()
 
 	ThumbnailManagerClass::Init();
 
+	_LoaderWake.Restart();
 	_TextureLoadThread.Execute();
 	_TextureLoadThread.Set_Priority(-4);
 	TextureInactiveOverrideTime = 0;
@@ -360,6 +373,9 @@ void TextureLoader::Deinit()
 	// unlocked instead: the loader either finishes its current task and exits on its own, or was
 	// never near the lock and exits immediately either way.
 	//
+	// The thread sleeps in _LoaderWake between tasks now, where `running` is never read, so wake it for good
+	// first; Stop() then finds it gone or finishing its task.
+	_LoaderWake.Stop();
 	_TextureLoadThread.Stop();
 
 	FastCriticalSectionClass::LockClass lock(_BackgroundCriticalSection);
@@ -1004,6 +1020,7 @@ void TextureLoader::Begin_Load_And_Queue(TextureLoadTaskClass *task)
 		// it has something to do with visually important textures,
 		// like those in the foreground, starting their load last.
 		_BackgroundQueue.Push_Front(task);
+		_LoaderWake.Wake();
 	} else {
 		// unable to load.
 		task->Apply_Missing_Texture();
@@ -1035,6 +1052,10 @@ void TextureLoader::Load_Thumbnail(TextureBaseClass *tc)
 void LoaderThreadClass::Thread_Function(void)
 {
 	while (running) {
+		// asleep until there is a task, and out when Deinit (or the exit) says so
+		if (!_LoaderWake.Wait([] { return !_BackgroundQueue.Is_Empty(); })) {
+			break;
+		}
 		// if there are no tasks on the background queue, no need to grab background lock.
 		if (!_BackgroundQueue.Is_Empty()) {
 			// Grab background load so other threads know we could be 
@@ -1055,8 +1076,6 @@ void LoaderThreadClass::Thread_Function(void)
 				_ForegroundQueue.Push_Back(task);
 			}
 		}
-
-		Switch_Thread();
 	}
 }
 

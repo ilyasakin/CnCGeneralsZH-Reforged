@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # net-check.sh: net_check.py's POSIX twin (L1).  Two headless copies of the game on this machine play
 # one seeded LAN match against each other (-netgame, no lobby), each with its own user data; then each
@@ -333,7 +348,11 @@ CODE="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 abs() { echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; }
 EXE[0]="$(abs "$GENERALS")"; EXE[1]="$(abs "$PEER1")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/net-check.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/net-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "net-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 ROOT="$WORK/root"
 TAG="nc$$_"
 

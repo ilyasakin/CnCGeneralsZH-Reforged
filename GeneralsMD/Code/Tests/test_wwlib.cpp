@@ -2050,3 +2050,107 @@ TEST(wcslcpy_and_wcslcat_count_characters_not_bytes)
 	CHECK_EQ(6u, (unsigned)wcslcat(dst, L"def", 8));
 	CHECK(wcscmp(dst, L"abcdef") == 0);
 }
+
+//-------------------------------------------------------------------------------------------------
+//
+// threadwake.h: WW3D's texture loader thread sleeps on a ThreadWakeClass between tasks, where it used to
+// look at its queue every millisecond (textureloader.cpp).  WakeWorker plays that thread exactly: its loop
+// waits for work and takes one item a turn, and its own destructor Stop()s the wake before ~ThreadClass
+// joins it, as LoaderThreadClass's does.  A wake that could be lost leaves an item unserved; a Stop() that
+// could not reach a sleeping worker hangs the join.
+//
+#include "threadwake.h"
+
+class WakeWorker : public ThreadClass
+{
+public:
+	WakeWorker(ThreadWakeClass &wake, std::atomic<int> &pending, std::atomic<int> &served)
+		: ThreadClass("WakeWorker"), m_wake(wake), m_pending(pending), m_served(served) {}
+	~WakeWorker() { m_wake.Stop(); }
+
+	void Thread_Function()
+	{
+		while (running) {
+			if (!m_wake.Wait([this] { return m_pending.load() > 0; }))
+				break;
+			--m_pending;
+			++m_served;
+		}
+	}
+
+private:
+	ThreadWakeClass &m_wake;
+	std::atomic<int> &m_pending;
+	std::atomic<int> &m_served;
+};
+
+/// Until served reaches want, or about five seconds: true when it did.
+static bool wait_for_served(const std::atomic<int> &served, int want)
+{
+	for (int i = 0; i < 5000 && served.load() < want; ++i)
+		ThreadClass::Sleep_Ms(1);
+	return served.load() >= want;
+}
+
+static long long ms_since(std::chrono::steady_clock::time_point start)
+{
+	return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+}
+
+TEST(threadwake_serves_work_queued_while_the_worker_sleeps)
+{
+	ThreadWakeClass wake;
+	std::atomic<int> pending(0), served(0);
+	WakeWorker *worker = new WakeWorker(wake, pending, served);
+	worker->Execute();
+	ThreadClass::Sleep_Ms(100);		// asleep in Wait by now
+	CHECK_EQ(served.load(), 0);
+	for (int item = 1; item <= 3; ++item) {
+		++pending;
+		wake.Wake();
+		CHECK(wait_for_served(served, item));
+	}
+	const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+	delete worker;						// ~WakeWorker Stop()s the wake, then ~ThreadClass joins
+	CHECK(ms_since(start) < 1000);
+	CHECK_EQ(served.load(), 3);
+}
+
+TEST(threadwake_work_queued_before_the_first_wait_is_not_lost)
+{
+	ThreadWakeClass wake;
+	std::atomic<int> pending(1), served(0);
+	WakeWorker *worker = new WakeWorker(wake, pending, served);
+	worker->Execute();					// no Wake(): the work was there before the worker looked
+	CHECK(wait_for_served(served, 1));
+	delete worker;
+}
+
+TEST(threadwake_stop_ends_a_sleeping_worker_at_once)
+{
+	ThreadWakeClass wake;
+	std::atomic<int> pending(0), served(0);
+	WakeWorker *worker = new WakeWorker(wake, pending, served);
+	worker->Execute();
+	ThreadClass::Sleep_Ms(100);
+	const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+	wake.Stop();
+	delete worker;
+	CHECK(ms_since(start) < 1000);
+	CHECK(!wake.Wait([] { return true; }));	// stopped: even work does not keep a worker
+	CHECK_EQ(served.load(), 0);
+}
+
+TEST(threadwake_restart_lets_a_new_worker_run)
+{
+	ThreadWakeClass wake;
+	std::atomic<int> pending(0), served(0);
+	wake.Stop();
+	wake.Restart();						// as TextureLoader::Init does before Execute()
+	WakeWorker *worker = new WakeWorker(wake, pending, served);
+	worker->Execute();
+	++pending;
+	wake.Wake();
+	CHECK(wait_for_served(served, 1));
+	delete worker;
+}

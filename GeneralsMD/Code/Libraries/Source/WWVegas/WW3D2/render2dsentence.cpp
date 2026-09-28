@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
  /***********************************************************************************************
  ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
@@ -896,8 +897,11 @@ void	Render2DSentenceClass::Build_Sentence_Centered (const WideChar *text, int *
 				ch = *text++;
 			}
 			float char_spacing = Font->Get_Char_Spacing (ch);
-			
-			bool exceeded_texture_width	= ((TextureOffset.I + char_spacing) >= CurrTextureSize);
+
+			//	Blit_Char writes the glyph's whole width, overlap and overhang columns included, so
+			//	that is what has to fit: tested on the spacing alone, the last few columns of a glyph
+			//	near the edge ran on into the next texel row and wiped the first letter of the line.
+			bool exceeded_texture_width	= ((TextureOffset.I + Font->Get_Char_Width (ch)) >= CurrTextureSize);
 			bool encountered_break_char	= (ch == u' ' || ch == u'\n' || ch == 0);
 			
 			//
@@ -1036,7 +1040,8 @@ Vector2	Render2DSentenceClass::Build_Sentence_Not_Centered (const WideChar *text
 		}
 		float char_spacing = Font->Get_Char_Spacing (ch);
 
-		bool exceeded_texture_width	= ((TextureOffset.I + char_spacing) >= CurrTextureSize);
+		// the whole width Blit_Char writes, as in Build_Sentence_Centered
+		bool exceeded_texture_width	= ((TextureOffset.I + Font->Get_Char_Width (ch)) >= CurrTextureSize);
 		bool encountered_break_char	= (ch == u' ' || ch == u'\n' || ch == 0);
 		bool wordBiggerThenLine = ((useHardWordWrap) && ( WrapWidth != 0 ) &&((Cursor.X + TextureOffset.I -TextureStartX + char_spacing) >= WrapWidth));
 		//

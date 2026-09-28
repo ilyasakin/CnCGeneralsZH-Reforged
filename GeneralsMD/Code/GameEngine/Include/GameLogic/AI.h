@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -729,6 +730,7 @@ public:
 	void store(const AICommandParms& parms);
 	void reconstitute(AICommandParms& parms) const;
 	void doXfer(Xfer *xfer);
+	void setCommandSource(CommandSourceType cmdSource) { m_cmdSource = cmdSource; }
 	AICommandType getCommandType() const { return m_cmd; }
 	ObjectID getTargetObjectID() const { return m_obj; }
 	const Coord3D& getTargetPosition() const { return m_pos; }

@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -112,6 +112,19 @@ const SdlProgram &SdlProgramCache::Make(std::map<std::string, SdlProgram> &cache
 	Sdl_Read_Slot_Lines(hlsl, program.SamplerSlots, program.SlotTexture, program.SlotSampler);
 	++Built;
 	return program;
+}
+
+std::string SdlProgramCache::Key_Of(const SDL_GPUShader *shader) const
+{
+	for (int stage = 0; stage < 2; ++stage) {
+		const std::map<std::string, SdlProgram> &cache = stage == 0 ? VertexPrograms : PixelPrograms;
+		for (std::map<std::string, SdlProgram>::const_iterator it = cache.begin(); it != cache.end(); ++it) {
+			if (it->second.Shader == shader) {
+				return it->first;
+			}
+		}
+	}
+	return std::string();
 }
 
 static uint64_t bytes_hash(const void *bytes, size_t size)

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /////////////////////////////////////////////////////////////////////////EA-V1
 // $File: //depot/GeneralsMD/Staging/code/Libraries/Source/profile/internal.h $
@@ -106,7 +107,15 @@ void ProfileFreeMemory(void *ptr);
 
 __forceinline void ProfileGetTime(__int64 &t)
 {
+#if defined(_M_ARM64)
+  // Windows on Arm has no __rdtsc.  Profile's start-up calibration (profile.cpp) measures these
+  // ticks against QueryPerformanceCounter, so the counter itself serves; _pch.h has windows.h.
+  LARGE_INTEGER counter;
+  QueryPerformanceCounter(&counter);
+  t = counter.QuadPart;
+#else
   t = (__int64)__rdtsc();
+#endif
 }
 
 #endif // INTERNAL_H

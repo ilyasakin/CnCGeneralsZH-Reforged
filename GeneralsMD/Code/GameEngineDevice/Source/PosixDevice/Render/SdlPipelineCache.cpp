@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -325,6 +325,7 @@ SDL_GPUGraphicsPipeline *SdlPipelineCache::Pipeline(const SdlPipelineKey &key)
 	}
 
 	SdlVertexLayout layout;
+	memset(&layout, 0, sizeof(layout));
 	std::string refusal;
 	SDL_GPUGraphicsPipeline *pipeline = NULL;
 	if (Sdl_Vertex_Layout(key.FVF, layout, refusal)) {
@@ -404,7 +405,25 @@ SDL_GPUGraphicsPipeline *SdlPipelineCache::Pipeline(const SdlPipelineKey &key)
 		}
 	}
 	if (pipeline == NULL) {
+		// Once per key, with what the key holds: a driver's refusal names no field, and the one that differs
+		// from a built pipeline's is what it refused (X1: Direct3D 12 refuses what Metal and Vulkan build).
 		fprintf(stderr, "SdlPipelineCache: a pipeline refused: %s\n", refusal.c_str());
+		fprintf(stderr, "SdlPipelineCache:   fvf 0x%x, %u attributes", (unsigned)key.FVF, layout.AttributeCount);
+		for (unsigned int i = 0; i < layout.AttributeCount; ++i) {
+			fprintf(stderr, " [loc %u fmt %u off %u]", (unsigned)layout.Location[i], (unsigned)layout.Format[i],
+				(unsigned)layout.Offset[i]);
+		}
+		fprintf(stderr, "; colour %u depth %u, primitive %u fill %u cull %u, blend %u (%u %u %u / %u %u %u) mask 0x%x,"
+			" depth test %u write %u compare %u, stencil %u, bias %g/%g\n", (unsigned)key.ColourFormat,
+			(unsigned)key.DepthFormat, (unsigned)key.Primitive, (unsigned)key.Fill, (unsigned)key.Cull,
+			(unsigned)key.BlendEnable, (unsigned)key.SourceColour, (unsigned)key.DestinationColour,
+			(unsigned)key.ColourOperation, (unsigned)key.SourceAlpha, (unsigned)key.DestinationAlpha,
+			(unsigned)key.AlphaOperation, (unsigned)key.WriteMask, (unsigned)key.DepthTest, (unsigned)key.DepthWrite,
+			(unsigned)key.DepthCompare, (unsigned)key.StencilEnable, key.DepthBias, key.SlopeBias);
+		if (Describe_Shader) {
+			fprintf(stderr, "SdlPipelineCache:   vertex program %s\nSdlPipelineCache:   pixel program %s\n",
+				Describe_Shader(key.VertexShader).c_str(), Describe_Shader(key.PixelShader).c_str());
+		}
 	}
 	else {
 		++Built;

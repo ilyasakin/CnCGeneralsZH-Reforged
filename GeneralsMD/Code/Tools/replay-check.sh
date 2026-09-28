@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # replay-check.sh: replay-check.ps1's POSIX twin (E1).  For each seed, plays a headless skirmish, plays
 # its own replay back, plays the same seed a second time, and compares the three runs' CRC of every
@@ -24,7 +39,7 @@
 # (ZH_USER_DATA_DIR) is in the same folder, and the folder is removed at the end.  The logs go next to
 # the executable, as on Windows, each under its own -logPrefix, and are removed once read.
 #
-# Usage: replay-check.sh --generals <path> | --app <.app> [--data <dir>] [--seeds "0 1"] [--players 2]
+# Usage: replay-check.sh --generals <path> | --app <.app> | --package <folder> [--data <dir>] [--seeds "0 1"] [--players 2]
 #          [--aidiff brutal] [--maxframes 12000] [--cells <n>] [--extra "<args>"]
 #          [--control] [--extended] [--keep] [--log-lines <regex>]
 #   --data            a folder holding zerohour/ (with the base game in zerohour/ZH_Generals, as the
@@ -44,6 +59,13 @@
 #   --keep            leave the temporary folder and the logs, and say where
 #   --log-lines <re>  print each live run's log lines matching the extended regex, as "  log: <line>",
 #                     before the log is removed (Tests/run_locomotor_check.sh reads defect #33's check)
+#   --package <folder>  the same for a Linux package (P3, Tools/linux-portable.sh): its launcher
+#                     zero-hour-reforged runs with no -root and no -overlay; the overlay it must report is
+#                     <folder>/share/zero-hour-reforged/overlay, the install is found through Registry.ini
+#   --appimage <file>  the same for the package as one AppImage: the file itself runs, mounted through FUSE; the
+#                     overlay it must report is under its own mount point, which is new every run
+#   REPLAY_CHECK_RUNNER  (environment) a command every run is started through, e.g. a script that runs
+#                     its arguments inside a container (P3's clean-environment E1); unset, none
 #   --app <.app>      E1 on the bundle itself, "tests what ships" (P1 step 5): its Contents/MacOS/generals
 #                     runs with NO -root and NO -overlay, so the bundle's own discovery finds both - its
 #                     overlay in Contents/Resources, and the install through Registry.ini's InstallPath,
@@ -59,9 +81,13 @@
 # VERIFY", never a change. Either fails the run whatever the matches said.
 
 set -u
+# Every game this starts is unattended: no box, chooser or crash report may wait on a person (EarlyCommandLine.h).
+export ZH_UNATTENDED=1
 
 GENERALS=""
 APP=""
+PACKAGED_OVERLAY=""
+REPLAY_CHECK_RUNNER="${REPLAY_CHECK_RUNNER:-}"
 DATA="${ZH_DATA_DIR:-}"
 SEEDS="0 1"
 PLAYERS=2
@@ -76,7 +102,9 @@ LOG_LINES=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
-		--app) APP="$(cd "$2" && pwd)"; GENERALS="$APP/Contents/MacOS/generals"; shift 2;;
+		--app) APP="$(cd "$2" && pwd)"; GENERALS="$APP/Contents/MacOS/generals"; PACKAGED_OVERLAY="$APP/Contents/Resources/Overlay"; shift 2;;
+		--package) APP="$(cd "$2" && pwd -P)"; GENERALS="$APP/zero-hour-reforged"; PACKAGED_OVERLAY="$APP/share/zero-hour-reforged/overlay"; shift 2;;
+		--appimage) APP="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"; GENERALS="$APP"; PACKAGED_OVERLAY="*/share/zero-hour-reforged/overlay"; shift 2;;
 		--data) DATA="$2"; shift 2;;
 		--seeds) SEEDS="$2"; shift 2;;
 		--players) PLAYERS="$2"; shift 2;;
@@ -105,11 +133,17 @@ CODE="$(cd "$(dirname "$0")/.." && pwd)"		# GeneralsMD/Code: its Data/ is the ov
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$GENERALS")"		# absolute: every run starts in the root
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/replay-check.XXXXXX")"
+# A work folder that could not be made is the end of the run: going on with WORK empty would put
+# "$WORK/..." at the file system's root.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/replay-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "replay-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="rc$$_"		# every log this run writes starts with it
-[ -n "$APP" ] && EXEDIR="$USERDATA/Logs"		# a bundle writes its logs there (ExecutableDirectory.cpp)
+[ -n "$APP" ] && EXEDIR="$USERDATA/Logs"		# a bundle or package writes its logs there (ExecutableDirectory.cpp)
 
 # The install, listed before anything else happens (RULE 9: a farm entry is a link into it, so a write
 # through one would change it).  Checked again on the way out, however the run ends.
@@ -184,20 +218,22 @@ run_game() {	# run_game <log prefix> <switches...>
 	# -noFPSLimit as replay-check.ps1 has it: nothing paces a headless run, and it cannot touch the
 	# logic.  -multiInstance so that a run does not wait on another copy's lock.
 	if [ -n "$APP" ]; then
-		( cd "$WORK" && HOME="$WORK/home" ZH_USER_DATA_DIR="$USERDATA" "$GENERALS" -headless -quickstart -noshellmap \
+		( cd "$WORK" && HOME="$WORK/home" ZH_USER_DATA_DIR="$USERDATA" $REPLAY_CHECK_RUNNER "$GENERALS" -headless -quickstart -noshellmap \
 			-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" "$@" $EXTRA \
 			> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
 	else
-		( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" "$GENERALS" -headless -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
+		( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" $REPLAY_CHECK_RUNNER "$GENERALS" -headless -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
 			-multiInstance -noFPSLimit -maxframes "$MAXFRAMES" -logPrefix "$prefix" "$@" $EXTRA \
 			> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
 	fi
 	RUN_STATUS=$?
 	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0; RUN_BUILT_NAMES=""; RUN_STATS=""
-	# --app: the bundle must have found its own overlay (PosixMain says so on stderr); a run that did not
-	# is reported as having no result
-	if [ -n "$APP" ] && ! grep -q -F "generals: overlay $APP/Contents/Resources/Overlay, searched before the install" "$WORK/${prefix}.err"; then
-		echo "(the bundle did not report its own overlay in $WORK/${prefix}.err) "
+	# --app, --package: the bundle or package must have found its own overlay (PosixMain says so on stderr);
+	# a run that did not is reported as having no result
+	if [ -n "$APP" ] && ! grep -a "^generals: overlay .*, searched before the install" "$WORK/${prefix}.err" \
+			| sed 's/^generals: overlay \(.*\), searched before the install$/\1/' \
+			| { while IFS= read -r o; do case "$o" in $PACKAGED_OVERLAY) exit 0;; esac; done; exit 1; }; then
+		echo "(the bundle or package did not report its own overlay in $WORK/${prefix}.err) "
 		return
 	fi
 	[ -f "$log" ] || return
@@ -277,7 +313,7 @@ for match in $MATCHES; do
 done
 
 echo
-if [ -n "$APP" ]; then
+if [ -n "$APP" ] && [ "${APP%.app}" != "$APP" ]; then		# a macOS bundle's seal; a Linux package has none
 	if codesign --verify --deep --strict "$APP" 2>/dev/null; then
 		echo "the bundle's signature still verifies --deep --strict: nothing was written into it"
 	else

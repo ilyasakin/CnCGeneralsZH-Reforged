@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # Tools/stage-overlay.sh keeps the HUD overlay on (a user directive, 2026-09-26): staging refuses a
 # GameData.ini line that sets ShowHudOverlay to No, loose or inside an archive the overlay links, and
@@ -9,7 +24,11 @@
 #   4. "ShowHudOverlay = 0" and "= false", in any case     -> refused
 set -u
 STAGE="$(cd "$(dirname "$0")/../Tools" && pwd)/stage-overlay.sh"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/test_stage_overlay_hud.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/test_stage_overlay_hud.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "test_stage_overlay_hud: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 trap 'rm -rf -- "${WORK:?}"' EXIT
 failed=0
 check() { if eval "$1"; then echo "ok: $2"; else echo "FAIL: $2"; failed=1; fi; }

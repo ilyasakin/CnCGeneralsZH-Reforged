@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -2484,7 +2485,10 @@ void W3DModelDraw::adjustAnimation(const ModelConditionInfo* prevState, Real pre
 					isCommonMaintainFrameFlagSet(m_curState->m_flags, prevState->m_flags) &&
 					prevAnimFraction >= 0.0)
 			{
-				startFrame = REAL_TO_INT(prevAnimFraction * animHandle->Get_Num_Frames()-1);
+				// getCurrentAnimFraction is frame / (frames - 1), so this is its inverse. EA wrote
+				// fraction * frames - 1, which put every carried-over animation a frame back (upstream #157)
+				// rounded, since frame 5 of 11 comes back as 4.9999995
+				startFrame = REAL_TO_INT(prevAnimFraction * (animHandle->Get_Num_Frames()-1) + 0.5f);
 			}
 
 			m_renderObject->Set_Animation(animHandle, startFrame, m_curState->m_mode);
@@ -2767,11 +2771,12 @@ void W3DModelDraw::handleClientTurretPositioning()
 */
 void W3DModelDraw::handleClientRecoil()
 {
-	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
-	if (!(m_curState->m_validStuff & ModelConditionInfo::BARRELS_VALID))
+	if (!m_curState || !(m_curState->m_validStuff & ModelConditionInfo::BARRELS_VALID))
 	{
 		return;
 	}
+
+	const W3DModelDrawModuleData* d = getW3DModelDrawModuleData();
 
 	// do recoil, if any
 	for (int wslot = 0; wslot < WEAPONSLOT_COUNT; ++wslot)

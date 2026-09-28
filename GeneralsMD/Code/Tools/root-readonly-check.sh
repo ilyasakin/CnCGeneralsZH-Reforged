@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # P1 step 2's proof that the game cannot write its install: the roots are read-only, so every write the
 # engine addresses relative to the install is refused (posixpath's refuses_write) rather than done.
@@ -49,7 +64,11 @@ RUNDIR="$(cd "$CODE/../Run" 2>/dev/null && pwd || true)"
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$GENERALS")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/root-readonly-check.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/root-readonly-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "root-readonly-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 TAG="ro$$_"
 
 cleanup() {

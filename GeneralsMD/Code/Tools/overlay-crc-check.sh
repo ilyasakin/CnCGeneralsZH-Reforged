@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#	Copyright 2026 İlyas Akın
+#	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+#
+#	This program is free software: you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the License, or
+#	(at your option) any later version.
+#
+#	This program is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # P1 step 1's multiplayer check: the fork's overlay searched as a read root (decision 9) must give the
 # game exactly what Windows' one folder gives it. Two layouts are built from the same install and the
@@ -63,7 +78,11 @@ RUNDIR="$(cd "$CODE/../Run" 2>/dev/null && pwd || true)"	# the fork's art archiv
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
 EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
 GENERALS="$EXEDIR/$(basename "$GENERALS")"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/overlay-crc-check.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/overlay-crc-check.XXXXXX")" || WORK=""
+if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
+	echo "overlay-crc-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
+	exit 2
+fi
 TAG="oc$$_"
 
 cleanup() {

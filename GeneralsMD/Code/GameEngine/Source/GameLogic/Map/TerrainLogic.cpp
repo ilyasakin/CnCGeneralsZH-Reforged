@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -2446,8 +2447,9 @@ void TerrainLogic::setWaterHeight( const WaterHandle *water, Real height, Real d
 			// get other object position
 			objPos = obj->getPosition();
 
-			// if this object is underwater, do some damage
-			if( isUnderwater( objPos->x, objPos->y ) )
+			// if this object is underwater, do some damage; an aircraft or a bridge above the water is not
+			Real waterZ;
+			if( isUnderwater( objPos->x, objPos->y, &waterZ ) && objPos->z < waterZ )
 			{
 
 				// do a lot of water damage
@@ -2664,7 +2666,11 @@ void TerrainLogic::setActiveBoundary(Int newActiveBoundary)
 	
 	ThePartitionManager->reset();
 	ThePartitionManager->init();
+	// newMap resets the radar, and a reset stops forcing it on: a replay, an observer or a beaten
+	// player lost the minimap for the rest of the match the moment a script moved the border
+	const Bool radarForced = TheRadar->isRadarForced();
 	TheRadar->newMap(TheTerrainLogic);
+	TheRadar->forceOn(radarForced);
 
 	ThePartitionManager->restoreFoggedCells(partitionStore, FALSE);
 

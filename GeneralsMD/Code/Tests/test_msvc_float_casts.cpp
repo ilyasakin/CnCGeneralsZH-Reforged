@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -63,7 +63,9 @@ int main()
 		printf("FAIL: the particle at -0.28 rad has orientation %u, expected 245\n", orientation);
 	}
 
-#if defined(_MSC_VER)
+// MSVC for x86 and x64 only: the claim is cvttss2si's.  MSVC for ARM64 converts with fcvtzs/fcvtzu and
+// saturates, as clang on ARM64 does, which is why the tree converts through these helpers there too.
+#if defined(_M_X64) || defined(_M_IX86)
 	// Where the claim can be measured: MSVC's own cast against the helper, over the wrap in range and
 	// then past the int range, NaN and the infinities, where the claim is INT_MIN's low byte.  Each value
 	// goes through a volatile so the compiler converts it at run time, as the game's code does, rather
@@ -113,7 +115,7 @@ int main()
 				printf("FAIL: %g converts to %u/%u, Windows gave %u/%u\n", (double)rows[i].value, (unsigned)u16, u32,
 					(unsigned)rows[i].u16, rows[i].u32);
 			}
-#if defined(_MSC_VER)
+#if defined(_M_X64) || defined(_M_IX86)
 			volatile float value = rows[i].value;		// and the same against MSVC's own casts, at run time
 			if ((unsigned short)value != u16 || (unsigned int)value != u32) {
 				++failures;

@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -90,6 +90,10 @@ SdlGpuFrame::SdlGpuFrame() :
 	FenceMs(0.0),
 	Flushes(0),
 	AcquireMs(0.0),
+	NotVisible(0),
+	NotVisibleTotal(0),
+	NotShown(0),
+	NotShownTotal(0),
 	OffscreenMs(0.0),
 	OffscreenPresents(false),
 	OffscreenHz(0),
@@ -98,6 +102,7 @@ SdlGpuFrame::SdlGpuFrame() :
 	NextTickNs(0),
 	GpuDevice(NULL),
 	Window(NULL),
+	OwnsWindow(false),
 	BackBuffer(NULL),
 	DepthStencil(NULL),
 	FrontCopy(NULL),
@@ -130,16 +135,51 @@ SdlGpuFrame * SdlGpuFrame::Create(RenderWindow window, unsigned int width, unsig
 	SdlGpuFrame * frame = new SdlGpuFrame();
 	// Debug validation only when asked: it is slow, and the game runs without it.
 	const bool debug = getenv("ZH_GPU_DEBUG") != NULL;
+#if defined(_WIN32)
+	// -d3d12 (X1): SDL's GPU device needs the video subsystem even with no window, and Win32 stays the platform
+	// layer, so nothing else has started it.  DXBC is what the D3D12 backend always takes: the programs reach it
+	// through SPIRV-Cross's HLSL and d3dcompiler_47.dll (SDL_shadercross).  The driver is named: SDL tries Vulkan
+	// before Direct3D 12, and would take it wherever a Vulkan driver is installed.
+	if (!SDL_WasInit(SDL_INIT_VIDEO) && !SDL_InitSubSystem(SDL_INIT_VIDEO)) {
+		error = std::string("SDL_InitSubSystem(VIDEO): ") + SDL_GetError();
+		delete frame;
+		return NULL;
+	}
+	frame->GpuDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXBC | SDL_GPU_SHADERFORMAT_SPIRV, debug, "direct3d12");
+	if (frame->GpuDevice != NULL)
+		fprintf(stderr, "SdlGpuFrame: SDL GPU driver %s\n", SDL_GetGPUDeviceDriver(frame->GpuDevice));
+#else
 	frame->GpuDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL, debug, NULL);
+#endif
 	if (frame->GpuDevice == NULL) {
 		error = std::string("SDL_CreateGPUDevice: ") + SDL_GetError();
 		delete frame;
 		return NULL;
 	}
+#if defined(_WIN32)
+	// On Windows a RenderWindow is the game's own HWND (WinMain), which SDL wraps rather than makes: SDL then
+	// forwards every message it does not keep to the game's WndProc, and puts that WndProc back when the
+	// window is destroyed with this frame.  SDL's event loop is never pumped: WinMain's loop runs the window.
+	if (window != NULL) {
+		const SDL_PropertiesID properties = SDL_CreateProperties();
+		SDL_SetPointerProperty(properties, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, (void *)window);
+		frame->Window = SDL_CreateWindowWithProperties(properties);
+		SDL_DestroyProperties(properties);
+		if (frame->Window == NULL) {
+			error = std::string("SDL_CreateWindowWithProperties(HWND): ") + SDL_GetError();
+			delete frame;
+			return NULL;
+		}
+		frame->OwnsWindow = true;
+	}
+#else
 	// The one place a RenderWindow is taken back to what it is: C2 hands the device its SDL_Window.
 	frame->Window = reinterpret_cast<SDL_Window *>(window);
+#endif
 	if (frame->Window != NULL && !SDL_ClaimWindowForGPUDevice(frame->GpuDevice, frame->Window)) {
 		error = std::string("SDL_ClaimWindowForGPUDevice: ") + SDL_GetError();
+		if (frame->OwnsWindow) SDL_DestroyWindow(frame->Window);
+		frame->OwnsWindow = false;
 		frame->Window = NULL;
 		delete frame;
 		return NULL;
@@ -183,6 +223,7 @@ SdlGpuFrame::~SdlGpuFrame()
 	if (PointSampler != NULL) SDL_ReleaseGPUSampler(GpuDevice, PointSampler);
 	if (Window != NULL) SDL_ReleaseWindowFromGPUDevice(GpuDevice, Window);
 	SDL_DestroyGPUDevice(GpuDevice);
+	if (OwnsWindow) SDL_DestroyWindow(Window);
 }
 
 bool SdlGpuFrame::Create_Targets(unsigned int width, unsigned int height)
@@ -323,13 +364,17 @@ bool SdlGpuFrame::Submit_Offscreen(SDL_GPUCommandBuffer * commands)
 }
 
 void SdlGpuFrame::Take_Timing(double & flush_ms, double & fence_ms, unsigned int & flushes, double & acquire_ms,
-	double & offscreen_ms)
+	double & offscreen_ms, unsigned int & not_visible, unsigned int & not_shown)
 {
 	flush_ms = FlushMs;
 	fence_ms = FenceMs;
 	flushes = Flushes;
 	acquire_ms = AcquireMs;
 	offscreen_ms = OffscreenMs;
+	not_visible = NotVisible;
+	NotVisible = 0;
+	not_shown = NotShown;
+	NotShown = 0;
 	OffscreenMs = 0.0;
 	FlushMs = 0.0;
 	FenceMs = 0.0;
@@ -523,6 +568,12 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 		SDL_GPUTexture * swapchain = NULL;
 		Uint32 width = 0;
 		Uint32 height = 0;
+		// Asked before the acquire: SDL keeps these flags from the window's own events (on macOS, OCCLUDED from
+		// NSWindow's occlusion state), and a window in any of them is not paced by the display.
+		if ((SDL_GetWindowFlags(Window) & (SDL_WINDOW_HIDDEN | SDL_WINDOW_OCCLUDED | SDL_WINDOW_MINIMIZED)) != 0) {
+			++NotVisible;
+			++NotVisibleTotal;
+		}
 		// No texture (a minimised window) is not a failure: there is nothing to show this frame.
 		const Uint64 acquire_start = SDL_GetTicksNS();
 		const bool acquired = SDL_WaitAndAcquireGPUSwapchainTexture(commands, Window, &swapchain, &width, &height);
@@ -530,6 +581,11 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 		if (acquired && swapchain != NULL) {
 			ok = Present_Into(commands, swapchain, width, height, SDL_GetGPUSwapchainTextureFormat(GpuDevice, Window), ramp)
 				&& ok;
+		} else {
+			// Nothing reaches the display and nothing waits for vsync, so this frame's time is not the
+			// display's pacing: the timing report says how many there were.
+			++NotShown;
+			++NotShownTotal;
 		}
 	} else if (OffscreenPresents) {
 		if (DisplayTexture == NULL) {

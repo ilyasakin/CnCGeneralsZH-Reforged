@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 // The D3DX vector and matrix types for the native Direct3D 9 renderer.
 //
@@ -52,7 +53,7 @@
 #ifndef D3DX9MATH_H
 #define D3DX9MATH_H
 
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(ZH_D3D12_DEVICE)
 
 #include <d3d9.h>
 

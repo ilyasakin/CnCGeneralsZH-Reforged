@@ -1,4 +1,21 @@
 /*
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/*
  * P1 step 4: where the player's Zero Hour is (PosixInstallRoot.h), every path but the dialog.
  *
  * Built in a temporary folder: Zero Hour folders with and without the base game (beside them, in
@@ -86,6 +103,19 @@ void build()
 	file( std::string( at( bottle ) ) + "/ZH_Generals/Textures.big" );
 	folder( at( "emptyhome" ) );
 	folder( at( "exe" ) );
+
+	// the Steam Deck (P3): Steam's own library holds nothing; libraryfolders.vdf names an SD card's, which
+	// holds Zero Hour with its base game beside it, as Steam installs the two; ~/.steam/steam is the usual
+	// symbolic link to Steam's folder, so the one library must not be listed twice
+	folder( at( "steamhome/.local/share/Steam/steamapps/common" ) );
+	const std::string card = at( "sdcard" );
+	file( at( "steamhome/.local/share/Steam/steamapps/libraryfolders.vdf" ),
+		("\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"" + at( "steamhome/.local/share/Steam" )
+		+ "\"\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"" + card + "\"\n\t\t\"label\"\t\t\"\"\n\t}\n}\n").c_str() );
+	file( card + "/steamapps/common/Command & Conquer Generals - Zero Hour/INIZH.big" );
+	file( card + "/steamapps/common/Command & Conquer Generals/Textures.big" );
+	folder( at( "steamhome/.steam" ) );
+	symlink( at( "steamhome/.local/share/Steam" ).c_str(), at( "steamhome/.steam/steam" ).c_str() );
 }
 
 std::string registry( const char *name, const std::string &lines )
@@ -220,6 +250,31 @@ TEST(install_known_places)
 	// a home without bottles lists the fixed places only
 	const std::vector<std::string> plain = PosixKnownInstallPlaces( at( "emptyhome" ) );
 	CHECK( plain.size() < places.size() );
+}
+
+TEST(install_known_places_include_the_steam_libraries)
+{
+	const std::string card = at( "sdcard" );
+	const std::vector<std::string> places = PosixKnownInstallPlaces( at( "steamhome" ) );
+	int own = 0, onCard = 0;
+	for (size_t i = 0; i < places.size(); ++i)
+	{
+		own += places[i] == at( "steamhome/.local/share/Steam/steamapps/common/Command & Conquer Generals Zero Hour" );
+		onCard += places[i] == card + "/steamapps/common/Command & Conquer Generals - Zero Hour";
+	}
+	CHECK_EQ( own, 1 );			// Steam's own library, once though ~/.steam/steam leads to it too
+	CHECK_EQ( onCard, 1 );		// the SD card's, from libraryfolders.vdf
+	// packaged, nothing registered: found on the card, and nothing is written for it
+	PosixInstallRequest r = request( std::vector<std::string>(), true, "steamhome", "" );
+	PosixInstallChoice choice;
+	CHECK( PosixChooseInstallRoot( r, choice ) );
+	CHECK_STR( choice.root.c_str(), real( card + "/steamapps/common/Command & Conquer Generals - Zero Hour" ).c_str() );
+	CHECK( choice.source == ROOT_FROM_KNOWN_PLACE );
+	CHECK( !choice.writeInstallPath );
+	// a home with no Steam lists none of it
+	const std::vector<std::string> plain = PosixKnownInstallPlaces( at( "emptyhome" ) );
+	for (size_t i = 0; i < plain.size(); ++i)
+		CHECK( plain[i].find( "steamapps" ) == std::string::npos );
 }
 
 TEST(install_chooser_asks_again_with_the_reason_and_can_be_cancelled)

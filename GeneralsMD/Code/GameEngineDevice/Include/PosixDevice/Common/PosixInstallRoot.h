@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -23,13 +23,13 @@
 
 	   1. "-root <dir>": used as given, never validated (harnesses root at farms and test folders);
 	   2. Registry.ini's Zero Hour InstallPath, if it still validates (an install can move);
-	   3. inside an app bundle only: the known places (~/Games, /Applications, CrossOver and Whisky
-	      bottles), the first that validates;
-	   4. inside an app bundle only: the player's own choice, through the chooser PosixMain passes
-	      (SDL's native folder dialog).  An invalid choice is said why and asked again; cancelling ends
-	      the start.  The chosen folder is the one thing written: Registry.ini's InstallPath, so the
-	      chooser runs once;
-	   5. outside a bundle: the executable's directory, as always.
+	   3. packaged only (an app bundle, or a Linux package, P3): the known places (~/Games, /Applications,
+	      the Steam libraries, CrossOver and Whisky bottles), the first that validates;
+	   4. packaged only: the player's own choice, through the chooser PosixMain passes (SDL's native
+	      folder dialog; none in the Steam Deck's Game Mode, which is told to use -root instead).  An
+	      invalid choice is said why and asked again; cancelling ends the start.  The chosen folder is
+	      the one thing written: Registry.ini's InstallPath, so the chooser runs once;
+	   5. unpackaged: the executable's directory, as always.
 
 	 Validation: Zero Hour's INIZH.big at the folder's top level, and the base game's Textures.big found
 	 where Win32BIGFileSystem::init will look for it (the folder itself, ZH_Generals/, the two sibling
@@ -64,7 +64,9 @@ PosixInstallCheck PosixCheckInstallFolderWith( const std::string &folder, const 
 /// The sentence a player reads for a check that failed, naming the folder.
 std::string PosixInstallCheckMessage( PosixInstallCheck check, const std::string &folder );
 
-/// The known places, in the order they are tried, below `home`.  Candidates only: nothing checked.
+/// The known places, in the order they are tried, below `home`: ~/Games, /Applications, every Steam
+/// library (each Steam folder's own and those its libraryfolders.vdf lists: the Steam Deck's, P3), then
+/// CrossOver's and Whisky's bottles.  Candidates only: nothing checked.
 std::vector<std::string> PosixKnownInstallPlaces( const std::string &home );
 
 enum PosixInstallSource { ROOT_FROM_ARGUMENT, ROOT_FROM_REGISTRY, ROOT_FROM_KNOWN_PLACE, ROOT_FROM_CHOOSER,
@@ -77,7 +79,7 @@ typedef bool (*PosixInstallChooser)( const std::string &why, std::string &chosen
 struct PosixInstallRequest
 {
 	std::vector<std::string> arguments;		///< argv[1..]
-	bool insideAppBundle;
+	bool insideAppBundle;					///< packaged: a macOS app bundle, or a Linux package (P3)
 	std::string executableDirectory;
 	std::string home;						///< for the known places
 	std::vector<std::string> forbidden;		///< the bundle and the overlays

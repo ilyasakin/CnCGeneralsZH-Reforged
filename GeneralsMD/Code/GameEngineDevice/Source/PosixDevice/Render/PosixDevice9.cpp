@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -183,7 +183,8 @@ PosixDevice9::~PosixDevice9()
 		if (Sdl_Creation_Log_Asked()) {
 			Sdl_Creation_Log_Flush();
 		}
-		fprintf(stderr, "PosixDevice9: %u draws recorded, %u presents\n", DrawsRecorded, PresentCount);
+		fprintf(stderr, "PosixDevice9: %u draws recorded, %u presents, %u of them to a window that was not visible, %u with"
+			" no drawable\n", DrawsRecorded, PresentCount, Gpu->Presents_Not_Visible(), Gpu->Presents_Not_Shown());
 		for (std::map<std::string, unsigned int>::const_iterator it = DrawRefusals.begin(); it != DrawRefusals.end(); ++it) {
 			fprintf(stderr, "PosixDevice9:   refused %u: %s\n", it->second, it->first.c_str());
 		}
@@ -216,6 +217,7 @@ RenderResult PosixDevice9::Create_Gpu_Frame(bool offscreen)
 	Set_Renderer_Name(SDL_GetGPUDeviceDriver(Gpu->Device()));
 	Programs = new SdlProgramCache(Gpu->Device());
 	Pipelines = new SdlPipelineCache(Gpu->Device());
+	Pipelines->Describe_Shader = [this](const SDL_GPUShader *shader) { return Programs->Key_Of(shader); };
 	Samplers = new SdlSamplerCache(Gpu->Device());
 	Mirrors = new SdlResourceMirrors(Gpu);
 	return D3D_OK;

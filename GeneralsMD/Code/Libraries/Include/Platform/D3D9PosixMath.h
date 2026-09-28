@@ -1,6 +1,6 @@
 /*
-**	Command & Conquer Generals Zero Hour(tm)
-**	Copyright 2025 Electronic Arts Inc.
+**	Copyright 2026 İlyas Akın
+**	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
 **
 **	This program is free software: you can redistribute it and/or modify
 **	it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@
 #ifndef PLATFORM_D3D9POSIXMATH_H
 #define PLATFORM_D3D9POSIXMATH_H
 
-#if defined(_WIN32) && !defined(D3D9POSIX_CHECKER)
+#if defined(_WIN32) && !defined(D3D9POSIX_CHECKER) && !defined(ZH_D3D12_DEVICE)
 #error "Platform/D3D9PosixMath.h is the POSIX side of Direct3D 9; Windows uses the SDK's d3d9types.h"
 #endif
 

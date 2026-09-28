@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port: parts come from GeneralsMD/Code/Main/WinMain.cpp, the rest is new code, copyright 2026 İlyas Akın; see NOTICE.md and the git history.
 
 // FILE: PosixMain.cpp ////////////////////////////////////////////////////////////////////////////
 // Desc:   The game's entry point off Windows (C2): WinMain's start-up sequence without the Windows.
@@ -166,6 +167,24 @@ static void activateThisApp()
 static void activateThisApp() {}
 #endif
 
+/** Whether this runs in the Steam Deck's Game Mode (P3): gamescope's session names itself in
+	* XDG_CURRENT_DESKTOP, and Steam's gamepad interface sets SteamGamepadUI for what it starts.  A file
+	* dialog may not show there, so PosixMain asks for -root in Steam's launch options instead.  (Both names
+	* are what gamescope and Steam document; the Deck itself has not been measured yet.) */
+static bool inSteamGameMode()
+{
+	const char *desktop = getenv( "XDG_CURRENT_DESKTOP" ), *gamepadUi = getenv( "SteamGamepadUI" );
+	return (desktop != NULL && strcasecmp( desktop, "gamescope" ) == 0) || (gamepadUi != NULL && gamepadUi[0] == '1');
+}
+
+/// What Game Mode says when the Zero Hour folder is found nowhere; the package's README.txt says the same
+static const char GAME_MODE_NO_ROOT[] =
+	"Zero Hour Reforged could not find your Command & Conquer Generals Zero Hour folder.\n\n"
+	"In Steam, open this game's Properties and enter under Launch Options:\n\n"
+	"-root \"~/Games/Command & Conquer Generals Zero Hour\"\n\n"
+	"with the path of your own Zero Hour folder (the one with INIZH.big in it) between the quotes. Or start "
+	"the game once from Desktop Mode to choose the folder there; it is remembered after that.";
+
 /** PosixInstallChooser over SDL: the reason the last choice was refused, if any, in a message box, then
 	* the folder dialog.  FALSE when the player cancels, or when the dialog cannot be shown; then the reason
 	* goes into the std::string the context points at, for the message the caller shows. */
@@ -204,42 +223,109 @@ static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, vo
 	return answer.state == 1;
 }
 
+/** The chooser's stand-in for tests (the user's rule: no run may need a human at any machine).
+	* ZH_TEST_CHOOSER_ANSWERS names a file of answers, one folder a line; each time the chooser is asked it
+	* takes the next line, and "cancel" or the end of the file cancels.  Nothing is shown: the reason the last
+	* answer was refused, which the dialog's message box would have shown, goes to stderr, as each answer does.
+	* PosixMain treats a start with it set as a packaged first launch; the SDL panel itself was proven by the
+	* user's own eyes (2026-09-27), and test_first_launch_chooser runs this path headless. */
+struct ScriptedAnswers
+{
+	std::vector<std::string> answers;
+	size_t next;
+};
+
+static bool readScriptedAnswers( const char *file, ScriptedAnswers &script )
+{
+	FILE *f = fopen( file, "r" );
+	if (f == NULL)
+		return false;
+	char line[ 4096 ];
+	while (fgets( line, sizeof( line ), f ) != NULL)
+	{
+		size_t n = strlen( line );
+		while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r'))
+			line[--n] = 0;
+		script.answers.push_back( line );
+	}
+	fclose( f );
+	script.next = 0;
+	return true;
+}
+
+static bool chooseFolderFromScript( const std::string &why, std::string &chosen, void *context )
+{
+	ScriptedAnswers &script = *(ScriptedAnswers *)context;
+	if (!why.empty())
+		fprintf( stderr, "generals: chooser (test answers): refused, asking again: %s\n", why.c_str() );
+	if (script.next >= script.answers.size() || strcasecmp( script.answers[script.next].c_str(), "cancel" ) == 0)
+	{
+		fprintf( stderr, "generals: chooser (test answers): cancel\n" );
+		return false;
+	}
+	chosen = script.answers[script.next++];
+	fprintf( stderr, "generals: chooser (test answers): answer %s\n", chosen.c_str() );
+	return true;
+}
+
 /** The install root (P1 step 4, PosixInstallRoot.h): "-root <dir>"; else Registry.ini's InstallPath while
 	* it still holds the game; else, inside an app bundle, the known places and then the player's own choice
-	* (never under -headless), which is written to Registry.ini's InstallPath so it is asked once; else the
-	* executable's directory.  Read from argv itself rather than EarlyCommandLine.h, whose values end at a
-	* space, because a path may have one. */
+	* (never in an unattended run: -headless or ZH_UNATTENDED), which is written to Registry.ini's
+	* InstallPath so it is asked once; else the executable's directory.  Read from argv itself rather than
+	* EarlyCommandLine.h, whose values end at a space, because a path may have one. */
 static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::string> &overlays, char *out, size_t outSize )
 {
 	PosixInstallRequest request;
-	Bool headless = FALSE;
+	Bool unattended = FALSE;
 	for (int i = 1; i < argc; ++i)
 	{
 		request.arguments.push_back( argv[i] );
 		if (strcasecmp( argv[i], "-headless" ) == 0)
-			headless = TRUE;
+			unattended = TRUE;
 	}
+	// ZH_UNATTENDED too: a scripted run that draws has nobody to answer a chooser or a box either.
+	if (unattendedByEnvironment())
+		unattended = TRUE;
 	char buffer[ 4096 ];
 	getExecutableDirectory( buffer, sizeof( buffer ), FALSE );
 	request.executableDirectory = buffer;
-	request.insideAppBundle = isExecutableInAppBundle() != FALSE;
+	request.insideAppBundle = isExecutablePackaged() != FALSE;		// a macOS app, or a Linux package (P3)
 	request.home = findHomeDirectory( buffer, sizeof( buffer ) ) ? buffer : "";
-	if (request.insideAppBundle)
+	if (isExecutableInAppBundle())
 		request.forbidden.push_back( request.executableDirectory + "/../.." );	// the bundle
+	else if (request.insideAppBundle)
+		request.forbidden.push_back( request.executableDirectory + "/.." );		// the Linux package
 	request.forbidden.insert( request.forbidden.end(), overlays.begin(), overlays.end() );
 	request.registryFile = findRegistryFile( buffer, sizeof( buffer ) ) ? buffer : "";
 	std::string dialogFailure;
-	request.chooser = headless ? NULL : chooseFolderWithSdl;
+	const bool gameMode = inSteamGameMode();
+	request.chooser = unattended || gameMode ? NULL : chooseFolderWithSdl;
 	request.chooserContext = &dialogFailure;
+	ScriptedAnswers script;
+	const char *answers = getenv( "ZH_TEST_CHOOSER_ANSWERS" );
+	const bool scripted = answers != NULL && answers[0] != 0;
+	if (scripted)
+	{
+		if (!readScriptedAnswers( answers, script ))
+		{
+			fprintf( stderr, "generals: cannot read ZH_TEST_CHOOSER_ANSWERS %s\n", answers );
+			return FALSE;
+		}
+		request.insideAppBundle = true;		// a packaged first launch, whatever the executable's place
+		request.chooser = chooseFolderFromScript;
+		request.chooserContext = &script;
+	}
 
 	PosixInstallChoice choice;
 	if (!PosixChooseInstallRoot( request, choice ))
 	{
-		// the dialog's own failure, when it failed, says more than "none was chosen"
-		const std::string problem = dialogFailure.empty() ? choice.problem
+		// the dialog's own failure, when it failed, says more than "none was chosen"; Game Mode has no dialog
+		std::string problem = dialogFailure.empty() ? choice.problem
 			: dialogFailure + "\n\nStart the game with -root <folder> to name the Zero Hour folder instead.";
+		if (gameMode && !unattended && !scripted)
+			problem = GAME_MODE_NO_ROOT;
 		fprintf( stderr, "generals: %s\n", problem.c_str() );
-		if (request.insideAppBundle && !headless)
+		if (request.insideAppBundle && !unattended && !scripted)
 		{
 			activateThisApp();
 			SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Zero Hour Reforged", problem.c_str(), NULL );

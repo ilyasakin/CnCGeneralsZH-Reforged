@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /***********************************************************************************************
  ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
@@ -111,7 +112,7 @@ class AggregateDefClass
 		virtual WW3DErrorType	Load_W3D (ChunkLoadClass &chunk_load);
 		virtual WW3DErrorType	Save_W3D (ChunkSaveClass &chunk_save);
 		const char *				Get_Name (void) const					{ return m_pName; }
-		void							Set_Name (const char *pname)			{ SAFE_FREE (m_pName); m_pName = strdupAsWindows(pname); }
+		void							Set_Name (const char *pname)			{ char *name = strdupAsWindows(pname); SAFE_FREE (m_pName); m_pName = name; }
 		RenderObjClass *			Create (void);
 		AggregateDefClass *		Clone (void) const						{ return W3DNEW AggregateDefClass (*this); }
 
