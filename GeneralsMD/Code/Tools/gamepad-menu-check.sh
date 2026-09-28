@@ -19,9 +19,10 @@
 # screens, and the focus must land where the list of screens says, step by step.
 #
 # One run, with no window at all (-offscreen, which starts SDL's gamepads only for ZH_INPUT_SCRIPT, so a
-# worker's own pad cannot join) and no sound (-noaudio), timed out and killed with its process group.
-# ZH_OFFSCREEN_HZ paces the passes, because the shell's menus move in on the clock: a press sent sooner
-# than a screen's transition lands on the screen before it.  The engine logs each change of focus
+# worker's own pad cannot join) and no sound (-offscreen and ZH_AUDIO_BACKEND=null; -noaudio is a Debug build's
+# switch), timed out and killed with its process group.  The shell's menus move in on the clock, so each
+# press waits for the menu to stand still ("s" lines, SdlInputScript.h) rather than for a pass count, and
+# ZH_OFFSCREEN_HZ keeps the passes at a screen's pace.  The engine logs each change of focus
 # ("GAMEPAD FOCUS: <screen> <widget>"), and the walk must give exactly EXPECTED below:
 #   the main menu starts on Solo Play (kept once the pad is first used, so the log begins with the first
 #   press's move: down from Solo Play is Multiplayer); down, down, down reaches Options; A opens it on its first widget;
@@ -37,7 +38,7 @@
 #   --data defaults to ZH_DATA_DIR, a folder holding zerohour/.  Exit 77 without it.
 set -u
 
-GENERALS=""; DATA="${ZH_DATA_DIR:-}"; KEEP=0; TIMEOUT="${GAMEPAD_MENU_TIMEOUT:-300}"
+GENERALS=""; DATA="${ZH_DATA_DIR:-}"; KEEP=0; TIMEOUT="${GAMEPAD_MENU_TIMEOUT:-600}"	# a backstop: the walk waits on the menus
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
@@ -98,24 +99,27 @@ mkdir -p "$ROOT" "$USERDATA"
 OVERLAY="$WORK/overlay"
 "$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
 
-# ---- the walk: engine passes at 30 a second, 80 to 150 between presses (the transitions take about one) --
-tap() { echo "p$1 pad $2 down"; echo "p$(( $1 + 3 )) pad $2 up"; }
+# ---- the walk: each press waits until the menu has stood still for 250 ms since the one before (focus,
+# screen and every widget's place: GamepadFocus::isSettled), and its release follows in the same pass.  A
+# walk timed in passes misrouted under load: a release that came 350 ms after its press, on a loaded
+# worker, let the menu's own repeat press the D-pad a second time, and the focus went to Credits.
+tap() { echo "s pad $1 down"; echo "n pad $1 up"; }
 {
-	tap 600 DPadDown; tap 700 DPadDown; tap 800 DPadDown	# Multiplayer, Load, Options
-	tap 900 South						# Options, on its first page's first widget
-	tap 1050 RightShoulder					# the second page, on its first widget
-	tap 1150 DPadDown					# the widget below it
-	tap 1250 East						# Cancel: the main menu, Options kept
-	tap 1400 East						# B on the main menu's top level: Exit
-	tap 1480 DPadDown					# the column wraps: Solo Play
-	tap 1560 South						# the Solo Play pane, on its first side
-	tap 1700 South						# that side's difficulty pane, on Medium
-	tap 1850 East						# its Back: the Solo Play pane
-	tap 2000 East						# its Back: the main menu, on Solo Play
-	tap 2100 South						# the Solo Play pane again
-	tap 2200 DPadDown; tap 2280 DPadDown; tap 2360 DPadDown; tap 2440 DPadDown	# to Skirmish
-	tap 2550 South						# skirmish setup, on Start Game
-	echo "p2900 quit"
+	tap DPadDown; tap DPadDown; tap DPadDown		# Multiplayer, Load, Options
+	tap South						# Options, on its first page's first widget
+	tap RightShoulder					# the second page, on its first widget
+	tap DPadDown						# the widget below it
+	tap East						# Cancel: the main menu, Options kept
+	tap East						# B on the main menu's top level: Exit
+	tap DPadDown						# the column wraps: Solo Play
+	tap South						# the Solo Play pane, on its first side
+	tap South						# that side's difficulty pane, on Medium
+	tap East						# its Back: the Solo Play pane
+	tap East						# its Back: the main menu, on Solo Play
+	tap South						# the Solo Play pane again
+	tap DPadDown; tap DPadDown; tap DPadDown; tap DPadDown	# to Skirmish
+	tap South						# skirmish setup, on Start Game
+	echo "s quit"
 } > "$WORK/walk.txt"
 
 EXPECTED="MainMenu.wnd MainMenu.wnd:ButtonMultiplayer
@@ -140,7 +144,7 @@ SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonStart"
 
 LOG="$EXEDIR/${TAG}walkDebugLogFile.txt"
 rm -f -- "$LOG"
-( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_OFFSCREEN_HZ=30 ZH_INPUT_SCRIPT="$WORK/walk.txt" \
+( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_OFFSCREEN_HZ=30 ZH_INPUT_SCRIPT="$WORK/walk.txt" ZH_AUDIO_BACKEND=null \
 	perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
 	"$GENERALS" -offscreen -noaudio -win -xres 1280 -yres 800 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
 	-multiInstance -logPrefix "${TAG}walk" > "$WORK/walk.out" 2> "$WORK/walk.err" )

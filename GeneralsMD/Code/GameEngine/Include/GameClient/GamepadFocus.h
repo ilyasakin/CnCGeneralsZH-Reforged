@@ -81,6 +81,11 @@ public:
 	/// The focused widget, or NULL: for the tests
 	static GameWindow *getFocus( void );
 
+	/** TRUE once a menu is up and its screen, its focus and every focusable widget's place have stood still for
+		* stillMs: the input script's "s" lines wait for it, so a scripted press follows what the menu has done,
+		* not the clock (a pane still sliding in, or a focus change not yet made, under a loaded machine) */
+	static Bool isSettled( UnsignedInt stillMs );
+
 	/** Of count centres, the nearest one from (x, y) in the direction (dx, dy) (one of them 0, the other 1 or
 		* -1), sideways distance counting double; -1 when none */
 	static Int pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy );

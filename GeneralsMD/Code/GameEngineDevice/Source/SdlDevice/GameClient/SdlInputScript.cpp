@@ -22,6 +22,7 @@
 
 #include "Common/GameEngine.h"
 #include "GameClient/Display.h"
+#include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadMap.h"
 #include "SdlDevice/GameClient/SdlInput.h"
 #include "SdlDevice/GameClient/SdlInputScript.h"
@@ -41,8 +42,12 @@ struct Action
 {
 	UnsignedInt frame;		///< the logic frame it waits for, or with byPass the engine pass
 	Bool byPass;					///< "p<n>": in the shell the logic frame stands still, so passes count there
+	Bool settled;					///< "s": when the menu has stood still (GamepadFocus::isSettled), whatever the clock
+	Bool next;						///< "n": straight after the action before it, in the same pass
 	std::string line;
 };
+
+const UnsignedInt SETTLED_MS = 250;		///< the default focus's own stillness rule (GamepadFocus.cpp)
 
 std::vector<Action> theActions;
 size_t theNext = 0;
@@ -186,11 +191,21 @@ Bool SdlInputScript_start( void )
 		unsigned int frame = 0;
 		char kind[ 16 ] = "";
 		const Bool byPass = line[0] == 'p';
-		if (line[0] == '#' || sscanf( byPass ? line + 1 : line, "%u %15s", &frame, kind ) != 2)
+		const Bool settled = line[0] == 's' && line[1] == ' ', next = line[0] == 'n' && line[1] == ' ';
+		if (line[0] == '#')
+			continue;
+		if (settled || next)
+		{
+			if (sscanf( line + 2, "%15s", kind ) != 1)
+				continue;
+		}
+		else if (sscanf( byPass ? line + 1 : line, "%u %15s", &frame, kind ) != 2)
 			continue;
 		Action action;
 		action.frame = frame;
 		action.byPass = byPass;
+		action.settled = settled;
+		action.next = next;
 		action.line = line;
 		theActions.push_back( action );
 		padLines = padLines || strcmp( kind, "pad" ) == 0;
@@ -237,9 +252,19 @@ Bool SdlInputScript_start( void )
 void SdlInputScript_play( UnsignedInt logicFrame )
 {
 	++thePasses;
-	while (theNext < theActions.size()
-			&& theActions[ theNext ].frame <= (theActions[ theNext ].byPass ? thePasses : logicFrame))
+	static UnsignedInt lastPlayedPass = 0;
+	while (theNext < theActions.size())
 	{
+		const Action &due = theActions[ theNext ];
+		if (due.settled)
+		{
+			// a menu step: after the step before has had a pass, and the menu has stood still since
+			if (lastPlayedPass == thePasses || !GamepadFocus::isSettled( SETTLED_MS ))
+				break;
+		}
+		else if (!due.next && due.frame > (due.byPass ? thePasses : logicFrame))
+			break;
+		lastPlayedPass = thePasses;
 		const Action &action = theActions[ theNext++ ];
 		const Bool known = play( action.line.c_str() );
 		DEBUG_LOG(( "INPUT SCRIPT: frame %u: %s%s\n", logicFrame, action.line.c_str(), known ? "" : " (not understood)" ));

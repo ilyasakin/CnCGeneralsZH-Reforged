@@ -28,6 +28,11 @@
 //   # a comment
 //   p<n> <action...>                                      at engine pass n instead: the shell's menus,
 //                                                         where the logic frame stands still
+//   s <action...>                                         when the menu has stood still for 250 ms since the
+//                                                         action before (GamepadFocus::isSettled): a menu
+//                                                         walk that follows what the menus did, not the clock
+//   n <action...>                                         in the same pass as the action before: a tap's
+//                                                         release, so no wall-clock repeat can come between
 //   <frame> pad <South|East|...|DPadUp|...> down|up         GamepadMap's button names
 //   <frame> pad axis <LeftX|LeftY|RightX|RightY|LeftTrigger|RightTrigger> <-32768..32767>
 //   <frame> mouse move <x> <y>                              the game's pixels

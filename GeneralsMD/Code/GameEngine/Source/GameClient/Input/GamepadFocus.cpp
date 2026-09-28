@@ -409,6 +409,38 @@ void GamepadFocus::setHooks( const Hooks &hooks )
 	theHooks = hooks;
 }
 
+Bool GamepadFocus::isSettled( UnsignedInt stillMs )
+{
+	static UnsignedInt lastSignature = 0, sameSince = 0;
+	Screen screen;
+	UnsignedInt signature = 2166136261u;		// FNV-1a over the screen, the focus, and each widget's id and rectangle
+	const Bool up = screenNow( screen );
+	if (up)
+	{
+		for (size_t i = 0; i < screen.key.size(); ++i)
+			signature = (signature ^ (UnsignedInt)(unsigned char)screen.key[i]) * 16777619u;
+		signature = (signature ^ (UnsignedInt)theFocusId) * 16777619u;
+		std::vector<GameWindow *> widgets;
+		focusables( screen, widgets );
+		for (size_t i = 0; i < widgets.size(); ++i)
+		{
+			Int x, y, width, height;
+			rectOf( widgets[i], x, y, width, height );
+			const Int parts[5] = { widgets[i]->winGetWindowId(), x, y, width, height };
+			for (Int k = 0; k < 5; ++k)
+				signature = (signature ^ (UnsignedInt)parts[k]) * 16777619u;
+		}
+	}
+	const UnsignedInt now = Clock_Milliseconds();
+	if (!up || signature != lastSignature)
+	{
+		lastSignature = signature;
+		sameSince = now;
+		return FALSE;
+	}
+	return now - sameSince >= stillMs;
+}
+
 Bool GamepadFocus::isActive( void )
 {
 	Screen screen;
