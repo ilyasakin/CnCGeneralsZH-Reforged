@@ -39,6 +39,7 @@
 set -u
 
 GENERALS=""; DATA="${ZH_DATA_DIR:-}"; KEEP=0; TIMEOUT="${GAMEPAD_MENU_TIMEOUT:-600}"	# a backstop: the walk waits on the menus
+HZ="${GAMEPAD_MENU_HZ:-30}"	# the passes' pace; 5 is the slow-machine control: a pass is 200 ms, past the menu's 350 ms repeat in two
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
@@ -144,7 +145,7 @@ SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonStart"
 
 LOG="$EXEDIR/${TAG}walkDebugLogFile.txt"
 rm -f -- "$LOG"
-( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_OFFSCREEN_HZ=30 ZH_INPUT_SCRIPT="$WORK/walk.txt" ZH_AUDIO_BACKEND=null \
+( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_OFFSCREEN_HZ="$HZ" ZH_INPUT_SCRIPT="$WORK/walk.txt" ZH_AUDIO_BACKEND=null \
 	perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
 	"$GENERALS" -offscreen -noaudio -win -xres 1280 -yres 800 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
 	-multiInstance -logPrefix "${TAG}walk" > "$WORK/walk.out" 2> "$WORK/walk.err" )
