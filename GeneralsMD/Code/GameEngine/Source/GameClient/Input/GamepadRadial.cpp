@@ -136,6 +136,11 @@ Bool GamepadRadial::activate( void )
 	GameWindow *window = commandWindow( theSlots[ thePick ] );
 	if (!shown( window ))
 		return FALSE;		// the selection changed under the ring: its button is gone
+	Int x, y, w, h;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &w, &h );
+	DEBUG_LOG(( "GAMEPAD RADIAL: pressed ButtonCommand%02d, sector %d of %d, centre %d,%d\n", theSlots[ thePick ] + 1, thePick,
+		(Int)theSlots.size(), x + w / 2, y + h / 2 ));
 	TheControlBar->pressCommandWindow( window );
 	return TRUE;
 }

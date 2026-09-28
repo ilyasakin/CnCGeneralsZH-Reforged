@@ -36,6 +36,7 @@
 set -u
 
 GENERALS=""; DATA="${ZH_DATA_DIR:-}"; MAXFRAMES=600; KEEP=0; TIMEOUT="${GAMEPAD_CRC_TIMEOUT:-300}"
+RADIAL_SITE="${GAMEPAD_RADIAL_SITE:-600 450}"		# where the radial's building goes, in the game's 1024x768 pixels
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
@@ -172,6 +173,48 @@ elif [ "$PAD_CRC" = "$NONE_CRC" ]; then
 	echo "FAIL: the input changed nothing (the armed control), so the agreement proves nothing"; status=1
 else
 	echo "PASS: the pad and the hand end on the same CRC, and the input changed the match"
+fi
+
+# ---- the radial menu (GamepadRadial.h): the same match, and then a building from the ring ------------------
+# The pad holds Y, tilts the stick up (the ring's first sector: the dozer's first command button), lets Y go,
+# and places the building with A; the hand clicks that button, at the centre the pad's run logged, and places
+# it with a click.  They must agree, and differ from the plain pad run above: the difference is the building.
+{ cat "$WORK/pad.txt"; cat <<'SCRIPT'
+330 pad North down
+332 pad axis LeftY -32767
+334 pad axis LeftY 0
+336 pad North up
+360 mouse move RADIAL_X RADIAL_Y
+370 pad South down
+372 pad South up
+SCRIPT
+} | sed "s/RADIAL_X RADIAL_Y/$RADIAL_SITE/" > "$WORK/pad-radial.txt"
+run_game padradial "$WORK/pad-radial.txt"
+PR_CRC="$RUN_CRC"; PR_FRAME="$RUN_FRAME"; PR_PLAYED="$RUN_PLAYED"; PR_STATUS="$RUN_STATUS"
+PRESSED="$(grep -a 'GAMEPAD RADIAL: pressed' "$EXEDIR/${TAG}padradialDebugLogFile.txt" 2>/dev/null | tail -1)"
+BUTTON_AT="$(printf '%s' "$PRESSED" | sed -n 's/.*centre \([0-9]*\),\([0-9]*\).*/\1 \2/p')"
+HR_CRC=""; HR_FRAME=""; HR_PLAYED=0; HR_STATUS=""
+if [ -n "$BUTTON_AT" ]; then
+	{ cat "$WORK/hand.txt"; printf '%s\n' "336 mouse move $BUTTON_AT" "336 mouse left down $BUTTON_AT" "338 mouse left up $BUTTON_AT" \
+		"360 mouse move $RADIAL_SITE" "370 mouse left down $RADIAL_SITE" "372 mouse left up $RADIAL_SITE"; } > "$WORK/hand-radial.txt"
+	run_game handradial "$WORK/hand-radial.txt"
+	HR_CRC="$RUN_CRC"; HR_FRAME="$RUN_FRAME"; HR_PLAYED="$RUN_PLAYED"; HR_STATUS="$RUN_STATUS"
+fi
+echo "radial: ${PRESSED#*GAMEPAD RADIAL: }"
+echo "pad, radial:  CRC ${PR_CRC:-none} at frame ${PR_FRAME:-none}, $PR_PLAYED of 21 actions played (exit $PR_STATUS)"
+echo "hand, button: CRC ${HR_CRC:-none} at frame ${HR_FRAME:-none}, $HR_PLAYED of 20 actions played (exit $HR_STATUS)"
+if [ -z "$BUTTON_AT" ]; then
+	echo "FAIL: the pad's radial pressed no button (no GAMEPAD RADIAL line in its log)"; status=1
+elif [ -z "$PR_CRC" ] || [ -z "$HR_CRC" ]; then
+	echo "FAIL: a radial run gave no result"; status=1
+elif [ "$PR_PLAYED" != "21" ] || [ "$HR_PLAYED" != "20" ]; then
+	echo "FAIL: the radial scripts were not played whole"; status=1
+elif [ "$PR_CRC" != "$HR_CRC" ] || [ "$PR_FRAME" != "$HR_FRAME" ]; then
+	echo "FAIL: the radial and the hand's click on the button disagree"; status=1
+elif [ "$PR_CRC" = "$PAD_CRC" ]; then
+	echo "FAIL: the radial's building changed nothing (the plain pad run ends the same), so the agreement proves nothing"; status=1
+else
+	echo "PASS: a building from the radial menu is the building a click on the command bar makes"
 fi
 if ! verify_install; then exit 99; fi
 echo "the install is unchanged"
