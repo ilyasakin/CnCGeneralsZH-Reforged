@@ -456,12 +456,27 @@ void press( GameWindow *button )
 }
 
 /// The tab buttons (named ...Tab...), left to right, and which is chosen
-Int tabButtons( const std::vector<GameWindow *> &widgets, std::vector<GameWindow *> &tabs )
+/// Every tab button shown under window, enabled or not (Options disables the tab of the page it is on)
+void collectTabs( GameWindow *window, std::vector<GameWindow *> &out )
+{
+	if (window == NULL || window->winIsHidden())
+		return;
+	if (isTab( window ))
+	{
+		out.push_back( window );
+		return;
+	}
+	for (GameWindow *child = window->winGetChild(); child != NULL; child = child->winGetNext())
+		collectTabs( child, out );
+}
+
+/// The screen's tabs, left to right, and which one is chosen: marked chosen, disabled (Options' way of showing its
+/// page: its tab is the one that cannot be pressed), or the one whose page (its name, Tab for Page) is shown; -1
+Int tabButtons( const Screen &screen, std::vector<GameWindow *> &tabs )
 {
 	tabs.clear();
-	for (size_t i = 0; i < widgets.size(); ++i)
-		if (isTab( widgets[i] ))
-			tabs.push_back( widgets[i] );
+	for (size_t i = 0; i < screen.roots.size(); ++i)
+		collectTabs( screen.roots[i], tabs );
 	for (size_t i = 1; i < tabs.size(); ++i)
 		for (size_t j = i; j > 0 && centreOf( tabs[j] ).x < centreOf( tabs[j - 1] ).x; --j)
 		{
@@ -470,9 +485,9 @@ Int tabButtons( const std::vector<GameWindow *> &widgets, std::vector<GameWindow
 			tabs[j - 1] = swap;
 		}
 	for (size_t i = 0; i < tabs.size(); ++i)
-		if (isChosen( tabs[i] ))
+		if (isChosen( tabs[i] ) || !BitTest( tabs[i]->winGetStatus(), WIN_STATUS_ENABLED ))
 			return (Int)i;
-	// the Options screen marks no tab chosen: the chosen one is the tab whose page (its name, Tab for Page) is shown
+	// else the tab whose page (its name, Tab for Page) is shown
 	for (size_t i = 0; i < tabs.size() && TheWindowManager != NULL && TheNameKeyGenerator != NULL; ++i)
 	{
 		std::string name = nameOf( tabs[i] );
@@ -628,10 +643,12 @@ Int GamepadFocus::pickNeighbourBox( const Box *boxes, Int count, const Box &from
 		const Int off = offLane < offSpan ? offLane : offSpan;
 		if (off > along)
 			continue;		// outside the 45 degree cone
-		// a step aside costs three steps along: a box in line wins over any as near or nearer beside it, and a wide
-		// box a short way off (a shorter row) over one further on; among boxes as good, the lane's (the remembered
-		// column or row) first, then the nearest to it
-		const Int score = gap + 3 * off;
+		// a step aside costs three steps along, and leaving the line at all a flat NOT_IN_LINE more: a box in line
+		// wins over any as near or nearer beside it, and a row or column holds across a gap (a command card's
+		// empty slot) rather than stepping to the next row; among boxes as good, the lane's (the remembered column
+		// or row) first, then the nearest to it
+		const Int NOT_IN_LINE = 64;
+		const Int score = gap + 3 * off + (off > 0 ? NOT_IN_LINE : 0);
 		const Int sideways = abs( (across ? y : x) - lane );
 		const Int tie = offLane * 65536 + sideways;
 		if (best < 0 || score < bestScore || (score == bestScore && tie < bestTie))
@@ -816,7 +833,7 @@ Bool GamepadFocus::act( Action action )
 		case TAB_NEXT:
 		{
 			std::vector<GameWindow *> tabs;
-			const Int chosen = tabButtons( widgets, tabs );
+			const Int chosen = tabButtons( screen, tabs );
 			if (tabs.empty())
 				return FALSE;
 			Int next = chosen < 0 ? 0 : chosen + (action == TAB_NEXT ? 1 : -1);
@@ -888,7 +905,7 @@ void GamepadFocus::draw( void )
 	if (byNameTail( widgets, theStartNames, GWS_PUSH_BUTTON ) != NULL)
 		items[ count++ ] = { GAMEPAD_BUTTON_START, "GUI:GamepadStart", NULL };
 	std::vector<GameWindow *> tabs;
-	tabButtons( widgets, tabs );
+	tabButtons( screen, tabs );
 	if (!tabs.empty())
 		items[ count++ ] = { GAMEPAD_BUTTON_RIGHT_SHOULDER, "GUI:GamepadTabs", NULL };
 
