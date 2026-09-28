@@ -41,7 +41,6 @@
 namespace {
 
 const Real PICK_TILT = 0.5f;					///< the stick's tilt that picks a sector; less leaves the pick alone
-const Real TWO_PI = 6.28318530718f;
 
 Bool theOpen = FALSE;
 std::vector<Int> theSlots;						///< the ring's command windows, as the bar's slots (0 is ButtonCommand01)
