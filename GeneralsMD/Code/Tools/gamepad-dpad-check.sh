@@ -144,8 +144,130 @@ if [ "$RECORD" -eq 1 ]; then
 fi
 
 # ---- what the D-pad must give (recorded, and looked over) ------------------------------------------------------
-EXPECTED_MENUS="RECORD-ME"
-EXPECTED_CARD="RECORD-ME"
+EXPECTED_MENUS="MainMenu.wnd MainMenu.wnd:ButtonMultiplayer
+MainMenu.wnd MainMenu.wnd:ButtonLoadReplay
+MainMenu.wnd MainMenu.wnd:ButtonOptions
+MainMenu.wnd MainMenu.wnd:ButtonCredits
+MainMenu.wnd MainMenu.wnd:ButtonExit
+MainMenu.wnd MainMenu.wnd:ButtonSinglePlayer
+MainMenu.wnd MainMenu.wnd:ButtonExit
+MainMenu.wnd MainMenu.wnd:ButtonCredits
+MainMenu.wnd MainMenu.wnd:ButtonOptions
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxResolution
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxWindowMode
+OptionsMenu.wnd OptionsMenu.wnd:CheckVSync
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:CheckSmoothMotion
+OptionsMenu.wnd OptionsMenu.wnd:SliderGamma
+OptionsMenu.wnd OptionsMenu.wnd:TabControls
+OptionsMenu.wnd OptionsMenu.wnd:TabGameplay
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxDetail
+OptionsMenu.wnd OptionsMenu.wnd:LowResSlider
+OptionsMenu.wnd OptionsMenu.wnd:ParticleCapSlider
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:SliderAnisotropy
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxTextureFilter
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxBloomThreshold
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxTextureFilter
+OptionsMenu.wnd OptionsMenu.wnd:SliderAnisotropy
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
+OptionsMenu.wnd OptionsMenu.wnd:Check3DShadows
+OptionsMenu.wnd OptionsMenu.wnd:Check2DShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckInfantryShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckProjectileShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckPropShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckParticleShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckBehindBuilding
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:CheckBehindBuilding
+OptionsMenu.wnd OptionsMenu.wnd:CheckHeatEffects
+OptionsMenu.wnd OptionsMenu.wnd:CheckTreeSway
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxSmoke
+OptionsMenu.wnd OptionsMenu.wnd:CheckParticleBounce
+OptionsMenu.wnd OptionsMenu.wnd:CheckNoDynamicLOD
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:SliderMusicVolume
+OptionsMenu.wnd OptionsMenu.wnd:SliderSFXVolume
+OptionsMenu.wnd OptionsMenu.wnd:SliderVoiceVolume
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:TabControls
+OptionsMenu.wnd OptionsMenu.wnd:TabGameplay
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:Retaliation
+OptionsMenu.wnd OptionsMenu.wnd:CheckDoubleClickAttackMove
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepad
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadAim
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
+OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadAim
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
+OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHealthBars
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxPlayerColors
+OptionsMenu.wnd OptionsMenu.wnd:CheckOrderLines
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxLanguage
+OptionsMenu.wnd OptionsMenu.wnd:TabControls
+OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxOnlineIP
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxIP
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:CheckSendDelay
+OptionsMenu.wnd OptionsMenu.wnd:ButtonFirewallRefresh
+OptionsMenu.wnd OptionsMenu.wnd:TextEntryFirewallPortOverride
+OptionsMenu.wnd OptionsMenu.wnd:TextEntryHTTPProxy
+OptionsMenu.wnd OptionsMenu.wnd:CheckSendDelay
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+MainMenu.wnd MainMenu.wnd:ButtonOptions
+MainMenu.wnd MainMenu.wnd:ButtonLoadReplay
+MainMenu.wnd MainMenu.wnd:ButtonMultiplayer
+MainMenu.wnd MainMenu.wnd:ButtonSinglePlayer
+MainMenu.wnd MainMenu.wnd:ButtonUSA
+MainMenu.wnd MainMenu.wnd:ButtonGLA
+MainMenu.wnd MainMenu.wnd:ButtonChina
+MainMenu.wnd MainMenu.wnd:ButtonChallenge
+MainMenu.wnd MainMenu.wnd:ButtonSkirmish
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonStart
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ListboxInfo
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:TabLobbySettings
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonSelectMap
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ListboxInfo
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxPlayer7
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ListboxInfo
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonStart
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ListboxInfo"
+EXPECTED_CARD="ControlBar.wnd:ButtonCommand03
+ControlBar.wnd:ButtonCommand05
+ControlBar.wnd:ButtonCommand07
+ControlBar.wnd:ButtonCommand08
+ControlBar.wnd:ButtonCommand06
+ControlBar.wnd:ButtonCommand04
+ControlBar.wnd:ButtonCommand03
+ControlBar.wnd:ButtonCommand05
+ControlBar.wnd:ButtonCommand06
+ControlBar.wnd:ButtonCommand08
+ControlBar.wnd:ButtonCommand09
+ControlBar.wnd:ButtonCommand11"
 
 status=0
 echo "menus: exit $MENU_STATUS, $MENU_PLAYED of $(grep -c . "$WORK/menus.txt") steps played, ${MENU_AGAIN:-0} pressed again"
