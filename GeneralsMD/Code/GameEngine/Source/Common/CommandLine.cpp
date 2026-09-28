@@ -1636,13 +1636,27 @@ Int parseDirect3D9(char *args[], int num)
 	if (TheWritableGlobalData)
 	{
 		TheWritableGlobalData->m_direct3D11 = FALSE;
+		TheWritableGlobalData->m_direct3D12Refused = TRUE;	// on Windows ARM64, not -d3d12's default either
+	}
+	return 1;
+}
+
+/* -dx11: the Direct3D 11 frame over Direct3D 9, which is the default everywhere but Windows ARM64, where
+	 * -d3d12 is (W3DDisplay::init).  So this is the way to the Direct3D 11 frame on ARM64. */
+Int parseDirect3D11(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_direct3D11 = TRUE;
+		TheWritableGlobalData->m_direct3D12Refused = TRUE;
 	}
 	return 1;
 }
 
 /* -d3d12: draw through zh_d3d12.dll (X1), the SDL3 GPU device macOS and Linux draw with, on Direct3D 12.
-	 * Windows only, and opt-in while it is proved against -d3d9 and -dx11.  W3DDisplay decides whether it
-	 * happens: a zh_d3d12.dll that does not load keeps the default renderer, and says so in the log. */
+	 * Windows only; opt-in on x64 while it is proved against -d3d9 and -dx11, and the default on ARM64.
+	 * W3DDisplay decides whether it happens: a zh_d3d12.dll that does not load keeps the old renderer, and
+	 * says so in the log. */
 Int parseDirect3D12(char *args[], int num)
 {
 	if (TheWritableGlobalData)
@@ -2499,6 +2513,8 @@ static CommandLineParam params[] =
 	{ "-language", parseTextLanguage },
 	{ "-dx11dump", parseDirect3D11Dump },
 	{ "-dx11post", parseDirect3D11Post },
+	// After every longer -dx11 name: a parameter matches by its prefix, and the first in this table wins.
+	{ "-dx11", parseDirect3D11 },
 	{ "-autocamera", parseAutoCamera },
 	{ "-camera", parseCameraLook },
 	{ "-tracemove", parseTraceMove },
