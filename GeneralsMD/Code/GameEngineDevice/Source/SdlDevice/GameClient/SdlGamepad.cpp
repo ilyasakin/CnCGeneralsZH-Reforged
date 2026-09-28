@@ -28,6 +28,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GamepadAim.h"
 #include "GameClient/GamepadFocus.h"
+#include "GameClient/GamepadRadial.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadMap.h"
 #include "GameClient/KeyDefs.h"
@@ -85,6 +86,7 @@ struct Pad
 	GamepadButtonType chordWith[ GAMEPAD_BUTTON_COUNT ];	///< the held button this press made a chord with
 	Int suspended[ GAMEPAD_BUTTON_COUNT ];							///< chords that have let this held button's keys go
 	Bool menuPress[ GAMEPAD_BUTTON_COUNT ];							///< pressed while a menu had the pad: its release is the menu's
+	Bool radialPress[ GAMEPAD_BUTTON_COUNT ];						///< pressed for the radial menu, or while it was open: its release is the radial's
 	Real axis[ SDL_GAMEPAD_AXIS_COUNT ];
 	Bool cameraKey[ 4 ];
 	Real wheelCarry;
@@ -124,6 +126,7 @@ Bool theCommandBarMode = FALSE;
 // A menu's direction held down (the D-pad or the stick): it acts once, then again after a pause, then often
 const UnsignedInt NAV_FIRST_REPEAT_MS = 350, NAV_REPEAT_MS = 110;
 Int theNavAction = -1;						///< the GamepadFocus::Action held, or -1
+GamepadButtonType theRadialButton = GAMEPAD_BUTTON_NONE;	///< the button holding the radial menu open
 UnsignedInt theNavNext = 0;				///< when it acts again
 Int theStickNav = -1;							///< the direction the left stick holds in a menu, or -1
 Int theTriggerNav = -1;						///< a trigger held in a menu: PAGE_UP or PAGE_DOWN, or -1
@@ -380,6 +383,20 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 		return;
 	}
 
+	// the radial command menu, while Y holds it open: A presses the pick at once, B closes it, the rest waits
+	if (GamepadRadial::isOpen())
+	{
+		pad.radialPress[ button ] = TRUE;
+		if (button == GAMEPAD_BUTTON_SOUTH)
+		{
+			GamepadRadial::activate();
+			GamepadRadial::close();
+		}
+		else if (button == GAMEPAD_BUTTON_EAST)
+			GamepadRadial::close();
+		return;
+	}
+
 	// command-bar mode has the D-pad, and East leaves it
 	const Bool dpad = button == GAMEPAD_BUTTON_DPAD_UP || button == GAMEPAD_BUTTON_DPAD_DOWN
 		|| button == GAMEPAD_BUTTON_DPAD_LEFT || button == GAMEPAD_BUTTON_DPAD_RIGHT;
@@ -420,6 +437,14 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	const GamepadButtonType with = pad.chordWith[ button ];
 	if (with != GAMEPAD_BUTTON_NONE && pad.suspended[ with ]++ == 0)
 		unapply( pad.pressed[ with ], time );
+	// Y's command-bar binding, held, opens the radial menu instead; its release decides (releaseButton)
+	if (pad.bound[ button ] && pad.binding[ button ].m_action == GAMEPAD_ACTION_COMMAND_BAR && with == GAMEPAD_BUTTON_NONE
+			&& !theCommandBarMode && GamepadRadial::open())
+	{
+		pad.radialPress[ button ] = TRUE;
+		theRadialButton = button;
+		return;
+	}
 	if (pad.bound[ button ])
 		pad.pressed[ button ] = apply( pad.binding[ button ], time );
 }
@@ -429,6 +454,20 @@ void releaseButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	if (!pad.held[ button ])
 		return;
 	pad.held[ button ] = FALSE;
+	if (pad.radialPress[ button ])
+	{
+		// the radial's: letting Y go presses the pick; a tap that picked nothing is command-bar mode, as before
+		pad.radialPress[ button ] = FALSE;
+		if (button == theRadialButton && GamepadRadial::isOpen())
+		{
+			if (GamepadRadial::hasPick())
+				GamepadRadial::activate();
+			else
+				theCommandBarMode = enterCommandBar( time );
+			GamepadRadial::close();
+		}
+		return;
+	}
 	if (pad.menuPress[ button ])
 	{
 		// pressed in a menu: its release is the menu's too (A's click ends on the release)
@@ -749,6 +788,7 @@ void SdlGamepad_noteMotion( Int /*x*/, Int /*y*/ )
 void SdlGamepad_noteHand( void )
 {
 	theLastUsed = FALSE;
+	GamepadRadial::close();		// the hand has the game: no ring waits for a pad
 	drawCursor( FALSE );		// the platform's cursor again
 	GamepadFocus::setPadDriving( FALSE );
 	GamepadHints::setShown( GAMEPAD_GLYPHS_NONE );		// the keys' letters again
@@ -855,6 +895,7 @@ void SdlGamepad_update( UnsignedInt nowMs )
 	// the camera and the wheel wait for the world (GamepadFocus.h)
 	if (GamepadFocus::isActive())
 	{
+		GamepadRadial::close();		// a menu or a box came up over the match: the ring goes
 		static UnsignedInt stickNext = 0, triggerNext = 0;
 		if (theNavAction >= 0 && nowMs >= theNavNext)
 		{
@@ -929,16 +970,24 @@ void SdlGamepad_update( UnsignedInt nowMs )
 	theStickNav = theTriggerNav = -1;
 
 	// the left stick moves the pointer: every pad's tilt, a radial dead zone, a squared response
-	Real vx = 0.0f, vy = 0.0f;
+	Real vx = 0.0f, vy = 0.0f, rawX = 0.0f, rawY = 0.0f;
 	for (size_t i = 0; i < thePads.size(); ++i)
 	{
 		const Real sx = thePads[i].axis[ SDL_GAMEPAD_AXIS_LEFTX ], sy = thePads[i].axis[ SDL_GAMEPAD_AXIS_LEFTY ];
+		rawX += sx;
+		rawY += sy;
 		const Real tilt = sqrtf( sx * sx + sy * sy );
 		if (tilt <= STICK_DEAD_ZONE)
 			continue;
 		const Real past = ((tilt > 1.0f ? 1.0f : tilt) - STICK_DEAD_ZONE) / (1.0f - STICK_DEAD_ZONE);
 		vx += sx / tilt * past * past;
 		vy += sy / tilt * past * past;
+	}
+	// ...unless the radial menu is open: then the stick picks its sector, and the pointer stays put
+	if (GamepadRadial::isOpen())
+	{
+		GamepadRadial::aim( rawX, rawY );
+		vx = vy = 0.0f;
 	}
 	Int width, height;
 	screenSize( width, height );
@@ -967,7 +1016,8 @@ void SdlGamepad_update( UnsignedInt nowMs )
 		if (x != thePointer.shownX || y != thePointer.shownY)
 			showPointer( x, y, nowMs );
 	}
-	else if (theLastUsed && thePointer.owned && !theCommandBarMode && width > 0 && height > 0 && seconds > 0.0f)
+	else if (theLastUsed && thePointer.owned && !theCommandBarMode && !GamepadRadial::isOpen() && width > 0 && height > 0
+			&& seconds > 0.0f)
 	{
 		// aim assist: the resting pointer eases onto the nearest unit or building the player can see
 		ICoord2D target;

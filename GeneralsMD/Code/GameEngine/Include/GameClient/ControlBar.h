@@ -764,6 +764,7 @@ public:
 	/** press a command bar button by its slot index (0..MAX_COMMANDS_PER_SET-1), exactly as
 		a mouse click would.  This is what the COMMAND_SLOTnn grid keys are wired to. */
 	void pressCommandButton( Int index );
+	void pressCommandWindow( GameWindow *win );		///< a command window pressed as a click presses it
 
 	/** The general's powers are laid out SPECIAL_POWER_SHORTCUT_COLS to a row, so one key press
 		cannot reach eleven of them.  The first press picks a row (F1 is the row in the corner,

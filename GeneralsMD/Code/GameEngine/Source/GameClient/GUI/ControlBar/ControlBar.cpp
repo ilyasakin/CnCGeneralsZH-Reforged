@@ -303,7 +303,17 @@ void ControlBar::pressCommandButton( Int index )
 	if( slot == SLOT_NOTHING )
 		return;
 
-	GameWindow *win = m_commandWindows[ slot ];
+	pressCommandWindow( m_commandWindows[ slot ] );
+
+}  // end pressCommandButton
+
+//-------------------------------------------------------------------------------------------------
+/** One command window pressed as a click on it presses it: its parent is told GBM_SELECTED, which
+	is what a push button sends when the mouse lets go over it.  A disabled one only clicks.  The
+	keyboard's grid keys come here once their slot is resolved, and so does a pad's radial menu. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::pressCommandWindow( GameWindow *win )
+{
 	if( win == NULL || BitTest( win->winGetStatus(), WIN_STATUS_HIDDEN ) )
 		return;
 
@@ -323,7 +333,7 @@ void ControlBar::pressCommandButton( Int index )
 			TheAudio->addAudioEvent( &disabledClick );
 	}
 
-}  // end pressCommandButton
+}  // end pressCommandWindow
 
 //-------------------------------------------------------------------------------------------------
 /** The second key of a structure chord is the cell's own position inside the group, so it is

@@ -50,6 +50,7 @@
 #include "GameClient/GamepadAim.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/GamepadMap.h"
+#include "GameClient/GamepadRadial.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/MetaEvent.h"
 #include "PosixDevice/Common/PosixLocalFileSystem.h"
@@ -746,6 +747,22 @@ TEST(aim_assist_eases_onto_its_target_and_never_overshoots)
 	CHECK( x == 176.0f );		// no time, no move
 	GamepadAim::easeToward( x, y, target, 0.06f );
 	CHECK( x > 190.0f && x < 192.0f );		// one time constant: 24 * e^-1 = 8.8 left
+}
+
+TEST(the_radial_menus_sectors_start_at_the_top_and_go_clockwise)
+{
+	CHECK_EQ( GamepadRadial::sectorFor( 0.0f, -1.0f, 4 ), 0 );		// up (a stick's up is negative)
+	CHECK_EQ( GamepadRadial::sectorFor( 1.0f, 0.0f, 4 ), 1 );			// right
+	CHECK_EQ( GamepadRadial::sectorFor( 0.0f, 1.0f, 4 ), 2 );			// down
+	CHECK_EQ( GamepadRadial::sectorFor( -1.0f, 0.0f, 4 ), 3 );		// left
+	CHECK_EQ( GamepadRadial::sectorFor( -0.2f, -0.9f, 4 ), 0 );		// a little left of up is still the top
+	CHECK_EQ( GamepadRadial::sectorFor( 0.3f, 0.0f, 4 ), -1 );		// under the picking tilt: no pick
+	CHECK_EQ( GamepadRadial::sectorFor( 1.0f, 0.0f, 0 ), -1 );		// no sectors
+	CHECK_EQ( GamepadRadial::sectorFor( 0.0f, -1.0f, 14 ), 0 );
+	CHECK_EQ( GamepadRadial::sectorFor( 0.0f, 1.0f, 14 ), 7 );		// straight down is the middle of fourteen
+	CHECK_EQ( GamepadRadial::sectorFor( -0.05f, -1.0f, 14 ), 0 );	// just left of up wraps to the first, not the last
+	CHECK_EQ( GamepadRadial::sectorFor( -0.5f, -0.87f, 14 ), 13 );	// 30 degrees left of up: the last sector
+	CHECK_EQ( GamepadRadial::sectorFor( 1.0f, 0.0f, 1 ), 0 );			// one sector takes every direction
 }
 
 TEST(north_with_no_command_bar_shown_does_nothing)

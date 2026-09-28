@@ -318,6 +318,7 @@ GameEngine/Include/GameClient/GamepadAim.h
 GameEngine/Include/GameClient/GamepadFocus.h
 GameEngine/Include/GameClient/GamepadHints.h
 GameEngine/Include/GameClient/GamepadMap.h
+GameEngine/Include/GameClient/GamepadRadial.h
 GameEngine/Include/GameClient/GlobalLanguage.h
 GameEngine/Include/GameClient/GraphDraw.h
 GameEngine/Include/GameClient/HeaderTemplate.h
@@ -975,6 +976,7 @@ GameEngine/Source/GameClient/Input/GamepadAim.cpp
 GameEngine/Source/GameClient/Input/GamepadFocus.cpp
 GameEngine/Source/GameClient/Input/GamepadHints.cpp
 GameEngine/Source/GameClient/Input/GamepadMap.cpp
+GameEngine/Source/GameClient/Input/GamepadRadial.cpp
 GameEngine/Source/GameClient/Input/Keyboard.cpp
 GameEngine/Source/GameClient/Input/Mouse.cpp
 GameEngine/Source/GameClient/LanguageFilter.cpp
