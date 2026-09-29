@@ -1,6 +1,7 @@
 # Which licence covers each library zh_d3d12.dll links (X1, -d3d12), in macos-app-licenses.txt's form and with
 # its entry names: the same vendored libraries, at vendor.ps1 -D3D12's pins, which are vendor.sh's.  Read from
-# the DLL's MSVC link line (build-ARM64\zh_d3d12.vcxproj, 2026-09-27).  Windows' own import libraries
+# the DLL's MSVC link line (build-ARM64\zh_d3d12.vcxproj, 2026-09-27; spirv-cross-msl gone since
+# SPIRV-Cross's MSL is off on Windows, 2026-09-29).  Windows' own import libraries
 # (kernel32, user32, gdi32, ole32 and the rest) are the platform's and are not listed.  A package that ships
 # zh_d3d12.dll ships these entries' licence texts with it; packaging (a contributor) checks the link line against this.
 #
@@ -24,4 +25,3 @@ spirv-cross-c         spirv-cross
 spirv-cross-core      spirv-cross
 spirv-cross-glsl      spirv-cross
 spirv-cross-hlsl      spirv-cross
-spirv-cross-msl       spirv-cross

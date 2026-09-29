@@ -1073,7 +1073,14 @@ if(ZH_PLATFORM_POSIX OR ZH_D3D12)
     set(SPIRV_CROSS_ENABLE_CPP OFF)
     set(SPIRV_CROSS_ENABLE_REFLECT OFF)
     set(SPIRV_CROSS_ENABLE_UTIL OFF)
-    set(SPIRV_CROSS_ENABLE_MSL ON)
+    # MSL off Windows only: Metal is the one reader.  On Windows the C API keeps its MSL functions as stubs that
+    # return an error, which SDL_shadercross's Metal branch never reaches there; and spirv_msl.cpp does not
+    # compile for ARM64 without /bigobj (C1128), which a plain build.bat, building every target, met first.
+    if(ZH_PLATFORM_WINDOWS)
+      set(SPIRV_CROSS_ENABLE_MSL OFF)
+    else()
+      set(SPIRV_CROSS_ENABLE_MSL ON)
+    endif()
     set(SPIRV_CROSS_ENABLE_GLSL ON)
     set(SPIRV_CROSS_ENABLE_C_API ON)
     set(SPIRV_CROSS_SKIP_INSTALL ON)
