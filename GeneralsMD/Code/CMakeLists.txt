@@ -2319,7 +2319,15 @@ endif()
 # default build and out of ctest, because a test that cannot be linked is not a failing test, it is
 # a test that does not exist here yet.  On Windows the keyword changes nothing at all.
 function(add_lib_test name)
+  # add_lib_test(<name> <libs...> [ARGS <arguments for the ctest entry...>])
   set(libs ${ARGN})
+  set(test_args "")
+  list(FIND libs ARGS _zh_args_at)
+  if(NOT _zh_args_at EQUAL -1)
+    list(SUBLIST libs ${_zh_args_at} -1 test_args)
+    list(REMOVE_AT test_args 0)
+    list(SUBLIST libs 0 ${_zh_args_at} libs)
+  endif()
   set(exclude "")
   if("PENDING_MACOS" IN_LIST libs)
     list(REMOVE_ITEM libs PENDING_MACOS)
@@ -2327,7 +2335,7 @@ function(add_lib_test name)
   endif()
   add_executable(${name} ${exclude} ${TESTS}/${name}.cpp)
   target_link_libraries(${name} PRIVATE test_harness ${libs})
-  add_test(NAME ${name} COMMAND ${name})
+  add_test(NAME ${name} COMMAND ${name} ${test_args})
   if(NOT exclude STREQUAL "")
     # PENDING_MACOS used to skip add_test() altogether, so `ctest` on macOS
     # listed 11 tests where Windows lists 16 and said nothing about the other
@@ -2466,7 +2474,16 @@ endif()
 
 # Phase 3 checkpoint: boots the memory manager, name keys and file system, then
 # runs a real INI file through the parser.
-add_lib_test(test_gameengine gameengine)
+# The money sweep (every_start_reaches_its_money_and_has_two_ways_out, 62 generated maps) was 125 s of
+# test_gameengine's 162 s on one Linux host: it is three cases, one per player count, each its own entry
+# below, so ctest -j runs them beside each other and beside the rest.  Only they are split out: the rest
+# stays one process, in one order, so a failure that depends on what ran before still shows.
+add_lib_test(test_gameengine gameengine ARGS --exclude=every_start_reaches_its_money_and_has_two_ways_out_)
+foreach(_zh_players 2 4 8)
+  add_test(NAME test_gameengine_money_sweep_${_zh_players}_players
+           COMMAND test_gameengine every_start_reaches_its_money_and_has_two_ways_out_${_zh_players}_players)
+  set_tests_properties(test_gameengine_money_sweep_${_zh_players}_players PROPERTIES TIMEOUT 2700)
+endforeach()
 # T1's terrain golden against the moved code (GameLogic/WorldHeightMapData, TerrainHeightSampling):
 # nine shipped maps out of the install's archives, which must sample exactly as Tests/terrain_golden.txt
 # says the original W3D code did.  Needs ZH_GAME_DATA; Skipped (77) without it.
