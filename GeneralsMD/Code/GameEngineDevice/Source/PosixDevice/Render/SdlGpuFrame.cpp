@@ -27,6 +27,37 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <d3d12.h>
+
+// ZH_GPU_DEBUG=gbv (Direct3D 12 only): the debug layer with GPU-based validation, which checks on the GPU what
+// the layer alone cannot see - reads and writes out of a resource's bounds, and descriptors that name nothing.
+// It is set through D3D12GetDebugInterface before SDL creates its device, which is the interface SDL takes when
+// no Agility SDK is named; it needs the Graphics Tools feature (d3d12SDKLayers.dll).  Slow: a diagnostic only.
+static void enable_gpu_based_validation()
+{
+	HMODULE d3d12 = LoadLibraryW(L"d3d12.dll");
+	PFN_D3D12_GET_DEBUG_INTERFACE get = d3d12 != NULL
+		? (PFN_D3D12_GET_DEBUG_INTERFACE)(void *)GetProcAddress(d3d12, "D3D12GetDebugInterface") : NULL;
+	static const IID debug1 = { 0xaffaa4ca, 0x63fe, 0x4d8e, { 0xb8, 0xad, 0x15, 0x90, 0x00, 0xaf, 0x43, 0x04 } };	// ID3D12Debug1
+	ID3D12Debug1 * debug = NULL;
+	if (get != NULL && SUCCEEDED(get(debug1, (void **)&debug)) && debug != NULL) {
+		debug->EnableDebugLayer();
+		debug->SetEnableGPUBasedValidation(TRUE);
+		debug->Release();
+		fprintf(stderr, "SdlGpuFrame: Direct3D 12 debug layer with GPU-based validation\n");
+	} else {
+		fprintf(stderr, "SdlGpuFrame: ZH_GPU_DEBUG=gbv, but the debug layer is not installed (Graphics Tools)\n");
+	}
+}
+#endif
+
 // The back buffer's format.  D3D9's X8R8G8B8 and A8R8G8B8 are these bytes in this order.
 static const SDL_GPUTextureFormat BACK_BUFFER_FORMAT = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
 
@@ -96,6 +127,10 @@ SdlGpuFrame::SdlGpuFrame() :
 	NotShownTotal(0),
 	ShownWidth(0),
 	ShownHeight(0),
+	FlushLimit(3),
+	FlushesTotal(0),
+	FlushInFlightMost(0),
+	FlushWaits(0),
 	OffscreenMs(0.0),
 	OffscreenPresents(false),
 	OffscreenHz(0),
@@ -128,6 +163,11 @@ SdlGpuFrame::SdlGpuFrame() :
 	LastConstants[0] = LastConstants[1] = LastConstantsSize[0] = LastConstantsSize[1] = 0;
 	memset(ClearPipelines, 0, sizeof(ClearPipelines));
 	InFlight[0] = InFlight[1] = NULL;
+	// ZH_GPU_FLUSH_LIMIT=<n>: at most n mid-frame flushes in flight (default 3); 0 lets them pile up as before
+	// the ring, which is how the ring's effect is measured.
+	if (const char * limit = getenv("ZH_GPU_FLUSH_LIMIT")) {
+		FlushLimit = (unsigned int)strtoul(limit, NULL, 10);
+	}
 	memset(&CurrentTarget, 0, sizeof(CurrentTarget));
 	TargetSet = false;
 }
@@ -146,6 +186,9 @@ SdlGpuFrame * SdlGpuFrame::Create(RenderWindow window, unsigned int width, unsig
 		error = std::string("SDL_InitSubSystem(VIDEO): ") + SDL_GetError();
 		delete frame;
 		return NULL;
+	}
+	if (debug && strcmp(getenv("ZH_GPU_DEBUG"), "gbv") == 0) {
+		enable_gpu_based_validation();
 	}
 	frame->GpuDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXBC | SDL_GPU_SHADERFORMAT_SPIRV, debug, "direct3d12");
 	if (frame->GpuDevice != NULL)
@@ -209,6 +252,11 @@ SdlGpuFrame::~SdlGpuFrame()
 			SDL_ReleaseGPUFence(GpuDevice, InFlight[i]);
 		}
 	}
+	for (size_t i = 0; i < FlushFences.size(); ++i) {
+		SDL_WaitForGPUFences(GpuDevice, true, &FlushFences[i], 1);
+		SDL_ReleaseGPUFence(GpuDevice, FlushFences[i]);
+	}
+	FlushFences.clear();
 	Release_Targets();
 	Commands.clear();
 	End_Batch();
@@ -298,11 +346,46 @@ bool SdlGpuFrame::Flush()
 		return false;
 	}
 	const bool recorded = Record_Batch(commands);
-	const bool submitted = Submit(commands);
+	const bool submitted = SerializeSubmits ? Submit(commands) : Submit_Flush(commands);
 	End_Batch();
 	FlushMs += (double)(SDL_GetTicksNS() - start) / 1.0e6;
 	++Flushes;
+	++FlushesTotal;
 	return submitted && recorded;
+}
+
+// A flush's submit, with a fence kept until the GPU is done: the ones done are let go, and past FlushLimit the
+// oldest is waited for.  Present needs none of this, as the swapchain already bounds the frames in flight;
+// flushes had no bound (a texture updated twice in one batch flushes, as does every restore after a reset).
+bool SdlGpuFrame::Submit_Flush(SDL_GPUCommandBuffer * commands)
+{
+	SDL_GPUFence * fence = SDL_SubmitGPUCommandBufferAndAcquireFence(commands);
+	if (fence == NULL) {
+		return false;
+	}
+	size_t kept = 0;
+	for (size_t i = 0; i < FlushFences.size(); ++i) {
+		if (SDL_QueryGPUFence(GpuDevice, FlushFences[i])) {
+			SDL_ReleaseGPUFence(GpuDevice, FlushFences[i]);
+		} else {
+			FlushFences[kept++] = FlushFences[i];
+		}
+	}
+	FlushFences.resize(kept);
+	FlushFences.push_back(fence);
+	if (FlushFences.size() > FlushInFlightMost) {
+		FlushInFlightMost = (unsigned int)FlushFences.size();
+		if (FlushInFlightMost >= 8 && (FlushInFlightMost & (FlushInFlightMost - 1)) == 0) {
+			fprintf(stderr, "SdlGpuFrame: %u mid-frame flushes in flight at once (flush %u)\n", FlushInFlightMost, FlushesTotal + 1);
+		}
+	}
+	if (FlushLimit > 0 && FlushFences.size() > FlushLimit) {
+		SDL_WaitForGPUFences(GpuDevice, true, &FlushFences[0], 1);	// counted in Flush's own time (device flush)
+		SDL_ReleaseGPUFence(GpuDevice, FlushFences[0]);
+		FlushFences.erase(FlushFences.begin());
+		++FlushWaits;
+	}
+	return true;
 }
 
 bool SdlGpuFrame::Submit(SDL_GPUCommandBuffer * commands)
