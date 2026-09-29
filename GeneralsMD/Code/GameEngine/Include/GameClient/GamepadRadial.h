@@ -37,7 +37,7 @@
 class GamepadRadial
 {
 public:
-	/// Opens the ring on the command bar's shown buttons; FALSE outside a match or with none shown
+	/// Opens the ring on the command grid's places that hold something; FALSE outside a match or with none
 	static Bool open( void );
 	static void close( void );
 	static Bool isOpen( void );

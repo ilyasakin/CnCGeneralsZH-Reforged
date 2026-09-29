@@ -18,7 +18,7 @@
 // GamepadCancel.h: a pad's B in a match (docs/mac-port/tasks/G1-gamepad-screens.md, "The buttons in a match").
 //
 // Every console strategy game gives the right face button (the bottom one on a Nintendo pad) one meaning: take
-// back.  Under Modern the mouse has no single button for that - a right click cancels what is armed and gives
+// back.  The mouse has no single button for that - a right click cancels what is armed and gives
 // an order at the pointer as well, and the selection is cleared by a left click on empty ground - so the pad's
 // Cancel does the taking back alone, the way those clicks do it:
 //   - an ability or a special power waiting for its target goes (InGameUI::setGUICommand( NULL ), a right

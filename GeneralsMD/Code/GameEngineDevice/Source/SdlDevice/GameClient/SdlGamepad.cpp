@@ -484,7 +484,7 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 		return;
 	}
 
-	// the radial command menu, while Y holds it open: A presses the pick at once, B closes it, the rest waits
+	// the radial command menu, while RT holds it open: A presses the pick at once, B closes it, the rest waits
 	if (GamepadRadial::isOpen())
 	{
 		pad.radialPress[ button ] = TRUE;
@@ -540,7 +540,7 @@ void pressButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 		unapply( pad.pressed[ with ], time );
 	if (with != GAMEPAD_BUTTON_NONE)
 		pad.deferred[ with ] = FALSE;		// a chord spent it: its OnRelease action does not follow
-	// Y's command-bar binding, held, opens the radial menu instead; its release decides (releaseButton)
+	// RT's command-bar binding, held, opens the radial menu instead; its release decides (releaseButton)
 	if (pad.bound[ button ] && pad.binding[ button ].m_action == GAMEPAD_ACTION_COMMAND_BAR && with == GAMEPAD_BUTTON_NONE
 			&& !theCommandBarMode && GamepadRadial::open())
 	{
@@ -576,7 +576,7 @@ void releaseButton( Pad &pad, GamepadButtonType button, UnsignedInt time )
 	pad.held[ button ] = FALSE;
 	if (pad.radialPress[ button ])
 	{
-		// the radial's: letting Y go presses the pick; a tap that picked nothing is command-bar mode, as before
+		// the radial's: letting RT go presses the pick; a tap that picked nothing is command-bar mode, as before
 		pad.radialPress[ button ] = FALSE;
 		if (button == theRadialButton && GamepadRadial::isOpen())
 		{

@@ -41,7 +41,7 @@ struct SDL_Window;
 /// One event; TRUE when it was input and was taken
 Bool SdlInput_dispatch( const SDL_Event &event );
 
-/** The hints and hooks the rest needs, once: Control+click stays a left click (Legacy force fire), the
+/** The hints and hooks the rest needs, once: Control+click stays a left click (force fire), the
 	* engine draws the composition itself, and the IME manager's text input goes through SDL. */
 void SdlInput_install( void );
 

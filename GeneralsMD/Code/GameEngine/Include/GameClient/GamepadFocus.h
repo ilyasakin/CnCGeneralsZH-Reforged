@@ -25,6 +25,10 @@
 //     sliders, list boxes and text entries.
 //   - The D-pad (and the left stick, with repeat) moves to the nearest of them that way.  A list or a slider
 //     takes the direction first when it can use it (the next row, the next step), as it would a key.
+//   - A combo box: shut, A opens its list; left and right step its value where it stands alone in its row, and
+//     move along a row of combo boxes (skirmish setup's).  Its open list is the pad's: up and down move a
+//     highlight of the pad's own, LB/RB and the triggers page, A picks, and B shuts it with nothing chosen;
+//     nothing reaches the screen before the pick.
 //   - Focusing puts the game's pointer on the widget, where the cursor is not drawn: so the widget shows its
 //     hover state and its tooltip as for a mouse.  A presses there, as a left click does.  Lists take Enter.
 //   - B presses the screen's Back or Cancel (or No), else it is Escape, which the shell's menus take as back.
@@ -110,7 +114,7 @@ public:
 		* through, and nothing outside the cone is picked. */
 	static Int pickNeighbourBox( const Box *boxes, Int count, const Box &from, Int dx, Int dy, Int lane );
 
-	/// pickNeighbourBox over points (the command bar's centres), the lane through (x, y)
+	/// pickNeighbourBox over points (boxes of no size), the lane through (x, y)
 	static Int pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy );
 };
 

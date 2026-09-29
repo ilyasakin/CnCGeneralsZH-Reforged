@@ -24,27 +24,31 @@
 // into MSG_RAW_* messages, the command maps, the translators - is the code a mouse and keyboard run.
 //
 //   - Buttons follow GamepadMap (Data\INI\GamepadReforged.ini): a mouse button pressed where the pointer
-//     is, a key with its modifiers, or the key the player's command map binds a command to.  A second
+//     is, a key with its modifiers, or a command: the key the command map binds it to, or where the
+//     command grid took that key, what the key's place gives (GamepadMap.h).  A second
 //     press within the system's double-click time and 4 pixels counts as a double click, as SDL counts
 //     a mouse's.  A chord (a binding With a held button) lets that button's own keys go while it lasts.
-//   - The triggers are the wheel, in proportion to how far they are pulled; the right stick holds the
-//     arrow keys, with some hysteresis.
+//   - The triggers are buttons, pressed past half their pull: RT is the command bar (a tap) and the radial
+//     command menu (held), LT a modifier.  The right stick holds the arrow keys, with some hysteresis;
+//     with LB held (its camera layer) it zooms, as the wheel does, and turns the camera instead.
 //   - The left stick moves the game's own pointer, and while a pad is in use the game draws the cursor itself
 //     (Mouse.ini's polygon images, RM_POLYGON), never the platform's: a warp of the platform's pointer does
 //     not come back on gamescope's Xwayland (the Steam Deck's Game Mode, measured).  A radial dead zone, a
 //     squared response, full tilt crossing the screen's width in 1.2 s of real time.  A real mouse or
 //     trackpad gives the platform's cursor back.  A pointer parked in the edge-scrolling band (the gamescope
 //     finding: (0, 0)) is put at the screen's centre when the pad is first used.
-//   - Command-bar mode (GamepadMap's CommandBar, North by default): the pointer goes to the command
-//     bar's first button, the D-pad moves it to the nearest button that way, South clicks, and East
-//     leaves.  The pointer is really over the button, so its hover and its tooltip show as for a mouse.
+//   - Command-bar mode (GamepadMap's CommandBar, RT's tap): the pointer goes to the command grid's
+//     first place that holds something, the D-pad moves it along the grid's rows and columns (the page's
+//     order keys included), South clicks, and East leaves.  The pointer is really over the place, so its
+//     hover and its tooltip show as for a mouse.
 //   - A message box up: South moves the pointer onto its OK or Yes and clicks, East onto its Cancel or
 //     No.  A click, not a message to the box: the mouse's own way to answer it.
 //   - A key or mouse button held by two things at once (two pads, a shoulder and a chord) goes down once
 //     and up when the last lets go.  A pad pulled out, or the window losing the focus, lets go of all
 //     it holds, so nothing is left stuck down.
 //
-// Only a game with a window starts it (SdlGameEngine), so -headless and -offscreen runs never do.
+// Only a game with a window starts it (SdlGameEngine), and an -offscreen one only for a test's virtual
+// pad (ZH_INPUT_SCRIPT); a -headless run never does.
 
 #pragma once
 
@@ -62,7 +66,8 @@ void SdlGamepad_stop( void );
 /// One event; TRUE when it was a gamepad's or a joystick's and was taken
 Bool SdlGamepad_dispatch( const SDL_Event &event );
 
-/// Once a frame after the events: the triggers' wheel and the right stick's keys, at nowMs
+/// Once a frame after the events: the triggers' presses, and the right stick's keys or, with the camera
+/// layer held, its wheel and turn, at nowMs
 void SdlGamepad_update( UnsignedInt nowMs );
 
 /// Lets go of every key and mouse button a gamepad holds (the focus lost; a pad pulled out)
@@ -87,8 +92,9 @@ Bool SdlGamepad_pointer( Int &x, Int &y );
 /// TRUE while command-bar mode has the D-pad
 Bool SdlGamepad_inCommandBar( void );
 
-/** Command-bar mode's step: of count button centres, the nearest one from (x, y) in the direction
-	* (dx, dy) (one of them 0, the other 1 or -1), sideways distance counting double; -1 when none */
+/** Command-bar mode's step over points: of count centres, the one from (x, y) in the direction (dx, dy)
+	* (one of them 0, the other 1 or -1) by GamepadFocus::pickNeighbour's rule (one in line first, else the
+	* nearest in the cone); -1 when none */
 Int SdlGamepad_pickNeighbour( const ICoord2D *centres, Int count, Int x, Int y, Int dx, Int dy );
 
 #endif // __SDLGAMEPAD_H

@@ -78,7 +78,7 @@ void SdlInput_install( void )
 	if (installed)
 		return;
 	installed = TRUE;
-	SDL_SetHint( SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "0" );	// Legacy force fire is Control + LEFT click
+	SDL_SetHint( SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "0" );	// force fire is Control + LEFT click
 	SDL_SetHint( SDL_HINT_IME_IMPLEMENTED_UI, "composition" );				// W3DTextEntry draws it; the platform draws candidates
 	PosixIMEManager::DeviceHooks hooks = { startTextInput, stopTextInput };
 	PosixIMEManager::setDeviceHooks( hooks );
