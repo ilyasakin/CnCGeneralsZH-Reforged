@@ -59,7 +59,20 @@ if(_zh_d3d12_target MATCHES "^(ARM64|arm64)$")
 else()
   set(_zh_d3d12_default OFF)
 endif()
+# A build tree configured before the default followed the target has ZH_D3D12 cached OFF as a BOOL and no record of
+# the default it came from: on ARM64 that OFF was the old default, not a choice, so it is moved to ON once (option()
+# never overrides a cached value, and every ARM64 tree would otherwise keep drawing without its terrain until a
+# clean build).  From then on ZH_D3D12_DEFAULT_APPLIED records the default, and any value set afterwards is kept.
+# A first -DZH_D3D12=OFF on the command line comes in untyped, not as a BOOL, and is kept too.
+if(DEFINED CACHE{ZH_D3D12} AND NOT DEFINED CACHE{ZH_D3D12_DEFAULT_APPLIED} AND _zh_d3d12_default AND NOT ZH_D3D12)
+  get_property(_zh_d3d12_type CACHE ZH_D3D12 PROPERTY TYPE)
+  if(_zh_d3d12_type STREQUAL "BOOL")
+    set(ZH_D3D12 ON CACHE BOOL "Windows: build the -d3d12 renderer (the SDL3 GPU device on D3D12)" FORCE)
+    message(STATUS "ZH_D3D12: this build tree kept the old default OFF; ${_zh_d3d12_target}'s default is ON now")
+  endif()
+endif()
 option(ZH_D3D12 "Windows: build the -d3d12 renderer (the SDL3 GPU device on D3D12)" ${_zh_d3d12_default})
+set(ZH_D3D12_DEFAULT_APPLIED ${_zh_d3d12_default} CACHE INTERNAL "the ZH_D3D12 default this build tree has seen")
 if(ZH_PLATFORM_WINDOWS)
   message(STATUS "ZH_D3D12=${ZH_D3D12} (target ${_zh_d3d12_target}; the default there is ${_zh_d3d12_default})")
 endif()
