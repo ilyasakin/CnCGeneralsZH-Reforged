@@ -22,7 +22,8 @@
 #   fingerprint-manifest.sh --check    exit 1 if the committed manifest is out of date, 77 without git
 #
 # Left out, because a vendoring or build run rewrites their bytes and two checkouts of one commit would
-# then disagree: Libraries/Source/FFmpeg/dist/ (Windows' FFmpeg, rebuilt by Tools/ffmpeg-build.sh).
+# then disagree: Libraries/Source/FFmpeg/dist/ and dist-arm64/ (Windows' FFmpeg, x64 and ARM64, rebuilt by
+# Tools/ffmpeg-build.sh).
 # The manifest itself is left out too (it would hash its own list).
 #
 # Refused while the index has unmerged entries (a merge or rebase stopped on a conflict): `git ls-files`
@@ -49,6 +50,7 @@ fi
 list() {
 	git -C "$CODE" ls-files -z . | tr '\0' '\n' \
 		| grep -v '^Libraries/Source/FFmpeg/dist/' \
+		| grep -v '^Libraries/Source/FFmpeg/dist-arm64/' \
 		| grep -v '^BuildFingerprint\.manifest$' \
 		| LC_ALL=C sort -u
 }

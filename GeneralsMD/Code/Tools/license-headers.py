@@ -103,6 +103,12 @@ SKIP = {
 	CODE + "Tests/glyph_rasteriser_golden.inc",
 	CODE + "Tests/w3d_view/shaders/model_shaders.h",
 }
+# Added folders of third-party build output, committed as they came out of their build: their own licence
+# (the LICENSE.txt beside them) governs every file, and ours would be wrong on any of them.  FFmpeg's dist/
+# came from upstream and is not an added file; dist-arm64/ is the same build for ARM64.
+SKIP_DIRS = (
+	CODE + "Libraries/Source/FFmpeg/dist-arm64/",
+)
 C_EXT = {"c", "cc", "cpp", "cxx", "h", "hh", "hpp", "inc", "m", "mm", "metal", "frag", "vert", "hlsl"}
 HASH_EXT = {"sh", "py", "ps1", "cmake"}
 
@@ -114,7 +120,7 @@ def git(*args):
 def comment_style(path, data):
 	name = os.path.basename(path)
 	ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-	if path.endswith(".patch") or path in SKIP:
+	if path.endswith(".patch") or path in SKIP or path.startswith(SKIP_DIRS):
 		return None
 	if ext in C_EXT:
 		return "c"
