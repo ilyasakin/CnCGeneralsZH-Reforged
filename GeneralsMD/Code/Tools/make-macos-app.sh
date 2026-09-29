@@ -23,7 +23,8 @@
 #   Contents/Resources/AppIcon.icns    from Main/Generals.ico's 48 px image (soft on Retina: an open item)
 #   Contents/Resources/Overlay/        the staged overlay (zh_overlay), without the art archives
 #   Contents/Resources/fetch-art.sh    Tools/fetch-art.sh: the game starts it, and it fetches the art into the
-#                                      user data folder (~/Library/Application Support/...), as on Linux
+#                                      user data folder (~/Library/Application Support/...), as on Linux;
+#                                      art-source.txt beside it with --art-url: where it fetches from
 #   Contents/Resources/Licenses/       from macos-app-licenses.txt, checked against the link line
 #
 # Refused, before anything is written:
@@ -42,7 +43,7 @@
 # nothing.
 #
 # Usage: make-macos-app.sh --generals <exe> --overlay <staged overlay> --build <build dir>
-#          --out <.../Zero Hour Reforged.app> --bundle-id <id> --min-macos <version> [--no-art]
+#          --out <.../Zero Hour Reforged.app> --bundle-id <id> --min-macos <version> [--art-url <address>] [--no-art]
 #          [--link-ninja <build.ninja>]
 #   --min-macos   LSMinimumSystemVersion, and the newest minimum any shipped object may carry (the build's
 #                 CMAKE_OSX_DEPLOYMENT_TARGET)
@@ -51,11 +52,12 @@
 #                 --generals into one executable before dsymutil; the minimum-macOS check reads every slice,
 #                 and the x86_64 build's own libraries too when its folder holds a build.ninja
 #   --link-ninja  the build.ninja whose generals link line is checked (default <build>/build.ninja)
+#   --art-url     where the app fetches the art from (https:// or file://); default upstream's art-latest
 # Exit status: 0 built, signed and verified; 1 refused or failed (the partial bundle is removed).
 
 set -u
 
-GENERALS="" OVERLAY="" BUILD="" OUT="" BUNDLE_ID="" NINJA="" MIN_MACOS="" X86=""
+GENERALS="" OVERLAY="" BUILD="" OUT="" BUNDLE_ID="" NINJA="" ART_URL="" MIN_MACOS="" X86=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
@@ -65,6 +67,7 @@ while [ $# -gt 0 ]; do
 		--bundle-id) BUNDLE_ID="$2"; shift 2;;
 		--min-macos) MIN_MACOS="$2"; shift 2;;
 		--x86-64-generals) X86="$2"; shift 2;;
+		--art-url) ART_URL="$2"; shift 2;;
 		--no-art) shift;;		# the art is never in the app now: taken, and nothing changes
 		--link-ninja) NINJA="$2"; shift 2;;
 		*) echo "make-macos-app: unknown argument $1" >&2; exit 2;;
@@ -232,6 +235,11 @@ done
 
 cp "$CODE/Tools/fetch-art.sh" "$C/Resources/fetch-art.sh" && chmod +x "$C/Resources/fetch-art.sh" \
 	|| fail "cannot copy fetch-art.sh"
+case "$ART_URL" in
+	"") ;;
+	https://*|file://*) printf '%s\n' "$ART_URL" > "$C/Resources/art-source.txt" || fail "cannot write art-source.txt";;
+	*) fail "--art-url must be an https:// or file:// address";;
+esac
 
 # the licences
 L="$C/Resources/Licenses"

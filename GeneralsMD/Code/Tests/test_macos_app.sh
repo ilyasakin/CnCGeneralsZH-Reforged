@@ -35,11 +35,12 @@
 #   6. universal2 (option A's path, tested with tiny stand-ins, no second build): an x86_64 executable
 #      for the target lipo'd in makes a bundle whose executable holds both slices and still verifies;
 #      one built for a newer macOS is refused, and so is an arm64 file passed as the x86_64 one;
-#   7. the art, fetched as on Linux (the user's rule: the app carries none): a fresh bundle holds no
-#      Reforged*.big, whatever the staged overlay links, and carries fetch-art.sh; that script, run from the
-#      bundle against a local file:// release, verifies a file into the user data folder's ReforgedArt and
-#      writes nothing into the bundle (its seal still verifies); and the bundle's game, started headless
-#      on an empty root with a ReforgedArt folder in its user data, reads that folder as an overlay.
+#   7. the art, fetched as on Linux (the user's rule: the app carries none): a fresh bundle built with
+#      --art-url <a local file:// release> holds no Reforged*.big, whatever the staged overlay links, and carries
+#      fetch-art.sh with that source in art-source.txt; the script, run from the bundle without ZHR_ART_URL,
+#      verifies the file into the user data folder's ReforgedArt and writes nothing into the bundle (its seal
+#      still verifies); an --art-url that is not https:// or file:// is refused; and the bundle's game, started
+#      headless on an empty root with a ReforgedArt folder in its user data, reads that folder as an overlay.
 # What it cannot see: a quarantined download and Gatekeeper (E2), the dialog of the root chooser (by hand),
 # and the fetch the game starts by itself (only in a run someone watches; test_fetch_art.sh proves the script).
 # Usage: test_macos_app.sh <generals> <staged overlay> <build dir> <deployment target>.
@@ -152,18 +153,21 @@ check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "the x86_64 executable 
 out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$T/eight/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --no-art --x86-64-generals "$T/not-x86" 2>&1)"; status=$?
 check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "is not an x86_64 executable"' "an arm64 file passed as the x86_64 slice is refused (exit $status)"
 
-# 7. the art, fetched, never bundled
-N="$T/nine/Zero Hour Reforged.app"
-out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$N" --bundle-id "$ID" --min-macos "$TARGET" 2>&1)"; status=$?
-check '[ $status -eq 0 ] && [ -z "$(find "$N" -name "Reforged*.big")" ] && [ -x "$N/Contents/Resources/fetch-art.sh" ]' \
-	"a bundle holds no Reforged*.big (the staged overlay links $(find -L "$OVERLAY" -maxdepth 1 -name 'Reforged*.big' | wc -l | tr -d ' ')) and carries fetch-art.sh (exit $status)"
+# 7. the art, fetched, never bundled; from the source the bundle was built with
 mkdir -p "$T/release" "$T/artuser"
 head -c 200000 /dev/urandom > "$T/release/ReforgedTest.big"
 printf '{\n  "files": [\n    {\n      "name": "ReforgedTest.big",\n      "size": %s,\n      "sha256": "%s"\n    }\n  ]\n}\n' \
 	"$(wc -c < "$T/release/ReforgedTest.big" | tr -d ' ')" "$(shasum -a 256 "$T/release/ReforgedTest.big" | cut -d ' ' -f 1)" > "$T/release/art.json"
-ZH_USER_DATA_DIR="$T/artuser" ZHR_ART_URL="file://$T/release" sh "$N/Contents/Resources/fetch-art.sh" > "$T/fetch.out" 2>&1; status=$?
+N="$T/nine/Zero Hour Reforged.app"
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$N" --bundle-id "$ID" --min-macos "$TARGET" --art-url "file://$T/release" 2>&1)"; status=$?
+check '[ $status -eq 0 ] && [ -z "$(find "$N" -name "Reforged*.big")" ] && [ -x "$N/Contents/Resources/fetch-art.sh" ] && [ "$(cat "$N/Contents/Resources/art-source.txt")" = "file://$T/release" ]' \
+	"a bundle holds no Reforged*.big (the staged overlay links $(find -L "$OVERLAY" -maxdepth 1 -name 'Reforged*.big' | wc -l | tr -d ' ')), carries fetch-art.sh and the --art-url source (exit $status)"
+env -u ZHR_ART_URL ZH_USER_DATA_DIR="$T/artuser" sh "$N/Contents/Resources/fetch-art.sh" > "$T/fetch.out" 2>&1; status=$?
 check '[ $status -eq 0 ] && cmp -s "$T/release/ReforgedTest.big" "$T/artuser/ReforgedArt/ReforgedTest.big" && codesign --verify --deep --strict "$N" 2>/dev/null' \
-	"the bundle's fetch-art.sh verifies the art into the user data folder, and the bundle's seal still verifies (exit $status)"
+	"the bundle's fetch-art.sh verifies the art from its built-in source into the user data folder, and the seal still verifies (exit $status)"
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$T/ten/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --art-url "ftp://example.invalid/art" 2>&1)"; status=$?
+check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "art-url must be an https:// or file:// address" && [ ! -e "$T/ten/Zero Hour Reforged.app" ]' \
+	"armed: an --art-url that is not https:// or file:// is refused, and leaves no bundle (exit $status)"
 mkdir -p "$T/emptyroot"
 ( ZH_UNATTENDED=1 ZH_USER_DATA_DIR="$T/artuser/" perl -e 'alarm shift; exec @ARGV' 120 "$N/Contents/MacOS/generals" -headless \
 	-root "$T/emptyroot" -maxframes 1 > "$T/start.out" 2> "$T/start.err" )

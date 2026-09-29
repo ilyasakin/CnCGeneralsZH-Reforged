@@ -26,7 +26,9 @@
 #   6. ZHR_NO_ART_FETCH=1 fetches nothing; an unreachable release changes nothing and says so;
 #   7. the launcher's --background mode returns at once and leaves the same result behind;
 #   8. without ZH_USER_DATA_DIR, the platform's own folder, as the game's (EarlyOptions.h): ~/Library/Application
-#      Support on macOS, $XDG_DATA_HOME or ~/.local/share elsewhere.
+#      Support on macOS, $XDG_DATA_HOME or ~/.local/share elsewhere;
+#   9. the source a package was built with: art-source.txt beside the script is the default, ZHR_ART_URL overrides
+#      it, and a line that is not an https:// or file:// address is ignored.
 # Needs curl or wget, and sha256sum or shasum; flock is used where there is one (Linux), a lock folder
 # where there is not (macOS).  Skipped (77) without them.
 
@@ -104,8 +106,8 @@ rm -rf "$USER_DATA"
 ZHR_NO_ART_FETCH=1 fetch
 check '[ $STATUS -eq 0 ] && [ ! -e "$ART" ]' "6. ZHR_NO_ART_FETCH=1: nothing fetched, nothing made"
 ZH_USER_DATA_DIR="$USER_DATA" ZHR_ART_URL="file://$T/nowhere" sh "$FETCH" > "$T/out" 2>&1; STATUS=$?
-check '[ $STATUS -ne 0 ] && grep -q "cannot read art.json" "$T/out" && [ -z "$(ls "$ART" 2>/dev/null | grep -v "^\.verified$")" ]' \
-	"6. an unreachable release: it says so, and nothing is used (exit $STATUS)"
+check '[ $STATUS -ne 0 ] && [ "$(grep -c "no public art source reachable" "$T/out")" -eq 1 ] && grep -q "playing at the original textures" "$T/out" && [ -z "$(ls "$ART" 2>/dev/null | grep -v "^\.verified$")" ]' \
+	"6. an unreachable source: said once, calmly, and nothing is used (exit $STATUS)"
 
 # 7.
 rm -rf "$USER_DATA"
@@ -121,6 +123,22 @@ else own="$T/home/.local/share/Command and Conquer Generals Zero Hour Data"; fi
 env -u ZH_USER_DATA_DIR -u XDG_DATA_HOME HOME="$T/home" ZHR_ART_URL="file://$REL" sh "$FETCH" > "$T/out" 2>&1; STATUS=$?
 check '[ $STATUS -eq 0 ] && cmp -s "$REL/ReforgedOther.big" "$own/ReforgedArt/ReforgedOther.big"' \
 	"8. without ZH_USER_DATA_DIR: into the platform's own user data folder ($(uname -s))"
+
+# 9.
+mkdir -p "$T/pkg" "$T/other"
+cp "$FETCH" "$T/pkg/fetch-art.sh"
+printf 'file://%s\n' "$REL" > "$T/pkg/art-source.txt"
+rm -rf "$USER_DATA"
+env -u ZHR_ART_URL ZH_USER_DATA_DIR="$USER_DATA" sh "$T/pkg/fetch-art.sh" > "$T/out" 2>&1; STATUS=$?
+check '[ $STATUS -eq 0 ] && grep -q "art from file://$REL into" "$T/out" && [ -f "$ART/ReforgedOther.big" ]' "9. art-source.txt is the built-in source (exit $STATUS)"
+rm -rf "$USER_DATA"
+ZH_USER_DATA_DIR="$USER_DATA" ZHR_ART_URL="file://$T/other" sh "$T/pkg/fetch-art.sh" > "$T/out" 2>&1; STATUS=$?
+check '[ $STATUS -ne 0 ] && grep -q "no public art source reachable (file://$T/other)" "$T/out"' "9. ZHR_ART_URL overrides it"
+printf 'javascript:evil\n' > "$T/pkg/art-source.txt"
+mkdir -p "$T/offline"		# stand-ins that fail at once, so the fallback to upstream's address touches no network
+printf '#!/bin/sh\nexit 7\n' > "$T/offline/curl"; cp "$T/offline/curl" "$T/offline/wget"; chmod +x "$T/offline/curl" "$T/offline/wget"
+env -u ZHR_ART_URL PATH="$T/offline:$PATH" ZH_USER_DATA_DIR="$USER_DATA" sh "$T/pkg/fetch-art.sh" > "$T/out" 2>&1
+check 'grep -q "art from https://github.com/" "$T/out"' "9. armed: an address that is not https:// or file:// is ignored (upstream's is used)"
 
 echo "$failures failure(s)"
 [ $failures -eq 0 ]

@@ -46,7 +46,7 @@
 #
 # Usage: linux-portable.sh --build <folder> --out <folder> --cmake <cmake>
 #          [--image <sdk image>] [--jobs <n>] [--no-art] [--no-tar] [--no-build]
-#          [--appimage <appimagetool> --runtime <type-2 runtime>]
+#          [--appimage <appimagetool> --runtime <type-2 runtime>] [--art-url <address>]
 #   --build     the build folder (made if missing); kept between runs, so a second build is incremental
 #   --out       the folder to make; its name is the package's (e.g. .../ZeroHourReforged-linux-x86_64)
 #   --cmake     a Linux CMake of 3.29 or later that runs inside the container: the SDK's own 3.25 cannot
@@ -66,7 +66,7 @@
 set -u
 
 BUILD="" OUT="" CMAKE="" IMAGE="registry.gitlab.steamos.cloud/steamrt/sniper/sdk:latest" JOBS="" ART=1 TAR=1 DOBUILD=1
-APPIMAGETOOL="" RUNTIME=""
+APPIMAGETOOL="" RUNTIME="" ART_URL=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--build) BUILD="$2"; shift 2;;
@@ -79,6 +79,7 @@ while [ $# -gt 0 ]; do
 		--no-build) DOBUILD=0; shift;;
 		--appimage) APPIMAGETOOL="$2"; shift 2;;
 		--runtime) RUNTIME="$2"; shift 2;;
+		--art-url) ART_URL="$2"; shift 2;;
 		*) echo "linux-portable: unknown argument $1" >&2; exit 2;;
 	esac
 done
@@ -163,6 +164,11 @@ for e in $ENTRIES; do
 done
 
 cp "$CODE/Tools/fetch-art.sh" "$S/fetch-art.sh" && chmod +x "$S/fetch-art.sh" || fail "cannot copy fetch-art.sh"
+case "$ART_URL" in		# where fetch-art.sh fetches from, when not upstream's art-latest
+	"") ;;
+	https://*|file://*) printf '%s\n' "$ART_URL" > "$S/art-source.txt" || fail "cannot write art-source.txt";;
+	*) fail "--art-url must be an https:// or file:// address";;
+esac
 cat > "$OUT/zero-hour-reforged.sh" <<'LAUNCHER'
 #!/bin/sh
 # Zero Hour Reforged's launcher (P3): the game finds its overlay beside it and the player's Zero Hour by itself

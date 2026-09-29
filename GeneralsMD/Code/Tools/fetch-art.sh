@@ -35,14 +35,23 @@
 # flock where there is one (a lock folder where there is not, as on macOS).
 #
 # Environment: ZHR_NO_ART_FETCH=1 fetches nothing; ZHR_ART_URL replaces the release's address (a test
-# passes a file:// folder).  Offline, or on any failure, it logs why and leaves what is verified in place;
+# passes a file:// folder), and art-source.txt beside the script the built-in one (see ART_URL below).  Offline, or on any failure, it logs why and leaves what is verified in place;
 # the next start tries again.  A file in ReforgedArt that art.json no longer lists is removed.
 #
 # Usage: fetch-art.sh [--background]
 #   --background   detach, lower its priority, and write only the log (the launcher's way)
 # Exit status: 0 the art is complete; 1 it is not (the log says why); 2 bad usage.
 
-ART_URL="${ZHR_ART_URL:-https://github.com/olcayseygan/CnCGeneralsZH-Reforged/releases/download/art-latest}"
+# Where the art is: ZHR_ART_URL; else the first line of art-source.txt beside this script, which the package or the
+# app was built with (make-macos-app.sh and linux-portable.sh --art-url, CMake's ZH_ART_URL); else upstream's
+# art-latest release.  Only an https:// or file:// address is taken from the file.
+source_file="$(dirname "$0")/art-source.txt"
+default_url="https://github.com/olcayseygan/CnCGeneralsZH-Reforged/releases/download/art-latest"
+if [ -f "$source_file" ]; then
+	built="$(head -n 1 "$source_file" | tr -d '\r')"
+	case "$built" in https://*|file://*) default_url="${built%/}";; esac
+fi
+ART_URL="${ZHR_ART_URL:-$default_url}"
 leaf="Command and Conquer Generals Zero Hour Data"
 if [ -n "${ZH_USER_DATA_DIR:-}" ]; then
 	data="${ZH_USER_DATA_DIR%/}"
@@ -106,7 +115,12 @@ fi
 size_of() { wc -c < "$1" | tr -d ' '; }
 
 say "$(date -u +%Y-%m-%dT%H:%M:%SZ): art from $ART_URL into $art"
-get "$ART_URL/art.json" "$stage/art.json.new" || { say "cannot read art.json (offline?): trying again next start"; exit 1; }
+if ! get "$ART_URL/art.json" "$stage/art.json.new"; then
+	# offline, or no art published there (upstream's art-latest is not, at times): not an error to worry anyone
+	say "no public art source reachable ($ART_URL): playing at the original textures; the next start tries again"
+	rm -f "$stage/art.json.new"
+	exit 1
+fi
 
 # art.json -> "name size sha256" lines.  Its names become file names here, so each must be a plain
 # Reforged*.big name, its size digits and its hash 64 hex digits; anything else refuses the whole list.

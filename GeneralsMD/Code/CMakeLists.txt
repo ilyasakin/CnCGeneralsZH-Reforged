@@ -2207,9 +2207,14 @@ if(ZH_PLATFORM_POSIX)
   # whoever ships; the default is the project's home (the README's).
   if(APPLE)
     set(ZH_APP_BUNDLE_ID "io.github.olcayseygan.zero-hour-reforged" CACHE STRING "CFBundleIdentifier of the macOS app")
+    # Where the app's fetch-art.sh takes the art from (art-source.txt in the bundle); empty: upstream's art-latest
+    set(ZH_ART_URL "" CACHE STRING "The art release the macOS app fetches from (https:// or file://); empty for upstream's art-latest")
     set(ZH_APP_ARGS --generals $<TARGET_FILE:generals> --overlay ${CMAKE_BINARY_DIR}/overlay
         --build ${CMAKE_BINARY_DIR} --out "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app" --bundle-id ${ZH_APP_BUNDLE_ID}
         --min-macos ${CMAKE_OSX_DEPLOYMENT_TARGET})
+    if(ZH_ART_URL)
+      list(APPEND ZH_APP_ARGS --art-url ${ZH_ART_URL})
+    endif()
     # P2 universal2, option A (release time, E2): an x86_64 build's generals, lipo'd into the bundle's
     set(ZH_X86_64_GENERALS "" CACHE FILEPATH "An x86_64 build's generals, to make the macOS app universal2 (P2)")
     if(ZH_X86_64_GENERALS)

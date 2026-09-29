@@ -29,7 +29,8 @@
 #   <out>/SHA256SUMS
 #
 # Usage: linux-packages.sh --build <folder> --out <folder> --cmake <cmake> --appimagetool <tool> --runtime <file>
-#          [--formats "appimage deb rpm arch flatpak"] [--no-build] [--jobs <n>]
+#          [--formats "appimage deb rpm arch flatpak"] [--no-build] [--jobs <n>] [--art-url <address>]
+#   --art-url                              where the packages fetch the art from (default: upstream's art-latest)
 #   --build, --cmake, --jobs, --no-build   as linux-portable.sh takes them
 #   --appimagetool, --runtime              linux-portable.sh's --appimage and --runtime (needed for appimage)
 #   --formats                              which to make (default: all five; the tarball always)
@@ -40,7 +41,7 @@
 # Exit status: 0 all made; 1 a step failed (it says which).
 
 set -u
-BUILD="" OUT="" CMAKE="" APPIMAGETOOL="" RUNTIME="" FORMATS="appimage deb rpm arch flatpak" NOBUILD="" JOBS=""
+BUILD="" OUT="" CMAKE="" APPIMAGETOOL="" RUNTIME="" FORMATS="appimage deb rpm arch flatpak" NOBUILD="" JOBS="" ART_URL=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--build) BUILD="$2"; shift 2;;
@@ -51,6 +52,7 @@ while [ $# -gt 0 ]; do
 		--formats) FORMATS="$2"; shift 2;;
 		--no-build) NOBUILD=--no-build; shift;;
 		--jobs) JOBS="$2"; shift 2;;
+		--art-url) ART_URL="$2"; shift 2;;
 		*) echo "linux-packages: unknown argument $1" >&2; exit 2;;
 	esac
 done
@@ -70,6 +72,7 @@ case "$MAINTAINER" in *"<>"*|" <"*) fail "set ZH_PACKAGE_MAINTAINER, or a git id
 portable=( --build "$BUILD" --out "$W/ZeroHourReforged-linux-x86_64" --no-art $NOBUILD )
 [ -n "$CMAKE" ] && portable+=( --cmake "$CMAKE" )
 [ -n "$JOBS" ] && portable+=( --jobs "$JOBS" )
+[ -n "$ART_URL" ] && portable+=( --art-url "$ART_URL" )
 wants appimage && portable+=( --appimage "$APPIMAGETOOL" --runtime "$RUNTIME" )
 bash "$CODE/Tools/linux-portable.sh" "${portable[@]}" || fail "linux-portable.sh failed"
 F="$W/ZeroHourReforged-linux-x86_64"
