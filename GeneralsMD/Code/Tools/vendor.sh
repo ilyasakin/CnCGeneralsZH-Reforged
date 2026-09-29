@@ -72,19 +72,19 @@ get_file() { # url destination -> prints destination
   if [ -e "$destination" ]; then printf '%s\n' "$destination"; return 0; fi
   mkdir -p "$(dirname "$destination")"
   step "downloading $(basename "$destination")"
-  if ! curl -fsSL "$url" -o "$destination.part"; then
-    rm -f "$destination.part"
+  if ! curl -fsSL "$url" -o "$destination.part.$$"; then
+    rm -f "$destination.part.$$"
     echo "[vendor] ERROR: could not download $url" >&2
     return 1
   fi
-  mv -f "$destination.part" "$destination"
+  mv -f "$destination.part.$$" "$destination"
   printf '%s\n' "$destination"
 }
 
 # Unpacks into a folder of its own and hands back whatever single directory the archive contained,
 # which for a GitHub source zip is the repository at that commit.
 expand_source() { # archive name -> prints the unpacked root
-  local archive="$1" name="$2" target="$work/$2"
+  local archive="$1" name="$2" target="$run/$2"
   rm -rf "$target"
   mkdir -p "$target"
   step "unpacking $name"
@@ -333,7 +333,7 @@ install_gamespy() {
   # Moved aside and moved back rather than read and rewritten, so it returns byte for byte. Read
   # into a variable it comes back a trailing newline short, and then the file the whole dance
   # exists to protect shows up as modified in every diff.
-  local keep="$destination/.gitignore" kept="$work/gamespy.gitignore"
+  local keep="$destination/.gitignore" kept="$run/gamespy.gitignore"
   rm -f "$kept"
   if [ -e "$keep" ]; then mv "$keep" "$kept"; fi
   rm -rf "$destination"
@@ -427,7 +427,7 @@ install_litehtml() {
   local archive source
   archive=$(get_file 'https://github.com/litehtml/litehtml/archive/9bc84b8b8d15a4e50f18b327aa30955048b441c2.zip' "$work/litehtml-0.10.zip")
   source=$(expand_source "$archive" 'litehtml')
-  local keep="$destination/.gitignore" kept="$work/litehtml.gitignore"
+  local keep="$destination/.gitignore" kept="$run/litehtml.gitignore"
   rm -f "$kept"
   if [ -e "$keep" ]; then mv "$keep" "$kept"; fi
   rm -rf "$destination"
@@ -486,7 +486,7 @@ install_sdl3() {
   local archive source
   archive=$(get_file 'https://github.com/libsdl-org/SDL/archive/fa2c02bb6e21974a89ea9824bc53c9932abe5f9c.zip' "$work/SDL3-3.4.16.zip")
   source=$(expand_source "$archive" 'SDL3')
-  local keep="$destination/.gitignore" kept="$work/SDL3.gitignore"
+  local keep="$destination/.gitignore" kept="$run/SDL3.gitignore"
   rm -f "$kept"
   if [ -e "$keep" ]; then mv "$keep" "$kept"; fi
   rm -rf "$destination"
@@ -542,7 +542,7 @@ install_miniaudio() {
 #   copy_entries <source> <destination> <entry>...
 copy_entries() {
   local source="$1" destination="$2"; shift 2
-  local keep="$destination/.gitignore" kept="$work/$(basename "$destination").gitignore"
+  local keep="$destination/.gitignore" kept="$run/$(basename "$destination").gitignore"
   rm -f "$kept"
   if [ -e "$keep" ]; then mv "$keep" "$kept"; fi
   rm -rf "$destination"
@@ -787,6 +787,12 @@ EOF
 }
 
 mkdir -p "$work"
+# Downloads are shared through $work: each is complete once renamed, and a .part carries this run's pid.
+# Everything unpacked or set aside goes in a folder of this run's own. Two vendor.sh runs on one
+# machine (two worktrees, or a gate's two legs on one Mac) used to unpack into the same
+# $work/<name> and delete each other's files halfway ("cannot create …/input-prompts/…").
+run=$(mktemp -d "$work/run.XXXXXX")
+trap 'rm -rf "$run"' EXIT
 install_zlib
 install_lzhl
 install_lzhl_patch
