@@ -28,6 +28,9 @@
   makes one. Started there, the script runs its desktop part again in the logged-on user's interactive
   session through a one-off scheduled task (schtasks /it), waits for it, reads its result and deletes the
   task. Started on the desktop, it runs that part itself. Either way it needs a user logged on to a desktop.
+  The task runs its wrapper in the classic console (conhost.exe), never the default terminal: Windows 11
+  hands a console started in the desktop session to Windows Terminal, and one left running from earlier
+  swallowed every such console, so the desktop part never started (a gate waited 90 minutes on it).
 
   RULE 9: the game never runs in the data folder. It runs in -WorkDir\farm: a symbolic link to every file
   of -DataDir\zerohour, with the build's GeneralsMD\Run over them (the exe and DLLs copied), as Windows'
@@ -224,7 +227,16 @@ function Invoke-DesktopPart {
 if ($Phase -eq "desktop") {
 	# written whole under another name, then renamed: the main part waits for this name, and Out-File would
 	# create it empty at the start of the pipeline
-	$json = Invoke-DesktopPart | ConvertTo-Json -Depth 4
+	$result = Invoke-DesktopPart
+	# what started this part, for the record: through the task, conhost then cmd, never the default terminal
+	$chain = @(); $id = $PID
+	for ($i = 0; $i -lt 5 -and $id; $i++) {
+		$p = Get-CimInstance Win32_Process -Filter "ProcessId = $id" -ErrorAction SilentlyContinue
+		if (-not $p) { break }
+		$chain += $p.Name; $id = $p.ParentProcessId
+	}
+	$result.Parents = $chain -join ' < '
+	$json = $result | ConvertTo-Json -Depth 4
 	$json | Out-File -Encoding utf8 "$ResultFile.partial"
 	Move-Item -Force "$ResultFile.partial" $ResultFile
 	exit 0
@@ -315,10 +327,16 @@ if ($session0) {
 	$user = (Get-CimInstance Win32_ComputerSystem).UserName
 	if (-not $user) { Write-Host "no user is logged on to a desktop: the GPU tests and E1 cannot run"; exit 1 }
 	$task = "zh-windows-ci-" + [guid]::NewGuid().ToString("N").Substring(0, 8)
-	# schtasks /tr takes at most 261 characters, so the task runs a one-line wrapper
+	# schtasks /tr takes at most 261 characters, so the task runs a one-line wrapper, in the classic console named
+	# outright: left to the default, Windows 11 hands it to Windows Terminal (see the description above)
 	$wrapper = Join-Path $WorkDir "desktop-part.cmd"
 	"@powershell.exe $argList" | Out-File -Encoding ascii $wrapper
-	schtasks /create /tn $task /tr "`"$wrapper`"" /sc once /st 23:59 /it /ru $user /f | Out-Null
+	# No quotes inside it: Windows PowerShell passes a program an argument with spaces in quotes of its own, without
+	# escaping any inside, so the paths must have no spaces (the work folder's is checked)
+	if ("$env:SystemRoot$wrapper" -match ' ') { Write-Host "the desktop part's task cannot run $wrapper (a space in the path): a -WorkDir without one"; exit 1 }
+	$taskRun = "$env:SystemRoot\System32\conhost.exe $env:SystemRoot\System32\cmd.exe /c $wrapper"
+	if ($taskRun.Length -gt 261) { Write-Host "the desktop part's task line is $($taskRun.Length) characters, over schtasks' 261: a shorter -WorkDir"; exit 1 }
+	schtasks /create /tn $task /tr $taskRun /sc once /st 23:59 /it /ru $user /f | Out-Null
 	schtasks /run /tn $task | Out-Null
 	$waitClock = [Diagnostics.Stopwatch]::StartNew()		# not the wall clock: a VM's can step by hours
 	while (-not (Test-Path $resultFile) -and $waitClock.Elapsed.TotalMinutes -lt 90) { Start-Sleep -Seconds 10 }
@@ -336,6 +354,7 @@ if (-not (Test-Path $resultFile)) {
 } else {
 	$summary += "desktop part (GPU tests and E1): $desktopTook"
 	$d = Get-Content -Raw $resultFile | ConvertFrom-Json
+	if ($d.Parents) { $summary += "desktop part started by: $($d.Parents)" }
 	if ($d.Dll) { $summary += "dll probe (desktop part): $($d.Dll)" }
 	$summary += "GPU tests (desktop session): $($d.Gpu)"; if ($d.Gpu -ne "passed") { $failed = $true }
 	if ($DataDir -ne "") {
