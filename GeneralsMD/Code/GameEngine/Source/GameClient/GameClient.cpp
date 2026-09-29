@@ -662,6 +662,12 @@ void GameClient::update( void )
 
 			TheShell->showShellMap(TRUE);
 			TheShell->showShell();
+			// A start from the command line (-mission, -file, a replay, a save) has no main menu: showShell
+			// returns before pushing one, and MainMenuInit is what clears this flag.  Left set, W3DDisplay
+			// never begins a frame, so a -mission campaign start, whose load screen does not clear it either,
+			// drew nothing and presented nothing for the whole mission.  Render-only: nothing else reads it.
+			if( !TheGlobalData->m_initialFile.isEmpty() )
+				TheWritableGlobalData->m_breakTheMovie = FALSE;
 			TheWritableGlobalData->m_afterIntro = FALSE;
 		}
 	}

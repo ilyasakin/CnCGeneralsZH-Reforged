@@ -149,8 +149,9 @@ public:
 	void Release_After_Batch(SDL_GPUTexture * texture, SDL_GPUBuffer * buffer);
 	/// Counts flushes: what a GPU copy compares to know whether this batch has used it.
 	uint64_t Batch() const { return BatchNumber; }
-	/// Whether the batch has grown enough that the next draw should flush first.
-	bool Batch_Is_Full() const;
+	/// Whether the batch has grown enough that the next draw should flush first: its staged and uploaded bytes,
+	/// or its draws (BatchDrawLimit).  Counts the flushes the draw limit asks for.
+	bool Batch_Is_Full();
 	/// The depth-stencil's SDL_GPUTextureFormat.  Every pass has it attached.
 	unsigned int Depth_Format() const { return DepthFormat; }
 
@@ -171,6 +172,15 @@ public:
 	/// Every windowed Present so far made to a window that was not visible, and with no drawable.
 	unsigned int Presents_Not_Visible() const { return NotVisibleTotal; }
 	unsigned int Presents_Not_Shown() const { return NotShownTotal; }
+	/// Mid-frame flushes (Flush) since the frame was made, the most that were ever submitted and not yet done
+	/// at once, and how many times a flush waited because the ring was full (Flush_Limit).
+	unsigned int Flushes_Total() const { return FlushesTotal; }
+	unsigned int Flushes_In_Flight_Most() const { return FlushInFlightMost; }
+	unsigned int Flush_Waits() const { return FlushWaits; }
+	unsigned int Flush_Limit() const { return FlushLimit; }
+	/// The flushes the draw limit asked for, and the limit.
+	unsigned int Draw_Limit_Flushes() const { return DrawLimitFlushes; }
+	unsigned int Batch_Draw_Limit() const { return BatchDrawLimit; }
 
 	/// -offscreen, the game with no window: Present draws the gamma pass into a display texture of the back
 	/// buffer's size, as it would into a swapchain's, and keeps at most two frames on the GPU, which a
@@ -215,6 +225,20 @@ private:
 	unsigned int NotShownTotal;		///< and since the frame was made
 	unsigned int ShownWidth;		///< the swapchain's size at the last Present that had one, which stderr gives
 	unsigned int ShownHeight;		///< whenever it changes: the back buffer is scaled to it
+	/// The mid-frame flushes still in flight, oldest first.  Each holds its command buffer, and on Direct3D 12
+	/// the two descriptor heaps SDL gives every command buffer, until the GPU is done with it.  Unbounded, a
+	/// slow GPU can let them pile up until the driver makes no more heaps; FlushLimit bounds them.
+	std::vector<struct SDL_GPUFence *> FlushFences;
+	unsigned int FlushLimit;			///< the most allowed in flight (ZH_GPU_FLUSH_LIMIT; 0: no limit)
+	unsigned int FlushesTotal;
+	unsigned int FlushInFlightMost;
+	unsigned int FlushWaits;
+	/// The most draws one batch records before the next draw flushes it.  A Direct3D 9 driver submits a full
+	/// command buffer on its own, presented or not; a batch that only ended at Present grew without bound when
+	/// the game drew and did not present (a -mission quickstart's movie: minutes, one command buffer, and on
+	/// Direct3D 12 hundreds of descriptor heaps held by it).  ZH_GPU_BATCH_DRAWS=<n> (0: no limit).
+	unsigned int BatchDrawLimit;
+	unsigned int DrawLimitFlushes;
 	double OffscreenMs;		///< -offscreen's waits: frames in flight, and the pacer
 	bool OffscreenPresents;
 	unsigned int OffscreenHz;
@@ -223,6 +247,7 @@ private:
 	unsigned int InFlightNext;
 	uint64_t NextTickNs;
 	bool Submit_Offscreen(struct SDL_GPUCommandBuffer * commands);
+	bool Submit_Flush(struct SDL_GPUCommandBuffer * commands);
 
 	SdlGpuFrame();
 	bool Create_Targets(unsigned int width, unsigned int height);

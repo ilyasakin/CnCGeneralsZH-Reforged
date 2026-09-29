@@ -301,7 +301,8 @@ function Install-Art {
 
 # --- The -d3d12 renderer's stack (X1): our SDL3 GPU device on SDL_GPU's D3D12 backend, its shaders through
 # glslang, SPIRV-Cross and SDL_shadercross, as vendor.sh fetches them for macOS and Linux, at the same commits.
-# SDL3's one patch (sdl3-metal-windowless.patch) is Metal's, so there is nothing of it to apply here.
+# SDL3's first patch (sdl3-metal-windowless.patch) is Metal's, so there is nothing of it to apply here; its
+# second (sdl3-d3d12-descriptors.patch) is Direct3D 12's, and Install-Sdl3D3d12Patch applies it.
 function Install-Sdl3 {
   $destination = Join-Path $libraries 'Source\SDL3'
   if ((Test-Path (Join-Path $destination 'CMakeLists.txt')) -and -not $Force) { return }
@@ -315,6 +316,41 @@ function Install-Sdl3 {
   if ($null -ne $kept) { Set-Content -Path $keep -Value $kept -NoNewline }
   if (-not (Test-Path (Join-Path $destination 'include\SDL3\SDL_gpu.h'))) { throw "SDL3 unpacked without include\SDL3\SDL_gpu.h" }
   Step "SDL3 3.4.16 -> Libraries\Source\SDL3"
+}
+
+# --- The fork's second change to SDL3, Libraries\Source\sdl3-d3d12-descriptors.patch: SDL_GPU's Direct3D 12
+# backend makes room in its descriptor heaps before it writes a bind (the patch's header says why).  A copy
+# that has it says so by its marker, which names the revision, so a copy fetched before the patch existed gets
+# it too, and one carrying an older revision gets the file back as SDL ships it, out of the archive, first.
+$Sdl3D3d12PatchMarker = 'sdl3-d3d12-descriptors.patch, revision 2'
+function Install-Sdl3D3d12Patch {
+  $destination = Join-Path $libraries 'Source\SDL3'
+  $source = Join-Path $destination 'src\gpu\d3d12\SDL_gpu_d3d12.c'
+  if (Select-String -LiteralPath $source -Pattern $Sdl3D3d12PatchMarker -SimpleMatch -Quiet) { return }
+  if (Select-String -LiteralPath $source -Pattern 'ZhEnsureGPUDescriptorSpace' -SimpleMatch -Quiet) {
+    $archive = Get-File 'https://github.com/libsdl-org/SDL/archive/fa2c02bb6e21974a89ea9824bc53c9932abe5f9c.zip' (Join-Path $work 'SDL3-3.4.16.zip')
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+      $entry = $zip.Entries | Where-Object { $_.FullName -like '*/src/gpu/d3d12/SDL_gpu_d3d12.c' } | Select-Object -First 1
+      if ($null -eq $entry) { throw "no SDL_gpu_d3d12.c in $archive to replace an older sdl3-d3d12-descriptors.patch with" }
+      [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $source, $true)
+    } finally { $zip.Dispose() }
+    Step "SDL_gpu_d3d12.c back as SDL ships it (it carried an older sdl3-d3d12-descriptors.patch)"
+  }
+  # The patch with the source's own line endings, as Install-LzhlPatch does it.
+  $text = [IO.File]::ReadAllText((Join-Path $libraries 'Source\sdl3-d3d12-descriptors.patch')) -replace "`r`n", "`n"
+  if ([IO.File]::ReadAllText($source).Contains("`r`n")) { $text = $text -replace "`n", "`r`n" }
+  $patch = Join-Path $work 'sdl3-d3d12-descriptors.patch'
+  [IO.File]::WriteAllText($patch, $text)
+  # without the ceiling git finds this checkout around the folder and skips the patch as outside it
+  $env:GIT_CEILING_DIRECTORIES = Join-Path $libraries 'Source'
+  try { git -C $destination -c core.autocrlf=false apply $patch }
+  finally { Remove-Item Env:GIT_CEILING_DIRECTORIES }
+  if (-not (Select-String -LiteralPath $source -Pattern $Sdl3D3d12PatchMarker -SimpleMatch -Quiet)) {
+    throw "sdl3-d3d12-descriptors.patch did not apply to Libraries\Source\SDL3"
+  }
+  Step "sdl3-d3d12-descriptors.patch -> Libraries\Source\SDL3"
 }
 
 function Install-Glslang {
@@ -363,11 +399,11 @@ Install-LitehtmlPatch
 Install-Nanosvg
 # SDL3 and miniaudio are the platform layer for everything that is not Windows (decision 3 in
 # docs/mac-port/README.md). Windows keeps Win32Device and Miles, so they are not fetched here;
-# vendor.sh fetches them, and says it skips DirectX the same way. The same holds for SDL3's one patch,
+# vendor.sh fetches them, and says it skips DirectX the same way. The same holds for SDL3's Metal patch,
 # Libraries\Source\sdl3-metal-windowless.patch: vendor.sh applies it, and there is nothing here to apply.
 # With -D3D12 (X1, the scoped amendment to decision 3) SDL3 comes too, for the -d3d12 renderer only: Win32
 # stays the platform layer, and miniaudio is still not fetched.
-if ($D3D12) { Install-Sdl3 } else { Step 'skipping SDL3 (and its patch) and miniaudio: not Windows, and vendor.sh is what fetches them' }
+if ($D3D12) { Install-Sdl3; Install-Sdl3D3d12Patch } else { Step 'skipping SDL3 (and its patch) and miniaudio: not Windows, and vendor.sh is what fetches them' }
 # glslang, SPIRV-Cross and SDL_shadercross compile the shader generators' SDL3 GPU target (decision 4).
 # Windows compiles the D3D11 target with d3dcompiler_47.dll, so they are fetched only for -d3d12.
 if ($D3D12) {
