@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -57,6 +58,7 @@
 
 // TYPE DEFINES ///////////////////////////////////////////////////////////////
 enum { NO_TIME_FROM_WINDOWS = 0 };
+struct AniCursorFrame;
 // Win32Mouse -----------------------------------------------------------------
 /** Mouse interface for when using only the Win32 messages */
 //-----------------------------------------------------------------------------
@@ -85,6 +87,15 @@ public:
 	void addWin32Event( UINT msg, WPARAM wParam, LPARAM lParam, DWORD time );
 	void lostFocus (Bool state) { m_lostFocus = state;}
 
+	/** The first frame of a cursor's .ANI (its first direction): the art the Windows cursor shows, for a
+		* renderer that draws the cursor itself (W3DMouse's RM_POLYGON, when a pad drives); FALSE without one.
+		* SdlMouse has the same. */
+	Bool firstCursorFrame( MouseCursor cursor, AniCursorFrame &frame ) const;
+
+	/** Where the pointer is, in client pixels: the last event's position, or the one update() asked Windows
+		* for until an event comes.  A gamepad's clicks and wheel go where the pointer is (SdlGamepad). */
+	void getPointerPosition( Int &x, Int &y ) const;
+
 protected:
 
 	/// get the next event available in the buffer
@@ -112,6 +123,7 @@ protected:
 	Bool m_cursorInWindow;	///< is the pointer over our client area right now, asked of Windows each frame
 	Bool m_positionReported;	///< has a window message ever told us where the pointer is
 	Bool m_cursorClipped;	///< did update() clip the pointer to the window, and so owes the release
+	Int m_lastEventX, m_lastEventY;	///< the last event's position, for getPointerPosition
 };  // end Win32Mouse
 
 // INLINING ///////////////////////////////////////////////////////////////////

@@ -40,9 +40,7 @@
 #include "GameClient/Mouse.h"
 #include "Platform/DoubleClickTime.h"
 #include "SdlDevice/GameClient/SdlGamepad.h"
-#include "SdlDevice/GameClient/SdlInput.h"
-#include "SdlDevice/GameClient/SdlKeyboard.h"
-#include "SdlDevice/GameClient/SdlMouse.h"
+#include "SdlDevice/GameClient/SdlGamepadOutput.h"
 
 #include <SDL3/SDL.h>
 
@@ -78,7 +76,7 @@ const Int EDGE_BAND = 3;											///< LookAtXlat's edgeScrollSize: a pointer t
 /// What one press did, so that its release undoes exactly that
 struct Pressed
 {
-	Int mouseButton;													///< an SdlMouse::Button, or -1
+	Int mouseButton;													///< an SdlGamepadOutputButton, or -1
 	UnsignedByte keys[ MAX_PRESSED_KEYS ];		///< in the order they went down
 	Int keyCount;
 };
@@ -251,18 +249,18 @@ UnsignedInt milliseconds( Uint64 timestampNs )
 
 void keyDown( UnsignedByte dik )
 {
-	if (theKeyHolds[ dik ]++ == 0 && SdlKeyboard::active() != NULL)
-		SdlKeyboard::active()->addKey( dik, TRUE );
+	if (theKeyHolds[ dik ]++ == 0)
+		SdlGamepadOutput_key( dik, TRUE );
 }
 
 void keyUp( UnsignedByte dik )
 {
-	if (theKeyHolds[ dik ] > 0 && --theKeyHolds[ dik ] == 0 && SdlKeyboard::active() != NULL)
-		SdlKeyboard::active()->addKey( dik, FALSE );
+	if (theKeyHolds[ dik ] > 0 && --theKeyHolds[ dik ] == 0)
+		SdlGamepadOutput_key( dik, FALSE );
 }
 
 /// Where a pad's click or wheel goes: the pad's pointer while it has it, else where the mouse left it
-void pointerPosition( SdlMouse *mouse, Int &x, Int &y )
+void pointerPosition( Int &x, Int &y )
 {
 	if (thePointer.owned)
 	{
@@ -270,18 +268,17 @@ void pointerPosition( SdlMouse *mouse, Int &x, Int &y )
 		y = thePointer.shownY;
 	}
 	else
-		mouse->getPointerPosition( x, y );
+		SdlGamepadOutput_mousePosition( x, y );
 }
 
 void mouseDown( Int button, UnsignedInt time )
 {
 	if (theMouseHolds[ button ]++ != 0)
 		return;
-	SdlMouse *mouse = SdlMouse::active();
-	if (mouse == NULL)
+	if (!SdlGamepadOutput_haveMouse())
 		return;
 	Int x, y;
-	pointerPosition( mouse, x, y );
+	pointerPosition( x, y );
 	// SDL's click count: one more for a press soon enough after the last and near enough to it
 	LastClick &last = theLastClicks[ button ];
 	Int clicks = 1;
@@ -293,19 +290,18 @@ void mouseDown( Int button, UnsignedInt time )
 	last.x = x;
 	last.y = y;
 	last.clicks = clicks;
-	mouse->addEvent( SdlMouse::EVENT_BUTTON_DOWN, x, y, (SdlMouse::Button)button, clicks, 0, time );
+	SdlGamepadOutput_mouseButton( (SdlGamepadOutputButton)button, TRUE, x, y, clicks, time );
 }
 
 void mouseUp( Int button, UnsignedInt time )
 {
 	if (theMouseHolds[ button ] <= 0 || --theMouseHolds[ button ] != 0)
 		return;
-	SdlMouse *mouse = SdlMouse::active();
-	if (mouse == NULL)
+	if (!SdlGamepadOutput_haveMouse())
 		return;
 	Int x, y;
-	pointerPosition( mouse, x, y );
-	mouse->addEvent( SdlMouse::EVENT_BUTTON_UP, x, y, (SdlMouse::Button)button, theLastClicks[ button ].clicks, 0, time );
+	pointerPosition( x, y );
+	SdlGamepadOutput_mouseButton( (SdlGamepadOutputButton)button, FALSE, x, y, theLastClicks[ button ].clicks, time );
 }
 
 void pressKeys( Pressed &pressed, MappableKeyType key, MappableKeyModState modState )
@@ -329,7 +325,7 @@ Int orderButton( void )
 {
 	const Bool aiming = TheInGameUI != NULL && (TheInGameUI->getGUICommand() != NULL || TheInGameUI->getPendingPlaceType() != NULL
 		|| TheInGameUI->isOrderKeyArmed());
-	return aiming ? SdlMouse::BUTTON_LEFT : SdlMouse::BUTTON_RIGHT;
+	return aiming ? GAMEPAD_OUTPUT_LEFT : GAMEPAD_OUTPUT_RIGHT;
 }
 
 /// The command grid's place whose key gives `command` now that the grid has the letter it had (ControlBar.cpp's
@@ -375,9 +371,9 @@ Pressed apply( const GamepadBinding &binding, UnsignedInt time )
 	pressed.keyCount = 0;
 	switch (binding.m_action)
 	{
-		case GAMEPAD_ACTION_MOUSE_LEFT:		pressed.mouseButton = SdlMouse::BUTTON_LEFT; break;
-		case GAMEPAD_ACTION_MOUSE_MIDDLE:	pressed.mouseButton = SdlMouse::BUTTON_MIDDLE; break;
-		case GAMEPAD_ACTION_MOUSE_RIGHT:	pressed.mouseButton = SdlMouse::BUTTON_RIGHT; break;
+		case GAMEPAD_ACTION_MOUSE_LEFT:		pressed.mouseButton = GAMEPAD_OUTPUT_LEFT; break;
+		case GAMEPAD_ACTION_MOUSE_MIDDLE:	pressed.mouseButton = GAMEPAD_OUTPUT_MIDDLE; break;
+		case GAMEPAD_ACTION_MOUSE_RIGHT:	pressed.mouseButton = GAMEPAD_OUTPUT_RIGHT; break;
 		case GAMEPAD_ACTION_MODIFIER:
 			pressKeys( pressed, MK_NONE, binding.m_modState );
 			break;
@@ -781,9 +777,8 @@ void screenSize( Int &width, Int &height )
 {
 	width = TheDisplay != NULL ? (Int)TheDisplay->getWidth() : 0;
 	height = TheDisplay != NULL ? (Int)TheDisplay->getHeight() : 0;
-	SDL_Window *window = SdlInput_gameWindow();
-	if ((width <= 0 || height <= 0) && window != NULL)
-		SDL_GetWindowSize( window, &width, &height );
+	if (width <= 0 || height <= 0)
+		SdlGamepadOutput_windowSize( width, height );
 }
 
 /** The game draws the cursor itself while a pad is in use: Mouse.ini's polygon images (W3DMouse's RM_POLYGON,
@@ -801,14 +796,13 @@ void drawCursor( Bool drawn )
 		thePointer.shownX, thePointer.shownY ));
 }
 
-/// The pointer to a pixel: straight to SdlMouse, as the platform's own motion would arrive
+/// The pointer to a pixel: straight to the platform's mouse, as its own motion would arrive
 void showPointer( Int x, Int y, UnsignedInt time )
 {
 	thePointer.shownX = x;
 	thePointer.shownY = y;
 	drawCursor( TRUE );
-	if (SdlMouse::active() != NULL)
-		SdlMouse::active()->addEvent( SdlMouse::EVENT_MOVE, x, y, SdlMouse::BUTTON_LEFT, 0, 0, time );
+	SdlGamepadOutput_mouseMove( x, y, time );
 }
 
 /// The pad takes the pointer and puts it on a pixel (a button's centre)
@@ -884,9 +878,9 @@ void focusPointTo( Int x, Int y )
 void focusLeftButton( Bool down )
 {
 	if (down)
-		mouseDown( SdlMouse::BUTTON_LEFT, (UnsignedInt)SDL_GetTicks() );
+		mouseDown( GAMEPAD_OUTPUT_LEFT, (UnsignedInt)SDL_GetTicks() );
 	else
-		mouseUp( SdlMouse::BUTTON_LEFT, (UnsignedInt)SDL_GetTicks() );
+		mouseUp( GAMEPAD_OUTPUT_LEFT, (UnsignedInt)SDL_GetTicks() );
 }
 
 void focusKey( UnsignedByte dik, Bool down )
@@ -908,10 +902,10 @@ void padUsed( const Pad &pad, UnsignedInt time )
 		return;
 	theLastUsed = TRUE;
 	drawCursor( TRUE );		// the game's own cursor from the first press, where the game's pointer is
-	if (thePointer.owned || SdlMouse::active() == NULL)
+	if (thePointer.owned || !SdlGamepadOutput_haveMouse())
 		return;
 	Int x, y, width, height;
-	SdlMouse::active()->getPointerPosition( x, y );
+	SdlGamepadOutput_mousePosition( x, y );
 	screenSize( width, height );
 	thePointer.owned = TRUE;
 	thePointer.x = (Real)x;
@@ -953,6 +947,11 @@ Bool SdlGamepad_start( void )
 			DEBUG_LOG(( "SdlGamepad: no gamepads: %s\n", SDL_GetError() ));
 		}
 	}
+	return theStarted;
+}
+
+Bool SdlGamepad_isStarted( void )
+{
 	return theStarted;
 }
 
@@ -1235,10 +1234,10 @@ void SdlGamepad_update( UnsignedInt nowMs )
 	if ((vx != 0.0f || vy != 0.0f) && width > 0 && height > 0 && seconds > 0.0f)
 	{
 		theCommandBarMode = FALSE;		// the stick takes the pointer off the bar
-		if (!thePointer.owned && SdlMouse::active() != NULL)
+		if (!thePointer.owned && SdlGamepadOutput_haveMouse())
 		{
 			Int x, y;
-			SdlMouse::active()->getPointerPosition( x, y );
+			SdlGamepadOutput_mousePosition( x, y );
 			thePointer.owned = TRUE;
 			thePointer.x = (Real)x;
 			thePointer.y = (Real)y;
@@ -1300,11 +1299,11 @@ void SdlGamepad_update( UnsignedInt nowMs )
 		pad.wheelCarry += zoom * WHEEL_NOTCHES_PER_SECOND * 120.0f * seconds;
 		const Int delta = (Int)pad.wheelCarry;		// toward zero: the fraction waits for the next frame
 		pad.wheelCarry -= (Real)delta;
-		if (delta != 0 && SdlMouse::active() != NULL)
+		if (delta != 0 && SdlGamepadOutput_haveMouse())
 		{
 			Int x, y;
-			pointerPosition( SdlMouse::active(), x, y );
-			SdlMouse::active()->addEvent( SdlMouse::EVENT_WHEEL, x, y, SdlMouse::BUTTON_LEFT, 0, delta, nowMs );
+			pointerPosition( x, y );
+			SdlGamepadOutput_mouseWheel( x, y, delta, nowMs );
 		}
 
 		// the turn: the player's rotate keys held while the stick is pushed left or right
