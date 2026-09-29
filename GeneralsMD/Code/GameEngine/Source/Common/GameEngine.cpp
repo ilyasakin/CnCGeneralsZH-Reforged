@@ -1269,8 +1269,6 @@ void GameEngine::init( int argc, char *argv[] )
 		AsciiString fname;
 		fname.format("Data\\%s\\CommandMap.ini", GetRegistryLanguage().str());
 		initSubsystem(TheMetaMap,"TheMetaMap", MSGNEW("GameEngineSubsystem") MetaMap(), NULL, fname.str(), "Data\\INI\\CommandMapReforged.ini");
-		// Legacy mouse and keyboard answers to the game's own map and to nothing this fork binds
-		TheMetaMap->loadLegacyBindings(fname);
 
 #if defined(_DEBUG) || defined(_INTERNAL)
 		ini.load("Data\\INI\\CommandMapDebug.ini", INI_LOAD_MULTIFILE, NULL);
@@ -1279,10 +1277,6 @@ void GameEngine::init( int argc, char *argv[] )
 #if defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
 		ini.load("Data\\INI\\CommandMapDemo.ini", INI_LOAD_MULTIFILE, NULL);
 #endif
-
-		// Modern with W A S D on the camera: everything Modern binds above, and the keys that moves
-		TheMetaMap->loadWasdBindings("Data\\INI\\CommandMapWASD.ini");
-
 
 		initSubsystem(TheActionManager,"TheActionManager", MSGNEW("GameEngineSubsystem") ActionManager(), NULL);
 		//initSubsystem((CComObject<WebBrowser> *)TheWebBrowser,"(CComObject<WebBrowser> *)TheWebBrowser", (CComObject<WebBrowser> *)createWebBrowser(), NULL);
