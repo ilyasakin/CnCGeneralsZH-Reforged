@@ -188,7 +188,7 @@ static const char GAME_MODE_NO_ROOT[] =
 /** PosixInstallChooser over SDL: the reason the last choice was refused, if any, in a message box, then
 	* the folder dialog.  FALSE when the player cancels, or when the dialog cannot be shown; then the reason
 	* goes into the std::string the context points at, for the message the caller shows. */
-static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, void *context )
+static bool chooseFolderWithSdl( PosixInstallQuestion question, const std::string &why, std::string &chosen, void *context )
 {
 	std::string &failure = *(std::string *)context;
 	if (!SDL_InitSubSystem( SDL_INIT_VIDEO ))
@@ -204,7 +204,9 @@ static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, vo
 	answer.state = 0;
 	char home[ 4096 ];
 	const SDL_PropertiesID properties = SDL_CreateProperties();
-	SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_TITLE_STRING, "Choose your Command & Conquer Generals Zero Hour folder" );
+	SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_TITLE_STRING, question == CHOOSE_GENERALS
+		? "Choose your Command & Conquer Generals folder (the original game)"
+		: "Choose your Command & Conquer Generals Zero Hour folder" );
 	SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_ACCEPT_STRING, "Use This Folder" );
 	if (findHomeDirectory( home, sizeof( home ) ))
 		SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_LOCATION_STRING, home );
@@ -253,10 +255,12 @@ static bool readScriptedAnswers( const char *file, ScriptedAnswers &script )
 	return true;
 }
 
-static bool chooseFolderFromScript( const std::string &why, std::string &chosen, void *context )
+static bool chooseFolderFromScript( PosixInstallQuestion question, const std::string &why, std::string &chosen, void *context )
 {
 	ScriptedAnswers &script = *(ScriptedAnswers *)context;
-	if (!why.empty())
+	if (question == CHOOSE_GENERALS)
+		fprintf( stderr, "generals: chooser (test answers): asked for the Generals folder: %s\n", why.c_str() );
+	else if (!why.empty())
 		fprintf( stderr, "generals: chooser (test answers): refused, asking again: %s\n", why.c_str() );
 	if (script.next >= script.answers.size() || strcasecmp( script.answers[script.next].c_str(), "cancel" ) == 0)
 	{
@@ -335,6 +339,9 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 	if (choice.writeInstallPath && !writeRegistryFile( registryFileKey( "", AsciiString::TheEmptyString,
 			AsciiString( "InstallPath" ) ), AsciiString( choice.root.c_str() ) ))
 		fprintf( stderr, "generals: could not remember %s in Registry.ini; it will be asked for again\n", choice.root.c_str() );
+	if (choice.writeGeneralsInstallPath && !writeRegistryFile( registryFileKey( "Generals\\", AsciiString::TheEmptyString,
+			AsciiString( "InstallPath" ) ), AsciiString( choice.generals.c_str() ) ))
+		fprintf( stderr, "generals: could not remember %s in Registry.ini; it will be asked for again\n", choice.generals.c_str() );
 	if (choice.root.size() + 1 > outSize)
 		return FALSE;
 	strcpy( out, choice.root.c_str() );

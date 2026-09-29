@@ -19,12 +19,15 @@
 # PosixMain's test stand-in for SDL's dialog, ZH_TEST_CHOOSER_ANSWERS, feeds the real generals a list of
 # answers; each refusal's reason goes to stderr where the dialog's message box would have shown it.
 #
-#   (a) an empty folder, a folder that is not Zero Hour, and Zero Hour without its base game: each refused with
-#       its own reason and asked again; then a farm of the install: accepted, remembered in Registry.ini, and the
-#       game runs its frames from it;
+#   (a) an empty folder and a folder that is not Zero Hour: each refused with its own reason and asked again;
+#       then a farm of the install: accepted, remembered in Registry.ini, and the game runs its frames from it;
 #   (b) an empty folder, then cancel: refused, asked again, then the "will close" message, a failed start, and
 #       nothing remembered;
-#   (c) a second start with (a)'s Registry.ini and no answers at all: nothing asked, the game runs.
+#   (c) a second start with (a)'s Registry.ini and no answers at all: nothing asked, the game runs;
+#   (d) Zero Hour and Generals in two separate folders (a CD or First Decade install, or what a Flatpak sees):
+#       Zero Hour alone is followed by the Generals question; a folder that is not Generals is refused and it
+#       is asked again; the Generals folder is accepted, both are remembered (InstallPath and Generals'
+#       InstallPath), and the game runs its frames from them.
 #
 # The root is always a farm of ZH_DATA_DIR's zerohour (rule 9), HOME an empty folder (no known place can answer),
 # the user data folder a scratch one.  Skipped (77) without ZH_DATA_DIR.  What it cannot see: the SDL panel
@@ -59,9 +62,14 @@ trap 'rm -rf -- "$T"; rm -f -- "$EXEDIR/$TAG"*' EXIT
 FARM="$T/farm"
 ( cd "$DATA/zerohour" && find . -type d ! -name '._*' ) | while IFS= read -r d; do mkdir -p "$FARM/$d"; done
 ( cd "$DATA/zerohour" && find . -type f ! -name '._*' ) | while IFS= read -r f; do ln -s "$DATA/zerohour/${f#./}" "$FARM/$f"; done
-mkdir -p "$T/empty" "$T/notzh" "$T/nobase" "$T/home"
+mkdir -p "$T/empty" "$T/notzh" "$T/home"
 echo readme > "$T/notzh/readme.txt"
-: > "$T/nobase/INIZH.big"
+# (d)'s two folders: Zero Hour without ZH_Generals, and Generals on its own (the install's ZH_Generals)
+ZHONLY="$T/zh-only" GENONLY="$T/generals-only"
+( cd "$FARM" && find . -path ./ZH_Generals -prune -o -print ) | while IFS= read -r f; do
+	if [ -d "$FARM/$f" ] && [ ! -L "$FARM/$f" ]; then mkdir -p "$ZHONLY/$f"; else ln -s "$(readlink "$FARM/$f")" "$ZHONLY/$f"; fi
+done
+cp -R -P "$FARM/ZH_Generals" "$GENONLY"
 
 start() {	# start <label> <user data> <answers file>: a headless start through the stand-in; sets STATUS
 	( cd "$T" && HOME="$T/home" ZH_USER_DATA_DIR="$2/" ZH_TEST_CHOOSER_ANSWERS="$3" perl -e 'alarm shift; exec @ARGV' 300 \
@@ -70,20 +78,21 @@ start() {	# start <label> <user data> <answers file>: a headless start through t
 	STATUS=$?
 }
 installPath() { sed -n 's/^InstallPath *= *//p' "$1/Registry.ini" 2>/dev/null; }
+generalsPath() { sed -n 's/^Generals\\InstallPath *= *//p' "$1/Registry.ini" 2>/dev/null; }
 ran() { grep -a -q 'HEADLESS CRC: 0x' "$EXEDIR/$TAG$1DebugLogFile.txt" 2>/dev/null; }
 
 # (a)
-printf '%s\n' "$T/empty" "$T/notzh" "$T/nobase" "$FARM" > "$T/a.answers"
+printf '%s\n' "$T/empty" "$T/notzh" "$FARM" > "$T/a.answers"
 mkdir -p "$T/user-a"
 start a "$T/user-a" "$T/a.answers"
 refusals="$(grep -c 'chooser (test answers): refused, asking again' "$T/a.err")"
-check '[ "$refusals" -eq 3 ]' "(a) three answers refused, each asked again ($refusals)"
+check '[ "$refusals" -eq 2 ]' "(a) two answers refused, each asked again ($refusals)"
 check 'grep -q "refused, asking again: \"$T/empty\" is not a Command & Conquer Generals Zero Hour folder" "$T/a.err"' \
 	"(a) the empty folder: not a Zero Hour folder"
 check 'grep -q "refused, asking again: \"$T/notzh\" is not a Command & Conquer Generals Zero Hour folder" "$T/a.err"' \
 	"(a) a folder that is not Zero Hour: the same reason, naming it"
-check 'grep -q "refused, asking again: \"$T/nobase\" holds Zero Hour, but not the original Command & Conquer Generals" "$T/a.err"' \
-	"(a) Zero Hour without its base game: that reason"
+check '! grep -q "asked for the Generals folder" "$T/a.err" && [ -z "$(generalsPath "$T/user-a")" ]' \
+	"(a) Zero Hour with its base game inside: Generals is not asked for, nor written"
 check '[ "$(installPath "$T/user-a")" = "$FARM" ]' "(a) the farm accepted and remembered: Registry.ini InstallPath = $(installPath "$T/user-a")"
 check '[ $STATUS -eq 0 ] && ran a' "(a) the game ran its frames from it (exit $STATUS)"
 
@@ -103,6 +112,18 @@ start c "$T/user-a" "$T/c.answers"
 check '! grep -q "chooser (test answers)" "$T/c.err"' "(c) with Registry.ini, nothing is asked"
 check '[ $STATUS -eq 0 ] && ran c' "(c) the game runs from the remembered folder (exit $STATUS)"
 
-[ $failures -eq 0 ] || { echo "--- (a) stderr"; head -20 "$T/a.err"; echo "--- (b) stderr"; head -10 "$T/b.err"; }
+# (d)
+printf '%s\n' "$ZHONLY" "$T/notzh" "$GENONLY" > "$T/d.answers"
+mkdir -p "$T/user-d"
+start d "$T/user-d" "$T/d.answers"
+check '[ "$(grep -c "asked for the Generals folder" "$T/d.err")" -eq 2 ]' \
+	"(d) Zero Hour alone: Generals asked for, the wrong folder refused, asked again"
+check 'grep -q "asked for the Generals folder: \"$ZHONLY\" holds Zero Hour" "$T/d.err" && grep -q "asked for the Generals folder: \"$T/notzh\" is not the original Command & Conquer Generals folder" "$T/d.err"' \
+	"(d) each question with its reason"
+check '[ "$(installPath "$T/user-d")" = "$ZHONLY" ] && [ "$(generalsPath "$T/user-d")" = "$GENONLY" ]' \
+	"(d) both remembered: InstallPath = $(installPath "$T/user-d"), Generals InstallPath = $(generalsPath "$T/user-d")"
+check '[ $STATUS -eq 0 ] && ran d' "(d) the game ran its frames with Generals from its own folder (exit $STATUS)"
+
+[ $failures -eq 0 ] || { echo "--- (a) stderr"; head -20 "$T/a.err"; echo "--- (b) stderr"; head -10 "$T/b.err"; echo "--- (d) stderr"; head -10 "$T/d.err"; }
 echo "$failures failure(s)"
 [ $failures -eq 0 ]
