@@ -34,17 +34,26 @@
   Every run is unattended (ZH_UNATTENDED), in a farm made by windows-ci.ps1's own New-Farm, and killed at
   -TimeoutMinutes.
 
+  -Renderer d3d12 records -d3d12's programs the same way (zh_d3d12.dll, the SDL3 GPU device on Direct3D 12, which
+  keeps its DXBC in d3d12shaders.cache and reads d3d12shaders.shipped): every run gets -d3d12, and the -dx11post off
+  runs are left out, since that switch changes nothing there.  -ExtraArgs goes to every run, for -noDynamicLOD: in a
+  build that has that switch (when this was written, only Debug and Internal builds did), it keeps the effects a slow
+  machine would drop, and so their programs, in the recording.
+
 .EXAMPLE
   .\record-dx11-shaders.ps1 -DataDir C:\work\data
   .\record-dx11-shaders.ps1 -DataDir C:\work\data -Maps "Bitter Winter","Lights Out" -Missions MD_USA01
+  .\record-dx11-shaders.ps1 -DataDir D:\ZeroHourData -Renderer d3d12 -ExtraArgs -noDynamicLOD
 #>
 param(
 	# a folder holding zerohour\ (a Zero Hour install, with ZH_Generals\ in it or the base game findable)
 	[Parameter(Mandatory = $true)] [string] $DataDir,
 	# the built game: generals.exe, its DLLs and the fork's data
 	[string] $RunDir = (Join-Path $PSScriptRoot "..\..\Run"),
-	# where the recording goes
-	[string] $Out = (Join-Path $PSScriptRoot "..\Data\dx11shaders.shipped"),
+	# which renderer's programs: dx11 (the Direct3D 11 backend) or d3d12 (-d3d12)
+	[ValidateSet('dx11', 'd3d12')] [string] $Renderer = 'dx11',
+	# where the recording goes (default: Data\dx11shaders.shipped, or Data\d3d12shaders.shipped for -Renderer d3d12)
+	[string] $Out = "",
 	# the game's user data folder, where the backend keeps the player's cache
 	[string] $UserData = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "Command and Conquer Generals Zero Hour Data"),
 	[string] $WorkDir = (Join-Path $env:TEMP "zh-record-dx11-shaders"),
@@ -56,7 +65,9 @@ param(
 	[int] $Frames = 2400,
 	[int] $TimeoutMinutes = 30,
 	# leave the shipped file in the farm: a check that a run with it compiles nothing it holds
-	[switch] $KeepShipped
+	[switch] $KeepShipped,
+	# given to every run, after its own switches (for example -noDynamicLOD)
+	[string[]] $ExtraArgs = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,7 +81,10 @@ $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefin
 	$args[0].Name -in 'New-FarmLink', 'New-Farm' }, $true) | ForEach-Object { Invoke-Expression $_.Extent.Text }
 
 $zh = Join-Path $DataDir "zerohour"
-$cache = Join-Path $UserData "dx11shaders.cache"
+$prefix = if ($Renderer -eq 'd3d12') { 'd3d12' } else { 'dx11' }	# the file names: dx11shaders.* or d3d12shaders.*
+if ($Out -eq "") { $Out = Join-Path $PSScriptRoot "..\Data\$($prefix)shaders.shipped" }
+$rendererArgs = if ($Renderer -eq 'd3d12') { @("-d3d12") } else { @() }
+$cache = Join-Path $UserData "$($prefix)shaders.cache"
 $aside = "$cache.recording-aside"
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
 
@@ -80,7 +94,7 @@ foreach ($seed in $Seeds) {
 	$match = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit", "-randommap", $seed, 2,
 		"-autoskirmish", 2, "-aidiff", "brutal", "-seed", $seed, "-observer")
 	$runs += , @{ Name = "seed$seed"; Args = $match; Minutes = $TimeoutMinutes }
-	$runs += , @{ Name = "seed$seed-nopost"; Args = $match + @("-dx11post", "off"); Minutes = $TimeoutMinutes }
+	if ($Renderer -eq 'dx11') { $runs += , @{ Name = "seed$seed-nopost"; Args = $match + @("-dx11post", "off"); Minutes = $TimeoutMinutes } }
 }
 foreach ($map in $Maps) {
 	# quoted by hand: Start-Process joins its arguments with spaces and the names have them
@@ -88,7 +102,7 @@ foreach ($map in $Maps) {
 		"-autoskirmish", 2, "-aidiff", "brutal", "-seed", 0, "-observer")
 	$tag = $map -replace '[^A-Za-z0-9]', ''
 	$runs += , @{ Name = "map-$tag"; Args = $named; Minutes = $TimeoutMinutes }
-	$runs += , @{ Name = "map-$tag-nopost"; Args = $named + @("-dx11post", "off"); Minutes = $TimeoutMinutes }
+	if ($Renderer -eq 'dx11') { $runs += , @{ Name = "map-$tag-nopost"; Args = $named + @("-dx11post", "off"); Minutes = $TimeoutMinutes } }
 }
 foreach ($mission in $Missions) {
 	$runs += , @{ Name = "mission-$mission"; Args = @("-quickstart", "-noshellmap", "-multiInstance", "-noFPSLimit",
@@ -103,9 +117,9 @@ try {
 	foreach ($run in $runs) {
 		$farm = Join-Path $WorkDir "farm-$($run.Name)"	# one a run, so every run's log is kept
 		New-Farm $zh $farm
-		$shipped = Join-Path $farm "dx11shaders.shipped"
+		$shipped = Join-Path $farm "$($prefix)shaders.shipped"
 		if (-not $KeepShipped -and (Test-Path -LiteralPath $shipped)) { Remove-Item -LiteralPath $shipped -Force }	# the link, never its target
-		$arguments = $run.Args + @("-maxframes", $Frames, "-hiddenwindow", "-noaudio", "-logPrefix", "rec_$($run.Name)")
+		$arguments = $run.Args + $rendererArgs + $ExtraArgs + @("-maxframes", $Frames, "-hiddenwindow", "-noaudio", "-logPrefix", "rec_$($run.Name)")
 		Write-Host ("{0}: " -f $run.Name) -NoNewline
 		$sw = [Diagnostics.Stopwatch]::StartNew()
 		$proc = Start-Process -FilePath (Join-Path $farm "generals.exe") -ArgumentList $arguments -WorkingDirectory $farm -PassThru

@@ -32,6 +32,9 @@ if exist "%~dp0build.local.bat" (
     echo [build] reading build.local.bat
     call "%~dp0build.local.bat"
 )
+rem A caller that names the platform wins over both: windows-ci.ps1 -Platform sets ZH_PLATFORM (x64 or
+rem ARM64), so an ARM64 machine can build and test the x64 game as a second CI lane.
+if defined ZH_PLATFORM set "PLATFORM=%ZH_PLATFORM%"
 
 rem Double-clicked from Explorer, the window closes on the last line and nobody reads it.
 rem A double-click passes no arguments and puts this file's own name in the parent command line.

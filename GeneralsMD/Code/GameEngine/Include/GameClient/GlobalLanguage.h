@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -129,4 +130,9 @@ public:
 // EXTERNALS //////////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 extern GlobalLanguage *TheGlobalLanguageData;
+
+/** A font file installed for this run the way Language.ini's LocalFontFile entries are (AddFontResource on
+	* Windows, the glyph rasteriser elsewhere), by the engine's spelling of its path; FALSE when it cannot be.
+	* G1's button hint fonts (GamepadHints.cpp). */
+Bool GlobalLanguage_installFontFile( const AsciiString &font );
 #endif // __GLOBAL_LANGUAGE_H_

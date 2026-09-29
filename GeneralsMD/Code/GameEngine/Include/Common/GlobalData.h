@@ -73,17 +73,6 @@ enum HealthBarModeType
 	HEALTH_BAR_MODE_COUNT	= 4,
 };
 
-/** How the mouse and the keyboard give orders.  Modern is this fork's: left selects, right orders, the
-	* middle button drives the camera and the grid keys run the command bar.  Legacy is the game as it
-	* shipped, keys and all, with none of what this fork added to either. */
-enum InputSchemeType
-{
-	INPUT_SCHEME_MODERN		= 0,
-	INPUT_SCHEME_LEGACY		= 1,
-
-	INPUT_SCHEME_COUNT		= 2,
-};
-
 /** The language the game's words are shown in.  English is the string table EA shipped; every other
 	* entry names a translation GameText lays over it.  Speech and video stay what the install has. */
 enum TextLanguageType
@@ -114,6 +103,13 @@ public:
 	void update() { }
 
 	Bool setTimeOfDay( TimeOfDay tod );		///< Use this function to set the Time of day;
+
+	/// Whether the dynamic LOD follows the frame rate this run: the player's (or the preset's) setting,
+	/// unless -noDynamicLOD turned it off.  Read this, not m_enableDynamicLOD, wherever the running game
+	/// acts on it; m_enableDynamicLOD is the preference the options menu shows and saves.
+	Bool isDynamicLODEnabled() const { return m_enableDynamicLOD && !m_noDynamicLODOverride; }
+	/// The particle ceiling in force: -particlecap's, or the options slider's MaxParticleCount.
+	Int getEffectiveParticleCap() const { return (m_particleCapOverride > 0) ? m_particleCapOverride : m_maxParticleCount; }
 
 	static void parseGameDataDefinition( INI* ini );
 
@@ -148,6 +144,7 @@ public:
 	Bool m_vsync;						///< wait for the monitor; off is the uncapped picture the frame-rate cap removal shipped
 	Bool m_direct3D11;			///< draw and present through the Direct3D 11 backend; -d3d9 and -headless turn it off
 	Bool m_direct3D12;			///< -d3d12, Windows: draw through zh_d3d12.dll, the SDL3 GPU device on Direct3D 12
+	Bool m_direct3D12Refused;	///< -d3d9 or -dx11: not -d3d12 by default (Windows ARM64, where it is the default)
 	AsciiString m_direct3D11DumpPath;	///< -dx11dump: where to write each generated program
 	AsciiString m_direct3D11PostChain;	///< -dx11post: the effects run over the finished D3D11 frame
 	Int m_xResolution;
@@ -165,6 +162,7 @@ public:
 	Bool m_drawEntireTerrain;
 	_TerrainLOD m_terrainLOD;
 	Bool m_enableDynamicLOD;
+	Bool m_noDynamicLODOverride;	// "-noDynamicLOD": off for this run, whatever the static preset or Options.ini set
 	Bool m_enableStaticLOD;
 	Int m_terrainLODTargetTimeMS;
 	Bool m_clientRetaliationModeEnabled;
@@ -320,10 +318,9 @@ public:
 	Int m_healthBarMode;					///< HealthBarModeType: which units wear a bar at all
 	Int m_playerColorScheme;			///< PlayerColorSchemeType: whose colour the client draws (client only)
 	Int m_textLanguage;						///< TextLanguageType: the translation GameText lays over the CSF, read once at startup (client only)
-	Int m_inputScheme;						///< InputSchemeType: which mouse and keyboard the client answers to, read on every click and key (client only)
-	Bool isLegacyInput( void ) const { return m_inputScheme == INPUT_SCHEME_LEGACY; }
-	Bool m_wasdCamera;						///< W A S D scroll the camera and the unit keys move to F G H J K; Modern input only (client only)
-	Bool isWasdCamera( void ) const { return m_wasdCamera && !isLegacyInput(); }
+	Bool m_gamepadEnabled;				///< G1: a connected controller plays; off, every controller is ignored (client only)
+	Bool m_gamepadAim;						///< G1: in a match a pad's pointer settles onto what it nears, and slows over it (client only)
+	Bool m_gamepadSwapConfirm;		///< G1: confirm and cancel the other way round from the pad's own layout (client only)
 	Bool m_showOrderLines;				///< draw a line from each selected unit to where it is going, and its queue (client only)
 	Bool m_scriptDebug;						///< Should we attempt to load the script debugger window (.DLL)
 	Bool m_particleEdit;					///< Should we attempt to load the particle editor (.DLL)
@@ -408,7 +405,7 @@ public:
 	Bool m_zoomToCursor;				///< the mouse wheel zooms toward whatever the cursor is over
 	Bool m_isometricCamera;				///< the tactical view from far off down a narrow cone, near enough orthographic
 	Bool m_smoothMotion;				///< R1: models shown between their last two logic states each render frame (W3DSmoothMotion.h)
-	Bool m_formationDrag;				///< dragging the right button spreads the selection along the line drawn
+	Bool m_formationDrag;				///< with the move, attack move or guard key armed, a left drag spreads the selection along the line drawn
 	Bool m_showAllyCursors;				///< in a network game, draw where each ally's mouse is pointing
 	Bool m_chromaLighting;				///< put the state of the match on Razer hardware
 	Int m_menuTransitionSpeed;			///< percent of the authored speed the menus slide and fade at; 100 = as drawn

@@ -604,6 +604,7 @@ void GameClient::update( void )
 			TheDisplay->playLogoMovie("EALogoMovie", 5000, 3000);
 		else
 			TheDisplay->playLogoMovie("EALogoMovie640", 5000, 3000);
+		DEBUG_LOG(("GameClient: the EA logo movie %s\n", TheDisplay->isMoviePlaying() ? "is playing" : "did not start (no stream: video off, or no file)"));
 		// Escape gets you out of this one too. The flag is what the key handler asks, and it was
 		// only ever raised once the logo had finished playing itself out, so the one movie you see
 		// on every single launch was the one you could not skip.

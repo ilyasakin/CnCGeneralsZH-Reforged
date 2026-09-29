@@ -113,7 +113,9 @@ static void write_preamble(std::string & hlsl)
 	hlsl += line;
 }
 
-// ffvertex's output structure, member for member.  See the file comment for why it cannot differ.
+// ffvertex's output structure, member for member (append_output_structure).  See the file comment for why
+// it cannot differ: it had two coordinate sets where ffvertex writes MAXIMUM_VERTEX_STAGES, which put Fog
+// on another location than every pixel program reads it from, and Direct3D 12 refuses such a pair (X1).
 static void write_output_structure(std::string & hlsl)
 {
 	hlsl +=
@@ -121,12 +123,26 @@ static void write_output_structure(std::string & hlsl)
 		"{\n"
 		"    float4 Position : SV_Position;\n"
 		"    float4 Diffuse  : COLOR0;\n"
-		"    float4 Specular : COLOR1;\n"
-		"    float2 TexCoord0 : TEXCOORD0;\n"
-		"    float2 TexCoord1 : TEXCOORD1;\n"
+		"    float4 Specular : COLOR1;\n";
+	for (unsigned stage = 0; stage < MAXIMUM_VERTEX_STAGES; ++stage) {
+		char line[64];
+		snprintf(line, sizeof(line), "    float2 TexCoord%u : TEXCOORD%u;\n", stage, stage);
+		hlsl += line;
+	}
+	hlsl +=
 		"    float Fog : FOG;\n"
 		"};\n"
 		"\n";
+}
+
+// The coordinate sets a transcription does not write: zero, as ffvertex writes a set it has no source for.
+static void write_unused_coordinates(std::string & hlsl, unsigned first)
+{
+	for (unsigned stage = first; stage < MAXIMUM_VERTEX_STAGES; ++stage) {
+		char line[64];
+		snprintf(line, sizeof(line), "    output.TexCoord%u = float2(0.0, 0.0);\n", stage);
+		hlsl += line;
+	}
 }
 
 /*
@@ -177,7 +193,9 @@ static void write_trees(std::string & hlsl)
 		"    output.Diffuse = input.Diffuse * float4(input.Sway.yyy, 1.0);\n"
 		"    output.Specular = float4(0.0, 0.0, 0.0, 0.0);\n"
 		"    output.TexCoord0 = input.TexCoord0;\n"
-		"    output.TexCoord1 = ((float4(input.Position, 1.0) + c[32]) * c[33]).xy;\n"
+		"    output.TexCoord1 = ((float4(input.Position, 1.0) + c[32]) * c[33]).xy;\n";
+	write_unused_coordinates(hlsl, 2);
+	hlsl +=
 		"    output.Fog = 1.0;\n"
 		"    return output;\n"
 		"}\n";

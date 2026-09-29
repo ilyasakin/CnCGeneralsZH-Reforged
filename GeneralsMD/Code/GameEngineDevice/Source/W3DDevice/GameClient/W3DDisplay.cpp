@@ -84,6 +84,9 @@ static void drawFramerateBar(void);
 #include "GameClient/Mouse.h"
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/Water.h"
+#include "GameClient/GamepadFocus.h"
+#include "GameClient/GamepadHints.h"
+#include "GameClient/GamepadRadial.h"
 
 #include "GameNetwork/NetworkInterface.h"
 #include "Common/ModelState.h"
@@ -1090,23 +1093,34 @@ void W3DDisplay::init( void )
 	// -d3d12 (X1) is decided here, before WW3D::Init makes the Direct3D 9 interface and binds D3DX from
 	// wherever d3d12runtime.h says.  Its device draws and presents alone: there is no Direct3D 9 behind it for
 	// the Direct3D 11 twin to mirror, so that is off, as under -d3d9.  A zh_d3d12.dll that will not load keeps
-	// the default renderer and says why; under ZH_UNATTENDED the run ends instead, since a harness that asked
-	// for -d3d12 would otherwise measure the wrong renderer without knowing it.
-	if( TheGlobalData->m_direct3D12 )
+	// the old renderer and says why; when -d3d12 was asked for, under ZH_UNATTENDED the run ends instead,
+	// since a harness that asked for it would otherwise measure the wrong renderer without knowing it.
+	//
+	// On Windows ARM64 it is also the default: there is no d3dx9_43.dll for ARM64, and the Direct3D 9 path
+	// draws without its terrain.  -d3d9 and -dx11 keep the old path there, and so does -headless, which draws
+	// nothing.  A default that finds no zh_d3d12.dll only says so: nothing asked for it.
+#if defined(_M_ARM64)
+	const Bool direct3D12ByDefault = !TheGlobalData->m_direct3D12Refused && !TheGlobalData->m_headless;
+#else
+	const Bool direct3D12ByDefault = FALSE;
+#endif
+	if( TheGlobalData->m_direct3D12 || direct3D12ByDefault )
 	{
 		char why[ 256 ] = "";
 		if( Direct3D12_Activate( why, sizeof( why ) ) )
 		{
 			TheWritableGlobalData->m_direct3D11 = FALSE;
+			// The programs it compiles are kept in the user data folder: the install is not writable.
+			Direct3D12_Set_Shader_Cache_Directory( TheGlobalData->getPath_UserData().str() );
 			DEBUG_LOG(( "-d3d12: drawing through zh_d3d12.dll\n" ));
 		}
 		else
 		{
-			DEBUG_LOG(( "-d3d12: %s; the default renderer draws instead\n", why ));
+			DEBUG_LOG(( "-d3d12%s: %s; the old renderer draws instead\n", TheGlobalData->m_direct3D12 ? "" : " (the default)", why ));
 			// a contributor's rule (Common/EarlyCommandLine.h, unattendedByEnvironment, batch5): set when present and
 			// neither empty nor "0".  To be replaced by that helper once both branches are in.
 			const char *unattended = getenv( "ZH_UNATTENDED" );
-			if( unattended != NULL && unattended[ 0 ] != '\0' && strcmp( unattended, "0" ) != 0 )
+			if( TheGlobalData->m_direct3D12 && unattended != NULL && unattended[ 0 ] != '\0' && strcmp( unattended, "0" ) != 0 )
 			{
 				const int D3D12_UNAVAILABLE_EXIT = 3;
 				fprintf( stderr, "-d3d12: %s; ZH_UNATTENDED is set, so the run ends (exit code %d)\n", why, D3D12_UNAVAILABLE_EXIT );
@@ -1265,16 +1279,17 @@ void W3DDisplay::init( void )
 						 WW3D::Get_Render_Device_Name(WW3D::Get_Render_Device())));
 	{
 		const char *lodName = "off";
-		if (TheGameLODManager && TheGlobalData && TheGlobalData->m_enableDynamicLOD)
+		if (TheGameLODManager && TheGlobalData && TheGlobalData->isDynamicLODEnabled())
 		{
 			const DynamicGameLODLevel lod = TheGameLODManager->getDynamicLODLevel();
 			if (lod >= DYNAMIC_GAME_LOD_LOW && lod < DYNAMIC_GAME_LOD_COUNT)
 				lodName = TheGameLODManager->getDynamicGameLODLevelName(lod);
 		}
-		DEBUG_LOG(("W3DDisplay::init - quality: filter %d aniso %d particles %d shadows vol %d decal %d trees %d heat %d dynamicLOD %s\n",
+		DEBUG_LOG(("W3DDisplay::init - quality: filter %d aniso %d particles %d (in force %d) shadows vol %d decal %d trees %d heat %d dynamicLOD %s\n",
 							 TheGlobalData ? TheGlobalData->m_textureFilterMode : -1,
 							 TheGlobalData ? TheGlobalData->m_anisotropyLevel : -1,
 							 TheGlobalData ? TheGlobalData->m_maxParticleCount : -1,
+							 TheGlobalData ? TheGlobalData->getEffectiveParticleCap() : -1,
 							 TheGlobalData ? (Int)TheGlobalData->m_useShadowVolumes : -1,
 							 TheGlobalData ? (Int)TheGlobalData->m_useShadowDecals : -1,
 							 TheGlobalData ? (Int)TheGlobalData->m_useTrees : -1,
@@ -2328,7 +2343,7 @@ void W3DDisplay::draw( void )
 	}
 
 	updateAverageFPS();
-	if (TheGlobalData->m_enableDynamicLOD && TheGameLogic->getShowDynamicLOD())
+	if (TheGlobalData->isDynamicLODEnabled() && TheGameLogic->getShowDynamicLOD())
 	{
 		DynamicGameLODLevel lod=TheGameLODManager->findDynamicLODLevel(m_averageFPS);
 		TheGameLODManager->setDynamicLODLevel(lod);
@@ -2652,6 +2667,11 @@ AGAIN:
 				{
 					drawVideoBuffer( m_videoBuffer, 0, 0, getWidth(), getHeight() );
 				}
+
+				// G1: a pad's menu focus and its hint bar, and its radial command menu, over the GUI and under the cursor
+				GamepadFocus::draw();
+				GamepadRadial::draw();
+				GamepadHints::drawMatchStrip();
 
 				// draw the mouse
 				if( TheMouse )

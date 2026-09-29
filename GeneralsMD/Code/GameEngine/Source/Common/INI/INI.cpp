@@ -107,6 +107,7 @@ static const BlockParse theTypeTable[] =
 	{ "EvaEvent",						INI::parseEvaEvent },
 	{ "FXList",							INI::parseFXListDefinition },
 	{ "GameData",						INI::parseGameDataDefinition },
+	{ "GamepadBinding",			INI::parseGamepadBindingDefinition },
 	{ "InGameUI",						INI::parseInGameUIDefinition },
 	{ "Locomotor",					INI::parseLocomotorTemplateDefinition },
 	{ "Language",						INI::parseLanguageDefinition },

@@ -213,6 +213,8 @@ private:
 	unsigned int NotVisibleTotal;	///< and since the frame was made
 	unsigned int NotShown;			///< Presents with no drawable since the last Take_Timing
 	unsigned int NotShownTotal;		///< and since the frame was made
+	unsigned int ShownWidth;		///< the swapchain's size at the last Present that had one, which stderr gives
+	unsigned int ShownHeight;		///< whenever it changes: the back buffer is scaled to it
 	double OffscreenMs;		///< -offscreen's waits: frames in flight, and the pacer
 	bool OffscreenPresents;
 	unsigned int OffscreenHz;

@@ -26,11 +26,13 @@
 typedef IDirect3D9 * (WINAPI * Direct3D12CreateFunction)(UINT sdk_version);
 typedef void (WINAPI * Direct3D12NameShaderFunction)(const void * shader, const char * name);
 typedef void (WINAPI * Direct3D12KeepDeclarationFunction)(IDirect3DVertexDeclaration9 * declaration, const DWORD * d3d8_tokens);
+typedef void (WINAPI * Direct3D12ShaderCacheFunction)(const char * directory);
 
 static HMODULE Module = NULL;
 static Direct3D12CreateFunction Create = NULL;
 static Direct3D12NameShaderFunction NameShader = NULL;
 static Direct3D12KeepDeclarationFunction KeepDeclaration = NULL;
+static Direct3D12ShaderCacheFunction ShaderCache = NULL;
 
 bool Direct3D12_Activate(char * why, size_t why_size)
 {
@@ -53,7 +55,9 @@ bool Direct3D12_Activate(char * why, size_t why_size)
 	Direct3D12NameShaderFunction name_shader = (Direct3D12NameShaderFunction)GetProcAddress(module, "ZH_D3D12_Name_Shader");
 	Direct3D12KeepDeclarationFunction keep_declaration =
 		(Direct3D12KeepDeclarationFunction)GetProcAddress(module, "ZH_D3D12_Keep_D3D8_Declaration");
-	if (create == NULL || name_shader == NULL || keep_declaration == NULL) {
+	Direct3D12ShaderCacheFunction shader_cache =
+		(Direct3D12ShaderCacheFunction)GetProcAddress(module, "ZH_D3D12_Set_Shader_Cache_Directory");
+	if (create == NULL || name_shader == NULL || keep_declaration == NULL || shader_cache == NULL) {
 		_snprintf_s(why, why_size, _TRUNCATE, "zh_d3d12.dll is not this build's (an entry point is missing)");
 		FreeLibrary(module);
 		return false;
@@ -62,6 +66,7 @@ bool Direct3D12_Activate(char * why, size_t why_size)
 	Create = create;
 	NameShader = name_shader;
 	KeepDeclaration = keep_declaration;
+	ShaderCache = shader_cache;
 	// Anything bound before now (Get_FVF_Vertex_Size binds on its own) was d3dx9_43.dll's, whose textures
 	// the module's device cannot take.
 	Unbind_D3DX9_Runtime();
@@ -94,5 +99,12 @@ void Direct3D12_Keep_D3D8_Declaration(IDirect3DVertexDeclaration9 * declaration,
 {
 	if (KeepDeclaration != NULL) {
 		KeepDeclaration(declaration, d3d8_tokens);
+	}
+}
+
+void Direct3D12_Set_Shader_Cache_Directory(const char * directory)
+{
+	if (ShaderCache != NULL) {
+		ShaderCache(directory);
 	}
 }

@@ -56,6 +56,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/Display.h"
+#include "GameClient/GamepadHints.h"
 #include "GameClient/DisplayStringManager.h"
 #include "W3DDevice/GameClient/W3DGameWindow.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
@@ -84,10 +85,10 @@ void W3DGadgetPushButtonImageDrawOne(GameWindow *window, WinInstanceData *instDa
 
 // PRIVATE FUNCTIONS //////////////////////////////////////////////////////////
 
-/** The command bar's own scale, from ControlBar.cpp.  Declared rather than included: ControlBar.h
+/** The bottom HUD's own scale, the one its buttons are laid out at, from ControlBar.cpp.  Declared rather than included: ControlBar.h
 	* drags in the whole command-set machinery for one function that takes nothing and returns a
 	* float. */
-extern Real ControlBarUniformScale( void );
+extern Real ControlBarHudScale( void );
 
 /** Point size a corner marking wears on a command button at 800x600, which is the resolution the
 	* command bar and its 50x44 buttons were drawn for.  Everything else is this times the scale the
@@ -119,7 +120,7 @@ static GameFont *getBadgeFont( GameWindow *window, Real designPoints = BADGE_DES
 	if( font == NULL )
 		return NULL;
 
-	Int pointSize = REAL_TO_INT_FLOOR( designPoints * ControlBarUniformScale() );
+	Int pointSize = REAL_TO_INT_FLOOR( designPoints * ControlBarHudScale() );
 	if( pointSize < 6 )
 		pointSize = 6;
 
@@ -131,6 +132,8 @@ static GameFont *getBadgeFont( GameWindow *window, Real designPoints = BADGE_DES
 	return TheFontLibrary->getFont( font->nameString, pointSize, TRUE );
 
 }  // end getBadgeFont
+
+static DisplayString *badgeString( const UnicodeString &text, GameFont *font );
 
 // drawButtonText =============================================================
 /** Draw button text to the screen */
@@ -178,32 +181,63 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	if( font != NULL && text->getFont() != font )
 		text->setFont( font );
 
+	// G1: with a gamepad in use its button shows where the key's letter was, or beside a message box's
+	// answer (GamepadHints.h); with the keyboard and mouse in use every button reads as it always did
+	GameFont *glyphFont = NULL;
+	UnicodeString glyphText;
+	// twice the word's size: a glyph's ink is under half its em, so this puts it at about 1.3 times the word's
+	// capitals, where console games draw their button prompts
+	const Int glyphPoints = font != NULL ? font->pointSize * 2 : 16;
+	Int glyphButton = GAMEPAD_BUTTON_NONE;
+	const GamepadHints::Hint hint = GamepadHints::hintFor( window, glyphPoints, glyphFont, glyphText, &glyphButton );
+	if( hint == GamepadHints::HINT_HIDE )
+		return;
+	DisplayString *glyph = hint != GamepadHints::HINT_TEXT ? badgeString( glyphText, glyphFont ) : NULL;
+	if( hint == GamepadHints::HINT_INSTEAD && glyph != NULL )
+		text = glyph;
+
 	// get text size
 	text->getSize( &width, &height );
+
+	// a glyph's ink is shorter than its line and sits on the baseline: it is placed by its ink (GamepadHints::inkRows)
+	const Bool glyphInstead = hint == GamepadHints::HINT_INSTEAD && glyph != NULL;
+	Int inkTop = 0, inkBottom = height;
+	if( glyphInstead )
+		GamepadHints::inkRows( GamepadHints::getShown(), glyphButton, height, inkTop, inkBottom );
 
 	// where to draw
 	if( BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON ) )
 	{
 		// Oh god... this is a total hack for shortcut buttons to handle rendering text top left corner...
 		textPos.x = origin.x + 2;
-		textPos.y = origin.y + 0;
+		textPos.y = origin.y + (glyphInstead ? 2 - inkTop : 0);		// a glyph's ink two pixels in, as the letter's
 	}
 	else
 	{
 		textPos.x = origin.x + (size.x / 2) - (width / 2);
-		textPos.y = origin.y + (size.y / 2) - (height / 2);
+		textPos.y = origin.y + (size.y / 2) - (inkTop + inkBottom) / 2;
 	}
 
 	// Shortcut text sits on top of the button's own art, which can be any colour at all -
-	// a light unit portrait swallowed the letter.  Lay a translucent black plate under it.
+	// a light unit portrait swallowed the letter.  Lay a translucent black plate under it,
+	// around a glyph's ink rather than its line.
 	if( BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON ) && width > 0 && height > 0 )
 	{
-		TheDisplay->drawFillRect( textPos.x - 2, textPos.y, width + 4, height,
-														GameMakeColor( 0, 0, 0, 160 ) );
+		TheDisplay->drawFillRect( textPos.x - 2, textPos.y + inkTop - (glyphInstead ? 1 : 0), width + 4,
+														inkBottom - inkTop + (glyphInstead ? 2 : 0), GameMakeColor( 0, 0, 0, 160 ) );
 	}
 
 	// draw it
 	text->draw( textPos.x, textPos.y, textColor, dropColor );
+
+	// a message box's answer: the pad's button just left of the word
+	if( hint == GamepadHints::HINT_BESIDE && glyph != NULL )
+	{
+		Int glyphWidth, glyphHeight;
+		glyph->getSize( &glyphWidth, &glyphHeight );
+		glyph->draw( textPos.x - glyphWidth - 4,
+			GamepadHints::glyphTop( GamepadHints::getShown(), glyphButton, glyphHeight, origin.y + (size.y / 2) ), textColor, dropColor );
+	}
 
 }  // end drawButtonText
 

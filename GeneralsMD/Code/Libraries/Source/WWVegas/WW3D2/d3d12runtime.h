@@ -51,6 +51,10 @@ IDirect3D9 * Direct3D12_Create(UINT sdk_version);
 void Direct3D12_Name_Shader(const void * shader, const char * name);
 void Direct3D12_Keep_D3D8_Declaration(IDirect3DVertexDeclaration9 * declaration, const DWORD * d3d8_tokens);
 
+/// Where the module keeps the programs it compiles: the user data folder (d3d12shaders.cache), beside the
+/// d3d12shaders.shipped next to the executable.  Before the device makes its first program.
+void Direct3D12_Set_Shader_Cache_Directory(const char * directory);
+
 #endif // _WIN32
 
 #endif // D3D12RUNTIME_H

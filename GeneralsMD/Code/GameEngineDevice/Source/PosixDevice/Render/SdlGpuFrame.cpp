@@ -94,6 +94,8 @@ SdlGpuFrame::SdlGpuFrame() :
 	NotVisibleTotal(0),
 	NotShown(0),
 	NotShownTotal(0),
+	ShownWidth(0),
+	ShownHeight(0),
 	OffscreenMs(0.0),
 	OffscreenPresents(false),
 	OffscreenHz(0),
@@ -579,6 +581,13 @@ bool SdlGpuFrame::Present(const uint16_t (*ramp)[256])
 		const bool acquired = SDL_WaitAndAcquireGPUSwapchainTexture(commands, Window, &swapchain, &width, &height);
 		AcquireMs += (double)(SDL_GetTicksNS() - acquire_start) / 1.0e6;
 		if (acquired && swapchain != NULL) {
+			if (width != ShownWidth || height != ShownHeight) {
+				// What the picture is scaled to on its way out: on a Retina Mac, the window's pixels.
+				fprintf(stderr, "SdlGpuFrame: the %ux%u back buffer is shown on a %ux%u swapchain\n", BackWidth, BackHeight,
+					(unsigned)width, (unsigned)height);
+				ShownWidth = width;
+				ShownHeight = height;
+			}
 			ok = Present_Into(commands, swapchain, width, height, SDL_GetGPUSwapchainTextureFormat(GpuDevice, Window), ramp)
 				&& ok;
 		} else {

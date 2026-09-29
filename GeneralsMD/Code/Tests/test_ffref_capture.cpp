@@ -46,20 +46,30 @@
 #include "PosixResources9.h"
 #include "SdlGpuFrame.h"
 #include "SdlResourceMirror.h"
+#if defined(_WIN32)
+#undef DrawState	// winuser.h's, which windows.h brings first for the -d3d12 device (X1); FFRef has its own
+#endif
 #include "ffreference/ffreference.h"
 
 #include <SDL3/SDL.h>
 
-#include <dirent.h>
 #include <math.h>
-#include <sys/stat.h>
 #include <algorithm>
+#include <filesystem>
 #include <map>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string>
 #include <vector>
+
+/// A program's tokens as the device takes them: RenderUInt32 is DWORD on Windows (-d3d12) and uint32_t
+/// elsewhere, 32 bits either way.
+static const RenderUInt32 *tokens_of(const std::vector<uint32_t> &tokens)
+{
+	static_assert(sizeof(RenderUInt32) == sizeof(uint32_t), "a shader token is 32 bits");
+	return reinterpret_cast<const RenderUInt32 *>(&tokens[0]);
+}
 
 static const uint32_t CLEAR = 0xFF3F2F1F;
 
@@ -604,14 +614,14 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	IDirect3DVertexShader9 *vertex_shader = NULL;
 	if (programmable) {
 		if (programs.PixelPresent) {
-			device->CreatePixelShader(&programs.PixelTokens[0], &pixel_shader);
+			device->CreatePixelShader(tokens_of(programs.PixelTokens), &pixel_shader);
 			PosixDevice_Name_Shader(pixel_shader, programs.PixelName.c_str());
 			device->SetPixelShader(pixel_shader);
 			state.pixelShaderBound = true;
 			state.pixelProgram = &reference_program;
 		}
 		if (programs.VertexPresent) {
-			device->CreateVertexShader(&programs.VertexTokens[0], &vertex_shader);
+			device->CreateVertexShader(tokens_of(programs.VertexTokens), &vertex_shader);
 			PosixDevice_Name_Shader(vertex_shader, programs.VertexName.c_str());
 			device->SetVertexShader(vertex_shader);
 			state.vertexShaderBound = true;
@@ -881,21 +891,39 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	}
 }
 
+/// The names of the files in a directory; none when it cannot be read.  std::filesystem, so the same
+/// harness builds for the -d3d12 device on Windows (X1), where there is no dirent.h.
+static std::vector<std::string> names_in(const std::string &directory)
+{
+	std::vector<std::string> names;
+	std::error_code error;
+	for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end; it.increment(error)) {
+		names.push_back(it->path().filename().string());
+	}
+	return names;
+}
+
+/// Sets a variable of this process's environment, which the device reads with getenv.
+static void set_environment(const char *name, const char *value)
+{
+#if defined(_WIN32)
+	_putenv_s(name, value);
+#else
+	setenv(name, value, 1);
+#endif
+}
+
 /// The draw_*.cap files in a directory, in order.
 static std::vector<std::string> list_captures(const std::string &directory)
 {
 	std::vector<std::string> files;
-	DIR *listing = opendir(directory.c_str());
-	if (listing == NULL) {
-		return files;
-	}
-	while (struct dirent *entry = readdir(listing)) {
-		const std::string name = entry->d_name;
+	const std::vector<std::string> names = names_in(directory);
+	for (size_t index = 0; index < names.size(); ++index) {
+		const std::string &name = names[index];
 		if (name.size() > 4 && name.compare(0, 5, "draw_") == 0 && name.compare(name.size() - 4, 4, ".cap") == 0) {
 			files.push_back(name);
 		}
 	}
-	closedir(listing);
 	std::sort(files.begin(), files.end());
 	return files;
 }
@@ -1227,10 +1255,8 @@ static void check_programs(const std::string &path)
 /// <build>/test-user-data, which nothing makes before the first test that writes there.
 static void make_folders(const std::string &path)
 {
-	for (size_t slash = path.find('/', 1); slash != std::string::npos; slash = path.find('/', slash + 1)) {
-		mkdir(path.substr(0, slash).c_str(), 0755);
-	}
-	mkdir(path.c_str(), 0755);
+	std::error_code error;
+	std::filesystem::create_directories(path, error);
 }
 
 static int round_trip()
@@ -1246,20 +1272,18 @@ static int round_trip()
 	// <build>/test-user-data, and a mkdir of the last folder alone then fails (a contributor, the M3 Pro Mac, 2026-09-27).
 	make_folders(directory);
 	// The last run's captures; this directory is the test's own.
-	if (DIR *listing = opendir(directory.c_str())) {
-		while (struct dirent *entry = readdir(listing)) {
-			const std::string name = entry->d_name;
-			const bool capture = name.size() > 4 && (name.compare(name.size() - 4, 4, ".cap") == 0
-				|| name.compare(name.size() - 4, 4, ".tex") == 0);
-			const bool programs = name.size() > 5 && name.compare(name.size() - 5, 5, ".prog") == 0;
-			if (capture || programs) {
-				remove((directory + "/" + name).c_str());
-			}
+	const std::vector<std::string> names = names_in(directory);
+	for (size_t index = 0; index < names.size(); ++index) {
+		const std::string &name = names[index];
+		const bool capture = name.size() > 4 && (name.compare(name.size() - 4, 4, ".cap") == 0
+			|| name.compare(name.size() - 4, 4, ".tex") == 0);
+		const bool programs = name.size() > 5 && name.compare(name.size() - 5, 5, ".prog") == 0;
+		if (capture || programs) {
+			remove((directory + "/" + name).c_str());
 		}
-		closedir(listing);
 	}
 	// The device reads ZH_GPU_CAPTURE at its first draw, which comes after this.
-	setenv("ZH_GPU_CAPTURE", directory.c_str(), 1);
+	set_environment("ZH_GPU_CAPTURE", directory.c_str());
 
 	Replayer original;
 	if (!make_replayer(ROUND_TRIP_SIZE, ROUND_TRIP_SIZE, D3DFMT_A8R8G8B8, original)) {

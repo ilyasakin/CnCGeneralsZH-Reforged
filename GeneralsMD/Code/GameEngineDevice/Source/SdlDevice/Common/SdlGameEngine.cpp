@@ -24,10 +24,13 @@
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
 #include "GameClient/ApplicationWindowTitle.h"
+#include "GameLogic/GameLogic.h"
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
+#include "SdlDevice/GameClient/SdlGamepad.h"
 #include "SdlDevice/GameClient/SdlInput.h"
+#include "SdlDevice/GameClient/SdlInputScript.h"
 #include "SdlDevice/GameClient/SdlMouse.h"
 #include "W3DDevice/GameClient/W3DGameClient.h"
 #include "PosixDevice/Common/PosixFileResolutionDump.h"
@@ -182,8 +185,15 @@ void SdlGameEngine::createWindow( void )
 	}
 	m_sdlVideoStarted = TRUE;
 	ThePlatformDisplays = &TheSdlDisplays;		// Monitors.h answers from SDL's displays from here on
+	if (SdlGamepad_start())		// G1: gamepads, only for a game with a window; without them it runs on as before
+		SdlInputScript_start();		// G1's test 2: ZH_INPUT_SCRIPT, never set by a player (SdlInputScript.h)
 
-	SDL_WindowFlags flags = 0;
+	/* The window's drawable in pixels, not points.  The game's sizes are pixels (SdlDisplays.h), and without
+		 this SDL's Metal view is sized in points: a first run on a scaled Mac drew 3420x2224 into a 1710x1112
+		 swapchain, which macOS then scaled up again (an M2 MacBook Air, 2026-09-28).  The mouse is unaffected: it is
+		 mapped from the window's points (SdlInput_toGamePixels).  Where points are pixels (X11, gamescope) this
+		 changes nothing. */
+	SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
 	if (!m_request.windowed)
 		flags |= SDL_WINDOW_FULLSCREEN;
 	if (m_request.hidden)
@@ -262,10 +272,16 @@ void SdlGameEngine::startOffscreen( void )
 	}
 	m_sdlVideoStarted = TRUE;
 	DEBUG_LOG(( "SdlGameEngine: offscreen, no window; SDL video driver %s (%s)\n", SDL_GetCurrentVideoDriver(), driver ));
+	// No pads here: a worker's harness must not take a real pad's input.  G1's test 2 is the exception - it
+	// plays its own virtual pad, and a host reached over ssh has no display for a window to hold one.
+	const char *script = getenv( "ZH_INPUT_SCRIPT" );
+	if (script != NULL && *script != 0 && SdlGamepad_start())
+		SdlInputScript_start();
 }
 
 void SdlGameEngine_releaseWindow( void )
 {
+	SdlGamepad_stop();		// lets go of what the pads hold, while the keyboard and mouse still take it
 	if (s_pendingWindow != NULL)
 	{
 		if (s_titledWindow == s_pendingWindow)
@@ -302,6 +318,9 @@ void SdlGameEngine::serviceWindowsOS( void )
 	if (!m_sdlVideoStarted)
 		return;
 
+	if (TheGameLogic != NULL)
+		SdlInputScript_play( TheGameLogic->getFrame() );		// nothing without ZH_INPUT_SCRIPT
+
 	SDL_Event event;
 	while (SDL_PollEvent( &event ))
 	{
@@ -324,13 +343,15 @@ void SdlGameEngine::serviceWindowsOS( void )
 
 			case SDL_EVENT_WINDOW_FOCUS_LOST:
 				setIsActive( FALSE );
+				SdlGamepad_releaseAll();		// SDL lets the keys go; the keys and buttons a pad holds go too
 				break;
 
 			default:
-				SdlInput_dispatch( event );		// keys, text and the mouse (C3): SdlInput.h
+				SdlInput_dispatch( event );		// keys, text, the mouse (C3) and gamepads (G1): SdlInput.h
 				break;
 		}
 	}
+	SdlGamepad_update( (UnsignedInt)SDL_GetTicks() );		// the triggers and the right stick, once a frame
 }
 
 // Win32GameEngine's factories, the same W3D classes (decision 8); the radar too: W3DRadar, and

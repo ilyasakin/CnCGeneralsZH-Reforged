@@ -57,3 +57,6 @@ gamespy               gamespy
 + zlib                # Compression/ZLib, inside libcompression
 + lzhl                # Compression/LZHCompress (LZH-Light, Sergey Ignatchenko), inside libcompression
 + nanosvg             # compiled into HtmlOverlay.cpp, inside libgameengine
+
+# shipped in the overlay, not linked
++ kenney-input-prompts  # Kenney's Input Prompts 1.5A (CC0): the controller button hint fonts, Data/Fonts/Gamepad

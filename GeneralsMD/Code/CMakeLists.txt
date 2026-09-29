@@ -892,16 +892,20 @@ if(ZH_PLATFORM_POSIX)
   # GPU (the renderer - Metal on macOS, Vulkan on Linux) and dialog (the first launch's folder chooser,
   # PosixMain.cpp: NSOpenPanel on macOS, the portal or zenity on Linux; with it off, SDL answers every
   # dialog at once with "not built with dialog support", and the chooser quit before showing anything).
+  # Joystick is on for G1's gamepads (SdlGamepad.h), with HIDAPI, which reads the Deck's own controls and
+  # PlayStation and Switch pads directly and gives their real button labels, and the virtual joystick
+  # driver, which test_sdl_gamepad drives in place of a pad.  HIDAPI's libusb backend stays off: no
+  # libusb to link or ship; HIDAPI uses the platform's own HID (hidraw on Linux, IOKit on macOS).
   # Off: audio (miniaudio has that job), render (SDL's 2D renderer; D4 uses the GPU API directly),
-  # camera, joystick, haptic, hidapi, power, sensor and tray, and the OpenGL/GLES video drivers, which
-  # the GPU API does not use.  C3 turns joystick back on if it wants gamepads.  Tests, examples and
-  # install are off.
+  # camera, haptic (no rumble), power, sensor (no gyro) and tray, and the OpenGL/GLES video drivers,
+  # which the GPU API does not use.  Tests, examples and install are off.
   foreach(_sdl_off SDL_SHARED SDL_TEST_LIBRARY SDL_TESTS SDL_EXAMPLES SDL_INSTALL SDL_UNINSTALL
-                   SDL_AUDIO SDL_RENDER SDL_CAMERA SDL_JOYSTICK SDL_HAPTIC SDL_HIDAPI SDL_POWER
+                   SDL_AUDIO SDL_RENDER SDL_CAMERA SDL_HAPTIC SDL_HIDAPI_LIBUSB SDL_POWER
                    SDL_SENSOR SDL_TRAY SDL_OPENGL SDL_OPENGLES)
     set(${_sdl_off} OFF CACHE BOOL "" FORCE)
   endforeach()
-  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU SDL_DIALOG)
+  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU SDL_DIALOG SDL_JOYSTICK SDL_HIDAPI SDL_HIDAPI_JOYSTICK
+                  SDL_VIRTUAL_JOYSTICK)
     set(${_sdl_on} ON CACHE BOOL "" FORCE)
   endforeach()
   add_subdirectory(${LIBSRC}/SDL3 ${CMAKE_CURRENT_BINARY_DIR}/SDL3)
@@ -1685,7 +1689,7 @@ if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
   target_include_directories(zh_d3d12_shim PRIVATE ${ZH_POSIX_D3D9_INCLUDE} ${WW}/WW3D2 ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
   target_compile_definitions(zh_d3d12_shim PRIVATE ${ZH_D3D12_DEVICE_DEFINES})
   target_compile_options(zh_d3d12_shim PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
-  target_link_libraries(zh_d3d12_shim PRIVATE d3dx9posix_d3d12)
+  target_link_libraries(zh_d3d12_shim PRIVATE d3dx9posix_d3d12 sdl3shadercompile SDL3::SDL3-static)
 
   add_library(zh_d3d12 SHARED ${D3D12DEVICE}/D3D12Adapter.cpp ${D3D12DEVICE}/D3D12Exports.cpp ${D3D12DEVICE}/zh_d3d12.def)
   set_target_properties(zh_d3d12 PROPERTIES CXX_STANDARD 17)
@@ -1700,6 +1704,28 @@ if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
   add_dependencies(test_d3d12_slice zh_d3d12)
   add_test(NAME test_d3d12_slice COMMAND test_d3d12_slice $<TARGET_FILE:zh_d3d12>)
   set_tests_properties(test_d3d12_slice PROPERTIES SKIP_RETURN_CODE 77)
+
+  # FFReference against the -d3d12 device: A3b's scenarios and the replay of captures, the same sources as
+  # off Windows, built with the device's settings.  The capture replay needs
+  # captures written by this build (ZH_FFREF_CAPTURE_DIR): DrawCapture.h is the writing build's structures.
+  # FFReference itself is built with the POSIX tests; here it is the same sources, self-contained.
+  add_library(ffreference_d3d12 STATIC ${CMAKE_CURRENT_SOURCE_DIR}/Tests/ffreference/ffreference.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/ffreference/ffprogram.cpp ${CMAKE_CURRENT_SOURCE_DIR}/Tests/ffreference/ffcapture.cpp)
+  set_target_properties(ffreference_d3d12 PROPERTIES CXX_STANDARD 17)
+  target_include_directories(ffreference_d3d12 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Tests)
+  foreach(ffref ffref_gpu ffref_capture)
+    add_executable(${ffref}_d3d12 ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_${ffref}.cpp)
+    set_target_properties(${ffref}_d3d12 PROPERTIES CXX_STANDARD 17)
+    target_include_directories(${ffref}_d3d12 PRIVATE ${ZH_POSIX_D3D9_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include
+      ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render ${WW}/WW3D2)
+    target_compile_definitions(${ffref}_d3d12 PRIVATE ${ZH_D3D12_DEVICE_DEFINES})
+    target_compile_options(${ffref}_d3d12 PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
+    target_link_libraries(${ffref}_d3d12 PRIVATE posixd3d9 d3dx9posix_d3d12 ffreference_d3d12 SDL3::SDL3-static)
+    add_test(NAME ${ffref}_d3d12 COMMAND ${ffref}_d3d12)
+    # A folder of its own to capture into, as every test has off Windows (the loop at the end of this file).
+    set_tests_properties(${ffref}_d3d12 PROPERTIES SKIP_RETURN_CODE 77
+      ENVIRONMENT "ZH_USER_DATA_DIR=${CMAKE_BINARY_DIR}/test-user-data/${ffref}_d3d12")
+  endforeach()
 endif()
 
 # ===========================================================================
@@ -1719,9 +1745,9 @@ endif()
 set(GENERATED ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(WRITE ${GENERATED}/BuildVersion.h
 "// Generated by CMake, standing in for Tools/buildVersionUpdate.\n"
-"#define VERSION_STRING \"v2.1.0\"\n"
-"#define VERSION_MAJOR 2\n"
-"#define VERSION_MINOR 1\n"
+"#define VERSION_STRING \"v3.0.0\"\n"
+"#define VERSION_MAJOR 3\n"
+"#define VERSION_MINOR 0\n"
 "#define VERSION_BUILDNUM 0\n")
 file(WRITE ${GENERATED}/GeneratedVersion.h
 "// Generated by CMake, standing in for Tools/versionUpdate.\n"
@@ -1802,6 +1828,14 @@ if(ZH_D3D12)
   add_dependencies(generals zh_d3d12)
   add_custom_command(TARGET generals POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:zh_d3d12> ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+  # The Direct3D 12 programs that ship with the game (sdl3shadercompile.cpp), compiled on Windows by
+  # Microsoft's d3dcompiler_47 when they were recorded: beside the exe, where the device reads them before
+  # compiling anything, as dx11shaders.shipped is for the Direct3D 11 backend.
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Data/d3d12shaders.shipped)
+    add_custom_command(TARGET generals POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              ${CMAKE_CURRENT_SOURCE_DIR}/Data/d3d12shaders.shipped ${CMAKE_CURRENT_SOURCE_DIR}/../Run/)
+  endif()
 endif()
 # The game reads its data relative to the working directory, so it has to sit
 # beside Run/'s .big files to find anything (Phase 5).
@@ -1844,7 +1878,8 @@ add_custom_command(TARGET generals POST_BUILD
           ${CMAKE_CURRENT_SOURCE_DIR}/Data/Install_Final.bmp
           ${CMAKE_CURRENT_SOURCE_DIR}/../Run/
   # The three command bar plates per side, the smoke signals' ground marks and the
-  # SupW uplink's pink laser strip (Tools/pink_laser.py).  A loose
+  # SupW uplink's pink laser strip (Tools/pink_laser.py) and the attack, hold and move cameos
+  # (Tools/order_cameos.py).  A loose
   # texture beats every .big, so these land in Run/Art/Textures where the W3D file
   # system looks first.
   COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -1921,6 +1956,9 @@ if(ZH_PLATFORM_POSIX)
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs)
   set_target_properties(sdldevice PROPERTIES CXX_STANDARD 17)
   target_link_libraries(sdldevice PUBLIC posixdevice w3ddevice SDL3::SDL3-static milesaudiomanager sdlinput)
+  if(APPLE)
+    target_link_libraries(sdldevice PRIVATE "-framework CoreGraphics")		# SdlDisplays' panel size
+  endif()
 
   add_executable(generals ${CMAKE_CURRENT_SOURCE_DIR}/Main/PosixMain.cpp)
   target_include_directories(generals PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Main ${GENERATED})
@@ -1970,6 +2008,19 @@ if(ZH_PLATFORM_POSIX)
     set_tests_properties(test_sdl_input PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
 
+  # G1's test 1: a gamepad, SDL's virtual joystick on the offscreen driver, against the SDL mouse and key
+  # events a hand makes for the same thing; equal MouseIO and KeyboardIO (Tests/test_sdl_gamepad.cpp).
+  # The shipped Data/INI/GamepadReforged.ini, read by the engine's INI code.
+  add_executable(test_sdl_gamepad ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gamepad.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gameengine_stubs.cpp)
+  target_include_directories(test_sdl_gamepad PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(test_sdl_gamepad PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+    GAMEPAD_INI="${CMAKE_CURRENT_SOURCE_DIR}/Data/INI/GamepadReforged.ini"
+    KENNEY_DIR="${LIBSRC}/KenneyInputPrompts")
+  set_target_properties(test_sdl_gamepad PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_sdl_gamepad PRIVATE sdldevice test_harness)
+  add_test(NAME test_sdl_gamepad COMMAND test_sdl_gamepad)
+
   # The entry sequence without game data: see the script.
   add_test(NAME generals_smoke
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_generals_smoke.sh $<TARGET_FILE:generals>)
@@ -1977,7 +2028,9 @@ if(ZH_PLATFORM_POSIX)
   # and an edited replay is reported DIVERGED.  Same-machine determinism only: see the script.
   add_test(NAME replay_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_replay_check.sh $<TARGET_FILE:generals>)
-  set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1200)	# four 12000-frame matches since #34
+  # Four 12000-frame matches since #34.  The cap is there for a hang, not for speed: replay_check takes 279-392 s
+  # alone, and up to 991 s inside a full suite on a loaded 8-core Linux worker, where 1200 s had begun to cut it off.
+  set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 2400)
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
@@ -2016,10 +2069,37 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(net_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # G1's test 2: one skirmish driven by a pad and by hand ends on one CRC, and differs from no input
+  # (Tools/gamepad-crc-check.sh).  -offscreen, no sound; skipped without data.
+  add_test(NAME gamepad_crc_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-crc-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(gamepad_crc_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 3600)	# eight matches: plain, radial, base chord
+  if(ZH_GAME_DATA)
+    set_tests_properties(gamepad_crc_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+  # G1's menus: a virtual pad walks the shell's screens and the focus must land where
+  # docs/mac-port/tasks/G1-gamepad-screens.md says, every step (Tools/gamepad-menu-check.sh).
+  add_test(NAME gamepad_menu_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-menu-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(gamepad_menu_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(gamepad_menu_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+  # G1's D-pad: fixed paths over the main menu, every Options page, skirmish setup and a match's command card,
+  # and the focus must land where the recorded lists say (Tools/gamepad-dpad-check.sh).
+  add_test(NAME gamepad_dpad_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-dpad-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(gamepad_dpad_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1200)
+  if(ZH_GAME_DATA)
+    set_tests_properties(gamepad_dpad_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # P1 step 3: the staged overlay, <build>/overlay - what the app bundle will copy verbatim and what the
   # harnesses pass with -overlay - and <build>/overlay-dev, the -scenario and -cinema folders that never
   # ship.  Tools/stage-overlay.sh is the one place the list lives.  Small (10 MB; the art is linked).
   file(GLOB_RECURSE ZH_OVERLAY_INPUTS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Data/*)
+  # G1's button hint fonts, staged into the overlay when vendor.sh has them (stage-overlay.sh)
+  file(GLOB ZH_PROMPT_INPUTS CONFIGURE_DEPENDS ${LIBSRC}/KenneyInputPrompts/*)
+  list(APPEND ZH_OVERLAY_INPUTS ${ZH_PROMPT_INPUTS})
   add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/overlay.staged
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/stage-overlay.sh ${CMAKE_CURRENT_SOURCE_DIR}/Data
@@ -2371,12 +2451,14 @@ set_tests_properties(test_gameengine PROPERTIES TIMEOUT 2700)
 # fxlist_reforged_ini_parses_and_keeps_its_light runs the fork's own FXList file through the real
 # INI parser, so it needs the tracked master rather than whatever sits in Run/.
 # the_options_menu_buttons_all_wear_one_font reads the tracked layout master, not Run/'s copy.
-# the_spectator_page_names_only_on_off_options reads the tracked page master the same way.
+# the_spectator_page_names_only_on_off_options reads the tracked page master the same way, and
+# the_command_grid_keys_are_the_places_and_n_sells_and_b_rallies the tracked command map.
 target_compile_definitions(test_gameengine PRIVATE
   GAMEENGINE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/GameEngine"
   FXLIST_REFORGED_INI="${CMAKE_CURRENT_SOURCE_DIR}/Data/INI/FXListReforged.ini"
   OPTIONS_MENU_WND="${CMAKE_CURRENT_SOURCE_DIR}/Data/Window/Menus/OptionsMenu.wnd"
   SPECTATOR_HTML="${CMAKE_CURRENT_SOURCE_DIR}/Data/Window/Html/Spectator.html"
+  COMMAND_MAP_REFORGED_INI="${CMAKE_CURRENT_SOURCE_DIR}/Data/INI/CommandMapReforged.ini"
   PLATE_TEXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Data/Art/Textures")
 
 # W3: these three link the engine without its device and WinMain, whose Debug-only names it reads
@@ -2698,6 +2780,14 @@ if(Python3_Interpreter_FOUND)
   # synthetic one and checks the block parser did not eat an End or duplicate a key.
   add_test(NAME vfx_tune_selfcheck
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/vfx_tune.py selfcheck)
+  # Tools/order_cameos.py paints the command bar's attack, hold position and move cameos: three
+  # whole pictures in the places the mapped images name, told apart by colour, the same every run.
+  add_test(NAME order_cameos_selfcheck
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/run_with_modules.py numpy,PIL
+                   ${CMAKE_CURRENT_SOURCE_DIR}/Tools/order_cameos.py selfcheck)
+  # numpy and Pillow are not on every machine (a Mac's system Python has neither): without them the
+  # test is skipped and says which is missing, instead of failing on an ImportError
+  set_tests_properties(order_cameos_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
   # The options screen is three tracked files that have to agree: TheOptionCatalog names a widget,
   # Data/Window/Menus/OptionsMenu.wnd has to carry it, and Data/Patch.str has to carry its label,
   # its tooltip and every combo box entry.  Nothing at build time notices a typo in any of them -
@@ -2790,6 +2880,7 @@ if(RELEASE_DEBUG_LOGGING)
     # under DEBUG_LOGGING (ScriptEngine's timing fields) has to be laid out alike in every TU that uses it.
     target_compile_definitions(posixdevice PRIVATE RELEASE_DEBUG_LOGGING)
     target_compile_definitions(sdldevice PRIVATE RELEASE_DEBUG_LOGGING)
+    target_compile_definitions(sdlinput PRIVATE RELEASE_DEBUG_LOGGING)	# the SDL layer's input half: SdlGamepad's lines
     target_compile_definitions(w3ddevice PRIVATE RELEASE_DEBUG_LOGGING)	# gameenginedevice's W3D half
     target_compile_definitions(generals PRIVATE RELEASE_DEBUG_LOGGING)
   endif()

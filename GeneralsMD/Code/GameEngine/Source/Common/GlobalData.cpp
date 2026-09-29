@@ -656,6 +656,7 @@ GlobalData::GlobalData()
 	m_vsync = FALSE;
 	m_direct3D11 = TRUE;
 	m_direct3D12 = FALSE;
+	m_direct3D12Refused = FALSE;
 	m_direct3D11DumpPath.clear();
 	// The Direct3D 11 frame gets every effect the backend has unless -dx11post names a chain of its
 	// own; "-dx11post off" is the faithful 2003 picture that dx11-check.ps1 compares against.
@@ -931,6 +932,7 @@ GlobalData::GlobalData()
 	m_particleGroundBounce = FALSE;
 	m_smokeThickness = 0.0f;
 	m_particleCapOverride = 0;
+	m_noDynamicLODOverride = FALSE;
 	m_maxFieldParticleCount = 30;
 	
 	// End Add
@@ -947,10 +949,9 @@ GlobalData::GlobalData()
 	m_playerColorScheme = PLAYER_COLORS_ORIGINAL;
 	// the words the game shipped with until somebody picks a translation
 	m_textLanguage = TEXT_LANGUAGE_ENGLISH;
-	// the mouse and keys this fork plays with until somebody asks for the ones the game shipped with
-	m_inputScheme = INPUT_SCHEME_MODERN;
-	// W A S D stay on the grid and the unit keys until somebody asks for them on the camera
-	m_wasdCamera = FALSE;
+	m_gamepadEnabled = TRUE;
+	m_gamepadAim = TRUE;
+	m_gamepadSwapConfirm = FALSE;
 	// the lines have been on since they were added, so nobody loses them until they say so
 	m_showOrderLines = TRUE;
 
@@ -1148,7 +1149,7 @@ GlobalData::GlobalData()
 #else
 	m_smoothMotion = TRUE;
 #endif
-	// the right button no longer scrolls, so a right-drag is free to mean something
+	// a left drag with the move, attack move or guard key armed draws a formation line
 	m_formationDrag = TRUE;
 	m_showAllyCursors = TRUE;
 	m_chromaLighting = TRUE;	//costs nothing on a machine with no Razer server: the handshake fails once

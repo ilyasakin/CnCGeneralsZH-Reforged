@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -44,6 +45,7 @@
 // Main Menu --------------------------------------------------------------------------------------
 extern void MainMenuInit( WindowLayout *layout, void *userData );
 extern void MainMenuUpdate( WindowLayout *layout, void *userData );
+extern Bool MainMenuTakesPresses( void );		///< G1: FALSE while a transition makes the main menu drop its buttons' presses
 extern void MainMenuShutdown( WindowLayout *layout, void *userData );
 extern WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 extern WindowMsgHandledType MainMenuInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
