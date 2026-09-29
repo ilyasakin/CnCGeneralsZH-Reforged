@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -35,6 +36,7 @@
 #include "Common/Language.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/Keyboard.h"
+#include "SdlDevice/GameClient/SdlGamepad.h"
 #include "Win32Device/GameClient/Win32DIKeyboard.h"
 #include "WinMain.h"
 
@@ -254,6 +256,18 @@ void DirectInputKeyboard::getKey( KeyboardIO *key )
 	key->sequence = 0;
 	key->key = KEY_NONE;
 
+	// a gamepad's keys first (addKey): DirectInput's device holds only the keyboard's own
+	if( m_count > 0 )
+	{
+		const QueuedKey &next = m_queue[ m_head ];
+		m_head = (m_head + 1) % QUEUE_SIZE;
+		--m_count;
+		key->key = next.dik;
+		key->state = next.down ? KEY_STATE_DOWN : KEY_STATE_UP;
+		key->status = KeyboardIO::STATUS_UNUSED;
+		return;
+	}
+
 	if( m_pKeyboardDevice )
 	{
 		// get 1 key, if available
@@ -314,6 +328,7 @@ void DirectInputKeyboard::getKey( KeyboardIO *key )
 
 		// set the key
 		key->key = (UnsignedByte)(kbdat.dwOfs & 0xFF);
+		SdlGamepad_noteHand();		// a key: the keyboard is the device in use (G1b)
 
 		// sequence
 		key->sequence = kbdat.dwSequence;
@@ -343,6 +358,8 @@ DirectInputKeyboard::DirectInputKeyboard( void )
 
 	m_pDirectInput = NULL;
 	m_pKeyboardDevice = NULL;
+	m_head = 0;
+	m_count = 0;
 
 
 	if( GetKeyState( VK_CAPITAL ) & 0x01 )
@@ -413,6 +430,18 @@ void DirectInputKeyboard::update( void )
 */
 
 }  // end update
+
+//-------------------------------------------------------------------------------------------------
+Bool DirectInputKeyboard::addKey( UnsignedByte dik, Bool down )
+{
+	if( dik == KEY_NONE || m_count >= QUEUE_SIZE )
+		return FALSE;
+	QueuedKey &slot = m_queue[ (m_head + m_count) % QUEUE_SIZE ];
+	slot.dik = dik;
+	slot.down = down;
+	++m_count;
+	return TRUE;
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Return TRUE if the caps lock key is down/hilighted */

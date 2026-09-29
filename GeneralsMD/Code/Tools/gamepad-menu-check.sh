@@ -66,7 +66,6 @@ if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
 	echo "gamepad-menu-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
 	exit 2
 fi
-ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="gm$$_"
 
@@ -94,11 +93,9 @@ cleanup() {
 trap cleanup EXIT
 install_snapshot "$INSTALL" "$WORK/install-before.list"
 
-mkdir -p "$ROOT" "$USERDATA"
-( cd "$INSTALL" && find . -type d ! -name '._*' ) | while IFS= read -r d; do mkdir -p "$ROOT/$d"; done
-( cd "$INSTALL" && find . -type f ! -name '._*' ) | while IFS= read -r f; do ln -s "$INSTALL/${f#./}" "$ROOT/$f"; done
-OVERLAY="$WORK/overlay"
-"$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
+mkdir -p "$USERDATA"
+. "$(dirname "$0")/gamepad-game.sh"	# ROOT, the farm the game runs in, and GAME, how it starts: here or on Windows
+gamepad_game_setup
 
 # ---- the walk: each press waits until the menu has stood still for a second since the one before (focus,
 # screen and every widget's place: GamepadFocus::isSettled), and its release follows in the same pass.  A
@@ -147,7 +144,7 @@ LOG="$EXEDIR/${TAG}walkDebugLogFile.txt"
 rm -f -- "$LOG"
 ( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_OFFSCREEN_HZ="$HZ" ZH_INPUT_SCRIPT="$WORK/walk.txt" ZH_AUDIO_BACKEND=null \
 	perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
-	"$GENERALS" -offscreen -noaudio -win -xres 1280 -yres 800 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
+	"${GAME[@]}" -noaudio -win -xres 1280 -yres 800 -quickstart -noshellmap \
 	-multiInstance -logPrefix "${TAG}walk" > "$WORK/walk.out" 2> "$WORK/walk.err" )
 STATUS=$?
 
@@ -186,7 +183,7 @@ run_hold() {	# run_hold <name> [VAR=value]: sets HOLD_LOG, HOLD_STATUS
 	rm -f -- "$HOLD_LOG"
 	( cd "$ROOT" && env "$@" ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_OFFSCREEN_HZ="$HZ" ZH_INPUT_SCRIPT="$WORK/hold.txt" ZH_AUDIO_BACKEND=null \
 		perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
-		"$GENERALS" -offscreen -noaudio -win -xres 1280 -yres 800 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
+		"${GAME[@]}" -noaudio -win -xres 1280 -yres 800 -quickstart -noshellmap \
 		-multiInstance -logPrefix "${TAG}${name}" > "$WORK/$name.out" 2> "$WORK/$name.err" )
 	HOLD_STATUS=$?
 }
