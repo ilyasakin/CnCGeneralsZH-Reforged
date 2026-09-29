@@ -26,6 +26,10 @@ What changes:
   cookie; with NULL it fails with E_INVALIDARG and the debug layer's messages never reach SDL's log) and
   f443c429c6 (SubmitAndAcquireFence reads the fence while submitLock is held).
 
+Two hunks are upstream SDL's own changes, backported unchanged from SDL's main branch: 67bf94eed5
+(RegisterMessageCallback is given a cookie) and f443c429c6 (SubmitAndAcquireFence reads the fence while
+submitLock is held); every other added line is this port's and is marked.
+
 Every run where the old code did not overflow is unchanged, except that a command buffer's first heaps
 now also mark its tables for a rebind (a few descriptor copies once per command buffer).
 

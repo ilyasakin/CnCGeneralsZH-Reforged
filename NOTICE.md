@@ -40,7 +40,7 @@ right to use them (LICENSE.md, additional terms). They appear here only to say w
   (and `vendor.ps1` on Windows), and each stays under its own licence.
 - **In the macOS app.** The app bundle carries those licences in `Contents/Resources/Licenses`.
 - **Marked changes.** The port's patches to third-party code are in `GeneralsMD/Code/Libraries/Source/*.patch`, and
-  their added lines are marked.
+  their added lines are marked, and hunks backported from upstream SDL are named in each patch's header.
 - **FreeType** is used under the GNU GPL (version 2 or later) option of its dual licence.
 - **FFmpeg** is built under LGPL-2.1-or-later only: its build scripts refuse GPL or non-free configurations.
 - **Controller button hints** are Kenney's "Input Prompts" 1.5A (kenney.nl/assets/input-prompts), under Creative
