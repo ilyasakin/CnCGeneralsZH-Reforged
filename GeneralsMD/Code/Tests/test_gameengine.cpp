@@ -13279,7 +13279,9 @@ TEST(menu_transition_speed_scales_the_step_rate_and_never_reaches_zero)
 //-------------------------------------------------------------------------------------------------
 TEST(build_placement_preview_defaults_are_the_ones_the_game_always_used)
 {
+	GlobalData *saved = TheWritableGlobalData;
 	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
 
 	CHECK_NEAR( scratch->m_buildPlacementOpacity, PLACEMENT_SILHOUETTE_OPACITY, 0.0001f );
 	CHECK( scratch->m_buildPlacementShadows );
@@ -13291,7 +13293,8 @@ TEST(build_placement_preview_defaults_are_the_ones_the_game_always_used)
 	// unless somebody turns it off
 	CHECK( scratch->m_formationDrag );
 
-	delete scratch;
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
+	TheWritableGlobalData = saved;
 }
 
 //-------------------------------------------------------------------------------------------------
