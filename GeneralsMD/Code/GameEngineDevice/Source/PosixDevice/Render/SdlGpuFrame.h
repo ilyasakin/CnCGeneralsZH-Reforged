@@ -149,8 +149,9 @@ public:
 	void Release_After_Batch(SDL_GPUTexture * texture, SDL_GPUBuffer * buffer);
 	/// Counts flushes: what a GPU copy compares to know whether this batch has used it.
 	uint64_t Batch() const { return BatchNumber; }
-	/// Whether the batch has grown enough that the next draw should flush first.
-	bool Batch_Is_Full() const;
+	/// Whether the batch has grown enough that the next draw should flush first: its staged and uploaded bytes,
+	/// or its draws (BatchDrawLimit).  Counts the flushes the draw limit asks for.
+	bool Batch_Is_Full();
 	/// The depth-stencil's SDL_GPUTextureFormat.  Every pass has it attached.
 	unsigned int Depth_Format() const { return DepthFormat; }
 
@@ -177,6 +178,9 @@ public:
 	unsigned int Flushes_In_Flight_Most() const { return FlushInFlightMost; }
 	unsigned int Flush_Waits() const { return FlushWaits; }
 	unsigned int Flush_Limit() const { return FlushLimit; }
+	/// The flushes the draw limit asked for, and the limit.
+	unsigned int Draw_Limit_Flushes() const { return DrawLimitFlushes; }
+	unsigned int Batch_Draw_Limit() const { return BatchDrawLimit; }
 
 	/// -offscreen, the game with no window: Present draws the gamma pass into a display texture of the back
 	/// buffer's size, as it would into a swapchain's, and keeps at most two frames on the GPU, which a
@@ -229,6 +233,12 @@ private:
 	unsigned int FlushesTotal;
 	unsigned int FlushInFlightMost;
 	unsigned int FlushWaits;
+	/// The most draws one batch records before the next draw flushes it.  A Direct3D 9 driver submits a full
+	/// command buffer on its own, presented or not; a batch that only ended at Present grew without bound when
+	/// the game drew and did not present (a -mission quickstart's movie: minutes, one command buffer, and on
+	/// Direct3D 12 hundreds of descriptor heaps held by it).  ZH_GPU_BATCH_DRAWS=<n> (0: no limit).
+	unsigned int BatchDrawLimit;
+	unsigned int DrawLimitFlushes;
 	double OffscreenMs;		///< -offscreen's waits: frames in flight, and the pacer
 	bool OffscreenPresents;
 	unsigned int OffscreenHz;

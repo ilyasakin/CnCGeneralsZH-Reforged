@@ -131,6 +131,8 @@ SdlGpuFrame::SdlGpuFrame() :
 	FlushesTotal(0),
 	FlushInFlightMost(0),
 	FlushWaits(0),
+	BatchDrawLimit(2048),
+	DrawLimitFlushes(0),
 	OffscreenMs(0.0),
 	OffscreenPresents(false),
 	OffscreenHz(0),
@@ -167,6 +169,10 @@ SdlGpuFrame::SdlGpuFrame() :
 	// the ring, which is how the ring's effect is measured.
 	if (const char * limit = getenv("ZH_GPU_FLUSH_LIMIT")) {
 		FlushLimit = (unsigned int)strtoul(limit, NULL, 10);
+	}
+	// ZH_GPU_BATCH_DRAWS=<n>: at most n draws in one batch (default 2048); 0 lets a batch grow until Present.
+	if (const char * draws = getenv("ZH_GPU_BATCH_DRAWS")) {
+		BatchDrawLimit = (unsigned int)strtoul(draws, NULL, 10);
 	}
 	memset(&CurrentTarget, 0, sizeof(CurrentTarget));
 	TargetSet = false;

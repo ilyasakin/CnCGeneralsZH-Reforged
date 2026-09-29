@@ -203,9 +203,16 @@ void SdlGpuFrame::Release_After_Batch(SDL_GPUTexture * texture, SDL_GPUBuffer * 
 	if (buffer != NULL) DeadBuffers.push_back(buffer);
 }
 
-bool SdlGpuFrame::Batch_Is_Full() const
+bool SdlGpuFrame::Batch_Is_Full()
 {
-	return StreamBytes.size() + UploadBytes.size() > BATCH_LIMIT;
+	if (StreamBytes.size() + UploadBytes.size() > BATCH_LIMIT) {
+		return true;
+	}
+	if (BatchDrawLimit > 0 && Draws.size() >= BatchDrawLimit) {
+		++DrawLimitFlushes;
+		return true;
+	}
+	return false;
 }
 
 void SdlGpuFrame::End_Batch()
