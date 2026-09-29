@@ -64,7 +64,9 @@ say() { echo "linux-packages-check: $*"; }
 crc() { printf '%s\n' "$1" | sed -n "s/.*seed $2, 2 players: HEADLESS CRC \(0x[0-9A-Fa-f]*\) at frame $3.*/\1/p" | head -1; }	# <E1 output> <seed> <frame>
 
 # the frame run's farm, the way replay-check.sh makes its own (links into the read-only data)
-WORKROOT="$(mktemp -d "${TMPDIR:-/tmp}/zhr-pkgcheck.XXXXXX")" || exit 1
+# a work folder that could not be made is the end of the run: going on with WORKROOT empty would write under /
+WORKROOT="$(mktemp -d "${TMPDIR:-/tmp}/zhr-pkgcheck.XXXXXX")" || WORKROOT=""
+if [ -z "$WORKROOT" ] || [ ! -d "$WORKROOT" ]; then echo "linux-packages-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2; exit 2; fi
 trap 'docker rm -f $(docker ps -aq --filter "label=zhr-pkgcheck=$$") > /dev/null 2>&1; rm -rf -- "$WORKROOT"' EXIT
 FARM="$WORKROOT/farm"
 ( cd "$DATA/zerohour" && find . -type d ! -name '._*' ) | while IFS= read -r d; do mkdir -p "$FARM/$d"; done

@@ -32,7 +32,9 @@ CODE="$(cd "$(dirname "$0")/.." && pwd)"
 FETCH="$CODE/Tools/linux-fetch-art.sh"
 for tool in sha256sum flock; do command -v $tool > /dev/null || { echo "skip: no $tool"; exit 77; }; done
 command -v curl > /dev/null || command -v wget > /dev/null || { echo "skip: neither curl nor wget"; exit 77; }
-T="$(mktemp -d "${TMPDIR:-/tmp}/fetch-art.XXXXXX")" || exit 1
+# a work folder that could not be made is the end of the run: going on with T empty would write under /
+T="$(mktemp -d "${TMPDIR:-/tmp}/fetch-art.XXXXXX")" || T=""
+if [ -z "$T" ] || [ ! -d "$T" ]; then echo "test_linux_fetch_art: cannot make a work folder under ${TMPDIR:-/tmp}" >&2; exit 2; fi
 trap 'rm -rf -- "$T"' EXIT
 failures=0
 check() { if eval "$1"; then echo "PASS $2"; else echo "FAIL $2"; failures=$((failures + 1)); fi; }
