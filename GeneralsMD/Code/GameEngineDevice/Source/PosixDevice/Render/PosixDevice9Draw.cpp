@@ -927,10 +927,17 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 
 	phases.Mark("copies");
 	// The vertices: a static buffer's copy is bound where the stream points, and a dynamic buffer's or
-	// the caller's bytes are staged, from the first vertex the draw can read.
+	// the caller's bytes are staged.  An indexed draw reads vertices MinVertex to MinVertex + VertexCount - 1 past
+	// its base, and only those are staged: the stream is then bound MinVertex vertices before them, so each index
+	// still lands on its own vertex.  The engine's dynamic buffer is one buffer filled front to back through a
+	// frame, and copying from the base instead (every vertex before MinVertex too) copied the whole buffer so far
+	// on every draw: in a particle-heavy frame nine bytes in ten were never read, and the Deck's frames went from
+	// 15 to 60 ms and more.  The binding cannot start before the stream does, so a draw whose vertices would land
+	// too near its start still stages from its base, as before.
 	if (stage_vertices) {
 		unsigned int first = 0;
 		unsigned int count = reads;
+		unsigned int skipped = 0;		// vertices before MinVertex, not staged
 		if (!user) {
 			if (call.Indexed && call.BaseVertex < 0) {
 				Refuse_Draw("a negative base vertex into a dynamic buffer");
@@ -938,14 +945,44 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 			}
 			first = call.Indexed ? (unsigned int)call.BaseVertex : call.StartVertex;
 			count = call.Indexed ? call.MinVertex + call.VertexCount : reads;
+			if (call.Indexed) {
+				skipped = call.MinVertex;
+			}
 		}
+#ifndef NDEBUG
+		// Debug builds check what the staging rests on: no index of the draw below MinVertex, none past its range.
+		if (!user && call.Indexed) {
+			const size_t index_start = (size_t)call.StartIndex * index_size;
+			if (index_start + (size_t)reads * index_size <= index_buffer->storage().length()) {
+				const uint8_t *indices = index_buffer->storage().bytes() + index_start;
+				for (unsigned int k = 0; k < reads; ++k) {
+					const unsigned int index = index_size == 4 ? ((const uint32_t *)indices)[k] : ((const uint16_t *)indices)[k];
+					if (index < call.MinVertex || index >= call.MinVertex + call.VertexCount) {
+						fprintf(stderr, "PosixDevice9: a draw reads index %u outside MinVertex %u + VertexCount %u (start index %u, "
+							"%u primitives, base vertex %d, programs %s | %s)\n", index, call.MinVertex, call.VertexCount,
+							call.StartIndex, call.PrimitiveCount, call.BaseVertex, vertex_program.Key.c_str(), pixel_program.Key.c_str());
+						abort();
+					}
+				}
+			}
+		}
+#endif
 		const size_t start = user ? 0 : (size_t)StreamOffsets[0] + (size_t)first * stride;
 		const size_t size = (size_t)count * stride;
 		if (!user && start + size > vertex_buffer->storage().length()) {
 			return D3DERR_INVALIDCALL;
 		}
 		const uint8_t *source = user ? (const uint8_t *)call.UserVertices : vertex_buffer->storage().bytes() + start;
-		memcpy(Gpu->Stage((uint32_t)size, draw.VertexOffset), source, size);
+		const size_t shift = (size_t)skipped * stride;
+		uint32_t staged = 0;
+		if (shift != 0 && Gpu->Stage_Offset_Next() >= shift) {
+			memcpy(Gpu->Stage((uint32_t)(size - shift), staged), source + shift, size - shift);
+			draw.VertexOffset = staged - (uint32_t)shift;
+		}
+		else {
+			memcpy(Gpu->Stage((uint32_t)size, staged), source, size);
+			draw.VertexOffset = staged;
+		}
 		draw.First = 0;
 		draw.BaseVertex = 0;
 	}

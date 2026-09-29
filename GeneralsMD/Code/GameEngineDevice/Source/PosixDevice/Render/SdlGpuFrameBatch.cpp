@@ -63,6 +63,11 @@ uint8_t * SdlGpuFrame::Stage(uint32_t size, uint32_t & offset)
 	return grow(StreamBytes, size, offset);
 }
 
+uint32_t SdlGpuFrame::Stage_Offset_Next() const
+{
+	return (uint32_t)((StreamBytes.size() + STAGING_ALIGNMENT - 1) & ~(size_t)(STAGING_ALIGNMENT - 1));
+}
+
 uint8_t * SdlGpuFrame::Upload_Space(uint32_t size, uint32_t & offset)
 {
 	return grow(UploadBytes, size, offset);
