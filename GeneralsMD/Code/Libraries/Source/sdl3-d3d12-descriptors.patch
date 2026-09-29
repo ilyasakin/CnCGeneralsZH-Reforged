@@ -39,13 +39,15 @@ Tools/vendor.sh; CMakeLists.txt refuses a ZH_D3D12 build of a tree without it.
 diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
 --- a/src/gpu/d3d12/SDL_gpu_d3d12.c
 +++ b/src/gpu/d3d12/SDL_gpu_d3d12.c
-@@ -955,6 +955,21 @@
+@@ -955,6 +955,23 @@
  
      D3D12StagingDescriptorPool *stagingDescriptorPools[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
      D3D12GPUDescriptorHeapPool gpuDescriptorHeapPools[2];
 +
-+    /* Zero Hour Reforged: descriptor-heap accounting, printed at destroy with ZH_SDL_GPU_D3D12_STATS=1 and always
-+       when a guard below refused anything.  zhHeapsOut and zhHeapsOutMost are per heap type, under the pool lock. */
++    /* Zero Hour Reforged: sdl3-d3d12-descriptors.patch, revision 2 (the vendor scripts and CMakeLists.txt look for
++       this line; a copy with an older revision gets the file back as SDL ships it before this one goes on).
++       Descriptor-heap accounting, printed at destroy with ZH_SDL_GPU_D3D12_STATS=1 and always when a guard below
++       refused anything.  zhHeapsOut and zhHeapsOutMost are per heap type, under the pool lock. */
 +    SDL_AtomicInt zhHeapsCreated[2];
 +    Uint32 zhHeapsOut[2];
 +    Uint32 zhHeapsOutMost[2];
@@ -61,7 +63,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      // Deferred resource releasing
  
-@@ -1017,6 +1032,11 @@
+@@ -1017,6 +1034,11 @@
      D3D12DescriptorHeap **usedDescriptorHeaps;
      Uint32 usedDescriptorHeapCount;
      Uint32 usedDescriptorHeapCapacity;
@@ -73,11 +75,10 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      D3D12UniformBuffer **usedUniformBuffers;
      Uint32 usedUniformBufferCount;
-@@ -1760,6 +1780,34 @@
- static void D3D12_DestroyDevice(SDL_GPUDevice *device)
+@@ -1761,6 +1783,34 @@
  {
      D3D12Renderer *renderer = (D3D12Renderer *)device->driverData;
-+
+ 
 +    /* Zero Hour Reforged: the descriptor-heap accounting.  Always when a guard refused anything; otherwise with
 +       ZH_SDL_GPU_D3D12_STATS=1.  "Out" is heaps taken from the pool and not yet back: in flight or recording. */
 +    {
@@ -105,10 +106,11 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
 +                SDL_GetAtomicInt(&renderer->zhRefusedDispatches));
 +        }
 +    }
- 
++
      // Release blit pipeline structures
      D3D12_INTERNAL_ReleaseBlitPipelines((SDL_GPURenderer *)renderer);
-@@ -2296,6 +2344,9 @@
+ 
+@@ -2296,6 +2346,9 @@
      heap->heapType = type;
      heap->maxDescriptors = descriptorCount;
      heap->staging = staging;
@@ -118,12 +120,10 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      heap->descriptorSize = ID3D12Device_GetDescriptorHandleIncrementSize(renderer->device, type);
      D3D_CALL_RET(handle, GetCPUDescriptorHandleForHeapStart, &heap->descriptorHeapCPUStart);
      if (!staging) {
-@@ -2372,8 +2423,45 @@
-     }
- 
+@@ -2374,6 +2427,43 @@
      return true;
-+}
-+
+ }
+ 
 +/* Zero Hour Reforged: the most a counter has reached, and one loud line per kind of guard that fired. */
 +static bool D3D12_INTERNAL_ZhRaiseMost(SDL_AtomicInt *most, int value)
 +{
@@ -135,8 +135,8 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
 +        seen = SDL_GetAtomicInt(most);
 +    }
 +    return false;
- }
- 
++}
++
 +/* A new most of 8, 16, 32 ..., printed as it happens with ZH_SDL_GPU_D3D12_STATS=1: a run that never reaches its
 +   destroy line still shows the growth. */
 +static void D3D12_INTERNAL_ZhSayMost(Uint32 most, const char *what)
@@ -164,7 +164,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  static void D3D12_INTERNAL_TrackGPUDescriptorHeap(
      D3D12CommandBuffer *commandBuffer,
      D3D12DescriptorHeap *descriptorHeap)
-@@ -2394,6 +2482,9 @@
+@@ -2394,6 +2484,9 @@
  
      commandBuffer->usedDescriptorHeaps[commandBuffer->usedDescriptorHeapCount] = descriptorHeap;
      commandBuffer->usedDescriptorHeapCount += 1;
@@ -174,7 +174,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  }
  
  static D3D12DescriptorHeap *D3D12_INTERNAL_AcquireGPUDescriptorHeapFromPool(
-@@ -2415,8 +2506,23 @@
+@@ -2415,8 +2508,23 @@
              descriptorHeapType == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? VIEW_GPU_DESCRIPTOR_COUNT : SAMPLER_GPU_DESCRIPTOR_COUNT,
              false);
      }
@@ -198,7 +198,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      D3D12_INTERNAL_TrackGPUDescriptorHeap(commandBuffer, result);
      return result;
  }
-@@ -2434,6 +2540,7 @@
+@@ -2434,6 +2542,7 @@
      heap->currentDescriptorIndex = 0;
  
      SDL_LockMutex(pool->lock);
@@ -206,7 +206,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      if (pool->count >= pool->capacity) {
          pool->capacity *= 2;
          pool->heaps = (D3D12DescriptorHeap **)SDL_realloc(
-@@ -5009,15 +5116,47 @@
+@@ -5009,15 +5118,47 @@
          length);
  }
  
@@ -255,7 +255,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      commandBuffer->gpuDescriptorHeaps[0] = viewHeap;
      commandBuffer->gpuDescriptorHeaps[1] = samplerHeap;
  
-@@ -5028,6 +5167,28 @@
+@@ -5028,6 +5169,28 @@
          commandBuffer->graphicsCommandList,
          2,
          heaps);
@@ -284,7 +284,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  }
  
  static void D3D12_INTERNAL_WriteGPUDescriptors(
-@@ -5040,14 +5201,20 @@
+@@ -5040,14 +5203,20 @@
      D3D12DescriptorHeap *heap;
      D3D12_CPU_DESCRIPTOR_HANDLE gpuHeapCpuHandle;
  
@@ -312,7 +312,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      gpuHeapCpuHandle.ptr = heap->descriptorHeapCPUStart.ptr + (heap->currentDescriptorIndex * heap->descriptorSize);
      gpuBaseDescriptor->ptr = heap->descriptorHeapGPUStart.ptr + (heap->currentDescriptorIndex * heap->descriptorSize);
  
-@@ -5068,15 +5235,44 @@
+@@ -5068,15 +5237,44 @@
      }
  }
  
@@ -361,7 +361,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      D3D12_CPU_DESCRIPTOR_HANDLE cpuHandles[MAX_TEXTURE_SAMPLERS_PER_STAGE];
      D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
-@@ -5279,6 +5475,13 @@
+@@ -5279,6 +5477,13 @@
              commandBuffer->needFragmentUniformBufferBind[i] = false;
          }
      }
@@ -375,7 +375,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  }
  
  static void D3D12_DrawIndexedPrimitives(
-@@ -5290,7 +5493,9 @@
+@@ -5290,7 +5495,9 @@
      Uint32 firstInstance)
  {
      D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
@@ -386,7 +386,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      ID3D12GraphicsCommandList_DrawIndexedInstanced(
          d3d12CommandBuffer->graphicsCommandList,
-@@ -5309,7 +5514,9 @@
+@@ -5309,7 +5516,9 @@
      Uint32 firstInstance)
  {
      D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
@@ -397,7 +397,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      ID3D12GraphicsCommandList_DrawInstanced(
          d3d12CommandBuffer->graphicsCommandList,
-@@ -5328,7 +5535,9 @@
+@@ -5328,7 +5537,9 @@
      D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
      D3D12Buffer *d3d12Buffer = ((D3D12BufferContainer *)buffer)->activeBuffer;
  
@@ -408,7 +408,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      ID3D12GraphicsCommandList_ExecuteIndirect(
          d3d12CommandBuffer->graphicsCommandList,
-@@ -5351,7 +5560,9 @@
+@@ -5351,7 +5562,9 @@
      D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
      D3D12Buffer *d3d12Buffer = ((D3D12BufferContainer *)buffer)->activeBuffer;
  
@@ -419,7 +419,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      ID3D12GraphicsCommandList_ExecuteIndirect(
          d3d12CommandBuffer->graphicsCommandList,
-@@ -5505,49 +5716,23 @@
+@@ -5505,49 +5718,23 @@
      }
  }
  
@@ -480,10 +480,13 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      if (pipeline->header.numReadWriteStorageTextures > 0) {
          for (Uint32 i = 0; i < pipeline->header.numReadWriteStorageTextures; i += 1) {
              cpuHandles[i] = d3d12CommandBuffer->computeReadWriteStorageTextureDescriptorHandles[i];
-@@ -5585,6 +5770,47 @@
-     }
- }
- 
+@@ -5582,7 +5769,48 @@
+             d3d12CommandBuffer->graphicsCommandList,
+             d3d12CommandBuffer->currentComputePipeline->rootSignature->readWriteStorageBufferRootIndex,
+             gpuDescriptorHandle);
++    }
++}
++
 +static void D3D12_BindComputePipeline(
 +    SDL_GPUCommandBuffer *commandBuffer,
 +    SDL_GPUComputePipeline *computePipeline)
@@ -508,7 +511,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
 +
 +    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
 +        d3d12CommandBuffer->needComputeUniformBufferBind[i] = true;
-+    }
+     }
 +
 +    for (Uint32 i = 0; i < pipeline->header.numUniformBuffers; i += 1) {
 +        if (d3d12CommandBuffer->computeUniformBuffers[i] == NULL) {
@@ -523,12 +526,10 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
 +    // first dispatch tries again and is refused if that fails too)
 +    d3d12CommandBuffer->zhNeedComputeReadWriteBind = true;
 +    D3D12_INTERNAL_ZhBindComputeReadWriteResources(d3d12CommandBuffer);
-+}
-+
+ }
+ 
  static void D3D12_BindComputeSamplers(
-     SDL_GPUCommandBuffer *commandBuffer,
-     Uint32 firstSlot,
-@@ -5708,15 +5934,39 @@
+@@ -5708,15 +5936,39 @@
          length);
  }
  
@@ -572,7 +573,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      D3D12_CPU_DESCRIPTOR_HANDLE cpuHandles[MAX_TEXTURE_SAMPLERS_PER_STAGE];
      D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
-@@ -5811,6 +6061,13 @@
+@@ -5811,6 +6063,13 @@
          }
          commandBuffer->needComputeUniformBufferBind[i] = false;
      }
@@ -586,7 +587,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  }
  
  static void D3D12_DispatchCompute(
-@@ -5821,7 +6078,9 @@
+@@ -5821,7 +6080,9 @@
  {
      D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
  
@@ -597,7 +598,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      ID3D12GraphicsCommandList_Dispatch(
          d3d12CommandBuffer->graphicsCommandList,
          groupcountX,
-@@ -5837,7 +6096,9 @@
+@@ -5837,7 +6098,9 @@
      D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
      D3D12Buffer *d3d12Buffer = ((D3D12BufferContainer *)buffer)->activeBuffer;
  
@@ -608,7 +609,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      ID3D12GraphicsCommandList_ExecuteIndirect(
          d3d12CommandBuffer->graphicsCommandList,
          d3d12CommandBuffer->renderer->indirectDispatchCommandSignature,
-@@ -7877,6 +8138,9 @@
+@@ -7877,6 +8140,9 @@
  
      commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = NULL;
      commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] = NULL;
@@ -618,7 +619,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      // Uniform buffers are now available
      SDL_LockMutex(renderer->acquireUniformBufferLock);
-@@ -7957,8 +8221,9 @@
+@@ -7957,8 +8223,9 @@
      return true;
  }
  
@@ -630,7 +631,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  {
      D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
      D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
-@@ -8036,6 +8301,12 @@
+@@ -8036,6 +8303,12 @@
          return false;
      }
  
@@ -643,7 +644,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      // Mark that a fence should be signaled after command list execution
      res = ID3D12CommandQueue_Signal(
          renderer->commandQueue,
-@@ -8057,6 +8328,10 @@
+@@ -8057,6 +8330,10 @@
  
      renderer->submittedCommandBuffers[renderer->submittedCommandBufferCount] = d3d12CommandBuffer;
      renderer->submittedCommandBufferCount += 1;
@@ -654,7 +655,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  
      bool result = true;
  
-@@ -8132,17 +8407,24 @@
+@@ -8132,17 +8409,24 @@
      SDL_UnlockMutex(renderer->submitLock);
  
      return result;
@@ -681,7 +682,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
  }
  
  static bool D3D12_Cancel(
-@@ -8901,6 +9183,7 @@
+@@ -8901,6 +9185,7 @@
  static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoLogger(D3D12Renderer *renderer)
  {
      ID3D12InfoQueue1 *infoQueue = NULL;
@@ -689,7 +690,7 @@ diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
      HRESULT res;
  
      res = ID3D12Device_QueryInterface(
-@@ -8916,7 +9199,7 @@
+@@ -8916,7 +9201,7 @@
          D3D12_INTERNAL_OnD3D12DebugInfoMsg,
          D3D12_MESSAGE_CALLBACK_FLAG_NONE,
          NULL,

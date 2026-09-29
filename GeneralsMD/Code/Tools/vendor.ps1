@@ -320,11 +320,24 @@ function Install-Sdl3 {
 
 # --- The fork's second change to SDL3, Libraries\Source\sdl3-d3d12-descriptors.patch: SDL_GPU's Direct3D 12
 # backend makes room in its descriptor heaps before it writes a bind (the patch's header says why).  A copy
-# that has it says so by ZhEnsureGPUDescriptorSpace, so a copy fetched before the patch existed gets it too.
+# that has it says so by its marker, which names the revision, so a copy fetched before the patch existed gets
+# it too, and one carrying an older revision gets the file back as SDL ships it, out of the archive, first.
+$Sdl3D3d12PatchMarker = 'sdl3-d3d12-descriptors.patch, revision 2'
 function Install-Sdl3D3d12Patch {
   $destination = Join-Path $libraries 'Source\SDL3'
   $source = Join-Path $destination 'src\gpu\d3d12\SDL_gpu_d3d12.c'
-  if (Select-String -LiteralPath $source -Pattern 'ZhEnsureGPUDescriptorSpace' -SimpleMatch -Quiet) { return }
+  if (Select-String -LiteralPath $source -Pattern $Sdl3D3d12PatchMarker -SimpleMatch -Quiet) { return }
+  if (Select-String -LiteralPath $source -Pattern 'ZhEnsureGPUDescriptorSpace' -SimpleMatch -Quiet) {
+    $archive = Get-File 'https://github.com/libsdl-org/SDL/archive/fa2c02bb6e21974a89ea9824bc53c9932abe5f9c.zip' (Join-Path $work 'SDL3-3.4.16.zip')
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+      $entry = $zip.Entries | Where-Object { $_.FullName -like '*/src/gpu/d3d12/SDL_gpu_d3d12.c' } | Select-Object -First 1
+      if ($null -eq $entry) { throw "no SDL_gpu_d3d12.c in $archive to replace an older sdl3-d3d12-descriptors.patch with" }
+      [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $source, $true)
+    } finally { $zip.Dispose() }
+    Step "SDL_gpu_d3d12.c back as SDL ships it (it carried an older sdl3-d3d12-descriptors.patch)"
+  }
   # The patch with the source's own line endings, as Install-LzhlPatch does it.
   $text = [IO.File]::ReadAllText((Join-Path $libraries 'Source\sdl3-d3d12-descriptors.patch')) -replace "`r`n", "`n"
   if ([IO.File]::ReadAllText($source).Contains("`r`n")) { $text = $text -replace "`n", "`r`n" }
@@ -334,7 +347,7 @@ function Install-Sdl3D3d12Patch {
   $env:GIT_CEILING_DIRECTORIES = Join-Path $libraries 'Source'
   try { git -C $destination -c core.autocrlf=false apply $patch }
   finally { Remove-Item Env:GIT_CEILING_DIRECTORIES }
-  if (-not (Select-String -LiteralPath $source -Pattern 'ZhEnsureGPUDescriptorSpace' -SimpleMatch -Quiet)) {
+  if (-not (Select-String -LiteralPath $source -Pattern $Sdl3D3d12PatchMarker -SimpleMatch -Quiet)) {
     throw "sdl3-d3d12-descriptors.patch did not apply to Libraries\Source\SDL3"
   }
   Step "sdl3-d3d12-descriptors.patch -> Libraries\Source\SDL3"

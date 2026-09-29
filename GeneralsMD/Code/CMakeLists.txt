@@ -184,12 +184,13 @@ if(APPLE)
 endif()
 
 # SDL3's Direct3D 12 patch (Libraries/Source/sdl3-d3d12-descriptors.patch), where that backend is built:
-# a tree fetched before it builds a -d3d12 renderer that writes past its descriptor heaps' end.
+# a tree fetched before it builds a -d3d12 renderer that writes past its descriptor heaps' end.  The marker
+# names the patch's revision (the vendor scripts replace an older one), so an older one stops here too.
 if(ZH_D3D12)
   file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/SDL3/src/gpu/d3d12/SDL_gpu_d3d12.c _zh_sdl3_d3d12_patched
-       REGEX "ZhEnsureGPUDescriptorSpace")
+       REGEX "sdl3-d3d12-descriptors.patch, revision 2")
   if(NOT _zh_sdl3_d3d12_patched)
-    message(FATAL_ERROR "Libraries/Source/SDL3 lacks sdl3-d3d12-descriptors.patch. ${VENDOR_HINT}")
+    message(FATAL_ERROR "Libraries/Source/SDL3 lacks sdl3-d3d12-descriptors.patch (revision 2). ${VENDOR_HINT}")
   endif()
 endif()
 
