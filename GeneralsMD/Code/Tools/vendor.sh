@@ -500,7 +500,7 @@ install_sdl3() {
   step "SDL3 3.4.16 -> Libraries/Source/SDL3"
 }
 
-# --- The fork's one change to SDL3, Libraries/Source/sdl3-metal-windowless.patch: METAL_PrepareDriver
+# --- The fork's first change to SDL3, Libraries/Source/sdl3-metal-windowless.patch: METAL_PrepareDriver
 # also accepts ZH_SDL_GPU_METAL_WINDOWLESS, so -offscreen makes a Metal GPU device on a host with no
 # window server (the patch's header says why, what upstream has, and when it goes). Hint-gated: every
 # run without the hint is upstream's. Checked by the marker, for the reason install_litehtml_patch gives.
@@ -517,6 +517,25 @@ install_sdl3_patch() {
     exit 1
   fi
   step "sdl3-metal-windowless.patch -> Libraries/Source/SDL3"
+}
+
+# --- The fork's second change to SDL3, Libraries/Source/sdl3-d3d12-descriptors.patch: SDL_GPU's Direct3D 12
+# backend makes room in its descriptor heaps before it writes a bind, instead of writing past their end (the
+# patch's header says why, what upstream has, and when it goes). Only Windows compiles that backend, so this
+# is for one tree on every platform; vendor.ps1 -D3D12 applies it too, and CMakeLists.txt checks the marker.
+install_sdl3_d3d12_patch() {
+  local destination="$libraries/Source/SDL3"
+  local source="$destination/src/gpu/d3d12/SDL_gpu_d3d12.c"
+  if grep -q 'ZhEnsureGPUDescriptorSpace' "$source" 2>/dev/null; then return 0; fi
+  local patch="$libraries/Source/sdl3-d3d12-descriptors.patch"
+  GIT_CEILING_DIRECTORIES="$libraries/Source" \
+    git -C "$destination" -c core.autocrlf=false apply "$patch" || true
+  if ! grep -q 'ZhEnsureGPUDescriptorSpace' "$source" 2>/dev/null; then
+    echo "[vendor] sdl3-d3d12-descriptors.patch did not apply to Libraries/Source/SDL3" >&2
+    echo "[vendor] ($source still lacks ZhEnsureGPUDescriptorSpace)" >&2
+    exit 1
+  fi
+  step "sdl3-d3d12-descriptors.patch -> Libraries/Source/SDL3"
 }
 
 # --- miniaudio 0.11.25, the one header and its one implementation file: audio beneath C4's port of
@@ -805,6 +824,7 @@ install_litehtml_patch
 install_nanosvg
 install_sdl3
 install_sdl3_patch
+install_sdl3_d3d12_patch
 install_miniaudio
 install_glslang
 install_spirv_cross

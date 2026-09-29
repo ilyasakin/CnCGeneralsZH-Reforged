@@ -171,7 +171,7 @@ foreach(vendored ${VENDORED})
     message(FATAL_ERROR "${vendored} is missing. ${VENDOR_HINT}")
   endif()
 endforeach()
-# SDL3's one patch (Libraries/Source/sdl3-metal-windowless.patch, decision 10).  A tree fetched before
+# SDL3's Metal patch (Libraries/Source/sdl3-metal-windowless.patch, decision 10).  A tree fetched before
 # it and never given a vendor.sh run since still builds, and -offscreen then fails on a host with no
 # window server with SDL's own "no supported SDL_GPU backend", which names nothing.  Said here instead.
 # Apple only: the patch is to the Metal backend.
@@ -180,6 +180,16 @@ if(APPLE)
        REGEX "ZH_SDL_GPU_METAL_WINDOWLESS")
   if(NOT _zh_sdl3_patched)
     message(FATAL_ERROR "Libraries/Source/SDL3 lacks sdl3-metal-windowless.patch. ${VENDOR_HINT}")
+  endif()
+endif()
+
+# SDL3's Direct3D 12 patch (Libraries/Source/sdl3-d3d12-descriptors.patch), where that backend is built:
+# a tree fetched before it builds a -d3d12 renderer that writes past its descriptor heaps' end.
+if(ZH_D3D12)
+  file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Source/SDL3/src/gpu/d3d12/SDL_gpu_d3d12.c _zh_sdl3_d3d12_patched
+       REGEX "ZhEnsureGPUDescriptorSpace")
+  if(NOT _zh_sdl3_d3d12_patched)
+    message(FATAL_ERROR "Libraries/Source/SDL3 lacks sdl3-d3d12-descriptors.patch. ${VENDOR_HINT}")
   endif()
 endif()
 
