@@ -82,8 +82,12 @@ echo [build] config: %CONFIG%
 
 rem --- third-party sources the repository does not carry (zlib, LZH-Light, the DirectX 8 headers,
 rem the GameSpy SDK) and the upscaled art. Fetches whatever is missing and is a no-op once it is
-rem there, so one build.bat on a fresh clone is enough. ---
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SRC%\Tools\vendor.ps1"
+rem there, so one build.bat on a fresh clone is enough.  ARM64 builds the -d3d12 renderer by default
+rem (ZH_D3D12 in CMakeLists.txt: that platform's Direct3D 9 path draws without its terrain), and its SDL3
+rem GPU stack comes with -D3D12. ---
+set "VENDOR_ARGS="
+if /i "%PLATFORM%"=="ARM64" set "VENDOR_ARGS=-D3D12"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SRC%\Tools\vendor.ps1" %VENDOR_ARGS%
 if !errorlevel! neq 0 (
     echo [build] ERROR: fetching the third-party sources failed.
     goto :fail
