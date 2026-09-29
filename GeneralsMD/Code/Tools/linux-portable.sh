@@ -24,11 +24,14 @@
 #   <out>/bin/generals                            stripped; bin/generals.debug beside it (a GNU debuglink)
 #   <out>/share/zero-hour-reforged/overlay/       the staged overlay (zh_overlay), its art copied in
 #   <out>/share/zero-hour-reforged/licenses/      from macos-app-licenses.txt, checked against the link line
-#   <out>/share/applications/, share/icons/       a .desktop file and the icon (Main/Generals.ico's 48 px)
+#   <out>/share/zero-hour-reforged/fetch-art.sh   Tools/linux-fetch-art.sh: with --no-art, the launcher fetches the
+#                                                 art into the user data folder (the packages' way, upstream's)
+#   <out>/share/applications/, share/icons/       a .desktop file and the icon (Main/Generals.ico's 48 px, and 128 px)
 #   <out>/VERSION, <out>/README.txt               which build this is; how to install it and point it at Zero Hour
 #   <out>.tar.zst                                 the folder, packed (not with --no-tar)
-#   <out>.AppImage                                the same folder as one AppImage (with --appimage): AppRun is the
-#                                                 launcher, the .desktop file and icon at its root, a type-2 runtime
+#   <out>.AppImage                                the same folder as one AppImage (with --appimage), without the debug
+#                                                 file: AppRun is the launcher, the .desktop file and icon at its root,
+#                                                 a type-2 runtime
 #
 # THE BUILD runs inside Valve's Steam Runtime 3 "sniper" SDK container (Debian 11, glibc 2.31, g++-14, mold),
 # as the user running this, with the repository, the build folder and CMake mounted at their own paths.
@@ -145,6 +148,7 @@ OUT="$(cd "$OUT" && pwd)"
 mounts+=( -v "$(dirname "$OUT"):$(dirname "$OUT")" )
 S="$OUT/share/zero-hour-reforged"
 mkdir -p "$OUT/bin" "$S/overlay" "$S/licenses" "$OUT/share/applications" "$OUT/share/icons/hicolor/48x48/apps" \
+	"$OUT/share/icons/hicolor/128x128/apps" \
 	|| fail "cannot create $OUT"
 in_sdk "objcopy --only-keep-debug '$GENERALS' '$OUT/bin/generals.debug' && strip -S -x -o '$OUT/bin/generals' '$GENERALS' && \
 	cd '$OUT/bin' && objcopy --add-gnu-debuglink=generals.debug generals" || fail "cannot strip generals"
@@ -158,18 +162,27 @@ for e in $ENTRIES; do
 	license_entry "$e" "$S/licenses" || fail "cannot write the licence entry '$e'"
 done
 
+cp "$CODE/Tools/linux-fetch-art.sh" "$S/fetch-art.sh" && chmod +x "$S/fetch-art.sh" || fail "cannot copy fetch-art.sh"
 cat > "$OUT/zero-hour-reforged.sh" <<'LAUNCHER'
 #!/bin/sh
 # Zero Hour Reforged's launcher (P3): the game finds its overlay beside it and the player's Zero Hour by itself
 # (Registry.ini, then ~/Games, the Steam libraries and the rest; see README.txt).  Arguments pass through,
 # so Steam's launch options reach the game: -root "<your Zero Hour folder>" names the install.
+# Without the art inside, it is fetched in the background into the user data folder (fetch-art.sh), unless
+# ZHR_NO_ART_FETCH=1, or the run is unattended (a harness's, which never touches the network).
 here="$(dirname "$(readlink -f "$0")")"
+case "${ZH_UNATTENDED:-}" in		# unattended as EarlyCommandLine.h reads it: anything but "" or "0"
+	""|0) ls "$here/share/zero-hour-reforged/overlay"/Reforged*.big > /dev/null 2>&1 \
+		|| sh "$here/share/zero-hour-reforged/fetch-art.sh" --background;;
+esac
 exec "$here/bin/generals" "$@"
 LAUNCHER
 chmod +x "$OUT/zero-hour-reforged.sh"
 
-python3 - "$CODE/Main/Generals.ico" "$OUT/share/icons/hicolor/48x48/apps/zero-hour-reforged.png" <<'ICON_EOF' || fail "cannot make the icon"
-# the .ico's largest 24-bit image, its AND mask as alpha, written as a PNG
+python3 - "$CODE/Main/Generals.ico" "$OUT/share/icons/hicolor/48x48/apps/zero-hour-reforged.png" \
+	"$OUT/share/icons/hicolor/128x128/apps/zero-hour-reforged.png" <<'ICON_EOF' || fail "cannot make the icon"
+# the .ico's largest 24-bit image (48 px), its AND mask as alpha, written as a PNG; and the same scaled to 128 px
+# (bilinear, over premultiplied alpha), because AppStream, which the Flatpak's metadata goes through, wants 64 or more
 import struct, sys, zlib
 d = open(sys.argv[1], "rb").read()
 count = struct.unpack("<H", d[4:6])[0]
@@ -186,21 +199,42 @@ w, h, pixels = best
 row = (w * 3 + 3) & ~3
 mask_row = ((w + 31) // 32) * 4
 mask = pixels + row * h
-raw = b""
+rgba = []		# rows of (r, g, b, a), top first
 for y in range(h):
     src = pixels + row * (h - 1 - y)
     msrc = mask + mask_row * (h - 1 - y)
-    line = bytearray([0])
+    line = []
     for x in range(w):
         b, g, r = d[src + 3 * x:src + 3 * x + 3]
         transparent = (d[msrc + x // 8] >> (7 - x % 8)) & 1
-        line += bytes([r, g, b, 0 if transparent else 255])
-    raw += bytes(line)
+        line.append((r, g, b, 0 if transparent else 255))
+    rgba.append(line)
 def chunk(kind, data):
     return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
-png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)) \
-    + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
-open(sys.argv[2], "wb").write(png)
+def write_png(path, image):
+    size = len(image)
+    raw = b"".join(bytes([0]) + bytes(v for p in line for v in p) for line in image)
+    open(path, "wb").write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+def scaled(image, size):
+    n = len(image)
+    def at(x, y):
+        r, g, b, a = image[min(max(y, 0), n - 1)][min(max(x, 0), n - 1)]
+        return (r * a / 255.0, g * a / 255.0, b * a / 255.0, float(a))
+    out = []
+    for y in range(size):
+        fy = (y + 0.5) * n / size - 0.5; y0 = int(fy // 1); ty = fy - y0
+        line = []
+        for x in range(size):
+            fx = (x + 0.5) * n / size - 0.5; x0 = int(fx // 1); tx = fx - x0
+            p = [at(x0, y0)[i] * (1 - tx) * (1 - ty) + at(x0 + 1, y0)[i] * tx * (1 - ty)
+                 + at(x0, y0 + 1)[i] * (1 - tx) * ty + at(x0 + 1, y0 + 1)[i] * tx * ty for i in range(4)]
+            a = p[3]
+            line.append(tuple(int(round(min(255, c * 255.0 / a))) if a > 0 else 0 for c in p[:3]) + (int(round(a)),))
+        out.append(line)
+    return out
+write_png(sys.argv[2], rgba)
+write_png(sys.argv[3], scaled(rgba, 128))
 ICON_EOF
 
 cat > "$OUT/share/applications/zero-hour-reforged.desktop" <<'DESKTOP'
@@ -258,6 +292,12 @@ WHERE YOUR ZERO HOUR IS
 
   with the path of your own Zero Hour folder (the one with INIZH.big in it) between the quotes.
 
+THE UPSCALED ART
+  A folder built without the art (every Linux package) fetches it on its first start, in the background,
+  from the game's art release into ReforgedArt/ in the settings folder below, checking each file's sha256.
+  That start plays at the original textures; the next one has the art. Offline, it tries again on the
+  next start. To never fetch it, set ZHR_NO_ART_FETCH=1. What happened: Logs/art-fetch.log.
+
 FILES
   Settings, saves, replays and logs:  ~/.local/share/Command and Conquer Generals Zero Hour Data/
                                      ($XDG_DATA_HOME's, when that is set)
@@ -282,8 +322,9 @@ if [ -n "$APPIMAGETOOL" ]; then
 	A="$OUT.AppDir"
 	rm -rf -- "$A" "$OUT.AppImage"
 	cp -al "$OUT" "$A" 2>/dev/null || cp -R "$OUT" "$A" || fail "cannot make $A"
+	rm -f "$A/bin/generals.debug"		# the AppImage is for playing; the debug file stays in the folder and its tarball
 	cp "$OUT/zero-hour-reforged.sh" "$A/AppRun" && cp "$OUT/share/applications/zero-hour-reforged.desktop" "$A/" \
-		&& cp "$OUT/share/icons/hicolor/48x48/apps/zero-hour-reforged.png" "$A/zero-hour-reforged.png" \
+		&& cp "$OUT/share/icons/hicolor/128x128/apps/zero-hour-reforged.png" "$A/zero-hour-reforged.png" \
 		&& ln -s zero-hour-reforged.png "$A/.DirIcon" || fail "cannot complete $A"
 	ARCH=x86_64 "$APPIMAGETOOL" --no-appstream --runtime-file "$RUNTIME" "$A" "$OUT.AppImage" > "$OUT.appimagetool.log" 2>&1 \
 		|| { tail -5 "$OUT.appimagetool.log" >&2; rm -rf -- "$A"; fail "appimagetool failed"; }

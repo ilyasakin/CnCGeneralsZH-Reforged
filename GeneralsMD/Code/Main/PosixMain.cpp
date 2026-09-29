@@ -348,10 +348,30 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 	return TRUE;
 }
 
+/** A Linux package's art overlay: "<user data>/ReforgedArt", when it is a folder.  The package ships no
+	* Reforged*.big (they are over a gigabyte); its launcher fetches them from the art release into that
+	* folder, each checked against art.json's sha256 before it is moved in, as vendor.sh does for a build. */
+static void appendUserArtOverlay( std::vector<std::string> &overlays )
+{
+	char folder[ 4096 ];
+	if (!findUserDataDirectory( folder, sizeof( folder ) ))
+		return;
+	std::string candidate( folder );
+	while (!candidate.empty() && (candidate[candidate.size() - 1] == '\\' || candidate[candidate.size() - 1] == '/'))
+		candidate.erase( candidate.size() - 1 );
+	candidate += "/ReforgedArt";
+	char real[ PATH_MAX ];
+	struct stat status;
+	if (realpath( candidate.c_str(), real ) != NULL && stat( real, &status ) == 0 && S_ISDIR( status.st_mode ))
+		overlays.push_back( real );
+}
+
 /** The fork's overlay (P1, decision 9): read roots searched before the install for every relative path
 	* that is read.  "-overlay <dir>", repeatable, in the order given; with none, the one a package puts
 	* beside the executable: "<exe>/../Resources/Overlay" in a macOS app bundle, or
-	* "<exe>/../share/zero-hour-reforged/overlay" in a Linux package.  An unpacked build has neither and
+	* "<exe>/../share/zero-hour-reforged/overlay" in a Linux package, and after it the package's upscaled
+	* art: the launcher downloads it into the user data folder, never into the package, and it is read from
+	* "<user data>/ReforgedArt" once there (appendUserArtOverlay).  An unpacked build has neither and
 	* runs on the install alone, as before.  Resolved to real paths here, before the chdir to the root,
 	* so a relative -overlay means what it meant where the command was typed.  FALSE for an -overlay
 	* that is not a directory. */
@@ -385,6 +405,8 @@ static Bool chooseOverlays( int argc, char *argv[], std::vector<std::string> &ov
 		if (realpath( candidate.c_str(), real ) != NULL && stat( real, &status ) == 0 && S_ISDIR( status.st_mode ))
 		{
 			overlays.push_back( real );
+			if (i == 1)		// a Linux package
+				appendUserArtOverlay( overlays );
 			break;
 		}
 	}

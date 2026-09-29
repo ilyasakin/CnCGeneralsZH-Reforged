@@ -65,6 +65,8 @@ check '[ -x "$OUT/zero-hour-reforged.sh" ] && [ -x "$OUT/bin/generals" ] && [ -s
 check 'readelf -S "$OUT/bin/generals" | grep -q "\.gnu_debuglink" && ! readelf -S "$OUT/bin/generals" | grep -q "\.debug_info"' \
 	"generals is stripped and names its debug file"
 check '[ -d "$OUT/share/zero-hour-reforged/overlay" ] && [ -n "$(ls "$OUT/share/zero-hour-reforged/overlay")" ]' "the overlay"
+check '[ -x "$OUT/share/zero-hour-reforged/fetch-art.sh" ] && grep -q "fetch-art.sh\" --background" "$OUT/zero-hour-reforged.sh"' \
+	"--no-art: the art fetcher, which the launcher starts"
 check '[ -f "$OUT/share/zero-hour-reforged/licenses/Zero-Hour-Reforged-LICENSE.md" ] && [ -f "$OUT/share/zero-hour-reforged/licenses/SDL3-LICENSE.txt" ]' \
 	"the licences"
 check 'grep -q "this notice may not be removed or altered" "$OUT/share/zero-hour-reforged/licenses/LZH-Light-LICENSE.txt" && grep -q "GNU GPL option, version 2 or later" "$OUT/share/zero-hour-reforged/licenses/FreeType-OPTION.txt" && [ -f "$OUT/share/zero-hour-reforged/licenses/FreeType-GPLv2.txt" ]' \
