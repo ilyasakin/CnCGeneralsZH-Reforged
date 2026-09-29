@@ -25,6 +25,8 @@
 //     X8R8G8B8 expanded with alpha 1, and an unbound slot sampling white;
 //   - a fan (DrawPrimitiveUP and indexed), static and dynamic buffers, and a static buffer written
 //     again after a draw used it, which must flush so both draws show what D3D9 would have shown;
+//   - indexed draws from a dynamic buffer whose indices start past its first vertex (MinVertex), with
+//     and without a base vertex, byte for byte the picture the same draws make from a static buffer;
 //   - a clear between draws, and the depth test ordering two quads whatever order they are drawn in;
 //   - partial clears as clear draws: one cut to a smaller viewport, a list of rectangles, and a depth-only
 //     rectangle that a following depth-tested draw sees (and whose own state does not leak into it);
@@ -316,6 +318,53 @@ static void check_fans_and_buffers(PosixDevice9 *device)
 	buffer->Release();
 	dynamic->Release();
 	fan_buffer->Release();
+	indices->Release();
+}
+
+// Indexed draws from a dynamic buffer read only vertices MinVertex onwards, and only those are staged: the
+// stream is bound MinVertex vertices before them.  The frame's first draw has nothing staged before it to
+// bind to and stages from its base instead.  The buffer's first quad is never read: a draw that reached it
+// would paint the whole target red.  The same draws from a static buffer take the other path (no staging),
+// and the two pictures must be the same bytes.
+static void check_min_vertex(PosixDevice9 *device)
+{
+	ScreenVertex vertices[24];
+	quad(vertices, 0, 0, 32, 32, 0.5f, RED);
+	quad(vertices + 6, 16, 0, 32, 16, 0.5f, YELLOW);
+	quad(vertices + 12, 0, 16, 16, 32, 0.5f, GREEN);
+	quad(vertices + 18, 16, 16, 32, 32, 0.5f, WHITE);
+	const uint16_t past_first[12] = { 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 };
+	IDirect3DIndexBuffer9 *indices = NULL;
+	void *data = NULL;
+	CHECK(device->CreateIndexBuffer(sizeof(past_first), 0, D3DFMT_INDEX16, D3DPOOL_MANAGED, &indices, NULL) == D3D_OK);
+	indices->Lock(0, 0, &data, 0);
+	memcpy(data, past_first, sizeof(past_first));
+	indices->Unlock();
+	std::vector<uint8_t> pictures[2];
+	for (int dynamic = 1; dynamic >= 0; --dynamic) {
+		IDirect3DVertexBuffer9 *buffer = NULL;
+		CHECK(device->CreateVertexBuffer(sizeof(vertices), dynamic ? D3DUSAGE_WRITEONLY | D3DUSAGE_DYNAMIC : D3DUSAGE_WRITEONLY,
+			SCREEN_FVF, dynamic ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED, &buffer, NULL) == D3D_OK);
+		buffer->Lock(0, 0, &data, dynamic ? D3DLOCK_DISCARD : 0);
+		memcpy(data, vertices, sizeof(vertices));
+		buffer->Unlock();
+		begin(device, BLUE);
+		device->SetStreamSource(0, buffer, 0, sizeof(ScreenVertex));
+		device->SetIndices(indices);
+		device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 6, 6, 0, 2);		// the frame's first: from its base
+		device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 12, 6, 6, 2);
+		device->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 6, 12, 6, 6, 2);		// a base vertex too: vertices 18 to 23
+		read_back(device);
+		CHECK_PIXEL(24, 8, YELLOW);
+		CHECK_PIXEL(8, 24, GREEN);
+		CHECK_PIXEL(24, 24, WHITE);
+		CHECK_PIXEL(8, 8, BLUE);
+		pictures[dynamic] = pixels;
+		device->SetStreamSource(0, NULL, 0, 0);
+		device->SetIndices(NULL);
+		buffer->Release();
+	}
+	CHECK(pictures[0] == pictures[1]);
 	indices->Release();
 }
 
@@ -702,6 +751,7 @@ int main()
 	check_transformed(device);
 	check_textures(device);
 	check_fans_and_buffers(device);
+	check_min_vertex(device);
 	check_clears_and_depth(device);
 	check_render_targets(device);
 	check_refusal(device);

@@ -135,6 +135,8 @@ public:
 	/// Room for `size` bytes in the staging stream, which the flush uploads into one GPU buffer that the
 	/// records bind as vertices and as indices; 16-byte aligned.  The pointer is good until the next call.
 	uint8_t * Stage(uint32_t size, uint32_t & offset);
+	/// Where the next Stage() would put its bytes: the stream's end, aligned as Stage aligns it.
+	uint32_t Stage_Offset_Next() const;
 	/// Room for bytes going to a GPU copy, and the uploads that take them there in the copy pass.  A
 	/// buffer or level-0 upload cycles its target, so draws already submitted keep what they read.
 	uint8_t * Upload_Space(uint32_t size, uint32_t & offset);
