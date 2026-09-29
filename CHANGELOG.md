@@ -531,6 +531,7 @@ A third pass went through the generals' powers, promotions and unit abilities.
 - Salvage waits. A crate used to disappear thirty seconds after it fell, which on most maps was before anyone could get to it: four crates from one fight, all four still lying untouched when the clock took them. They stay on the ground now until something drives over one.
 - And anybody can take the money. A salvage crate could only be picked up by a unit that salvages, so one dropped among troops who could not use it was money that belonged to nobody. The parts still only go to a salvager - the weapon, the armour, the promotion - but the cash goes to whoever drives over it.
 - A crate pays once per frame, not once per soldier who touched it.
+- Crates pay again. In v2.2.0 no crate could be picked up at all: the Supply Drop Zone's parachute drop landed and sat there as boxes, and salvage and money crates stayed on the ground under the wheels that drove over them. The drop zone brings in its $1,500 every two minutes again, and a Humvee driven over a crate takes it.
 - A unit that kills something carrying a crate now goes for the crate. The game noted the crate, then forgot which one before it looked, so the "pick up what I just dropped" order at seven places in the code never once fired.
 - A thrown vehicle's crash damage hits the pile once, not once per unit.
 - A dying unit is no longer promoted by its last kill.
