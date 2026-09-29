@@ -64,6 +64,12 @@
 #                     <folder>/share/zero-hour-reforged/overlay, the install is found through Registry.ini
 #   --appimage <file>  the same for the package as one AppImage: the file itself runs, mounted through FUSE; the
 #                     overlay it must report is under its own mount point, which is new every run
+#   --installed <command> [--overlay-pattern <glob>]
+#                     the same for an installed package (a .deb, .rpm, Arch package or Flatpak): <command> exists
+#                     only where REPLAY_CHECK_RUNNER runs it (a container the package is installed in, or
+#                     "flatpak run" with the app's ID as <command>), so nothing of it is looked for here.  It
+#                     runs with no -root and no -overlay, as --package; the overlay it must report matches
+#                     <glob> (default */share/zero-hour-reforged/overlay).  Needs REPLAY_CHECK_RUNNER
 #   REPLAY_CHECK_RUNNER  (environment) a command every run is started through, e.g. a script that runs
 #                     its arguments inside a container (P3's clean-environment E1); unset, none
 #   --app <.app>      E1 on the bundle itself, "tests what ships" (P1 step 5): its Contents/MacOS/generals
@@ -87,6 +93,7 @@ export ZH_UNATTENDED=1
 GENERALS=""
 APP=""
 PACKAGED_OVERLAY=""
+INSTALLED=0
 REPLAY_CHECK_RUNNER="${REPLAY_CHECK_RUNNER:-}"
 DATA="${ZH_DATA_DIR:-}"
 SEEDS="0 1"
@@ -105,6 +112,9 @@ while [ $# -gt 0 ]; do
 		--app) APP="$(cd "$2" && pwd)"; GENERALS="$APP/Contents/MacOS/generals"; PACKAGED_OVERLAY="$APP/Contents/Resources/Overlay"; shift 2;;
 		--package) APP="$(cd "$2" && pwd -P)"; GENERALS="$APP/zero-hour-reforged.sh"; PACKAGED_OVERLAY="$APP/share/zero-hour-reforged/overlay"; shift 2;;
 		--appimage) APP="$(cd "$(dirname "$2")" && pwd -P)/$(basename "$2")"; GENERALS="$APP"; PACKAGED_OVERLAY="*/share/zero-hour-reforged/overlay"; shift 2;;
+		--installed) APP="$2"; GENERALS="$2"; INSTALLED=1
+			[ -n "$PACKAGED_OVERLAY" ] || PACKAGED_OVERLAY="*/share/zero-hour-reforged/overlay"; shift 2;;
+		--overlay-pattern) PACKAGED_OVERLAY="$2"; shift 2;;
 		--data) DATA="$2"; shift 2;;
 		--seeds) SEEDS="$2"; shift 2;;
 		--players) PLAYERS="$2"; shift 2;;
@@ -120,7 +130,12 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-if [ -z "$GENERALS" ] || [ ! -x "$GENERALS" ]; then
+if [ $INSTALLED -eq 1 ]; then
+	if [ -z "$REPLAY_CHECK_RUNNER" ]; then
+		echo "replay-check: --installed needs REPLAY_CHECK_RUNNER, where the command exists" >&2
+		exit 2
+	fi
+elif [ -z "$GENERALS" ] || [ ! -x "$GENERALS" ]; then
 	echo "replay-check: --generals must name the POSIX generals executable" >&2
 	exit 2
 fi
@@ -131,8 +146,10 @@ fi
 
 CODE="$(cd "$(dirname "$0")/.." && pwd)"		# GeneralsMD/Code: its Data/ is the overlay
 INSTALL="$(cd "$DATA/zerohour" && pwd)"
-EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
-GENERALS="$EXEDIR/$(basename "$GENERALS")"		# absolute: every run starts in the root
+if [ $INSTALLED -eq 0 ]; then
+	EXEDIR="$(cd "$(dirname "$GENERALS")" && pwd)"
+	GENERALS="$EXEDIR/$(basename "$GENERALS")"		# absolute: every run starts in the root
+fi
 # A work folder that could not be made is the end of the run: going on with WORK empty would put
 # "$WORK/..." at the file system's root.
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/replay-check.XXXXXX")" || WORK=""
@@ -227,7 +244,7 @@ run_game() {	# run_game <log prefix> <switches...>
 			> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )
 	fi
 	RUN_STATUS=$?
-	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0; RUN_BUILT_NAMES=""; RUN_STATS=""
+	RUN_CRC=""; RUN_FRAME=""; RUN_RESULT=""; RUN_BUILT=0; RUN_BUILT_NAMES=""; RUN_STATS=""; RUN_LOG_LINES=""
 	# --app, --package: the bundle or package must have found its own overlay (PosixMain says so on stderr);
 	# a run that did not is reported as having no result
 	if [ -n "$APP" ] && ! grep -a "^generals: overlay .*, searched before the install" "$WORK/${prefix}.err" \

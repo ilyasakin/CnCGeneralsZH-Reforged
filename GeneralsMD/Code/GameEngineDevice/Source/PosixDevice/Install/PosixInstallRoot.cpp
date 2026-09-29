@@ -98,6 +98,12 @@ bool readRegistryValue( const std::string &file, const char *key, std::string &v
 	return found && !value.empty();
 }
 
+/// A folder the original Generals is installed in: its Textures.big at the top, or in First Decade's subfolder.
+bool isGeneralsFolder( const std::string &generals )
+{
+	return holds( generals, BASE_GAME_ARCHIVE ) || holds( join( generals, FIRST_DECADE_GENERALS_FOLDER ), BASE_GAME_ARCHIVE );
+}
+
 bool holdsBaseGame( const std::string &zeroHour, const std::string &registryFile )
 {
 	for (size_t i = 0; i < sizeof( BASE_GAME_FOLDERS ) / sizeof( BASE_GAME_FOLDERS[0] ); ++i)
@@ -106,7 +112,7 @@ bool holdsBaseGame( const std::string &zeroHour, const std::string &registryFile
 	// Registry.ini's Generals InstallPath, as GetStringFromGeneralsRegistry("", "InstallPath") reads it
 	std::string generals;
 	if (readRegistryValue( registryFile, "Generals\\InstallPath", generals ))
-		return holds( generals, BASE_GAME_ARCHIVE ) || holds( join( generals, FIRST_DECADE_GENERALS_FOLDER ), BASE_GAME_ARCHIVE );
+		return isGeneralsFolder( generals );
 	return false;
 }
 
@@ -261,6 +267,7 @@ bool PosixChooseInstallRoot( const PosixInstallRequest &request, PosixInstallCho
 {
 	choice = PosixInstallChoice();
 	choice.writeInstallPath = false;
+	choice.writeGeneralsInstallPath = false;
 
 	// 1. -root: as given, as harnesses and development runs have always used it
 	const std::string argument = argumentValue( request.arguments, "-root" );
@@ -310,7 +317,7 @@ bool PosixChooseInstallRoot( const PosixInstallRequest &request, PosixInstallCho
 	for (;;)
 	{
 		std::string chosen;
-		if (!request.chooser( why, chosen, request.chooserContext ))
+		if (!request.chooser( CHOOSE_ZERO_HOUR, why, chosen, request.chooserContext ))
 		{
 			choice.problem = "No Zero Hour folder was chosen, so the game will close.\n\nStart it again to choose the "
 				"folder where Command & Conquer Generals Zero Hour is installed.";
@@ -323,6 +330,38 @@ bool PosixChooseInstallRoot( const PosixInstallRequest &request, PosixInstallCho
 			choice.source = ROOT_FROM_CHOOSER;
 			choice.writeInstallPath = true;
 			return true;
+		}
+		if (check == INSTALL_NO_BASE_GAME)
+		{
+			// Zero Hour, with its base game somewhere the game does not look: ask for that folder too
+			std::string generalsWhy = "\"" + chosen + "\" holds Zero Hour. It also needs the original Command & Conquer "
+				"Generals, which is not inside it or beside it.\n\nChoose the folder Generals is installed in, the one "
+				"with Textures.big in it.";
+			for (;;)
+			{
+				std::string generals;
+				if (!request.chooser( CHOOSE_GENERALS, generalsWhy, generals, request.chooserContext ))
+				{
+					choice.problem = "No Command & Conquer Generals folder was chosen, so the game will close.\n\nStart "
+						"it again to choose the Zero Hour folder and then the Generals folder.";
+					return false;
+				}
+				bool forbidden = false;
+				for (size_t i = 0; i < request.forbidden.size(); ++i)
+					forbidden = forbidden || isInside( realOf( generals ), realOf( request.forbidden[i] ) );
+				if (!forbidden && isFolder( realOf( generals ) ) && isGeneralsFolder( realOf( generals ) ))
+				{
+					choice.root = realOf( chosen );
+					choice.generals = realOf( generals );
+					choice.source = ROOT_FROM_CHOOSER;
+					choice.writeInstallPath = true;
+					choice.writeGeneralsInstallPath = true;
+					return true;
+				}
+				generalsWhy = forbidden ? PosixInstallCheckMessage( INSTALL_INSIDE_THE_APP, generals )
+					: "\"" + generals + "\" is not the original Command & Conquer Generals folder: it has no "
+					"Textures.big.\n\nChoose the folder Generals is installed in, the one with Textures.big in it.";
+			}
 		}
 		why = PosixInstallCheckMessage( check, chosen );
 	}

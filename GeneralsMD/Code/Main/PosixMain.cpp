@@ -188,7 +188,7 @@ static const char GAME_MODE_NO_ROOT[] =
 /** PosixInstallChooser over SDL: the reason the last choice was refused, if any, in a message box, then
 	* the folder dialog.  FALSE when the player cancels, or when the dialog cannot be shown; then the reason
 	* goes into the std::string the context points at, for the message the caller shows. */
-static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, void *context )
+static bool chooseFolderWithSdl( PosixInstallQuestion question, const std::string &why, std::string &chosen, void *context )
 {
 	std::string &failure = *(std::string *)context;
 	if (!SDL_InitSubSystem( SDL_INIT_VIDEO ))
@@ -204,7 +204,9 @@ static bool chooseFolderWithSdl( const std::string &why, std::string &chosen, vo
 	answer.state = 0;
 	char home[ 4096 ];
 	const SDL_PropertiesID properties = SDL_CreateProperties();
-	SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_TITLE_STRING, "Choose your Command & Conquer Generals Zero Hour folder" );
+	SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_TITLE_STRING, question == CHOOSE_GENERALS
+		? "Choose your Command & Conquer Generals folder (the original game)"
+		: "Choose your Command & Conquer Generals Zero Hour folder" );
 	SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_ACCEPT_STRING, "Use This Folder" );
 	if (findHomeDirectory( home, sizeof( home ) ))
 		SDL_SetStringProperty( properties, SDL_PROP_FILE_DIALOG_LOCATION_STRING, home );
@@ -253,10 +255,12 @@ static bool readScriptedAnswers( const char *file, ScriptedAnswers &script )
 	return true;
 }
 
-static bool chooseFolderFromScript( const std::string &why, std::string &chosen, void *context )
+static bool chooseFolderFromScript( PosixInstallQuestion question, const std::string &why, std::string &chosen, void *context )
 {
 	ScriptedAnswers &script = *(ScriptedAnswers *)context;
-	if (!why.empty())
+	if (question == CHOOSE_GENERALS)
+		fprintf( stderr, "generals: chooser (test answers): asked for the Generals folder: %s\n", why.c_str() );
+	else if (!why.empty())
 		fprintf( stderr, "generals: chooser (test answers): refused, asking again: %s\n", why.c_str() );
 	if (script.next >= script.answers.size() || strcasecmp( script.answers[script.next].c_str(), "cancel" ) == 0)
 	{
@@ -335,16 +339,39 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 	if (choice.writeInstallPath && !writeRegistryFile( registryFileKey( "", AsciiString::TheEmptyString,
 			AsciiString( "InstallPath" ) ), AsciiString( choice.root.c_str() ) ))
 		fprintf( stderr, "generals: could not remember %s in Registry.ini; it will be asked for again\n", choice.root.c_str() );
+	if (choice.writeGeneralsInstallPath && !writeRegistryFile( registryFileKey( "Generals\\", AsciiString::TheEmptyString,
+			AsciiString( "InstallPath" ) ), AsciiString( choice.generals.c_str() ) ))
+		fprintf( stderr, "generals: could not remember %s in Registry.ini; it will be asked for again\n", choice.generals.c_str() );
 	if (choice.root.size() + 1 > outSize)
 		return FALSE;
 	strcpy( out, choice.root.c_str() );
 	return TRUE;
 }
 
+/** A Linux package's art overlay: "<user data>/ReforgedArt", when it is a folder.  The package ships no
+	* Reforged*.big (they are over a gigabyte); its launcher fetches them from the art release into that
+	* folder, each checked against art.json's sha256 before it is moved in, as vendor.sh does for a build. */
+static void appendUserArtOverlay( std::vector<std::string> &overlays )
+{
+	char folder[ 4096 ];
+	if (!findUserDataDirectory( folder, sizeof( folder ) ))
+		return;
+	std::string candidate( folder );
+	while (!candidate.empty() && (candidate[candidate.size() - 1] == '\\' || candidate[candidate.size() - 1] == '/'))
+		candidate.erase( candidate.size() - 1 );
+	candidate += "/ReforgedArt";
+	char real[ PATH_MAX ];
+	struct stat status;
+	if (realpath( candidate.c_str(), real ) != NULL && stat( real, &status ) == 0 && S_ISDIR( status.st_mode ))
+		overlays.push_back( real );
+}
+
 /** The fork's overlay (P1, decision 9): read roots searched before the install for every relative path
 	* that is read.  "-overlay <dir>", repeatable, in the order given; with none, the one a package puts
 	* beside the executable: "<exe>/../Resources/Overlay" in a macOS app bundle, or
-	* "<exe>/../share/zero-hour-reforged/overlay" in a Linux package.  An unpacked build has neither and
+	* "<exe>/../share/zero-hour-reforged/overlay" in a Linux package, and after it the package's upscaled
+	* art: the launcher downloads it into the user data folder, never into the package, and it is read from
+	* "<user data>/ReforgedArt" once there (appendUserArtOverlay).  An unpacked build has neither and
 	* runs on the install alone, as before.  Resolved to real paths here, before the chdir to the root,
 	* so a relative -overlay means what it meant where the command was typed.  FALSE for an -overlay
 	* that is not a directory. */
@@ -378,6 +405,8 @@ static Bool chooseOverlays( int argc, char *argv[], std::vector<std::string> &ov
 		if (realpath( candidate.c_str(), real ) != NULL && stat( real, &status ) == 0 && S_ISDIR( status.st_mode ))
 		{
 			overlays.push_back( real );
+			if (i == 1)		// a Linux package
+				appendUserArtOverlay( overlays );
 			break;
 		}
 	}

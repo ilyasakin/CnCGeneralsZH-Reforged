@@ -145,12 +145,14 @@ struct Stub
 {
 	std::vector<std::string> answers;
 	std::vector<std::string> reasons;
+	std::vector<PosixInstallQuestion> questions;
 	size_t next;
 };
 
-bool stubChooser( const std::string &why, std::string &chosen, void *context )
+bool stubChooser( PosixInstallQuestion question, const std::string &why, std::string &chosen, void *context )
 {
 	Stub *stub = (Stub *)context;
+	stub->questions.push_back( question );
 	stub->reasons.push_back( why );
 	if (stub->next >= stub->answers.size() || stub->answers[stub->next].empty())
 		return false;
@@ -277,13 +279,74 @@ TEST(install_known_places_include_the_steam_libraries)
 		CHECK( plain[i].find( "steamapps" ) == std::string::npos );
 }
 
+TEST(install_chooser_asks_for_generals_when_zero_hour_has_no_base_game)
+{
+	// Zero Hour alone (a CD or First Decade install with Generals elsewhere, or a Flatpak, which sees only the
+	// folder chosen): the chooser then asks for the Generals folder, until one holds Textures.big
+	Stub stub;
+	stub.next = 0;
+	stub.answers.push_back( at( "nobase" ) );			// Zero Hour, no base game anywhere it looks
+	stub.answers.push_back( at( "notzh" ) );			// not Generals
+	stub.answers.push_back( at( "Fake.app/Contents/Resources/Overlay/zh/ZH_Generals" ) );	// Generals, inside the app
+	stub.answers.push_back( at( "firstdecade" ) );		// First Decade's folder: Generals in its subfolder
+	PosixInstallRequest r = request( std::vector<std::string>(), true, "emptyhome", "" );
+	r.chooser = stubChooser;
+	r.chooserContext = &stub;
+	PosixInstallChoice choice;
+	CHECK( PosixChooseInstallRoot( r, choice ) );
+	CHECK_EQ( choice.source, ROOT_FROM_CHOOSER );
+	CHECK_STR( choice.root.c_str(), at( "nobase" ).c_str() );
+	CHECK_STR( choice.generals.c_str(), at( "firstdecade" ).c_str() );
+	CHECK( choice.writeInstallPath );
+	CHECK( choice.writeGeneralsInstallPath );
+	CHECK_EQ( stub.questions.size(), (size_t)4 );
+	if (stub.questions.size() == 4)
+	{
+		CHECK_EQ( stub.questions[0], CHOOSE_ZERO_HOUR );
+		CHECK_EQ( stub.questions[1], CHOOSE_GENERALS );
+		CHECK( stub.reasons[1].find( "holds Zero Hour" ) != std::string::npos );
+		CHECK_EQ( stub.questions[2], CHOOSE_GENERALS );
+		CHECK( stub.reasons[2].find( "no Textures.big" ) != std::string::npos );
+		CHECK_EQ( stub.questions[3], CHOOSE_GENERALS );		// the app's own copy was refused as well
+		CHECK( stub.reasons[3].find( "inside the game's own app" ) != std::string::npos );
+	}
+
+	// a plain Generals folder, Textures.big at its top
+	Stub plain;
+	plain.next = 0;
+	plain.answers.push_back( at( "nobase" ) );
+	plain.answers.push_back( at( "siblings/Command & Conquer Generals" ) );
+	r.chooserContext = &plain;
+	CHECK( PosixChooseInstallRoot( r, choice ) );
+	CHECK_STR( choice.generals.c_str(), at( "siblings/Command & Conquer Generals" ).c_str() );
+	CHECK( choice.writeGeneralsInstallPath );
+
+	// cancelled at the Generals question: no root, nothing written, and it says what was missing
+	Stub cancel;
+	cancel.next = 0;
+	cancel.answers.push_back( at( "nobase" ) );
+	cancel.answers.push_back( "" );
+	r.chooserContext = &cancel;
+	CHECK( !PosixChooseInstallRoot( r, choice ) );
+	CHECK( !choice.writeInstallPath && !choice.writeGeneralsInstallPath );
+	CHECK( choice.problem.find( "Generals folder" ) != std::string::npos );
+
+	// armed: a Zero Hour with its base game inside is never followed by the Generals question
+	Stub whole;
+	whole.next = 0;
+	whole.answers.push_back( at( "whole" ) );
+	r.chooserContext = &whole;
+	CHECK( PosixChooseInstallRoot( r, choice ) );
+	CHECK( whole.questions.size() == 1 && !choice.writeGeneralsInstallPath && choice.generals.empty() );
+}
+
 TEST(install_chooser_asks_again_with_the_reason_and_can_be_cancelled)
 {
 	// 4. inside a bundle, nothing registered or known: the player chooses; wrong answers are said why
 	Stub stub;
 	stub.next = 0;
 	stub.answers.push_back( at( "notzh" ) );			// not Zero Hour
-	stub.answers.push_back( at( "nobase" ) );			// Zero Hour without the base game
+	stub.answers.push_back( at( "Fake.app/Contents/Resources/Overlay/zh" ) );	// inside the app
 	stub.answers.push_back( at( "whole" ) );			// right
 	PosixInstallRequest r = request( std::vector<std::string>(), true, "emptyhome", "" );
 	r.chooser = stubChooser;
@@ -298,8 +361,11 @@ TEST(install_chooser_asks_again_with_the_reason_and_can_be_cancelled)
 	{
 		CHECK( stub.reasons[0].empty() );
 		CHECK( stub.reasons[1].find( "INIZH.big" ) != std::string::npos );
-		CHECK( stub.reasons[2].find( "Textures.big" ) != std::string::npos );
+		CHECK( stub.reasons[2].find( "inside the game's own app" ) != std::string::npos );
 	}
+	CHECK( !choice.writeGeneralsInstallPath );			// Generals was inside it: never asked for
+	for (size_t i = 0; i < stub.questions.size(); ++i)
+		CHECK_EQ( stub.questions[i], CHOOSE_ZERO_HOUR );
 
 	// cancelled: no root, nothing to write
 	Stub cancel;

@@ -2241,6 +2241,11 @@ if(ZH_PLATFORM_POSIX)
       list(APPEND _zh_portable_env "ZH_DATA_DIR=${ZH_GAME_DATA}")
     endif()
     set_tests_properties(linux_portable_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 7200 ENVIRONMENT "${_zh_portable_env}")
+    # The Linux packages' art download (Tools/linux-fetch-art.sh) against a local file:// release: the sha256
+    # check, a second fetch that downloads nothing, a wrong hash and a path-like name refused, a withdrawn file
+    # removed, the opt-out, and the launcher's background mode.  No network, no game.
+    add_test(NAME linux_fetch_art_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_linux_fetch_art.sh)
+    set_tests_properties(linux_fetch_art_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
   endif()
 
   # P1 step 1: the fork's overlay as a read root gives the game what Windows' one folder gives it - the

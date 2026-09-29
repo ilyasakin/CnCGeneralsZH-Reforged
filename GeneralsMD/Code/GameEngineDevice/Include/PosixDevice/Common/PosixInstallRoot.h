@@ -28,7 +28,10 @@
 	   4. packaged only: the player's own choice, through the chooser PosixMain passes (SDL's native
 	      folder dialog; none in the Steam Deck's Game Mode, which is told to use -root instead).  An
 	      invalid choice is said why and asked again; cancelling ends the start.  The chosen folder is
-	      the one thing written: Registry.ini's InstallPath, so the chooser runs once;
+	      the one thing written: Registry.ini's InstallPath, so the chooser runs once.  Zero Hour whose
+	      base game is nowhere the game looks (a CD or First Decade install with Generals elsewhere, or a
+	      Flatpak, which sees only the folder chosen) is followed by a second question, for the original
+	      Generals folder, written as Registry.ini's Generals InstallPath;
 	   5. unpackaged: the executable's directory, as always.
 
 	 Validation: Zero Hour's INIZH.big at the folder's top level, and the base game's Textures.big found
@@ -72,9 +75,15 @@ std::vector<std::string> PosixKnownInstallPlaces( const std::string &home );
 enum PosixInstallSource { ROOT_FROM_ARGUMENT, ROOT_FROM_REGISTRY, ROOT_FROM_KNOWN_PLACE, ROOT_FROM_CHOOSER,
 	ROOT_FROM_EXECUTABLE };
 
+/// What the chooser asks for: the Zero Hour folder, or, for a Zero Hour without its base game, the folder the
+/// original Generals is installed in.
+enum PosixInstallQuestion { CHOOSE_ZERO_HOUR, CHOOSE_GENERALS };
+
 /** The player's choice: TRUE with a real folder, FALSE when they cancelled.  `why` is empty the first
-	* time, and the reason the last choice was refused after that. */
-typedef bool (*PosixInstallChooser)( const std::string &why, std::string &chosen, void *context );
+	* time Zero Hour is asked for, and otherwise the reason for the question (the last choice refused, or
+	* why Generals is asked for). */
+typedef bool (*PosixInstallChooser)( PosixInstallQuestion question, const std::string &why, std::string &chosen,
+	void *context );
 
 struct PosixInstallRequest
 {
@@ -93,6 +102,8 @@ struct PosixInstallChoice
 	std::string root;
 	PosixInstallSource source;
 	bool writeInstallPath;		///< the player chose it: PosixMain writes Registry.ini's InstallPath
+	std::string generals;		///< the original Generals folder the player chose, when it was asked for
+	bool writeGeneralsInstallPath;	///< PosixMain writes `generals` as Registry.ini's Generals InstallPath
 	std::string problem;		///< why there is no root, when the answer is FALSE
 };
 
