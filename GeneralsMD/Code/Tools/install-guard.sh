@@ -31,9 +31,14 @@
 #
 # A harness treats 1 and 2 alike, as a failure; only the words differ, so a reader knows which it was.
 
+# python3, or on Windows (Git Bash, G1b) python: there python3 is the Store's stub, which only says to install it
+install_python() {
+	if python3 -c '' > /dev/null 2>&1; then python3 "$@"; else python "$@"; fi
+}
+
 install_snapshot() {
 	[ -d "$1" ] || return 1
-	python3 - "$1" > "$2" <<'EOF' || return 1
+	install_python - "$1" > "$2" <<'EOF' || return 1
 import hashlib, os, sys
 root = sys.argv[1]
 count = 0

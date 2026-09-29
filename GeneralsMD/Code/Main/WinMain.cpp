@@ -68,6 +68,8 @@
 #include "GameClient/Mouse.h"
 #include "GameClient/IMEManager.h"
 #include "GameClient/LookAtXlat.h"
+#include "SdlDevice/GameClient/SdlGamepad.h"
+#include "Win32Device/GameClient/Win32GamepadOutput.h"
 #include "Win32Device/GameClient/Win32Mouse.h"
 #include "Win32Device/Common/Win32GameEngine.h"
 #include "Common/Version.h"
@@ -536,6 +538,7 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 					TheInGameUI->clearModifierModes();		// see WM_SETFOCUS above
 				if (TheWin32Mouse)
 					TheWin32Mouse->lostFocus(TRUE);
+				SdlGamepad_releaseAll();		// and the keys and buttons a gamepad holds (G1b)
 
 				break;
 			}
@@ -632,6 +635,7 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 			case WM_RBUTTONDBLCLK:
 			{
 
+				SdlGamepad_noteHand();		// a mouse button: the mouse is the device in use (G1b)
 				if( TheWin32Mouse )
 					TheWin32Mouse->addWin32Event( message, wParam, lParam, TheMessageTime );
 
@@ -651,6 +655,7 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 				if( x < rect.left || x > rect.right || y < rect.top || y > rect.bottom )
 					return 0;
 
+				SdlGamepad_noteHand();		// a wheel: the mouse is the device in use (G1b)
 				if( TheWin32Mouse )
 					TheWin32Mouse->addWin32Event( message, wParam, lParam, TheMessageTime );
 
@@ -670,6 +675,10 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message,
 				// ignore when outside of client area
 				GetClientRect( ApplicationHWnd, &rect );
 				if( x < rect.left || x > rect.right || y < rect.top || y > rect.bottom )
+					return 0;
+
+				// a hand's move takes the pointer back from a gamepad; Windows' repeat of one is not a move (G1b)
+				if( !Win32GamepadOutput_handMotion( x, y ) )
 					return 0;
 
 				// The pointer has walked in of its own accord, so it is fair to hold it now.
