@@ -10810,8 +10810,8 @@ TEST(borderless_asks_for_a_windowed_device_the_size_of_the_desktop)
 	CHECK_EQ( scratch->m_xResolution, 1280 );
 	CHECK_EQ( scratch->m_yResolution, 720 );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(every_side_has_three_plates_and_every_general_wears_its_sides)
@@ -11597,8 +11597,8 @@ TEST(gameplay_conveniences_are_forced_on_and_left_the_catalog)
 		CHECK( def->widgetName == NULL || def->widgetName[ 0 ] == '\0' );
 	}
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(the_input_scheme_is_a_live_menu_choice_that_starts_modern)
@@ -11626,8 +11626,8 @@ TEST(the_input_scheme_is_a_live_menu_choice_that_starts_modern)
 	CHECK( scratch->isLegacyInput() );
 	CHECK_EQ( def->get(), (Int)INPUT_SCHEME_LEGACY );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(wasd_camera_is_a_live_check_box_that_starts_off_and_needs_modern_input)
@@ -11657,8 +11657,8 @@ TEST(wasd_camera_is_a_live_check_box_that_starts_off_and_needs_modern_input)
 	scratch->m_inputScheme = INPUT_SCHEME_MODERN;
 	CHECK( scratch->isWasdCamera() );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(order_lines_are_a_live_check_box_that_starts_on)
@@ -11682,8 +11682,8 @@ TEST(order_lines_are_a_live_check_box_that_starts_on)
 	CHECK( !scratch->m_showOrderLines );
 	CHECK_EQ( def->get(), 0 );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(option_catalog_round_trips_every_key_through_options_ini)
@@ -11716,8 +11716,8 @@ TEST(option_catalog_round_trips_every_key_through_options_ini)
 		CHECK_EQ( def.get(), def.hi );
 	}
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(option_catalog_writes_bools_as_yes_and_no)
@@ -11757,8 +11757,8 @@ TEST(option_catalog_writes_bools_as_yes_and_no)
 	loadOptionsFromPreferences( pref );
 	CHECK_EQ( zoom->get(), 0 );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(option_catalog_clamps_and_leaves_an_absent_key_alone)
@@ -11787,8 +11787,8 @@ TEST(option_catalog_clamps_and_leaves_an_absent_key_alone)
 	loadOptionsFromPreferences( pref );
 	CHECK_EQ( speed->get(), 142 );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 /** Bloom is picked as a level and stored as one, and the shader still reads the percentage it
@@ -11859,8 +11859,8 @@ TEST(bloom_levels_carry_the_percentages_the_shader_reads)
 	CHECK_EQ( TheGlobalData->m_bloomIntensity, shippedIntensity );
 	CHECK_EQ( TheGlobalData->m_bloomThreshold, shippedThreshold );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(msaa_levels_map_to_the_counts_a_device_offers)
@@ -11905,8 +11905,8 @@ TEST(vsync_is_off_until_the_player_asks)
 	vsync->set( 0 );
 	CHECK_EQ( TheGlobalData->m_vsync, FALSE );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(texture_filter_defaults_to_anisotropic)
@@ -11934,8 +11934,8 @@ TEST(texture_filter_defaults_to_anisotropic)
 	CHECK_EQ( scratch->m_anisotropyLevel, 0 );
 	CHECK_EQ( scratch->m_vsync, FALSE );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(high_static_lod_keeps_the_picture_settings)
@@ -12011,8 +12011,8 @@ TEST(effects_page_rows_reach_the_fields_the_command_line_switches_set)
 	bounce->set( 1 );
 	CHECK_EQ( (Int)scratch->m_particleGroundBounce, 1 );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(window_mode_derives_the_boolean_the_device_layer_reads)
@@ -12047,8 +12047,8 @@ TEST(window_mode_derives_the_boolean_the_device_layer_reads)
 	CHECK_EQ( TheGlobalData->m_yResolution, (Int)::GetSystemMetrics( SM_CYSCREEN ) );
 	CHECK_EQ( (Int)TheGlobalData->m_edgeScrollInWindowedMode, 1 );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 /* The monitor list and the sizes each monitor offers, read off whatever desktop the test runs on.
@@ -12101,8 +12101,8 @@ TEST(borderless_covers_the_monitor_options_ini_names)
 	CHECK_EQ( TheGlobalData->m_xResolution, (Int)( chosen.rect.right - chosen.rect.left ) );
 	CHECK_EQ( TheGlobalData->m_yResolution, (Int)( chosen.rect.bottom - chosen.rect.top ) );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(window_mode_survives_a_round_trip_through_options_ini)
@@ -12134,8 +12134,8 @@ TEST(window_mode_survives_a_round_trip_through_options_ini)
 	loadOptionsFromPreferences( pref );
 	CHECK_EQ( mode->get(), (Int)WINDOW_MODE_COUNT - 1 );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 TEST(early_options_reads_the_same_file_userpreferences_writes)
@@ -12927,8 +12927,8 @@ TEST(menu_transition_speed_scales_the_step_rate_and_never_reaches_zero)
 	scratch->m_menuTransitionSpeed = 100000;
 	CHECK_NEAR( GameClient_menuAnimStepsPerSec(), UI_ANIM_STEPS_PER_SEC * 4.0f, 0.0001f );
 
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -14013,8 +14013,8 @@ TEST(camera_preferences_default_to_a_finite_map_margin)
 		bounds->set(0);
 		CHECK(!scratch->m_useCameraConstraints);
 	}
+	delete scratch;					// while it is the current one: a Debug build's ~GlobalData reads TheWritableGlobalData
 	TheWritableGlobalData = saved;
-	delete scratch;
 }
 // The Razer grid is six rows of twenty-two with the logo strip in column zero and
 // escape, tab, caps and shift in column one, so the top left key the command bar
