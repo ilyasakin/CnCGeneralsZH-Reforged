@@ -36,10 +36,33 @@ else()
 endif()
 
 # X1: the -d3d12 renderer on Windows - the POSIX device (posixd3d9) on SDL_GPU's D3D12 backend, with its shaders
-# through glslang, SPIRV-Cross (HLSL) and SDL_shadercross to DXBC, and d3dcompiler_47.dll at run time.  Off by
-# default until pictures prove parity with -dx11 (docs/mac-port/tasks/X1-d3d12.md); run Tools\vendor.ps1 -D3D12
-# first.  Decision 3's scoped amendment: SDL3 on Windows for this renderer only, Win32 stays the platform layer.
-option(ZH_D3D12 "Windows: build the -d3d12 renderer (the SDL3 GPU device on D3D12)" OFF)
+# through glslang, SPIRV-Cross (HLSL) and SDL_shadercross to DXBC, and d3dcompiler_47.dll at run time.  Its
+# sources come from Tools\vendor.ps1 -D3D12 (build.bat passes it for ARM64).  Decision 3's scoped amendment: SDL3
+# on Windows for this renderer only, Win32 stays the platform layer.
+#
+# The default follows the target.  On Windows ARM64 it is ON: -d3d12 is that platform's default renderer, and the
+# Direct3D 9 path it falls back to without zh_d3d12.dll has no d3dx9_43.dll there and draws without its terrain,
+# so a plain build.bat without it gave players the broken picture.  On x64 it stays OFF: -d3d12 is opt-in there
+# (docs/mac-port/tasks/X1-d3d12.md).  An explicit -DZH_D3D12=ON or OFF wins, as with any option.  The target is
+# the compiler's (MSVC reports ARM64 or x64 whatever the generator), then the Visual Studio platform, so an x64
+# build on an ARM64 machine is x64 here.
+set(_zh_d3d12_target "")
+if(ZH_PLATFORM_WINDOWS)
+  if(CMAKE_CXX_COMPILER_ARCHITECTURE_ID)
+    set(_zh_d3d12_target "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}")
+  elseif(CMAKE_VS_PLATFORM_NAME)
+    set(_zh_d3d12_target "${CMAKE_VS_PLATFORM_NAME}")
+  endif()
+endif()
+if(_zh_d3d12_target MATCHES "^(ARM64|arm64)$")
+  set(_zh_d3d12_default ON)
+else()
+  set(_zh_d3d12_default OFF)
+endif()
+option(ZH_D3D12 "Windows: build the -d3d12 renderer (the SDL3 GPU device on D3D12)" ${_zh_d3d12_default})
+if(ZH_PLATFORM_WINDOWS)
+  message(STATUS "ZH_D3D12=${ZH_D3D12} (target ${_zh_d3d12_target}; the default there is ${_zh_d3d12_default})")
+endif()
 if(ZH_D3D12 AND NOT ZH_PLATFORM_WINDOWS)
   message(FATAL_ERROR "ZH_D3D12 is Windows' option: off Windows the same device is the renderer already")
 endif()
