@@ -212,6 +212,7 @@ public:
 	static void parseTerrainRoadDefinition( INI *ini );
 	static void parseTerrainBridgeDefinition( INI *ini );
 	static void parseMetaMapDefinition( INI *ini );
+	static void parseGamepadBindingDefinition( INI *ini );	///< G1: GamepadMap.h
 	static void parseFXListDefinition( INI *ini );
 	static void parseObjectCreationListDefinition( INI* ini );
 	static void parseMultiplayerSettingsDefinition( INI* ini );

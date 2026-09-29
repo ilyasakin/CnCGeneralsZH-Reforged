@@ -56,6 +56,12 @@ Int GameEngine_logicCatchupMaxFrames( Int logicFps );
 	(0 just after a tick, 1 a whole tick later or more; always 1 in fast mode or before the first tick).
 	The logic loop notes each pass's last tick with GameEngine_noteLogicTickDone. */
 void GameEngine_noteLogicTickDone( Int logicFps, Bool fastMode );
+
+/** At most one logic frame an engine pass: no catch-up burst.  An input script (ZH_INPUT_SCRIPT, a test's) plays
+	* its actions once a pass, keyed to the logic frame, so a burst of several frames in one pass would give an
+	* action a later frame than its script names (seen on a loaded worker: radial presses frames late).  Set by the
+	* input script as it starts; never by a player's game. */
+void GameEngine_setOneLogicFramePerPass( Bool one );
 Real GameEngine_logicTickFraction( void );
 
 /**	How long the catch-up loop may keep starting new logic ticks before it gives up for this pass.

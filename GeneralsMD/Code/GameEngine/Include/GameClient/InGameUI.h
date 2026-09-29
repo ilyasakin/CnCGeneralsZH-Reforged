@@ -371,6 +371,15 @@ struct MoneyPlateWidth
 enum { MONEY_SHRINK_HOLD_MS = 3000, MONEY_SHRINK_EASE_MS = 200 };
 Int InGameUI_moneyPlateWidth( MoneyPlateWidth &plate, Int needed, UnsignedInt nowMs );
 
+/** What stands at a command grid place: nothing, a command button, or one of the page's order keys (attack, hold
+	* position, move), which have no window */
+enum CommandPlaceHolds { COMMAND_PLACE_HOLDS_NOTHING, COMMAND_PLACE_HOLDS_WINDOW, COMMAND_PLACE_HOLDS_ORDER };
+
+/** G1: the command grid as the bar last laid it out, on the screen: each place's rectangle and what stands there,
+	* for a gamepad's D-pad and radial.  Both arrays have COMMAND_PLACE_COUNT (ControlBar.h).  FALSE while the grid
+	* is not shown (nothing selected, a watcher) or was not laid out this frame or the last. */
+Bool InGameUI_commandPlaces( IRegion2D *rects, Int *holds );
+
 // ------------------------------------------------------------------------------------------------
 /** Basic functionality common to all in-game user interfaces */
 // ------------------------------------------------------------------------------------------------ 

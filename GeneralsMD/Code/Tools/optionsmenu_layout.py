@@ -162,6 +162,9 @@ NEW_CONTROLS = [
     (LABEL,  "LabelSmoke",             "GUI:Smoke"),
     (COMBO,  "ComboBoxSmoke",          None),
     (CHECK,  "CheckParticleBounce",    "GUI:ParticleBounce"),
+    (CHECK,  "CheckGamepad",           "GUI:Gamepad"),
+    (CHECK,  "CheckGamepadAim",        "GUI:GamepadAim"),
+    (CHECK,  "CheckGamepadSwapConfirm", "GUI:GamepadSwapConfirm"),
     (CHECK,  "CheckChromaLighting",    "GUI:ChromaLighting"),
 ]
 
@@ -266,6 +269,9 @@ GROUP_LAYOUT = [
         ("check", "Retaliation"),
         ("check", "CheckDoubleClickAttackMove")]),
     ("PageControls", 2, "GUI:OptionsGroupInput", [
+        ("check", "CheckGamepad"),
+        ("check", "CheckGamepadAim"),
+        ("check", "CheckGamepadSwapConfirm"),
         ("check", "CheckChromaLighting")]),
 
     ("PageGameplay", 0, "GUI:OptionsGroupBattlefield", [

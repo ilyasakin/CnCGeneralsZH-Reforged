@@ -1363,7 +1363,7 @@ void BaseHeightMapRenderObjClass::updateShorelineTiles(Int minX, Int minY, Int m
 		if (x >= minX && x < maxX &&
 			y >= minY && y < maxY)
 		{	//this tile is inside region being updated so remove it by shifting tile array
-			memcpy(m_shoreLineTilePositions+j,m_shoreLineTilePositions+j+1,(m_numShoreLineTiles-1-j)*sizeof(shoreLineTileInfo));
+			memmove(m_shoreLineTilePositions+j,m_shoreLineTilePositions+j+1,(m_numShoreLineTiles-1-j)*sizeof(shoreLineTileInfo));
 			m_numShoreLineTiles--;
 			j--;	//look at current tile again since it was removed.
 		}

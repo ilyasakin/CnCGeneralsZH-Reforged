@@ -1616,6 +1616,11 @@ ModalWindow *ModalStack_removeWindow( ModalWindow *head, const GameWindow *windo
 }
 
 //-------------------------------------------------------------------------------------------------
+GameWindow *GameWindowManager::winGetModal( void )
+{
+	return m_modalHead ? m_modalHead->window : NULL;
+}
+
 Int GameWindowManager::winSetModal( GameWindow *window )
 {
 	ModalWindow *modal;
