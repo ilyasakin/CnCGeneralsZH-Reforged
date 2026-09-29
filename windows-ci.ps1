@@ -21,7 +21,8 @@
   What the M3 Pro Mac's post-merge run is for the Mac, for Windows (W2). In order:
     1. build.bat -Config (skip with -SkipBuild), then ZH_GAME_DATA set on the build tree when -DataDir is given;
     2. ctest, minus the audio and video tests (no sound on a worker) and, in session 0, minus the GPU tests;
-    3. the desktop part: the GPU tests, then replay-check.ps1 for each E1 run on a farm of the data. The runs
+    3. the desktop part: the GPU tests, then replay-check.ps1 for every E1 run at once, each on its own farm of
+       the data with its own user data folder (ZH_USER_DATA_DIR, which Windows honours too). The runs
        are -Seeds at -MaxFrames, or -Runs "seed@frames" pairs when the seeds need different lengths.
 
   Session 0 (an ssh or service session) has no display, so no Direct3D device, and Windows -headless still
@@ -32,7 +33,7 @@
   hands a console started in the desktop session to Windows Terminal, and one left running from earlier
   swallowed every such console, so the desktop part never started (a gate waited 90 minutes on it).
 
-  RULE 9: the game never runs in the data folder. It runs in -WorkDir\farm: a symbolic link to every file
+  RULE 9: the game never runs in the data folder. Each run runs in -WorkDir\farm<n>: a symbolic link to every file
   of -DataDir\zerohour, with the build's GeneralsMD\Run over them (the exe and DLLs copied), as Windows'
   one-folder layout has the fork's files over the install. Every file of the data folder is hashed before
   the farm is made and again after the runs, and a difference fails the check. Symbolic links need an
@@ -203,17 +204,36 @@ function Invoke-DesktopPart {
 		$zh = Join-Path $DataDir "zerohour"
 		New-Item -ItemType Directory -Force $WorkDir | Out-Null
 		$before = @(Get-TreeListing $zh)
-		$farm = Join-Path $WorkDir "farm"
-		try { New-Farm $zh $farm }
-		catch { $r.E1 = "FAILED (could not make the farm: $($_.Exception.Message))"; return $r }
+		# E1's runs side by side: each its own farm and its own user data folder (ZH_USER_DATA_DIR, through
+		# replay-check.ps1 -UserDataDir), since every recording is written to Replays\00000000.rep and the
+		# game deletes Data\INI\INIZH.big from its root.  Each is its own powershell, hidden; the results
+		# are read back in the runs' order, so the log reads as when they ran one after another.
+		$started = @()
+		$single = Join-Path $WorkDir "farm"		# the one farm the runs shared before; its links go, never their targets
+		if (Test-Path $single) { cmd /c "rmdir /s /q `"$single`"" | Out-Null }
+		for ($i = 0; $i -lt $Runs.Count; $i++) {
+			$farm = Join-Path $WorkDir "farm$i"
+			try { New-Farm $zh $farm }
+			catch { $r.E1 = "FAILED (could not make the farm: $($_.Exception.Message))"; return $r }
+			$user = Join-Path $WorkDir "user$i"
+			if (Test-Path $user) { cmd /c "rmdir /s /q `"$user`"" | Out-Null }
+			$seed, $frames = $Runs[$i].Split('@')
+			$outFile = Join-Path $WorkDir "e1-run$i.log"
+			$argList = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $Root 'replay-check.ps1')`" -RunDir `"$farm`" " +
+				"-UserDataDir `"$user`" -Seeds $([int]$seed) -MaxFrames $([int]$frames)"
+			$p = Start-Process powershell.exe -ArgumentList $argList -WindowStyle Hidden -PassThru `
+				-RedirectStandardOutput $outFile -RedirectStandardError "$outFile.err"
+			$null = $p.Handle		# kept, so ExitCode is still there after the exit
+			$started += [pscustomobject]@{ Run = $Runs[$i]; Process = $p; Out = $outFile }
+		}
 		$failures = 0
-		foreach ($run in $Runs) {
-			$seed, $frames = $run.Split('@')
-			$out = & (Join-Path $Root "replay-check.ps1") -RunDir $farm -Seeds ([int]$seed) -MaxFrames ([int]$frames) *>&1 | ForEach-Object { "$_" }
-			$failures += $LASTEXITCODE
+		foreach ($s in $started) {
+			$s.Process.WaitForExit()
+			$failures += $s.Process.ExitCode
+			$out = @(Get-Content $s.Out, "$($s.Out).err" -ErrorAction SilentlyContinue | ForEach-Object { "$_" })
 			$r.Log += $out
 			foreach ($line in $out) {
-				if ($line -match 'frame (\d+), CRC (0x[0-9A-Fa-f]+)') { $r.Crcs[$run] = $Matches[2]; break }
+				if ($line -match 'frame (\d+), CRC (0x[0-9A-Fa-f]+)') { $r.Crcs[$s.Run] = $Matches[2]; break }
 			}
 		}
 		$r.Log | Out-File -Encoding utf8 (Join-Path $WorkDir "e1.log")

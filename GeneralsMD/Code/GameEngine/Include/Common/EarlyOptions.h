@@ -137,12 +137,30 @@ inline bool isDirectoryWritable( const char *directory )
 	* the engine exists and GlobalData sets m_userDataDir from it, so the two cannot disagree.  When
 	* nothing can be written there the same leaf under %LOCALAPPDATA% is used instead, which no
 	* folder protection covers; the settings the player had in Documents are then left behind, but
-	* a game that cannot save settings could not have kept them anyway. */
+	* a game that cannot save settings could not have kept them anyway.
+	*
+	* ZH_USER_DATA_DIR, when it is set, is the folder instead, as off Windows: a harness gives each
+	* game it runs side by side a folder of its own, since every recording is written to the same
+	* Replays\00000000.rep.  Unset (every player's case), nothing here changes. */
 inline bool findUserDataDirectory( char *out, size_t outSize )
 {
 	if (outSize == 0)
 		return false;
 	out[0] = 0;
+
+	const char *given = ::getenv( "ZH_USER_DATA_DIR" );
+	if (given != NULL && given[0] != 0)
+	{
+		const size_t length = ::strlen( given );
+		const bool separated = given[length - 1] == '\\' || given[length - 1] == '/';
+		if (length + (separated ? 1 : 2) > outSize)
+			return false;
+		::strcpy( out, given );
+		if (!separated)
+			::strcat( out, "\\" );
+		::CreateDirectoryA( out, NULL );		// the harness makes it; this only covers a folder not made yet
+		return true;
+	}
 
 	char documents[MAX_PATH * 2];
 	if (!findDocumentsFolderA( documents, sizeof( documents ) ))

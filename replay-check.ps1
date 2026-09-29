@@ -48,7 +48,11 @@ param(
 	# minutes before a run is killed rather than waited on forever, as ai-batch.ps1 does. -headless
 	# does not stop every dialog (a missing base game still puts up a message box), and no unattended
 	# run may wait on a person; the killed run reports no result, which counts as a failure
-	[int] $TimeoutMinutes = 60
+	[int] $TimeoutMinutes = 60,
+	# the games' user data folder (ZH_USER_DATA_DIR, which EarlyOptions.h honours on Windows too), so that
+	# several of these can run side by side: each recording is written to Replays\00000000.rep there.
+	# Empty: the player's own, in Documents, as always
+	[string] $UserDataDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,7 +63,14 @@ if (-not (Test-Path $exePath)) { throw "no $Exe in $RunDir" }
 
 # The game writes its replays here and always to the same name, so a run has to be moved aside
 # before the next one overwrites it.
-$replayDir = Join-Path $env:USERPROFILE "Documents\Command and Conquer Generals Zero Hour Data\Replays"
+if ($UserDataDir -ne "") {
+	New-Item -ItemType Directory -Force $UserDataDir | Out-Null
+	$env:ZH_USER_DATA_DIR = (Resolve-Path $UserDataDir).Path		# every game started below inherits it
+	$replayDir = Join-Path $env:ZH_USER_DATA_DIR "Replays"
+} else {
+	Remove-Item Env:\ZH_USER_DATA_DIR -ErrorAction SilentlyContinue
+	$replayDir = Join-Path $env:USERPROFILE "Documents\Command and Conquer Generals Zero Hour Data\Replays"
+}
 $lastReplay = Join-Path $replayDir "00000000.rep"
 
 function Invoke-Run([string[]] $extra, [string] $prefix)
