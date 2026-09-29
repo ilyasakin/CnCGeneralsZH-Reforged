@@ -3605,6 +3605,7 @@ Tools/ffprogram-values-check.sh
 Tools/fingerprint-check.sh
 Tools/fingerprint-manifest.sh
 Tools/fingerprint/build_fingerprint.cpp
+Tools/gamepad-combo-check.sh
 Tools/gamepad-crc-check.sh
 Tools/gamepad-dpad-check.sh
 Tools/gamepad-menu-check.sh

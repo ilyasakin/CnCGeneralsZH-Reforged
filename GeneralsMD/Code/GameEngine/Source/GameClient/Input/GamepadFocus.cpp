@@ -29,6 +29,7 @@
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetComboBox.h"
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/Mouse.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/GameText.h"
 #include "GameClient/GameWindow.h"
@@ -502,6 +503,119 @@ Int tabButtons( const Screen &screen, std::vector<GameWindow *> &tabs )
 	return -1;
 }
 
+/// A combo box's list while it is open under the pad: the pad's own highlight, which it moves and draws itself.  The
+/// list box's selection is never the highlight: in EA's list box a selection is the choice (GLM_SELECTED, then the
+/// combo's GCM_SELECTED to its screen, which applies it, and the list shuts), so an arrow key into the list chose the
+/// next row and closed it.  Nothing is chosen until A picks the highlight; B closes the list with nothing changed.
+struct PadList { Int comboId; Int highlight; };
+PadList thePadList = { 0, -1 };
+
+GameWindow *openList( GameWindow *combo )
+{
+	GameWindow *list = combo != NULL && (combo->winGetStyle() & GWS_COMBO_BOX) ? GadgetComboBoxGetListBox( combo ) : NULL;
+	return list != NULL && !list->winIsHidden() ? list : NULL;
+}
+
+/// The list scrolled, if it has to be, so that row shows
+void showRow( GameWindow *list, Int row )
+{
+	if (row < GadgetListBoxGetTopVisibleEntry( list ))
+		GadgetListBoxSetTopVisibleEntry( list, row );
+	else if (row > GadgetListBoxGetBottomVisibleEntry( list ))
+		GadgetListBoxSetBottomVisibleEntry( list, row );
+}
+
+/// Where a row of the list is drawn now, by the list's own reckoning (GadgetListBoxGetEntryBasedOnXY down its middle);
+/// FALSE while it is scrolled out of sight
+Bool rowRect( GameWindow *list, Int row, Int &x, Int &y, Int &width, Int &height )
+{
+	Int lx, ly, lw, lh;
+	rectOf( list, lx, ly, lw, lh );
+	Int top = -1, bottom = -1;
+	for (Int yy = ly; yy < ly + lh; ++yy)
+	{
+		Int r = -1, c = -1;
+		GadgetListBoxGetEntryBasedOnXY( list, lx + lw / 3, yy, r, c );
+		if (r == row)
+		{
+			if (top < 0)
+				top = yy;
+			bottom = yy;
+		}
+	}
+	if (top < 0)
+		return FALSE;
+	x = lx; y = top; width = lw; height = bottom - top + 1;
+	return TRUE;
+}
+
+/// A combo box's list opened or shut as its drop-down button does it (the combo's own GBM_SELECTED from that button),
+/// which chooses nothing.  Not a click: B's shut and A's open again came as two clicks within the double-click time,
+/// which the combo took for no toggle at all, and the D-pad then left the combo with its list shut
+void toggleList( GameWindow *combo )
+{
+	GameWindow *button = GadgetComboBoxGetDropDownButton( combo );
+	if (button != NULL && TheWindowManager != NULL)
+		TheWindowManager->winSendSystemMsg( combo, GBM_SELECTED, (WindowMsgData)button, button->winGetWindowId() );
+}
+
+/// The combo box beside combo that way (dx), in its row (overlapping it top to bottom), the nearest; NULL for none
+GameWindow *comboBeside( const std::vector<GameWindow *> &widgets, GameWindow *combo, Int dx )
+{
+	Int cx, cy, cw, ch;
+	rectOf( combo, cx, cy, cw, ch );
+	GameWindow *best = NULL;
+	Int bestGap = 0;
+	for (size_t i = 0; i < widgets.size(); ++i)
+	{
+		GameWindow *w = widgets[i];
+		if (w == combo || !(w->winGetStyle() & GWS_COMBO_BOX))
+			continue;
+		Int x, y, width, height;
+		rectOf( w, x, y, width, height );
+		if (y >= cy + ch || y + height <= cy)
+			continue;		// not in its row
+		const Int gap = dx > 0 ? x - (cx + cw) : cx - (x + width);
+		if (gap < 0)
+			continue;		// not that way
+		if (best == NULL || gap < bestGap)
+		{
+			best = w;
+			bestGap = gap;
+		}
+	}
+	return best;
+}
+
+/// The pad's highlight in a combo box's open list, begun on the combo box's choice the first time it is asked
+Int padListRow( GameWindow *combo )
+{
+	if (thePadList.comboId != combo->winGetWindowId())
+	{
+		Int pos = -1;
+		GadgetComboBoxGetSelectedPos( combo, &pos );
+		thePadList.comboId = combo->winGetWindowId();
+		thePadList.highlight = pos < 0 ? 0 : pos;
+	}
+	return thePadList.highlight;
+}
+
+/// "GAMEPAD LIST: <combo> <what>, highlight N, choice N of N", and while the list is open where the highlight's row
+/// is ("at x,y wxh"), which a check's mouse clicks to make the same pick
+void padListLog( GameWindow *combo, const char *what )
+{
+	Int pos = -1;
+	GadgetComboBoxGetSelectedPos( combo, &pos );
+	GameWindow *list = openList( combo );
+	Int x = 0, y = 0, width = 0, height = 0;
+	if (list != NULL && rowRect( list, thePadList.highlight, x, y, width, height ))
+		DEBUG_LOG(( "GAMEPAD LIST: %s %s, highlight %d, choice %d of %d, at %d,%d %dx%d\n", nameOf( combo ), what,
+			thePadList.highlight, pos, GadgetComboBoxGetLength( combo ), x, y, width, height ));
+	else
+		DEBUG_LOG(( "GAMEPAD LIST: %s %s, highlight %d, choice %d of %d\n", nameOf( combo ), what, thePadList.highlight, pos,
+			GadgetComboBoxGetLength( combo ) ));
+}
+
 }  // namespace
 
 void GamepadFocus::setHooks( const Hooks &hooks )
@@ -707,6 +821,8 @@ Bool GamepadFocus::act( Action action )
 	const Bool isSlider = focus != NULL && (focus->winGetStyle() & GWS_ALL_SLIDER);
 	GameWindow *dropdown = (focus != NULL && (focus->winGetStyle() & GWS_COMBO_BOX)) ? GadgetComboBoxGetListBox( focus ) : NULL;
 	const Bool dropdownOpen = dropdown != NULL && !dropdown->winIsHidden();
+	if (!dropdownOpen)
+		thePadList.comboId = 0;		// a list shut (by a pick, B, the mouse, or the screen going) begins afresh when opened
 
 	switch (action)
 	{
@@ -714,12 +830,22 @@ Bool GamepadFocus::act( Action action )
 		{
 			const Bool vertical = action == NAV_UP || action == NAV_DOWN;
 			const UnsignedByte key = action == NAV_UP ? KEY_UP : action == NAV_DOWN ? KEY_DOWN : action == NAV_LEFT ? KEY_LEFT : KEY_RIGHT;
-			// an open combo's list, a list, a slider: the direction is theirs while it moves something
-			if (dropdownOpen && vertical)
+			// an open combo's list is the pad's: up and down move its highlight (clamped, the list scrolled to it), and
+			// left and right do nothing, the list staying open; nothing is chosen until A
+			if (dropdownOpen)
 			{
-				keyTo( dropdown, key );
+				if (vertical)
+				{
+					const Int length = GadgetComboBoxGetLength( focus );
+					Int row = padListRow( focus ) + (action == NAV_DOWN ? 1 : -1);
+					row = row < 0 ? 0 : (row >= length ? length - 1 : row);
+					thePadList.highlight = row;
+					showRow( dropdown, row );
+					padListLog( focus, "moved" );
+				}
 				return TRUE;
 			}
+			// a list, a slider: the direction is theirs while it moves something
 			if (isList && vertical)
 			{
 				const Int before = selectedRow( focus );
@@ -732,15 +858,20 @@ Bool GamepadFocus::act( Action action )
 				keyTo( focus, key );
 				return TRUE;
 			}
-			// a closed combo box: left and right step its choice, as a player's pick from its list does (GCM_SELECTED)
+			// a closed combo box: left and right step its choice, as a player's pick from its list does (GCM_SELECTED) -
+			// unless another combo box stands beside it in its row (skirmish setup's player, colour, army and team), where
+			// they move along the row, and A's list changes it: else no D-pad could reach the rest of that row
 			const Bool isCombo = focus != NULL && (focus->winGetStyle() & GWS_COMBO_BOX);
-			if (isCombo && !vertical && !dropdownOpen)
+			if (isCombo && !vertical && !dropdownOpen && comboBeside( widgets, focus, action == NAV_RIGHT ? 1 : -1 ) == NULL)
 			{
 				Int pos = -1;
 				GadgetComboBoxGetSelectedPos( focus, &pos );
 				const Int next = pos + (action == NAV_RIGHT ? 1 : -1);
 				if (next >= 0 && next < GadgetComboBoxGetLength( focus ))
+				{
 					GadgetComboBoxSetSelectedPos( focus, next );
+					DEBUG_LOG(( "GAMEPAD LIST: %s stepped, choice %d of %d\n", nameOf( focus ), next, GadgetComboBoxGetLength( focus ) ));
+				}
 				return TRUE;
 			}
 			if (focus == NULL)
@@ -795,10 +926,41 @@ Bool GamepadFocus::act( Action action )
 		{
 			if (focus == NULL)
 				return TRUE;
-			if (dropdownOpen || isList)
+			if (dropdownOpen)
+			{
+				// the pick: the highlight chosen as a click on its row chooses it (GLM_SELECTED, the screen's GCM_SELECTED),
+				// which shuts the list; the choice it already had only shuts it
+				if (action == ACCEPT_DOWN)
+				{
+					const Int row = padListRow( focus );
+					Int pos = -1;
+					GadgetComboBoxGetSelectedPos( focus, &pos );
+					if (row != pos)
+						GadgetComboBoxSetSelectedPos( focus, row );
+					else
+						toggleList( focus );
+					padListLog( focus, "picked" );
+					thePadList.comboId = 0;
+				}
+				return TRUE;
+			}
+			if (isList)
 			{
 				if (action == ACCEPT_DOWN)
-					keyTo( dropdownOpen ? dropdown : focus, KEY_ENTER );
+					keyTo( focus, KEY_ENTER );
+				return TRUE;
+			}
+			if (focus->winGetStyle() & GWS_COMBO_BOX)
+			{
+				// a shut combo box: A opens its list, the highlight on its choice
+				if (action == ACCEPT_DOWN)
+				{
+					toggleList( focus );
+					GameWindow *opened = openList( focus );
+					if (opened != NULL)
+						showRow( opened, padListRow( focus ) );
+					padListLog( focus, "opened" );
+				}
 				return TRUE;
 			}
 			if (action == ACCEPT_DOWN)
@@ -812,7 +974,9 @@ Bool GamepadFocus::act( Action action )
 		{
 			if (dropdownOpen)
 			{
-				press( focus );		// the combo itself: a click closes its list
+				toggleList( focus );		// shut, and the choice is the one it had
+				padListLog( focus, "shut, nothing chosen" );
+				thePadList.comboId = 0;
 				return TRUE;
 			}
 			GameWindow *back = byNameTail( widgets, theBackNames, GWS_PUSH_BUTTON );
@@ -837,6 +1001,12 @@ Bool GamepadFocus::act( Action action )
 		case TAB_PREV:
 		case TAB_NEXT:
 		{
+			if (dropdownOpen)
+			{
+				// in an open list the shoulders page, a screenful of rows, as the triggers do: the tabs wait
+				act( action == TAB_PREV ? PAGE_UP : PAGE_DOWN );
+				return TRUE;
+			}
 			std::vector<GameWindow *> tabs;
 			const Int chosen = tabButtons( screen, tabs );
 			if (tabs.empty())
@@ -867,7 +1037,19 @@ Bool GamepadFocus::act( Action action )
 		case PAGE_UP:
 		case PAGE_DOWN:
 		{
-			GameWindow *list = dropdownOpen ? dropdown : (isList ? focus : NULL);
+			if (dropdownOpen)
+			{
+				const Int length = GadgetComboBoxGetLength( focus );
+				Int page = GadgetListBoxGetBottomVisibleEntry( dropdown ) - GadgetListBoxGetTopVisibleEntry( dropdown ) + 1;
+				page = page < 1 ? 1 : page;
+				Int row = padListRow( focus ) + (action == PAGE_DOWN ? page : -page);
+				row = row < 0 ? 0 : (row >= length ? length - 1 : row);
+				thePadList.highlight = row;
+				showRow( dropdown, row );
+				padListLog( focus, "paged" );
+				return TRUE;
+			}
+			GameWindow *list = isList ? focus : NULL;
 			for (Int i = 0; list != NULL && i < 8; ++i)
 				keyTo( list, action == PAGE_UP ? KEY_UP : KEY_DOWN );
 			return list != NULL;
@@ -895,23 +1077,49 @@ void GamepadFocus::draw( void )
 		TheDisplay->drawOpenRect( x - 3, y - 3, width + 6, height + 6, 2.0f, GameMakeColor( 255, 210, 60, 255 ) );
 	}
 
+	// an open combo box's list: the pad's highlight on its row (the list box's own selection is the choice, unchanged)
+	GameWindow *list = openList( focus );
+	if (list == NULL)
+		thePadList.comboId = 0;
+	Int rx, ry, rw, rh;
+	if (list != NULL && rowRect( list, padListRow( focus ), rx, ry, rw, rh ))
+	{
+		TheDisplay->drawFillRect( rx, ry, rw, rh, GameMakeColor( 255, 210, 60, 70 ) );
+		TheDisplay->drawOpenRect( rx, ry, rw, rh, 1.0f, GameMakeColor( 255, 210, 60, 255 ) );
+	}
+	// and no tooltip over it: the pad's pointer rests on the combo box, whose tooltip covered the list's rows (the
+	// mouse draws it after this, from what is set now)
+	if (list != NULL && TheMouse != NULL)
+		TheMouse->setCursorTooltip( UnicodeString::TheEmptyString );
+	// a closed combo box whose left and right change it (none beside it in its row): the prompt says so
+	const Bool closedCombo = list == NULL && focus != NULL && (focus->winGetStyle() & GWS_COMBO_BOX)
+		&& comboBeside( widgets, focus, 1 ) == NULL && comboBeside( widgets, focus, -1 ) == NULL;
+
 	// the hint bar: the buttons that do something here, bottom right
 	struct Item { Int button; const char *label; GameWindow *owner; };		// owner: a button whose own text is the word
-	const Int MAX_ITEMS = 6;
+	const Int MAX_ITEMS = 8;
 	Item items[ MAX_ITEMS ];
 	Int count = 0;
+	// a closed combo box: left and right change it in place (the word after the pair of glyphs)
+	if (closedCombo)
+	{
+		items[ count++ ] = { GAMEPAD_BUTTON_DPAD_LEFT, "", NULL };
+		items[ count++ ] = { GAMEPAD_BUTTON_DPAD_RIGHT, "GUI:GamepadChange", NULL };
+	}
 	items[ count++ ] = { GAMEPAD_BUTTON_SOUTH, "GUI:GamepadSelect", NULL };
 	items[ count++ ] = { GAMEPAD_BUTTON_EAST, "GUI:GamepadBack", NULL };
-	GameWindow *xButton = secondaryButton( widgets, FALSE ), *yButton = secondaryButton( widgets, TRUE );
+	// an open list: only its own two, a pick and a way out
+	GameWindow *xButton = list == NULL ? secondaryButton( widgets, FALSE ) : NULL;
+	GameWindow *yButton = list == NULL ? secondaryButton( widgets, TRUE ) : NULL;
 	if (xButton != NULL)
 		items[ count++ ] = { GAMEPAD_BUTTON_WEST, NULL, xButton };
 	if (yButton != NULL)
 		items[ count++ ] = { GAMEPAD_BUTTON_NORTH, NULL, yButton };
-	if (byNameTail( widgets, theStartNames, GWS_PUSH_BUTTON ) != NULL)
+	if (list == NULL && byNameTail( widgets, theStartNames, GWS_PUSH_BUTTON ) != NULL)
 		items[ count++ ] = { GAMEPAD_BUTTON_START, "GUI:GamepadStart", NULL };
 	std::vector<GameWindow *> tabs;
 	tabButtons( screen, tabs );
-	if (!tabs.empty())
+	if (list == NULL && !tabs.empty())
 		items[ count++ ] = { GAMEPAD_BUTTON_RIGHT_SHOULDER, "GUI:GamepadTabs", NULL };
 
 	static DisplayString *glyphs[ MAX_ITEMS ] = { NULL }, *words[ MAX_ITEMS ] = { NULL };
@@ -933,7 +1141,7 @@ void GamepadFocus::draw( void )
 		if (glyphs[i] == NULL || words[i] == NULL)
 			continue;
 		const UnicodeString word = items[i].owner != NULL ? items[i].owner->winGetText()
-			: (TheGameText != NULL ? TheGameText->fetch( items[i].label ) : UnicodeString::TheEmptyString);
+			: (TheGameText != NULL && items[i].label[0] != 0 ? TheGameText->fetch( items[i].label ) : UnicodeString::TheEmptyString);
 		if (glyphs[i]->getFont() != glyphFont)
 			glyphs[i]->setFont( glyphFont );
 		if (glyphs[i]->getText() != glyph)
@@ -950,6 +1158,6 @@ void GamepadFocus::draw( void )
 		x -= gw + 4;
 		glyphs[i]->draw( x, GamepadHints::glyphTop( GamepadHints::getShown(), items[i].button, gh, centreY ),
 			GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
-		x -= 18;
+		x -= (i > 0 && items[i - 1].owner == NULL && items[i - 1].label[0] == 0) ? 4 : 18;	// a pair's first glyph sits close
 	}
 }

@@ -1390,7 +1390,9 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	TheSkirmishGameInfo->setSlot(1, gSlot);
 
 	ParseAsciiStringToGameInfo(TheSkirmishGameInfo, prefs.getSlotList());
-	TheSkirmishGameInfo->setSeed(Clock_Milliseconds_Coarse());
+	// -seed repeats a match set up here too, as it does -autoskirmish's (GameEngine.cpp): a pad's set-up can then be
+	// compared with a mouse's, the same match from the same choices
+	TheSkirmishGameInfo->setSeed((TheGlobalData->m_fixedSeed >= 0) ? TheGlobalData->m_fixedSeed : Clock_Milliseconds_Coarse());
 
 	UnsignedInt isPreorder = 0;
 	GetUnsignedIntFromRegistry("", "Preorder", isPreorder);
