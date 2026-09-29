@@ -21,7 +21,9 @@
 #   Contents/Info.plist, PkgInfo       with ZHReforgedCommit and ZHReforgedBuildDate: which build this is
 #   Contents/MacOS/generals            stripped; its dSYM beside the bundle (<out>.dSYM), not in it, for C5
 #   Contents/Resources/AppIcon.icns    from Main/Generals.ico's 48 px image (soft on Retina: an open item)
-#   Contents/Resources/Overlay/        the staged overlay (zh_overlay), its art archives as APFS clones
+#   Contents/Resources/Overlay/        the staged overlay (zh_overlay), without the art archives
+#   Contents/Resources/fetch-art.sh    Tools/fetch-art.sh: the game starts it, and it fetches the art into the
+#                                      user data folder (~/Library/Application Support/...), as on Linux
 #   Contents/Resources/Licenses/       from macos-app-licenses.txt, checked against the link line
 #
 # Refused, before anything is written:
@@ -34,10 +36,10 @@
 # Last, an ad-hoc signature (codesign --sign - --timestamp=none) over the final contents, and
 # codesign --verify --deep --strict of it.  Anything written into the bundle afterwards breaks that seal.
 #
-# THE ART is cloned (cp -c, clonefile) from the files the staged overlay links to, so on APFS the
-# bundle's 1.6 GB costs almost no space; on another file system, or across volumes, cp -c fails and so
-# does this script - it never falls back to a real copy (the disk rule).  --no-art leaves the archives
-# out (a local bundle; the game then looks as ClassicGraphics does).
+# THE ART is not in the app (the user's rule, as on Linux and upstream's Windows): the Reforged*.big the
+# staged overlay links are left out, and the game fetches them on its first start into the user data
+# folder, each checked against art.json's sha256 (fetch-art.sh).  --no-art is still taken, and changes
+# nothing.
 #
 # Usage: make-macos-app.sh --generals <exe> --overlay <staged overlay> --build <build dir>
 #          --out <.../Zero Hour Reforged.app> --bundle-id <id> --min-macos <version> [--no-art]
@@ -53,7 +55,7 @@
 
 set -u
 
-GENERALS="" OVERLAY="" BUILD="" OUT="" BUNDLE_ID="" ART=1 NINJA="" MIN_MACOS="" X86=""
+GENERALS="" OVERLAY="" BUILD="" OUT="" BUNDLE_ID="" NINJA="" MIN_MACOS="" X86=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--generals) GENERALS="$2"; shift 2;;
@@ -63,7 +65,7 @@ while [ $# -gt 0 ]; do
 		--bundle-id) BUNDLE_ID="$2"; shift 2;;
 		--min-macos) MIN_MACOS="$2"; shift 2;;
 		--x86-64-generals) X86="$2"; shift 2;;
-		--no-art) ART=0; shift;;
+		--no-art) shift;;		# the art is never in the app now: taken, and nothing changes
 		--link-ninja) NINJA="$2"; shift 2;;
 		*) echo "make-macos-app: unknown argument $1" >&2; exit 2;;
 	esac
@@ -219,17 +221,17 @@ rm -f "$iconset/base.png"
 iconutil -c icns "$iconset" -o "$C/Resources/AppIcon.icns" || fail "iconutil failed"
 rm -rf -- "$(dirname "$iconset")"
 
-# the overlay: everything as staged; the art archives cloned from the files the staging links to
+# the overlay: everything as staged but the art, and the script that fetches it
 for entry in "$OVERLAY"/*; do
 	name="$(basename "$entry")"
 	case "$name" in
-		*.big)
-			[ "$ART" -eq 1 ] || continue
-			cp -c "$entry" "$C/Resources/Overlay/$name" || fail "cannot clone $name (cp -c: is the build on APFS, on the art's volume?)"
-			;;
+		Reforged*.big) continue;;		# the art: fetched on the first start, never in the app
 		*) cp -R -L "$entry" "$C/Resources/Overlay/$name" || fail "cannot copy $name";;
 	esac
 done
+
+cp "$CODE/Tools/fetch-art.sh" "$C/Resources/fetch-art.sh" && chmod +x "$C/Resources/fetch-art.sh" \
+	|| fail "cannot copy fetch-art.sh"
 
 # the licences
 L="$C/Resources/Licenses"
@@ -248,4 +250,4 @@ minos_check "the bundle's executables" "${machos[@]}"
 # ---- the signature, last, over the final contents ------------------------------------------------------------
 codesign --force --sign - --timestamp=none "$OUT" 2>/dev/null || fail "codesign failed"
 codesign --verify --deep --strict "$OUT" 2>/dev/null || fail "the fresh signature does not verify"
-echo "make-macos-app: $OUT: $(lipo -archs "$C/MacOS/generals"), version $version, minimum macOS $minos, $(printf '%s\n' $ENTRIES | wc -l | tr -d ' ') licence entries for $(printf '%s\n' $linked | wc -l | tr -d ' ') linked libraries, art $( [ "$ART" -eq 1 ] && echo cloned || echo left out); signed ad hoc and verified"
+echo "make-macos-app: $OUT: $(lipo -archs "$C/MacOS/generals"), version $version, minimum macOS $minos, $(printf '%s\n' $ENTRIES | wc -l | tr -d ' ') licence entries for $(printf '%s\n' $linked | wc -l | tr -d ' ') linked libraries, art fetched on the first start; signed ad hoc and verified"

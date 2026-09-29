@@ -24,7 +24,7 @@
 #   <out>/bin/generals                            stripped; bin/generals.debug beside it (a GNU debuglink)
 #   <out>/share/zero-hour-reforged/overlay/       the staged overlay (zh_overlay), its art copied in
 #   <out>/share/zero-hour-reforged/licenses/      from macos-app-licenses.txt, checked against the link line
-#   <out>/share/zero-hour-reforged/fetch-art.sh   Tools/linux-fetch-art.sh: with --no-art, the launcher fetches the
+#   <out>/share/zero-hour-reforged/fetch-art.sh   Tools/fetch-art.sh: with --no-art, the launcher fetches the
 #                                                 art into the user data folder (the packages' way, upstream's)
 #   <out>/share/applications/, share/icons/       a .desktop file and the icon (Main/Generals.ico's 48 px, and 128 px)
 #   <out>/VERSION, <out>/README.txt               which build this is; how to install it and point it at Zero Hour
@@ -162,7 +162,7 @@ for e in $ENTRIES; do
 	license_entry "$e" "$S/licenses" || fail "cannot write the licence entry '$e'"
 done
 
-cp "$CODE/Tools/linux-fetch-art.sh" "$S/fetch-art.sh" && chmod +x "$S/fetch-art.sh" || fail "cannot copy fetch-art.sh"
+cp "$CODE/Tools/fetch-art.sh" "$S/fetch-art.sh" && chmod +x "$S/fetch-art.sh" || fail "cannot copy fetch-art.sh"
 cat > "$OUT/zero-hour-reforged.sh" <<'LAUNCHER'
 #!/bin/sh
 # Zero Hour Reforged's launcher (P3): the game finds its overlay beside it and the player's Zero Hour by itself

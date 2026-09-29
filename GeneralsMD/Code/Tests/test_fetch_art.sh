@@ -14,7 +14,7 @@
 #
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# test_linux_fetch_art.sh: Tools/linux-fetch-art.sh, the Linux packages' art download, against a local file://
+# test_fetch_art.sh: Tools/fetch-art.sh, the Linux packages' and the macOS app's art download, against a local file://
 # release (no network): an art.json and one .big, as upstream's art-latest release lays them out.
 #
 #   1. a first fetch: the .big downloaded, its sha256 checked, moved into <user data>/ReforgedArt, recorded;
@@ -24,17 +24,20 @@
 #   4. armed: a name that is not a plain Reforged*.big (a path) refuses the whole list, and nothing changes;
 #   5. a file art.json no longer lists is removed;
 #   6. ZHR_NO_ART_FETCH=1 fetches nothing; an unreachable release changes nothing and says so;
-#   7. the launcher's --background mode returns at once and leaves the same result behind.
-# Needs curl or wget, sha256sum and flock (util-linux): Linux's.  Skipped (77) without them.
+#   7. the launcher's --background mode returns at once and leaves the same result behind;
+#   8. without ZH_USER_DATA_DIR, the platform's own folder, as the game's (EarlyOptions.h): ~/Library/Application
+#      Support on macOS, $XDG_DATA_HOME or ~/.local/share elsewhere.
+# Needs curl or wget, and sha256sum or shasum; flock is used where there is one (Linux), a lock folder
+# where there is not (macOS).  Skipped (77) without them.
 
 set -u
 CODE="$(cd "$(dirname "$0")/.." && pwd)"
-FETCH="$CODE/Tools/linux-fetch-art.sh"
-for tool in sha256sum flock; do command -v $tool > /dev/null || { echo "skip: no $tool"; exit 77; }; done
+FETCH="$CODE/Tools/fetch-art.sh"
+command -v sha256sum > /dev/null || command -v shasum > /dev/null || { echo "skip: neither sha256sum nor shasum"; exit 77; }
 command -v curl > /dev/null || command -v wget > /dev/null || { echo "skip: neither curl nor wget"; exit 77; }
 # a work folder that could not be made is the end of the run: going on with T empty would write under /
 T="$(mktemp -d "${TMPDIR:-/tmp}/fetch-art.XXXXXX")" || T=""
-if [ -z "$T" ] || [ ! -d "$T" ]; then echo "test_linux_fetch_art: cannot make a work folder under ${TMPDIR:-/tmp}" >&2; exit 2; fi
+if [ -z "$T" ] || [ ! -d "$T" ]; then echo "test_fetch_art: cannot make a work folder under ${TMPDIR:-/tmp}" >&2; exit 2; fi
 trap 'rm -rf -- "$T"' EXIT
 failures=0
 check() { if eval "$1"; then echo "PASS $2"; else echo "FAIL $2"; failures=$((failures + 1)); fi; }
@@ -54,7 +57,7 @@ publish() {	# publish <name> <size> <sha256> [<name> <size> <sha256>...]: art.js
 	  echo '    }'; echo '  ]'; echo '}'; } > "$REL/art.json"
 }
 size() { wc -c < "$1" | tr -d ' '; }
-sha() { sha256sum "$1" | cut -d ' ' -f 1; }
+if command -v sha256sum > /dev/null; then sha() { sha256sum "$1" | cut -d ' ' -f 1; }; else sha() { shasum -a 256 "$1" | cut -d ' ' -f 1; }; fi
 fetch() { ZH_USER_DATA_DIR="$USER_DATA" ZHR_ART_URL="file://$REL" sh "$FETCH" "$@" > "$T/out" 2>&1; STATUS=$?; }
 
 # 1.
@@ -110,6 +113,14 @@ ZH_USER_DATA_DIR="$USER_DATA" ZHR_ART_URL="file://$REL" sh "$FETCH" --background
 for i in $(seq 50); do grep -q "the art is complete" "$USER_DATA/Logs/art-fetch.log" 2>/dev/null && break; sleep 0.2; done
 check '[ $STATUS -eq 0 ] && grep -q "the art is complete" "$USER_DATA/Logs/art-fetch.log" && cmp -s "$REL/ReforgedOther.big" "$ART/ReforgedOther.big"' \
 	"7. --background returns at once; its log says complete and the file is in place"
+
+# 8.
+mkdir -p "$T/home"
+if [ "$(uname -s)" = Darwin ]; then own="$T/home/Library/Application Support/Command and Conquer Generals Zero Hour Data"
+else own="$T/home/.local/share/Command and Conquer Generals Zero Hour Data"; fi
+env -u ZH_USER_DATA_DIR -u XDG_DATA_HOME HOME="$T/home" ZHR_ART_URL="file://$REL" sh "$FETCH" > "$T/out" 2>&1; STATUS=$?
+check '[ $STATUS -eq 0 ] && cmp -s "$REL/ReforgedOther.big" "$own/ReforgedArt/ReforgedOther.big"' \
+	"8. without ZH_USER_DATA_DIR: into the platform's own user data folder ($(uname -s))"
 
 echo "$failures failure(s)"
 [ $failures -eq 0 ]

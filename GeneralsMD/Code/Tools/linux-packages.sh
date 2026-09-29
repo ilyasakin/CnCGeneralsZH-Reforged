@@ -16,7 +16,7 @@
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # linux-packages.sh: Zero Hour Reforged's Linux release files, from one command.  Each is the engine only: the
 # player's own Zero Hour is found or asked for on the first start, and the upscaled art is fetched into their
-# user data folder (Tools/linux-fetch-art.sh), as upstream's Windows player gets it.  Every one carries the same
+# user data folder (Tools/fetch-art.sh), as upstream's Windows player gets it.  Every one carries the same
 # binary: the portable folder Tools/linux-portable.sh --no-art builds in Valve's sniper SDK and checks (glibc
 # 2.31, libstdc++, SDL3, FFmpeg's LGPL build and the rest static, the licences against the link line).
 #
