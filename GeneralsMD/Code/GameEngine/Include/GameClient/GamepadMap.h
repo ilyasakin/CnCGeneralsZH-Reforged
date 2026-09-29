@@ -19,10 +19,10 @@
 // GamepadMap.h: a gamepad's buttons, each bound to what a mouse button or a key already does (G1).
 //
 // The rule of G1 (docs/mac-port/tasks/G1-gamepad.md): a gamepad only produces the input the mouse and
-// keyboard already produce.  So a binding here never names a GameMessage.  It names a mouse button, or a
-// key with its modifiers, and the device layer (SdlGamepad) presses exactly that through the mouse's and
-// keyboard's own devices.  The command maps then turn the key into whatever the player's input scheme
-// binds it to, so Modern, Legacy and W A S D each keep their own meaning, and a rebound key carries over.
+// keyboard already produce.  So a binding names a mouse button, a key with its modifiers, or a command the
+// command maps name, and the device layer (SdlGamepad) presses exactly that through the mouse's and
+// keyboard's own devices.  The command maps then turn the key into their message, so a rebound key carries
+// over.
 //
 // The buttons are named by where they sit (SDL3's South, East, West, North...), not by what is printed on
 // them: the same hand does the same thing on every pad, and only the drawn hint changes.
@@ -41,18 +41,21 @@
 //   End
 //
 // Modifier holds modifiers alone (`Modifiers = SHIFT`), as a hand holds Shift.  Key presses a named key
-// with its modifiers (`Key = KEY_S`, `Modifiers = CTRL`: the command maps' names).  Command
-// presses whatever key, with whatever modifiers, the player's input scheme binds that command to at the
-// moment of the press: S for STOP under Modern, G under W A S D.  Either way what arrives is a key.
+// with its modifiers (`Key = KEY_S`, `Modifiers = CTRL`: the command maps' names).  Command presses whatever
+// key, with whatever modifiers, the command maps bind that command to at the moment of the press
+// (keyForCommand: a key an earlier record takes is not the command's).  An order whose letter the command
+// grid took (stop's S, attack move's D) is its place's instead, pressed as that key presses it where the key
+// still gives the order, and nothing where it would press a building there; any other command no key
+// reaches is sent as its message, as a key would send it (SdlGamepad.cpp).
 //
 // Structures selects the local player's next or previous production building and looks at it
 // (GamepadCycle.h): the selection message is the one a click on that building sends.
 //
-// Order presses the input scheme's order button: the right one under Modern, the left under Legacy, and
-// the left one under both while an armed ability, attack move or guard waits for its target (they are aimed
-// with the left button).  Cancel drops what is armed - an ability waiting for a target, a structure being
-// placed, an order key - and with nothing armed clears the selection (GamepadCancel.h): what a Modern right
-// click cancels, without the order that click also gives, and what a Modern click on empty ground clears.
+// Order clicks the right button, down and up in one pass (held, it would drag, and a right drag pans), and
+// the left one while an armed ability, attack move, guard or move waits for its target (they are aimed with
+// the left button).  Cancel drops what is armed - an ability waiting for a target, a structure being
+// placed, an order key - and with nothing armed clears the selection (GamepadCancel.h): what a right click
+// cancels, without the order that click also gives, and what a click on empty ground clears.
 //
 // The triggers bind as LeftTrigger and RightTrigger: a trigger pulled past half is a press.
 //
