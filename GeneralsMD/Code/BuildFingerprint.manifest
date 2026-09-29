@@ -1357,6 +1357,7 @@ GameEngineDevice/Include/SdlDevice/Common/SdlMessageBox.h
 GameEngineDevice/Include/SdlDevice/Common/SdlPanel.h
 GameEngineDevice/Include/SdlDevice/GameClient/AniCursor.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlGamepad.h
+GameEngineDevice/Include/SdlDevice/GameClient/SdlGamepadOutput.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlInput.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlInputScript.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyTable.h
@@ -1455,6 +1456,7 @@ GameEngineDevice/Include/Win32Device/Common/Win32LocalFile.h
 GameEngineDevice/Include/Win32Device/Common/Win32LocalFileSystem.h
 GameEngineDevice/Include/Win32Device/GameClient/Win32DIKeyboard.h
 GameEngineDevice/Include/Win32Device/GameClient/Win32DIMouse.h
+GameEngineDevice/Include/Win32Device/GameClient/Win32GamepadOutput.h
 GameEngineDevice/Include/Win32Device/GameClient/Win32Mouse.h
 GameEngineDevice/Source/D3D12Device/D3D12Adapter.cpp
 GameEngineDevice/Source/D3D12Device/D3D12Adapter.h
@@ -1503,6 +1505,7 @@ GameEngineDevice/Source/SdlDevice/Common/SdlMessageBox.cpp
 GameEngineDevice/Source/SdlDevice/Common/SdlPanel.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/AniCursor.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlGamepad.cpp
+GameEngineDevice/Source/SdlDevice/GameClient/SdlGamepadOutput.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlInput.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlInputScript.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyTable.cpp
@@ -1625,6 +1628,7 @@ GameEngineDevice/Source/Win32Device/Common/Win32LocalFileSystem.cpp
 GameEngineDevice/Source/Win32Device/Common/Win32OSDisplay.cpp
 GameEngineDevice/Source/Win32Device/GameClient/Win32DIKeyboard.cpp
 GameEngineDevice/Source/Win32Device/GameClient/Win32DIMouse.cpp
+GameEngineDevice/Source/Win32Device/GameClient/Win32GamepadOutput.cpp
 GameEngineDevice/Source/Win32Device/GameClient/Win32Mouse.cpp
 Libraries/DirectX/.gitignore
 Libraries/Include/Granny/.gitignore
@@ -3614,7 +3618,9 @@ Tools/fingerprint/build_fingerprint.cpp
 Tools/gamepad-combo-check.sh
 Tools/gamepad-crc-check.sh
 Tools/gamepad-dpad-check.sh
+Tools/gamepad-game.sh
 Tools/gamepad-menu-check.sh
+Tools/gamepad-windows-game.sh
 Tools/gametext.py
 Tools/gdi-font-metrics-header.py
 Tools/gdi-font-metrics.ps1

@@ -1037,17 +1037,22 @@ if(ZH_PLATFORM_POSIX)
     ffvertex engineshader sdl3shadercompile)
 endif()
 
-# ---- X1: SDL3 on Windows, for the -d3d12 renderer only ------------------------------------------------
-# Video (the GPU device needs it initialised, and wraps the game's own HWND) and GPU, nothing else: no
-# dialog, audio, render, joystick and the rest.  Win32Device stays the platform layer (decision 3, amended).
-if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
+# ---- SDL3 on Windows: the gamepad (G1b) on every build, and the -d3d12 renderer (X1) --------------------
+# The joystick and gamepad subsystems (with HIDAPI and the virtual joystick G1's test 2 plays) for SdlGamepad,
+# and with ZH_D3D12 video (the GPU device needs it initialised, and wraps the game's own HWND) and GPU; nothing
+# else: no dialog, audio, render and the rest.  Win32Device stays the platform layer (decision 3, amended
+# twice): the game's window, mouse and keyboard are Win32's, and SDL sees only the pads.
+if(ZH_PLATFORM_WINDOWS)
   foreach(_sdl_off SDL_SHARED SDL_TEST_LIBRARY SDL_TESTS SDL_EXAMPLES SDL_INSTALL SDL_UNINSTALL
-                   SDL_AUDIO SDL_RENDER SDL_CAMERA SDL_JOYSTICK SDL_HAPTIC SDL_HIDAPI SDL_POWER
+                   SDL_AUDIO SDL_RENDER SDL_CAMERA SDL_HAPTIC SDL_POWER
                    SDL_SENSOR SDL_TRAY SDL_OPENGL SDL_OPENGLES SDL_DIALOG)
     set(${_sdl_off} OFF CACHE BOOL "" FORCE)
   endforeach()
-  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU)
+  foreach(_sdl_on SDL_STATIC SDL_JOYSTICK SDL_HIDAPI SDL_VIRTUAL_JOYSTICK)
     set(${_sdl_on} ON CACHE BOOL "" FORCE)
+  endforeach()
+  foreach(_sdl_gpu SDL_VIDEO SDL_GPU)
+    set(${_sdl_gpu} ${ZH_D3D12} CACHE BOOL "" FORCE)
   endforeach()
   add_subdirectory(${LIBSRC}/SDL3 ${CMAKE_CURRENT_BINARY_DIR}/SDL3)
 endif()
@@ -1856,13 +1861,21 @@ add_library(milesaudio STATIC ${WW}/Miles6/xaudio2/miles_xaudio2.cpp)
 target_include_directories(milesaudio PRIVATE ${WW}/Miles6/include ${FFMPEG_DIR}/include)
 target_link_libraries(milesaudio PRIVATE ${FFMPEG_CORE} xaudio2)
 
+# G1b: the gamepad is SdlDevice's on every platform (SdlGamepad.h), over Win32Device's mouse and keyboard here
+# (Win32GamepadOutput.cpp); with it the input script, the key table the script's key names go through, and
+# the .ANI decoder the pad's drawn cursor takes its art from (W3DMouse's RM_POLYGON).
+list(APPEND GAMEENGINEDEVICE_SOURCES
+  ${GED}/Source/SdlDevice/GameClient/SdlGamepad.cpp
+  ${GED}/Source/SdlDevice/GameClient/SdlInputScript.cpp
+  ${GED}/Source/SdlDevice/GameClient/SdlKeyTable.cpp
+  ${GED}/Source/SdlDevice/GameClient/AniCursor.cpp)
 add_library(gameenginedevice STATIC ${GAMEENGINEDEVICE_SOURCES})
 
 target_include_directories(gameenginedevice PUBLIC
   ${GED}/Include ${STUBS} ${CMAKE_CURRENT_SOURCE_DIR}/Main
   ${WW}/Miles6/include ${WW}/Bink/include)
 set_target_properties(gameenginedevice PROPERTIES CXX_STANDARD 17)
-target_link_libraries(gameenginedevice PUBLIC gameengine ww3d2 milesaudio binkvideo)
+target_link_libraries(gameenginedevice PUBLIC gameengine ww3d2 milesaudio binkvideo SDL3::SDL3-static)
 
 # ---- generals.exe ---------------------------------------------------------
 add_executable(generals WIN32 ${CMAKE_CURRENT_SOURCE_DIR}/Main/WinMain.cpp
@@ -1959,6 +1972,14 @@ add_custom_command(TARGET generals POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
           ${CMAKE_CURRENT_SOURCE_DIR}/Data/Cinema
           ${CMAKE_CURRENT_SOURCE_DIR}/../Run/Cinema)
+# The gamepad's button hint fonts and their glyph maps (Kenney's Input Prompts, CC0, fetched by vendor.ps1):
+# Run/Data/Fonts/Gamepad, where GamepadHints.cpp asks for them, as stage-overlay.sh puts them off Windows.
+file(GLOB ZH_PROMPT_FILES ${LIBSRC}/KenneyInputPrompts/*.ttf ${LIBSRC}/KenneyInputPrompts/*_map.txt)
+if(ZH_PROMPT_FILES)
+  add_custom_command(TARGET generals POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/../Run/Data/Fonts/Gamepad
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ZH_PROMPT_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/../Run/Data/Fonts/Gamepad/)
+endif()
 
 # The audio and video backends decode with FFmpeg, so its DLLs have to sit next to the exe.  These
 # are the five the two backends link against; avdevice and avfilter are not used.

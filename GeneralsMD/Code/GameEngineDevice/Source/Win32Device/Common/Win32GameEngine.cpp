@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -31,6 +32,7 @@
 
 #include <windows.h>
 #include "Win32Device/Common/Win32GameEngine.h"
+#include "Win32Device/GameClient/Win32GamepadOutput.h"
 #include "Common/PerfTimer.h"
 
 #include "GameNetwork/LANAPICallbacks.h"
@@ -54,6 +56,7 @@ Win32GameEngine::Win32GameEngine()
 //-------------------------------------------------------------------------------------------------
 Win32GameEngine::~Win32GameEngine()
 {
+	Win32GamepadOutput_stop();		// lets go of what the pads hold, while the keyboard and mouse still take it
 	// restore it (this isn't really necessary, but feels good.)
 	SetErrorMode( m_previousErrorMode );
 }
@@ -172,6 +175,8 @@ void Win32GameEngine::serviceWindowsOS( void )
 		TheMessageTime = 0;
 			
 	}  // end while
+
+	Win32GamepadOutput_pump();		// the pads and the input script (G1b), after the window's own input
 
 }  // end ServiceWindowsOS
 

@@ -40,8 +40,8 @@
 
 #include "W3DDevice/Common/W3DConvert.h"
 #include "W3DDevice/GameClient/W3DMouse.h"
-#if !defined(_WIN32)
 #include "SdlDevice/GameClient/AniCursor.h"
+#if !defined(_WIN32)
 #include "SdlDevice/GameClient/SdlInput.h"
 #include <SDL3/SDL_mouse.h>
 #endif
@@ -67,15 +67,14 @@ static CriticalSectionClass mutex;
 static Bool isThread;
 static TextureClass *cursorTextures[Mouse::NUM_MOUSE_CURSORS][MAX_2D_CURSOR_ANIM_FRAMES];	///<Textures for each cursor type
 static const Image *cursorImages[Mouse::NUM_MOUSE_CURSORS];			///<Images for use with the RM_POLYGON method.
-#if !defined(_WIN32)
 static ICoord2D aniHotSpots[Mouse::NUM_MOUSE_CURSORS];					///< an .ANI-made polygon image's own hot spot
 static Bool aniHotSpotKnown[Mouse::NUM_MOUSE_CURSORS];
 
 /** Mouse.ini's Image entries name mapped images the shipped data does not have (loadOrderCursorImage in
 	* W3DInGameUI.cpp says the same), so RM_POLYGON had nothing to draw, and a pad's cursor was invisible.  The
-	* cursor's own .ANI, the art the platform's cursor shows (SdlMouse), gives its first frame as a texture
+	* cursor's own .ANI, the art the platform's cursor shows (SdlMouse, Win32Mouse), gives its first frame as a texture
 	* instead.  It joins the image collection under a name of its own, so a later switch finds it again. */
-static const Image *aniCursorImage( const SdlMouse &mouse, Mouse::MouseCursor cursor )
+static const Image *aniCursorImage( const Win32Mouse &mouse, Mouse::MouseCursor cursor )
 {
 	AsciiString name;
 	name.format( "AniPolygonCursor%d", (Int)cursor );
@@ -127,7 +126,6 @@ static const Image *aniCursorImage( const SdlMouse &mouse, Mouse::MouseCursor cu
 	aniHotSpotKnown[cursor] = TRUE;
 	return image;
 }
-#endif
 static RenderObjClass *cursorModels[Mouse::NUM_MOUSE_CURSORS];	///< W3D models for each cursor type
 static HAnimClass			*cursorAnims[Mouse::NUM_MOUSE_CURSORS];		///< W3D animations for each cursor type
 
@@ -219,10 +217,8 @@ void W3DMouse::initPolygonAssets(void)
 			m_currentPolygonCursor = m_currentCursor;
 			if (!m_cursorInfo[i].imageName.isEmpty())
 				cursorImages[i]=TheMappedImageCollection->findImageByName(m_cursorInfo[i].imageName);
-#if !defined(_WIN32)
 			if (cursorImages[i] == NULL)
 				cursorImages[i] = aniCursorImage( *this, (MouseCursor)i );
-#endif
 		}
 	}
 }
@@ -517,10 +513,8 @@ void W3DMouse::setCursor( MouseCursor cursor )
 		m_currentW3DCursor=NONE;
 		m_currentPolygonCursor = cursor;
 		m_currentHotSpot = m_cursorInfo[cursor].hotSpotPosition;
-#if !defined(_WIN32)
 		if (cursor > NONE && cursor < NUM_MOUSE_CURSORS && aniHotSpotKnown[cursor])
 			m_currentHotSpot = aniHotSpots[cursor];		// an .ANI-made image points where its own art does
-#endif
 	}
 	else if (m_currentRedrawMode == RM_W3D)
 	{

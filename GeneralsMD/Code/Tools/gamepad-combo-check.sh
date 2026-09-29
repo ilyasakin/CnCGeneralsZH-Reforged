@@ -63,7 +63,6 @@ if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
 	echo "gamepad-combo-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
 	exit 2
 fi
-ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="gc$$_"
 
@@ -91,11 +90,9 @@ cleanup() {
 trap cleanup EXIT
 install_snapshot "$INSTALL" "$WORK/install-before.list"
 
-mkdir -p "$ROOT" "$USERDATA"
-( cd "$INSTALL" && find . -type d ! -name '._*' ) | while IFS= read -r d; do mkdir -p "$ROOT/$d"; done
-( cd "$INSTALL" && find . -type f ! -name '._*' ) | while IFS= read -r f; do ln -s "$INSTALL/${f#./}" "$ROOT/$f"; done
-OVERLAY="$WORK/overlay"
-"$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
+mkdir -p "$USERDATA"
+. "$(dirname "$0")/gamepad-game.sh"	# ROOT, the farm the game runs in, and GAME, how it starts: here or on Windows
+gamepad_game_setup
 
 
 
@@ -116,7 +113,7 @@ run() {	# run <name> <script>: sets LOG, STATUS, CRC
 	rm -f -- "$LOG"
 	( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA/$name" ZH_UNATTENDED=1 ZH_OFFSCREEN_HZ=30 ZH_INPUT_SCRIPT="$script" ZH_AUDIO_BACKEND=null \
 		perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
-		"$GENERALS" -offscreen -noaudio -win -xres 1280 -yres 800 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
+		"${GAME[@]}" -noaudio -win -xres 1280 -yres 800 -quickstart -noshellmap \
 		-multiInstance -seed 7 -maxframes "$MAXFRAMES" -logPrefix "${TAG}${name}" > "$WORK/$name.out" 2> "$WORK/$name.err" )
 	STATUS=$?
 	CRC="$(grep -a "HEADLESS CRC AT LIMIT: " "$LOG" 2>/dev/null | tail -1 | sed 's/.*LIMIT: \(0x[0-9A-F]*\).*/\1/')"

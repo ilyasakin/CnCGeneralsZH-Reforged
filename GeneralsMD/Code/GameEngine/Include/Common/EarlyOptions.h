@@ -144,6 +144,23 @@ inline bool findUserDataDirectory( char *out, size_t outSize )
 		return false;
 	out[0] = 0;
 
+	// ZH_USER_DATA_DIR, when set, is the directory itself, as off Windows: for tests, which bring their own
+	// Options.ini (the gamepad checks), and never set by a player.  Made when missing, one level deep.
+	const char *forced = ::getenv( "ZH_USER_DATA_DIR" );
+	if (forced != NULL && forced[0] != 0)
+	{
+		const size_t length = ::strlen( forced );
+		const bool slashed = forced[length - 1] == '\\' || forced[length - 1] == '/';
+		if (::_snprintf( out, outSize, slashed ? "%s" : "%s\\", forced ) < 0)
+		{
+			out[0] = 0;
+			return false;
+		}
+		out[outSize - 1] = 0;
+		::CreateDirectoryA( forced, NULL );
+		return true;
+	}
+
 	char documents[MAX_PATH * 2];
 	if (!findDocumentsFolderA( documents, sizeof( documents ) ))
 		return false;
