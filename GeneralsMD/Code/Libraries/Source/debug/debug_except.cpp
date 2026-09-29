@@ -29,6 +29,7 @@
 //////////////////////////////////////////////////////////////////////////////
 #include "_pch.h"
 #include <commctrl.h>
+#include "Common/EarlyCommandLine.h"   // isUnattendedProcess: -headless or ZH_UNATTENDED
 
 #pragma comment (lib,"comctl32")
 
@@ -394,6 +395,17 @@ LONG __stdcall DebugExceptionhandler::ExceptionFilter(struct _EXCEPTION_POINTERS
   // shut down real Debug module now
   // (atexit code never gets called in exception case)
   Debug::StaticExit();
+
+  // A run nobody watches (-headless, ZH_UNATTENDED) has nobody to click OK: the dialog waited for ever,
+  // unseen in a service session, and a test that crashed looked like a hang until ctest's limit (W3).
+  // The report is already in the debug log; say where on stderr, and end the run as OK would.
+  if (isUnattendedProcess())
+  {
+    fprintf(stderr,"Unhandled exception 0x%08lX at %p; the report is in the debug log (unattended, so no dialog)\n",
+            (unsigned long)pExPtrs->ExceptionRecord->ExceptionCode,pExPtrs->ExceptionRecord->ExceptionAddress);
+    fflush(stderr);
+    return EXCEPTION_EXECUTE_HANDLER;
+  }
 
   // Show a dialog box
   InitCommonControls();

@@ -2669,6 +2669,7 @@ Tests/d3dx_golden.h
 Tests/d3dx_oracle/d3dx_oracle.cpp
 Tests/d3dx_oracle/run_d3dx_oracle.sh
 Tests/d3dx_sweep.h
+Tests/debug_build_stubs.cpp
 Tests/ffreference/f7probe_windows.cpp
 Tests/ffreference/ffcapture.cpp
 Tests/ffreference/ffcapture.h
@@ -2794,6 +2795,7 @@ Tests/test_workfolder_guard.sh
 Tests/test_ww3d2.cpp
 Tests/test_wwdownload.cpp
 Tests/test_wwdownload_registry.cpp
+Tests/test_wwdownload_stubs.cpp
 Tests/test_wwlib.cpp
 Tests/test_wwmath.cpp
 Tests/test_wwsaveload.cpp

@@ -8,6 +8,7 @@
 #include "test_harness.h"
 
 #include <stdlib.h>
+#include <chrono>
 
 namespace
 {
@@ -67,6 +68,11 @@ int main(int argc, char *argv[])
 	const char *filter = (argc > 1) ? argv[1] : 0;
 	int ran = 0;
 
+	/* ZH_TEST_PROGRESS names each test as it starts and says how long it took, flushed, so a run
+	   that times out shows where it was (a Debug build of test_gameengine, W3).  Unset, the output
+	   is the failures and the summary, as always. */
+	const bool progress = getenv("ZH_TEST_PROGRESS") != 0;
+
 	for (int i = 0; i < g_numTests; ++i)
 	{
 		if (filter && !strstr(g_tests[i].name, filter))
@@ -76,7 +82,21 @@ int main(int argc, char *argv[])
 		g_currentFails = 0;
 		++ran;
 
+		const std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+		if (progress)
+		{
+			printf("RUN  %s\n", g_currentTest);
+			fflush(stdout);
+		}
+
 		g_tests[i].fn();
+
+		if (progress)
+		{
+			printf("DONE %s %.1f s\n", g_currentTest,
+				std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
+			fflush(stdout);
+		}
 
 		if (g_currentFails)
 		{

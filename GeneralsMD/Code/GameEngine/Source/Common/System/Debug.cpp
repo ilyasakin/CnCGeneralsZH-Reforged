@@ -63,6 +63,9 @@
 #include "Common/ExecutableDirectory.h"
 #include "Platform/BreakIntoDebugger.h"
 #include "stringex.h"
+#if defined(_WIN32) && defined(_DEBUG)
+#include <crtdbg.h>		// the Debug CRT's report hook (W3)
+#endif
 #include "Common/SystemInfo.h"
 #include "Common/UnicodeString.h"
 #include "GameClient/GameText.h"
@@ -150,10 +153,21 @@ static void doStackDump();
 // ----------------------------------------------------------------------------
 
 // ----------------------------------------------------------------------------
+#if defined(_DEBUG) || defined(_INTERNAL)
+/* W3: a run nobody watches never waits on an assertion box - a -headless game, or any process started with
+	 ZH_UNATTENDED set (windows-ci.ps1 sets it for ctest).  It logs the assertion and goes on, as EA's full-screen
+	 game did, and says so on stderr too. */
+static Bool unattendedRun()
+{
+	static const Bool fromStart = getenv("ZH_UNATTENDED") != NULL || findEarlyCommandLineOption(L"-headless") != NULL;
+	return fromStart || (TheGlobalData && TheGlobalData->m_headless);
+}
+#endif
+
 inline Bool ignoringAsserts()
 {
 #if defined(_DEBUG) || defined(_INTERNAL)
-	return !DX8Wrapper_IsWindowed || (TheGlobalData&&TheGlobalData->m_debugIgnoreAsserts);
+	return !DX8Wrapper_IsWindowed || (TheGlobalData&&TheGlobalData->m_debugIgnoreAsserts) || unattendedRun();
 #else
 	return !DX8Wrapper_IsWindowed;
 #endif
@@ -420,6 +434,29 @@ static void whackFunnyCharacters(char *buf)
 	start of the app as possible, before anything else (since other code will
 	probably want to make use of it).
 */
+#if defined(_WIN32) && defined(_DEBUG)
+/* W3: the Debug CRT's own checks - a checked iterator's "vector subscript out of range", a heap check - put
+	 up their box too, which in a run nobody watches waits for ever.  There they are logged with the stack and
+	 the run goes on; anywhere else the CRT asks as it always did. */
+static int __cdecl unattendedCrtReport( int, char *message, int *returnValue )
+{
+	if (!unattendedRun())
+		return FALSE;
+	fprintf(stderr, "DEBUG CRT REPORT (auto-ignored): %s\n", message ? message : "");
+#ifdef DEBUG_LOGGING
+	DebugLog("DEBUG CRT REPORT (auto-ignored): %s\n", message ? message : "");
+#ifdef DEBUG_STACKTRACE
+	doStackDump();
+#endif
+	if (theLogFile != NULL)
+		fflush(theLogFile);
+#endif
+	if (returnValue != NULL)
+		*returnValue = 0;		// no debugger
+	return TRUE;					// handled: no box
+}
+#endif
+
 void DebugInit(int flags)
 {
 //	if (theDebugFlags != 0)
@@ -491,6 +528,9 @@ void DebugInit(int flags)
 				DebugLog("Could not rotate the previous log to %s: it holds an older run than this one.\n", prevbuf);
 		}
 	#endif
+#if defined(_WIN32) && defined(_DEBUG)
+		_CrtSetReportHook2(_CRT_RPTHOOK_INSTALL, unattendedCrtReport);
+#endif
 	}
 
 }  
@@ -575,6 +615,10 @@ void DebugCrash(const char *format, ...)
 	}
 	whackFunnyCharacters(theCrashBuffer);
 	doLogOutput(theCrashBuffer);
+#endif
+#if defined(_DEBUG) || defined(_INTERNAL)
+	if (unattendedRun())
+		fprintf(stderr, "DEBUG CRASH (auto-ignored): %s\n", theCrashBuffer);
 #endif
 #ifdef DEBUG_STACKTRACE
 	if (!(TheGlobalData && TheGlobalData->m_debugIgnoreStackTrace))

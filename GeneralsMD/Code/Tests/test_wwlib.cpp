@@ -15,6 +15,7 @@
 #include "test_harness.h"
 
 #include <atomic>	/* the B14 thread tests below share flags between threads */
+#include <string>	/* next_thread_name */
 #include <chrono>	/* mutexclass_timed_acquire_gives_up_and_says_so times its wait finer than Clock_Milliseconds_Coarse */
 
 #include "global.h"       /* UINT4 / PROTO_LIST, which md5.h assumes */
@@ -1647,6 +1648,20 @@ TEST(cpudetect_logs_are_printable)
 }
 
 //-------------------------------------------------------------------------------------------------
+// Worker names ------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+//
+// Except.cpp's thread list finds a thread by its name to unregister it, and asserts that the entry
+// it finds has that thread's ID; a Debug build aborts there (W3).  Two live threads with one name
+// break that, and so does a thread Stop() had to terminate: it never unregisters, so the next thread
+// with its name finds the stale entry first.  So every worker below is named once per instance.
+static std::string next_thread_name(const char *base)
+{
+	static std::atomic<int> serial(0);
+	return std::string(base) + std::to_string(++serial);
+}
+
+//-------------------------------------------------------------------------------------------------
 // ThreadClass::Stop() deadlock pattern -----------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 //
@@ -1666,7 +1681,7 @@ TEST(cpudetect_logs_are_printable)
 class LockLoopWorker : public ThreadClass
 {
 public:
-	LockLoopWorker(FastCriticalSectionClass &lock) : ThreadClass("LockLoopWorker"), m_lock(lock), m_looping(false) {}
+	LockLoopWorker(FastCriticalSectionClass &lock) : ThreadClass(next_thread_name("LockLoopWorker").c_str()), m_lock(lock), m_looping(false) {}
 
 	/// Until the worker has taken the lock once, or about a second: true when it has
 	bool Wait_Until_Looping()
@@ -1786,7 +1801,7 @@ TEST(mutexclass_is_recursive)
 class LockHolderWorker : public ThreadClass
 {
 public:
-	LockHolderWorker(MutexClass &m) : ThreadClass("LockHolderWorker"), Held(false), m_mutex(m) {}
+	LockHolderWorker(MutexClass &m) : ThreadClass(next_thread_name("LockHolderWorker").c_str()), Held(false), m_mutex(m) {}
 	std::atomic<bool> Held;
 protected:
 	virtual void Thread_Function()
@@ -1840,7 +1855,7 @@ TEST(mutexclass_timed_acquire_gives_up_and_says_so)
 class IdWorker : public ThreadClass
 {
 public:
-	IdWorker() : ThreadClass("IdWorker"), Id(0), Stable(false) {}
+	IdWorker() : ThreadClass(next_thread_name("IdWorker").c_str()), Id(0), Stable(false) {}
 	std::atomic<unsigned> Id;
 	std::atomic<bool> Stable;
 protected:
@@ -1883,7 +1898,7 @@ TEST(thread_ids_are_distinct_stable_and_never_zero)
 class CountingWorker : public ThreadClass
 {
 public:
-	CountingWorker() : ThreadClass("CountingWorker"), Ticks(0) {}
+	CountingWorker() : ThreadClass(next_thread_name("CountingWorker").c_str()), Ticks(0) {}
 	std::atomic<long> Ticks;
 protected:
 	virtual void Thread_Function() { while (running) { ++Ticks; ThreadClass::Sleep_Ms(0); } }
@@ -1922,7 +1937,9 @@ TEST(fastcriticalsection_serialises_a_plain_counter)
 
 	struct Bumper : public ThreadClass
 	{
-		Bumper(FastCriticalSectionClass &l, long *c) : ThreadClass("Bumper"), m_lock(l), m_counter(c) {}
+		/* Each its own name: WWLib's Unregister_Thread_ID finds a thread by name and asserts the id, so four
+		   live threads called "Bumper" failed that assert in a Debug build (W3). */
+		Bumper(FastCriticalSectionClass &l, long *c, const char *name) : ThreadClass(name), m_lock(l), m_counter(c) {}
 		virtual void Thread_Function()
 		{
 			for (int i = 0; i < 20000; ++i) {
@@ -1935,7 +1952,7 @@ TEST(fastcriticalsection_serialises_a_plain_counter)
 		long *m_counter;
 	};
 
-	Bumper a(lock, &counter), b(lock, &counter), c(lock, &counter), d(lock, &counter);
+	Bumper a(lock, &counter, "BumperA"), b(lock, &counter, "BumperB"), c(lock, &counter, "BumperC"), d(lock, &counter, "BumperD");
 	a.Execute(); b.Execute(); c.Execute(); d.Execute();
 	a.Stop(30000); b.Stop(30000); c.Stop(30000); d.Stop(30000);
 

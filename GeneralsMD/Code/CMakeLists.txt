@@ -792,6 +792,9 @@ target_link_libraries(debug PUBLIC dbghelp comctl32 ws2_32)
 # "debug" is also a target_link_libraries config keyword, so it can never be
 # passed as a plain library name.  Link this alias instead.
 add_library(debuglib ALIAS debug)
+# debug.h asks the linker for this library by the build's name (#pragma comment(lib, "debugdebug.lib") under
+# _DEBUG), so a Debug build names it that way.  Release keeps debug.lib, the name it asks for there.
+set_target_properties(debug PROPERTIES OUTPUT_NAME_DEBUG debugdebug)
 
 # ---- profile --------------------------------------------------------------
 # EA's in-repo sampling/function profiler.  GameEngine includes profile.h, whose
@@ -803,6 +806,8 @@ add_library(profile STATIC
   ${LIBSRC}/profile/profile_result.cpp)
 target_include_directories(profile PUBLIC ${LIBSRC}/profile)
 target_link_libraries(profile PUBLIC debuglib)
+# profile.h asks for it by the build's name too (profiledebug.lib under _DEBUG), as debug.h does.
+set_target_properties(profile PROPERTIES OUTPUT_NAME_DEBUG profiledebug)
 
 # ---- wwdownload -----------------------------------------------------------
 # FTP patch downloader.  Its wlib/resource.h includes are all commented out in
@@ -1136,6 +1141,11 @@ endif()
 # ZH_NOT_YET_PORTABLE: defined on macOS, kept out of the default build there until B1-B6 land.
 # The link list below is left exactly as it is on purpose - B6 owns it.
 add_library(gameengine STATIC ${ZH_NOT_YET_PORTABLE} ${GAMEENGINE_SOURCES})
+# GameMemory.cpp asks MSVC for the engine library by the build's name (#pragma comment(lib, "GameEngineDebug")
+# under _DEBUG), so a Debug build names it that way.  Release keeps gameengine.lib, which "GameEngine" finds.
+if(MSVC)
+  set_target_properties(gameengine PROPERTIES OUTPUT_NAME_DEBUG GameEngineDebug)
+endif()
 
 # N1 (decision 5): the build fingerprint GlobalData.cpp folds into m_exeCRC in place of the executable's
 # own bytes, on every platform, so two builds of the same source agree whatever compiled them.  CRC-32 over
@@ -1327,7 +1337,7 @@ endif()
 # GameEngine.lib, so they drop that request (W2).
 if(MSVC)
   foreach(name gametext_csf test_premain_strings test_premain_unicode)
-    target_link_options(${name} PRIVATE /NODEFAULTLIB:GameEngine.lib)
+    target_link_options(${name} PRIVATE /NODEFAULTLIB:GameEngine.lib $<$<CONFIG:Debug>:/NODEFAULTLIB:GameEngineDebug.lib>)
   endforeach()
 endif()
 set_tests_properties(gametext_csf PROPERTIES SKIP_RETURN_CODE 77)
@@ -2359,11 +2369,41 @@ endif()  # ZH_PLATFORM_WINDOWS - renderer and Direct3D backend tests
 if(ZH_PLATFORM_WINDOWS)
 add_lib_test(test_wwdownload wwdownload)
 target_include_directories(test_wwdownload PRIVATE ${WW}/WWDownload)
+# A Debug wwdownload logs through DebugLog, which the engine defines; the test links no engine.
+target_sources(test_wwdownload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_wwdownload_stubs.cpp)
 
 add_lib_test(test_debug debuglib)
 
 add_lib_test(test_support benchmark eabrowserdispatch)
 endif()  # ZH_PLATFORM_WINDOWS - Windows-only support library tests
+
+# W3: in a Debug build WWVegas and GameMemory.cpp call the engine's debug entry points (DebugCrash, the
+# file-and-line operator new, the stack dumper, ...), and these tests link no engine.  One stub file gives
+# each what it lacks; outside _DEBUG it compiles to nothing, so a Release link is unchanged.
+if(MSVC)
+  foreach(name test_wwlib test_wwmath test_smooth_motion wwmath_selfcheck test_wwsaveload test_wwutil
+               test_ww3d2 gametext_csf test_premain_strings test_premain_unicode)
+    if(TARGET ${name})
+      target_sources(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests/debug_build_stubs.cpp)
+    endif()
+  endforeach()
+  foreach(name test_wwlib test_wwmath test_smooth_motion wwmath_selfcheck test_wwsaveload test_wwutil
+               test_ww3d2)
+    if(TARGET ${name})
+      target_compile_definitions(${name} PRIVATE ZH_DEBUG_STUBS_WWVEGAS)
+    endif()
+  endforeach()
+  foreach(name widechar_crc_gate widechar_file_selfcheck widechar_format_selfcheck)
+    target_sources(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests/debug_build_stubs.cpp)
+  endforeach()
+  foreach(name widechar_crc_gate widechar_file_selfcheck widechar_format_selfcheck gametext_csf
+               test_premain_strings test_premain_unicode)
+    target_compile_definitions(${name} PRIVATE ZH_DEBUG_STUBS_CRASH)
+  endforeach()
+  target_compile_definitions(gametext_csf PRIVATE ZH_DEBUG_STUBS_GAMEMEMORY)
+  target_compile_definitions(test_premain_strings PRIVATE ZH_DEBUG_STUBS_GAMEMEMORY ZH_DEBUG_STUBS_GLOBALDATA)
+  target_compile_definitions(test_premain_unicode PRIVATE ZH_DEBUG_STUBS_GAMEMEMORY ZH_DEBUG_STUBS_GLOBALDATA)
+endif()
 
 # Phase 3 checkpoint: boots the memory manager, name keys and file system, then
 # runs a real INI file through the parser.
@@ -2414,6 +2454,8 @@ endif()
 # GameEngineDevice, which Phase 4 ports; stand-ins until then.
 target_sources(test_gameengine PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
 set_target_properties(test_gameengine PROPERTIES CXX_STANDARD 17)
+# 454 cases in 98 s in Release; a Debug build runs them far slower (W3), so its ceiling is its own.
+set_tests_properties(test_gameengine PROPERTIES TIMEOUT 2700)
 # simulation_uses_no_runtime_trig reads the engine's own sources back off disk to prove nothing in
 # GameLogic or Common has gone back to calling sinf().
 # fxlist_reforged_ini_parses_and_keeps_its_light runs the fork's own FXList file through the real
@@ -2428,6 +2470,15 @@ target_compile_definitions(test_gameengine PRIVATE
   SPECTATOR_HTML="${CMAKE_CURRENT_SOURCE_DIR}/Data/Window/Html/Spectator.html"
   COMMAND_MAP_REFORGED_INI="${CMAKE_CURRENT_SOURCE_DIR}/Data/INI/CommandMapReforged.ini"
   PLATE_TEXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Data/Art/Textures")
+
+# W3: these three link the engine without its device and WinMain, whose Debug-only names it reads
+# (Tests/debug_build_stubs.cpp; empty outside _DEBUG).
+if(MSVC)
+  foreach(name test_gameengine test_terrain_golden test_water_grid)
+    target_sources(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Tests/debug_build_stubs.cpp)
+    target_compile_definitions(${name} PRIVATE ZH_DEBUG_STUBS_ENGINE)
+  endforeach()
+endif()
 
 # The three hand-written self-checks predate the harness; run them from ctest
 # too so one command covers everything.
@@ -2826,11 +2877,15 @@ if(ZH_PLATFORM_POSIX)
 endif()
 
 if(RELEASE_DEBUG_LOGGING)
-  target_compile_definitions(gameengine PRIVATE RELEASE_DEBUG_LOGGING)
   if(ZH_PLATFORM_WINDOWS)
-    target_compile_definitions(gameenginedevice PRIVATE RELEASE_DEBUG_LOGGING)
-    target_compile_definitions(generals PRIVATE RELEASE_DEBUG_LOGGING)
+    # W3: not in a Debug build, which is EA's Debug build with its asserts (RELEASE_DEBUG_LOGGING turns
+    # DEBUG_CRASHING off, while the libraries WWVegas builds without it call DebugCrash).  Every target has
+    # _DEBUG there, so DEBUG_LOGGING's layouts still agree.  Release is as before.
+    foreach(name gameengine gameenginedevice generals)
+      target_compile_definitions(${name} PRIVATE $<$<NOT:$<CONFIG:Debug>>:RELEASE_DEBUG_LOGGING>)
+    endforeach()
   else()
+    target_compile_definitions(gameengine PRIVATE RELEASE_DEBUG_LOGGING)
     # The same off Windows, for the same reason: the device layer and the exe log, and a class laid out
     # under DEBUG_LOGGING (ScriptEngine's timing fields) has to be laid out alike in every TU that uses it.
     target_compile_definitions(posixdevice PRIVATE RELEASE_DEBUG_LOGGING)
