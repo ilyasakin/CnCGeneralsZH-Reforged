@@ -1,0 +1,701 @@
+The fork's second change to SDL3 3.4.16: SDL_GPU's Direct3D 12 backend keeps its descriptor writes inside
+their heaps.
+
+Why: D3D12_INTERNAL_WriteGPUDescriptors switched to new shader-visible heaps only when the current one was
+already full (index >= max), then wrote the whole table ("FIXME: need to error on overflow"). A table that
+did not fit ran past the heap's end: the 2048-slot sampler heap at 2046 + 4, then D3D12 EXECUTION ERROR 646
+under the debug layer, and memory corruption or a lost device on WARP, where the heap is process memory
+(the -d3d12 renderer's crashes on Windows ARM64). A switch between two tables of one draw also left the
+tables written before it pointing into the old heaps, which SetDescriptorHeaps makes undefined.
+
+What changes:
+- BindGraphicsResources and BindComputeResources count the descriptors the bind will write and switch
+  heaps before writing any of it when they do not fit (EnsureGPUDescriptorSpace). After any switch every
+  descriptor table is marked to be written again, the compute read-write tables included (moved into a
+  helper so they can be).
+- WriteGPUDescriptors keeps its switch as a last line (index + count > max): it keeps the write inside a
+  heap and refuses that draw or dispatch.
+- A heap the pool could not make is no longer used unchecked: the draw or dispatch is refused instead.
+- Each guard logs once, loudly (SDL_LogError, GPU category), and is counted. The counts, with the heaps
+  made, the most out at once, the most held by one command buffer and the heap switches, are printed when
+  the device is destroyed: always if a guard fired, otherwise with ZH_SDL_GPU_D3D12_STATS=1, which also
+  prints each new most of 8, 16, 32 ... as it happens (heaps out, heaps held by one command buffer, command
+  buffers submitted and not yet cleaned). A correct run shows 0 late switches, 0 heap failures, 0 refused
+  draws and 0 refused dispatches.
+- Two fixes from upstream SDL main, as they are there: 67bf94eed5 (RegisterMessageCallback is given a
+  cookie; with NULL it fails with E_INVALIDARG and the debug layer's messages never reach SDL's log) and
+  f443c429c6 (SubmitAndAcquireFence reads the fence while submitLock is held).
+
+Every run where the old code did not overflow is unchanged, except that a command buffer's first heaps
+now also mark its tables for a rebind (a few descriptor copies once per command buffer).
+
+Upstream (checked 2026-09-29): SDL main has the same WriteGPUDescriptors, FIXME included; 67bf94eed5 and
+f443c429c6 are there and are not in any 3.4 release.
+
+Remove when: this tree moves to an SDL release whose D3D12 backend makes room before it writes a table (or
+errors on overflow) and carries the two upstream fixes. Applied by Tools/vendor.ps1 -D3D12 and
+Tools/vendor.sh; CMakeLists.txt refuses a ZH_D3D12 build of a tree without it.
+
+diff --git a/src/gpu/d3d12/SDL_gpu_d3d12.c b/src/gpu/d3d12/SDL_gpu_d3d12.c
+--- a/src/gpu/d3d12/SDL_gpu_d3d12.c
++++ b/src/gpu/d3d12/SDL_gpu_d3d12.c
+@@ -955,6 +955,23 @@
+ 
+     D3D12StagingDescriptorPool *stagingDescriptorPools[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
+     D3D12GPUDescriptorHeapPool gpuDescriptorHeapPools[2];
++
++    /* Zero Hour Reforged: sdl3-d3d12-descriptors.patch, revision 2 (the vendor scripts and CMakeLists.txt look for
++       this line; a copy with an older revision gets the file back as SDL ships it before this one goes on).
++       Descriptor-heap accounting, printed at destroy with ZH_SDL_GPU_D3D12_STATS=1 and always when a guard below
++       refused anything.  zhHeapsOut and zhHeapsOutMost are per heap type, under the pool lock. */
++    SDL_AtomicInt zhHeapsCreated[2];
++    Uint32 zhHeapsOut[2];
++    Uint32 zhHeapsOutMost[2];
++    SDL_AtomicInt zhHeldMost;
++    Uint32 zhSubmittedMost;
++    SDL_AtomicInt zhSwitches;
++    SDL_AtomicInt zhSwitchesMost;
++    SDL_AtomicInt zhLateSwitches;
++    SDL_AtomicInt zhHeapFailures;
++    SDL_AtomicInt zhRefusedDraws;
++    SDL_AtomicInt zhRefusedDispatches;
++    SDL_AtomicInt zhLogged[4];
+ 
+     // Deferred resource releasing
+ 
+@@ -1017,6 +1034,11 @@
+     D3D12DescriptorHeap **usedDescriptorHeaps;
+     Uint32 usedDescriptorHeapCount;
+     Uint32 usedDescriptorHeapCapacity;
++
++    // Zero Hour Reforged: heap switches in this command buffer, and the guards' state (see EnsureGPUDescriptorSpace)
++    Uint32 zhSwitches;
++    bool zhNeedComputeReadWriteBind;
++    bool zhDescriptorsRefused;
+ 
+     D3D12UniformBuffer **usedUniformBuffers;
+     Uint32 usedUniformBufferCount;
+@@ -1761,6 +1783,34 @@
+ {
+     D3D12Renderer *renderer = (D3D12Renderer *)device->driverData;
+ 
++    /* Zero Hour Reforged: the descriptor-heap accounting.  Always when a guard refused anything; otherwise with
++       ZH_SDL_GPU_D3D12_STATS=1.  "Out" is heaps taken from the pool and not yet back: in flight or recording. */
++    {
++        const int refused = SDL_GetAtomicInt(&renderer->zhRefusedDraws) + SDL_GetAtomicInt(&renderer->zhRefusedDispatches) +
++                            SDL_GetAtomicInt(&renderer->zhLateSwitches) + SDL_GetAtomicInt(&renderer->zhHeapFailures);
++        if (refused > 0 || SDL_GetHintBoolean("ZH_SDL_GPU_D3D12_STATS", false)) {
++            // asked for by the hint, so through SDL_Log, which prints by default; an error through the GPU category
++            SDL_LogMessage(refused > 0 ? SDL_LOG_CATEGORY_GPU : SDL_LOG_CATEGORY_APPLICATION,
++                refused > 0 ? SDL_LOG_PRIORITY_ERROR : SDL_LOG_PRIORITY_INFO,
++                "D3D12 descriptor heaps: %d view and %d sampler heaps created; at most %u view and %u sampler heaps out at once; "
++                "at most %d held by one command buffer; at most %u command buffers submitted and not yet cleaned; "
++                "%d switches, at most %d in one command buffer; "
++                "%d late switches, %d heap failures, %d refused draws, %d refused dispatches",
++                SDL_GetAtomicInt(&renderer->zhHeapsCreated[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]),
++                SDL_GetAtomicInt(&renderer->zhHeapsCreated[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]),
++                renderer->zhHeapsOutMost[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV],
++                renderer->zhHeapsOutMost[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER],
++                SDL_GetAtomicInt(&renderer->zhHeldMost),
++                renderer->zhSubmittedMost,
++                SDL_GetAtomicInt(&renderer->zhSwitches),
++                SDL_GetAtomicInt(&renderer->zhSwitchesMost),
++                SDL_GetAtomicInt(&renderer->zhLateSwitches),
++                SDL_GetAtomicInt(&renderer->zhHeapFailures),
++                SDL_GetAtomicInt(&renderer->zhRefusedDraws),
++                SDL_GetAtomicInt(&renderer->zhRefusedDispatches));
++        }
++    }
++
+     // Release blit pipeline structures
+     D3D12_INTERNAL_ReleaseBlitPipelines((SDL_GPURenderer *)renderer);
+ 
+@@ -2296,6 +2346,9 @@
+     heap->heapType = type;
+     heap->maxDescriptors = descriptorCount;
+     heap->staging = staging;
++    if (!staging) {
++        SDL_AddAtomicInt(&renderer->zhHeapsCreated[type], 1);
++    }
+     heap->descriptorSize = ID3D12Device_GetDescriptorHandleIncrementSize(renderer->device, type);
+     D3D_CALL_RET(handle, GetCPUDescriptorHandleForHeapStart, &heap->descriptorHeapCPUStart);
+     if (!staging) {
+@@ -2374,6 +2427,43 @@
+     return true;
+ }
+ 
++/* Zero Hour Reforged: the most a counter has reached, and one loud line per kind of guard that fired. */
++static bool D3D12_INTERNAL_ZhRaiseMost(SDL_AtomicInt *most, int value)
++{
++    int seen = SDL_GetAtomicInt(most);
++    while (value > seen) {
++        if (SDL_CompareAndSwapAtomicInt(most, seen, value)) {
++            return true;
++        }
++        seen = SDL_GetAtomicInt(most);
++    }
++    return false;
++}
++
++/* A new most of 8, 16, 32 ..., printed as it happens with ZH_SDL_GPU_D3D12_STATS=1: a run that never reaches its
++   destroy line still shows the growth. */
++static void D3D12_INTERNAL_ZhSayMost(Uint32 most, const char *what)
++{
++    if (most >= 8 && (most & (most - 1)) == 0 && SDL_GetHintBoolean("ZH_SDL_GPU_D3D12_STATS", false)) {
++        SDL_Log("D3D12 descriptor heaps: %u %s", most, what);
++    }
++}
++
++typedef enum ZhGuardKind
++{
++    ZH_GUARD_HEAP_FAILURE,
++    ZH_GUARD_LATE_SWITCH,
++    ZH_GUARD_REFUSED_DRAW,
++    ZH_GUARD_REFUSED_DISPATCH
++} ZhGuardKind;
++
++static void D3D12_INTERNAL_ZhGuard(D3D12Renderer *renderer, ZhGuardKind kind, const char *what)
++{
++    if (SDL_CompareAndSwapAtomicInt(&renderer->zhLogged[kind], 0, 1)) {
++        SDL_LogError(SDL_LOG_CATEGORY_GPU, "D3D12 descriptor guard: %s (logged once; counted at destroy)", what);
++    }
++}
++
+ static void D3D12_INTERNAL_TrackGPUDescriptorHeap(
+     D3D12CommandBuffer *commandBuffer,
+     D3D12DescriptorHeap *descriptorHeap)
+@@ -2394,6 +2484,9 @@
+ 
+     commandBuffer->usedDescriptorHeaps[commandBuffer->usedDescriptorHeapCount] = descriptorHeap;
+     commandBuffer->usedDescriptorHeapCount += 1;
++    if (D3D12_INTERNAL_ZhRaiseMost(&commandBuffer->renderer->zhHeldMost, (int)commandBuffer->usedDescriptorHeapCount)) {
++        D3D12_INTERNAL_ZhSayMost(commandBuffer->usedDescriptorHeapCount, "heaps held by one command buffer");
++    }
+ }
+ 
+ static D3D12DescriptorHeap *D3D12_INTERNAL_AcquireGPUDescriptorHeapFromPool(
+@@ -2415,8 +2508,23 @@
+             descriptorHeapType == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? VIEW_GPU_DESCRIPTOR_COUNT : SAMPLER_GPU_DESCRIPTOR_COUNT,
+             false);
+     }
++    Uint32 newMost = 0;
++    if (result != NULL) {
++        renderer->zhHeapsOut[descriptorHeapType] += 1;
++        if (renderer->zhHeapsOut[descriptorHeapType] > renderer->zhHeapsOutMost[descriptorHeapType]) {
++            renderer->zhHeapsOutMost[descriptorHeapType] = renderer->zhHeapsOut[descriptorHeapType];
++            newMost = renderer->zhHeapsOutMost[descriptorHeapType];
++        }
++    }
+     SDL_UnlockMutex(pool->lock);
+ 
++    D3D12_INTERNAL_ZhSayMost(newMost, descriptorHeapType == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? "view heaps out at once" : "sampler heaps out at once");
++
++    if (result == NULL) {
++        SDL_AddAtomicInt(&renderer->zhHeapFailures, 1);
++        D3D12_INTERNAL_ZhGuard(renderer, ZH_GUARD_HEAP_FAILURE, "a shader-visible descriptor heap could not be made");
++        return NULL;
++    }
+     D3D12_INTERNAL_TrackGPUDescriptorHeap(commandBuffer, result);
+     return result;
+ }
+@@ -2434,6 +2542,7 @@
+     heap->currentDescriptorIndex = 0;
+ 
+     SDL_LockMutex(pool->lock);
++    renderer->zhHeapsOut[heap->heapType] -= 1;
+     if (pool->count >= pool->capacity) {
+         pool->capacity *= 2;
+         pool->heaps = (D3D12DescriptorHeap **)SDL_realloc(
+@@ -5009,15 +5118,47 @@
+         length);
+ }
+ 
+-static void D3D12_INTERNAL_SetGPUDescriptorHeaps(D3D12CommandBuffer *commandBuffer)
++/* Zero Hour Reforged: SetDescriptorHeaps leaves every descriptor table set before it undefined, so after a switch
++   each table is written again into the new heaps before the next draw or dispatch uses it.  Root constant buffer
++   views are not tables and stay. */
++static void D3D12_INTERNAL_ZhMarkDescriptorTablesForRebind(D3D12CommandBuffer *commandBuffer)
++{
++    commandBuffer->needVertexSamplerBind = true;
++    commandBuffer->needVertexStorageTextureBind = true;
++    commandBuffer->needVertexStorageBufferBind = true;
++    commandBuffer->needFragmentSamplerBind = true;
++    commandBuffer->needFragmentStorageTextureBind = true;
++    commandBuffer->needFragmentStorageBufferBind = true;
++    commandBuffer->needComputeSamplerBind = true;
++    commandBuffer->needComputeReadOnlyStorageTextureBind = true;
++    commandBuffer->needComputeReadOnlyStorageBufferBind = true;
++    commandBuffer->zhNeedComputeReadWriteBind = true;
++}
++
++static bool D3D12_INTERNAL_SetGPUDescriptorHeaps(D3D12CommandBuffer *commandBuffer)
+ {
+     ID3D12DescriptorHeap *heaps[2];
+     D3D12DescriptorHeap *viewHeap;
+     D3D12DescriptorHeap *samplerHeap;
++    D3D12Renderer *renderer = commandBuffer->renderer;
++
++    if (commandBuffer->gpuDescriptorHeaps[0] != NULL) {
++        commandBuffer->zhSwitches += 1;
++        SDL_AddAtomicInt(&renderer->zhSwitches, 1);
++        D3D12_INTERNAL_ZhRaiseMost(&renderer->zhSwitchesMost, (int)commandBuffer->zhSwitches);
++    }
+ 
+     viewHeap = D3D12_INTERNAL_AcquireGPUDescriptorHeapFromPool(commandBuffer, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+     samplerHeap = D3D12_INTERNAL_AcquireGPUDescriptorHeapFromPool(commandBuffer, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+ 
++    // A heap that was acquired is tracked and goes back to the pool with the command buffer.  With none set, the
++    // next bind tries again, and until one succeeds its draws are refused.
++    if (viewHeap == NULL || samplerHeap == NULL) {
++        commandBuffer->gpuDescriptorHeaps[0] = NULL;
++        commandBuffer->gpuDescriptorHeaps[1] = NULL;
++        return false;
++    }
++
+     commandBuffer->gpuDescriptorHeaps[0] = viewHeap;
+     commandBuffer->gpuDescriptorHeaps[1] = samplerHeap;
+ 
+@@ -5028,6 +5169,28 @@
+         commandBuffer->graphicsCommandList,
+         2,
+         heaps);
++
++    D3D12_INTERNAL_ZhMarkDescriptorTablesForRebind(commandBuffer);
++    return true;
++}
++
++/* Zero Hour Reforged: room for a whole bind before any of it is written.  Upstream switched heaps only when one was
++   already full, so a table that did not fit ran past the heap's end (the FIXME below), and a switch between two
++   tables of one draw left the first pointing into the old heaps.  A fresh pair holds any single bind. */
++static bool D3D12_INTERNAL_ZhEnsureGPUDescriptorSpace(
++    D3D12CommandBuffer *commandBuffer,
++    Uint32 viewCount,
++    Uint32 samplerCount)
++{
++    D3D12DescriptorHeap *viewHeap = commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV];
++    D3D12DescriptorHeap *samplerHeap = commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER];
++
++    if (viewHeap != NULL && samplerHeap != NULL &&
++        viewHeap->currentDescriptorIndex + viewCount <= viewHeap->maxDescriptors &&
++        samplerHeap->currentDescriptorIndex + samplerCount <= samplerHeap->maxDescriptors) {
++        return true;
++    }
++    return D3D12_INTERNAL_SetGPUDescriptorHeaps(commandBuffer);
+ }
+ 
+ static void D3D12_INTERNAL_WriteGPUDescriptors(
+@@ -5040,14 +5203,20 @@
+     D3D12DescriptorHeap *heap;
+     D3D12_CPU_DESCRIPTOR_HANDLE gpuHeapCpuHandle;
+ 
+-    /* Descriptor overflow, acquire new heaps */
+-    if (commandBuffer->gpuDescriptorHeaps[heapType]->currentDescriptorIndex >= commandBuffer->gpuDescriptorHeaps[heapType]->maxDescriptors) {
+-        D3D12_INTERNAL_SetGPUDescriptorHeaps(commandBuffer);
+-    }
+-
++    /* Descriptor overflow, acquire new heaps.  Zero Hour Reforged: the bind functions make room first
++       (EnsureGPUDescriptorSpace), so this is a last line: it keeps the write inside a heap, and refuses the draw or
++       dispatch, whose earlier tables the switch has just left behind in the old heaps. */
+     heap = commandBuffer->gpuDescriptorHeaps[heapType];
+-
+-    // FIXME: need to error on overflow
++    if (heap == NULL || heap->currentDescriptorIndex + resourceHandleCount > heap->maxDescriptors) {
++        SDL_AddAtomicInt(&commandBuffer->renderer->zhLateSwitches, 1);
++        D3D12_INTERNAL_ZhGuard(commandBuffer->renderer, ZH_GUARD_LATE_SWITCH, "descriptor heaps switched in the middle of a bind");
++        commandBuffer->zhDescriptorsRefused = true;
++        if (!D3D12_INTERNAL_SetGPUDescriptorHeaps(commandBuffer)) {
++            gpuBaseDescriptor->ptr = 0;
++            return;
++        }
++        heap = commandBuffer->gpuDescriptorHeaps[heapType];
++    }
+     gpuHeapCpuHandle.ptr = heap->descriptorHeapCPUStart.ptr + (heap->currentDescriptorIndex * heap->descriptorSize);
+     gpuBaseDescriptor->ptr = heap->descriptorHeapGPUStart.ptr + (heap->currentDescriptorIndex * heap->descriptorSize);
+ 
+@@ -5068,15 +5237,44 @@
+     }
+ }
+ 
+-static void D3D12_INTERNAL_BindGraphicsResources(
++static bool D3D12_INTERNAL_BindGraphicsResources(
+     D3D12CommandBuffer *commandBuffer)
+ {
+     D3D12GraphicsPipeline *graphicsPipeline = commandBuffer->currentGraphicsPipeline;
++    Uint32 viewCount = 0;
++    Uint32 samplerCount = 0;
+ 
+-    /* Acquire GPU descriptor heaps if we haven't yet */
+-    if (commandBuffer->gpuDescriptorHeaps[0] == NULL) {
+-        D3D12_INTERNAL_SetGPUDescriptorHeaps(commandBuffer);
++    /* Acquire GPU descriptor heaps if we haven't yet, or new ones if this bind's tables do not fit.
++       Zero Hour Reforged: the counts are the ones the writes below use. */
++    if (commandBuffer->needVertexSamplerBind) {
++        samplerCount += graphicsPipeline->header.num_vertex_samplers;
++        viewCount += graphicsPipeline->header.num_vertex_samplers;
+     }
++    if (commandBuffer->needVertexStorageTextureBind) {
++        viewCount += graphicsPipeline->header.num_vertex_storage_textures;
++    }
++    if (commandBuffer->needVertexStorageBufferBind) {
++        viewCount += graphicsPipeline->header.num_vertex_storage_buffers;
++    }
++    if (commandBuffer->needFragmentSamplerBind) {
++        samplerCount += graphicsPipeline->header.num_fragment_samplers;
++        viewCount += graphicsPipeline->header.num_fragment_samplers;
++    }
++    if (commandBuffer->needFragmentStorageTextureBind) {
++        viewCount += graphicsPipeline->header.num_fragment_storage_textures;
++    }
++    if (commandBuffer->needFragmentStorageBufferBind) {
++        viewCount += graphicsPipeline->header.num_fragment_storage_buffers;
++    }
++    commandBuffer->zhDescriptorsRefused = false;
++    if (!D3D12_INTERNAL_ZhEnsureGPUDescriptorSpace(commandBuffer, viewCount, samplerCount)) {
++        commandBuffer->zhDescriptorsRefused = true;
++    }
++    if (commandBuffer->zhDescriptorsRefused) {
++        SDL_AddAtomicInt(&commandBuffer->renderer->zhRefusedDraws, 1);
++        D3D12_INTERNAL_ZhGuard(commandBuffer->renderer, ZH_GUARD_REFUSED_DRAW, "a draw was refused: no descriptor heaps to bind it with");
++        return false;
++    }
+ 
+     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandles[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+     D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
+@@ -5279,6 +5477,13 @@
+             commandBuffer->needFragmentUniformBufferBind[i] = false;
+         }
+     }
++
++    if (commandBuffer->zhDescriptorsRefused) {
++        SDL_AddAtomicInt(&commandBuffer->renderer->zhRefusedDraws, 1);
++        D3D12_INTERNAL_ZhGuard(commandBuffer->renderer, ZH_GUARD_REFUSED_DRAW, "a draw was refused: its descriptor tables were split across heaps");
++        return false;
++    }
++    return true;
+ }
+ 
+ static void D3D12_DrawIndexedPrimitives(
+@@ -5290,7 +5495,9 @@
+     Uint32 firstInstance)
+ {
+     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+-    D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
++    if (!D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer)) {
++        return;
++    }
+ 
+     ID3D12GraphicsCommandList_DrawIndexedInstanced(
+         d3d12CommandBuffer->graphicsCommandList,
+@@ -5309,7 +5516,9 @@
+     Uint32 firstInstance)
+ {
+     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+-    D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
++    if (!D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer)) {
++        return;
++    }
+ 
+     ID3D12GraphicsCommandList_DrawInstanced(
+         d3d12CommandBuffer->graphicsCommandList,
+@@ -5328,7 +5537,9 @@
+     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+     D3D12Buffer *d3d12Buffer = ((D3D12BufferContainer *)buffer)->activeBuffer;
+ 
+-    D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
++    if (!D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer)) {
++        return;
++    }
+ 
+     ID3D12GraphicsCommandList_ExecuteIndirect(
+         d3d12CommandBuffer->graphicsCommandList,
+@@ -5351,7 +5562,9 @@
+     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+     D3D12Buffer *d3d12Buffer = ((D3D12BufferContainer *)buffer)->activeBuffer;
+ 
+-    D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
++    if (!D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer)) {
++        return;
++    }
+ 
+     ID3D12GraphicsCommandList_ExecuteIndirect(
+         d3d12CommandBuffer->graphicsCommandList,
+@@ -5505,49 +5718,23 @@
+     }
+ }
+ 
+-static void D3D12_BindComputePipeline(
+-    SDL_GPUCommandBuffer *commandBuffer,
+-    SDL_GPUComputePipeline *computePipeline)
++/* Zero Hour Reforged: the read-write tables, moved here from BindComputePipeline unchanged so that a heap switch
++   before a dispatch can write them again. */
++static void D3D12_INTERNAL_ZhBindComputeReadWriteResources(D3D12CommandBuffer *d3d12CommandBuffer)
+ {
+-    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+-
+-    /* Acquire GPU descriptor heaps if we haven't yet */
+-    if (d3d12CommandBuffer->gpuDescriptorHeaps[0] == NULL) {
+-        D3D12_INTERNAL_SetGPUDescriptorHeaps(d3d12CommandBuffer);
+-    }
+-
+-    D3D12ComputePipeline *pipeline = (D3D12ComputePipeline *)computePipeline;
++    D3D12ComputePipeline *pipeline = d3d12CommandBuffer->currentComputePipeline;
+     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandles[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+     D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
+ 
+-    ID3D12GraphicsCommandList_SetPipelineState(
+-        d3d12CommandBuffer->graphicsCommandList,
+-        pipeline->pipelineState);
+-
+-    ID3D12GraphicsCommandList_SetComputeRootSignature(
+-        d3d12CommandBuffer->graphicsCommandList,
+-        pipeline->rootSignature->handle);
+-
+-    d3d12CommandBuffer->currentComputePipeline = pipeline;
+-
+-    d3d12CommandBuffer->needComputeSamplerBind = true;
+-    d3d12CommandBuffer->needComputeReadOnlyStorageTextureBind = true;
+-    d3d12CommandBuffer->needComputeReadOnlyStorageBufferBind = true;
+-
+-    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+-        d3d12CommandBuffer->needComputeUniformBufferBind[i] = true;
++    if (!D3D12_INTERNAL_ZhEnsureGPUDescriptorSpace(
++            d3d12CommandBuffer,
++            d3d12CommandBuffer->computeReadWriteStorageTextureSubresourceCount + d3d12CommandBuffer->computeReadWriteStorageBufferCount,
++            0)) {
++        d3d12CommandBuffer->zhDescriptorsRefused = true;
++        return;
+     }
++    d3d12CommandBuffer->zhNeedComputeReadWriteBind = false;
+ 
+-    for (Uint32 i = 0; i < pipeline->header.numUniformBuffers; i += 1) {
+-        if (d3d12CommandBuffer->computeUniformBuffers[i] == NULL) {
+-            d3d12CommandBuffer->computeUniformBuffers[i] = D3D12_INTERNAL_AcquireUniformBufferFromPool(
+-                d3d12CommandBuffer);
+-        }
+-    }
+-
+-    D3D12_INTERNAL_TrackComputePipeline(d3d12CommandBuffer, pipeline);
+-
+-    // Bind write-only resources after setting root signature
+     if (pipeline->header.numReadWriteStorageTextures > 0) {
+         for (Uint32 i = 0; i < pipeline->header.numReadWriteStorageTextures; i += 1) {
+             cpuHandles[i] = d3d12CommandBuffer->computeReadWriteStorageTextureDescriptorHandles[i];
+@@ -5582,7 +5769,48 @@
+             d3d12CommandBuffer->graphicsCommandList,
+             d3d12CommandBuffer->currentComputePipeline->rootSignature->readWriteStorageBufferRootIndex,
+             gpuDescriptorHandle);
++    }
++}
++
++static void D3D12_BindComputePipeline(
++    SDL_GPUCommandBuffer *commandBuffer,
++    SDL_GPUComputePipeline *computePipeline)
++{
++    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
++
++    D3D12ComputePipeline *pipeline = (D3D12ComputePipeline *)computePipeline;
++
++    ID3D12GraphicsCommandList_SetPipelineState(
++        d3d12CommandBuffer->graphicsCommandList,
++        pipeline->pipelineState);
++
++    ID3D12GraphicsCommandList_SetComputeRootSignature(
++        d3d12CommandBuffer->graphicsCommandList,
++        pipeline->rootSignature->handle);
++
++    d3d12CommandBuffer->currentComputePipeline = pipeline;
++
++    d3d12CommandBuffer->needComputeSamplerBind = true;
++    d3d12CommandBuffer->needComputeReadOnlyStorageTextureBind = true;
++    d3d12CommandBuffer->needComputeReadOnlyStorageBufferBind = true;
++
++    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
++        d3d12CommandBuffer->needComputeUniformBufferBind[i] = true;
+     }
++
++    for (Uint32 i = 0; i < pipeline->header.numUniformBuffers; i += 1) {
++        if (d3d12CommandBuffer->computeUniformBuffers[i] == NULL) {
++            d3d12CommandBuffer->computeUniformBuffers[i] = D3D12_INTERNAL_AcquireUniformBufferFromPool(
++                d3d12CommandBuffer);
++        }
++    }
++
++    D3D12_INTERNAL_TrackComputePipeline(d3d12CommandBuffer, pipeline);
++
++    // Bind write-only resources after setting root signature (Zero Hour Reforged: if there is no room for them, the
++    // first dispatch tries again and is refused if that fails too)
++    d3d12CommandBuffer->zhNeedComputeReadWriteBind = true;
++    D3D12_INTERNAL_ZhBindComputeReadWriteResources(d3d12CommandBuffer);
+ }
+ 
+ static void D3D12_BindComputeSamplers(
+@@ -5708,15 +5936,39 @@
+         length);
+ }
+ 
+-static void D3D12_INTERNAL_BindComputeResources(
++static bool D3D12_INTERNAL_BindComputeResources(
+     D3D12CommandBuffer *commandBuffer)
+ {
+     D3D12ComputePipeline *computePipeline = commandBuffer->currentComputePipeline;
++    Uint32 viewCount = 0;
++    Uint32 samplerCount = 0;
+ 
+-    /* Acquire GPU descriptor heaps if we haven't yet */
+-    if (commandBuffer->gpuDescriptorHeaps[0] == NULL) {
+-        D3D12_INTERNAL_SetGPUDescriptorHeaps(commandBuffer);
++    /* Acquire GPU descriptor heaps if we haven't yet, or new ones if this bind's tables do not fit (Zero Hour
++       Reforged: as in BindGraphicsResources, with the read-write tables when a switch has left them behind). */
++    if (commandBuffer->needComputeSamplerBind) {
++        samplerCount += computePipeline->header.numSamplers;
++        viewCount += computePipeline->header.numSamplers;
+     }
++    if (commandBuffer->needComputeReadOnlyStorageTextureBind) {
++        viewCount += computePipeline->header.numReadonlyStorageTextures;
++    }
++    if (commandBuffer->needComputeReadOnlyStorageBufferBind) {
++        viewCount += computePipeline->header.numReadonlyStorageBuffers;
++    }
++    if (commandBuffer->zhNeedComputeReadWriteBind) {
++        viewCount += commandBuffer->computeReadWriteStorageTextureSubresourceCount + commandBuffer->computeReadWriteStorageBufferCount;
++    }
++    commandBuffer->zhDescriptorsRefused = false;
++    if (!D3D12_INTERNAL_ZhEnsureGPUDescriptorSpace(commandBuffer, viewCount, samplerCount)) {
++        commandBuffer->zhDescriptorsRefused = true;
++    } else if (commandBuffer->zhNeedComputeReadWriteBind) {
++        D3D12_INTERNAL_ZhBindComputeReadWriteResources(commandBuffer);
++    }
++    if (commandBuffer->zhDescriptorsRefused) {
++        SDL_AddAtomicInt(&commandBuffer->renderer->zhRefusedDispatches, 1);
++        D3D12_INTERNAL_ZhGuard(commandBuffer->renderer, ZH_GUARD_REFUSED_DISPATCH, "a dispatch was refused: no descriptor heaps to bind it with");
++        return false;
++    }
+ 
+     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandles[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+     D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
+@@ -5811,6 +6063,13 @@
+         }
+         commandBuffer->needComputeUniformBufferBind[i] = false;
+     }
++
++    if (commandBuffer->zhDescriptorsRefused) {
++        SDL_AddAtomicInt(&commandBuffer->renderer->zhRefusedDispatches, 1);
++        D3D12_INTERNAL_ZhGuard(commandBuffer->renderer, ZH_GUARD_REFUSED_DISPATCH, "a dispatch was refused: its descriptor tables were split across heaps");
++        return false;
++    }
++    return true;
+ }
+ 
+ static void D3D12_DispatchCompute(
+@@ -5821,7 +6080,9 @@
+ {
+     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+ 
+-    D3D12_INTERNAL_BindComputeResources(d3d12CommandBuffer);
++    if (!D3D12_INTERNAL_BindComputeResources(d3d12CommandBuffer)) {
++        return;
++    }
+     ID3D12GraphicsCommandList_Dispatch(
+         d3d12CommandBuffer->graphicsCommandList,
+         groupcountX,
+@@ -5837,7 +6098,9 @@
+     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+     D3D12Buffer *d3d12Buffer = ((D3D12BufferContainer *)buffer)->activeBuffer;
+ 
+-    D3D12_INTERNAL_BindComputeResources(d3d12CommandBuffer);
++    if (!D3D12_INTERNAL_BindComputeResources(d3d12CommandBuffer)) {
++        return;
++    }
+     ID3D12GraphicsCommandList_ExecuteIndirect(
+         d3d12CommandBuffer->graphicsCommandList,
+         d3d12CommandBuffer->renderer->indirectDispatchCommandSignature,
+@@ -7877,6 +8140,9 @@
+ 
+     commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = NULL;
+     commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] = NULL;
++    commandBuffer->zhSwitches = 0;
++    commandBuffer->zhNeedComputeReadWriteBind = false;
++    commandBuffer->zhDescriptorsRefused = false;
+ 
+     // Uniform buffers are now available
+     SDL_LockMutex(renderer->acquireUniformBufferLock);
+@@ -7957,8 +8223,9 @@
+     return true;
+ }
+ 
+-static bool D3D12_Submit(
+-    SDL_GPUCommandBuffer *commandBuffer)
++static bool D3D12_INTERNAL_Submit(
++    SDL_GPUCommandBuffer *commandBuffer,
++    SDL_GPUFence **fence)
+ {
+     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+     D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
+@@ -8036,6 +8303,12 @@
+         return false;
+     }
+ 
++    // Return the fence while submitLock is held, another thread could
++    // recycle this command buffer as soon as the lock is released.
++    if (fence) {
++        *fence = (SDL_GPUFence *)d3d12CommandBuffer->inFlightFence;
++    }
++
+     // Mark that a fence should be signaled after command list execution
+     res = ID3D12CommandQueue_Signal(
+         renderer->commandQueue,
+@@ -8057,6 +8330,10 @@
+ 
+     renderer->submittedCommandBuffers[renderer->submittedCommandBufferCount] = d3d12CommandBuffer;
+     renderer->submittedCommandBufferCount += 1;
++    if (renderer->submittedCommandBufferCount > renderer->zhSubmittedMost) {
++        renderer->zhSubmittedMost = renderer->submittedCommandBufferCount;
++        D3D12_INTERNAL_ZhSayMost(renderer->zhSubmittedMost, "command buffers submitted and not yet cleaned");
++    }
+ 
+     bool result = true;
+ 
+@@ -8132,17 +8409,24 @@
+     SDL_UnlockMutex(renderer->submitLock);
+ 
+     return result;
++}
++
++static bool D3D12_Submit(
++    SDL_GPUCommandBuffer *commandBuffer)
++{
++    return D3D12_INTERNAL_Submit(commandBuffer, NULL);
+ }
+ 
+ static SDL_GPUFence *D3D12_SubmitAndAcquireFence(
+     SDL_GPUCommandBuffer *commandBuffer)
+ {
+     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
++    SDL_GPUFence *fence = NULL;
+     d3d12CommandBuffer->autoReleaseFence = false;
+-    if (!D3D12_Submit(commandBuffer)) {
++    if (!D3D12_INTERNAL_Submit(commandBuffer, &fence)) {
+         return NULL;
+     }
+-    return (SDL_GPUFence *)d3d12CommandBuffer->inFlightFence;
++    return fence;
+ }
+ 
+ static bool D3D12_Cancel(
+@@ -8901,6 +9185,7 @@
+ static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoLogger(D3D12Renderer *renderer)
+ {
+     ID3D12InfoQueue1 *infoQueue = NULL;
++    DWORD callbackCookie = 0;
+     HRESULT res;
+ 
+     res = ID3D12Device_QueryInterface(
+@@ -8916,7 +9201,7 @@
+         D3D12_INTERNAL_OnD3D12DebugInfoMsg,
+         D3D12_MESSAGE_CALLBACK_FLAG_NONE,
+         NULL,
+-        NULL);
++        &callbackCookie);
+ 
+     ID3D12InfoQueue1_Release(infoQueue);
+ }

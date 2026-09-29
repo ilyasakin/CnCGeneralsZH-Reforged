@@ -500,7 +500,7 @@ install_sdl3() {
   step "SDL3 3.4.16 -> Libraries/Source/SDL3"
 }
 
-# --- The fork's one change to SDL3, Libraries/Source/sdl3-metal-windowless.patch: METAL_PrepareDriver
+# --- The fork's first change to SDL3, Libraries/Source/sdl3-metal-windowless.patch: METAL_PrepareDriver
 # also accepts ZH_SDL_GPU_METAL_WINDOWLESS, so -offscreen makes a Metal GPU device on a host with no
 # window server (the patch's header says why, what upstream has, and when it goes). Hint-gated: every
 # run without the hint is upstream's. Checked by the marker, for the reason install_litehtml_patch gives.
@@ -517,6 +517,40 @@ install_sdl3_patch() {
     exit 1
   fi
   step "sdl3-metal-windowless.patch -> Libraries/Source/SDL3"
+}
+
+# --- The fork's second change to SDL3, Libraries/Source/sdl3-d3d12-descriptors.patch: SDL_GPU's Direct3D 12
+# backend makes room in its descriptor heaps before it writes a bind, instead of writing past their end (the
+# patch's header says why, what upstream has, and when it goes). Only Windows compiles that backend, so this
+# is for one tree on every platform; vendor.ps1 -D3D12 applies it too, and CMakeLists.txt checks the marker.
+# The marker names the patch's revision: a copy carrying an older one gets the file back as SDL ships it,
+# out of the archive, and then this revision.
+SDL3_D3D12_PATCH_MARKER='sdl3-d3d12-descriptors.patch, revision 2'
+install_sdl3_d3d12_patch() {
+  local destination="$libraries/Source/SDL3"
+  local source="$destination/src/gpu/d3d12/SDL_gpu_d3d12.c"
+  if grep -qF "$SDL3_D3D12_PATCH_MARKER" "$source" 2>/dev/null; then return 0; fi
+  if grep -q 'ZhEnsureGPUDescriptorSpace' "$source" 2>/dev/null; then
+    local archive entry
+    archive=$(get_file 'https://github.com/libsdl-org/SDL/archive/fa2c02bb6e21974a89ea9824bc53c9932abe5f9c.zip' "$work/SDL3-3.4.16.zip")
+    entry=$(unzip -Z1 "$archive" | grep -m 1 '/src/gpu/d3d12/SDL_gpu_d3d12\.c$' || true)
+    if [ -z "$entry" ] || ! unzip -p "$archive" "$entry" > "$source.orig.$$"; then
+      rm -f "$source.orig.$$"
+      echo "[vendor] could not take SDL_gpu_d3d12.c out of $archive to replace an older sdl3-d3d12-descriptors.patch" >&2
+      exit 1
+    fi
+    mv -f "$source.orig.$$" "$source"
+    step "SDL_gpu_d3d12.c back as SDL ships it (it carried an older sdl3-d3d12-descriptors.patch)"
+  fi
+  local patch="$libraries/Source/sdl3-d3d12-descriptors.patch"
+  GIT_CEILING_DIRECTORIES="$libraries/Source" \
+    git -C "$destination" -c core.autocrlf=false apply "$patch" || true
+  if ! grep -qF "$SDL3_D3D12_PATCH_MARKER" "$source" 2>/dev/null; then
+    echo "[vendor] sdl3-d3d12-descriptors.patch did not apply to Libraries/Source/SDL3" >&2
+    echo "[vendor] ($source still lacks '$SDL3_D3D12_PATCH_MARKER')" >&2
+    exit 1
+  fi
+  step "sdl3-d3d12-descriptors.patch -> Libraries/Source/SDL3"
 }
 
 # --- miniaudio 0.11.25, the one header and its one implementation file: audio beneath C4's port of
@@ -805,6 +839,7 @@ install_litehtml_patch
 install_nanosvg
 install_sdl3
 install_sdl3_patch
+install_sdl3_d3d12_patch
 install_miniaudio
 install_glslang
 install_spirv_cross
