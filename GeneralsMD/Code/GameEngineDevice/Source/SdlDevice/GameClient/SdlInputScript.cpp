@@ -24,7 +24,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/GamepadFocus.h"
 #include "GameClient/GamepadMap.h"
-#include "SdlDevice/GameClient/SdlInput.h"
+#include "SdlDevice/GameClient/SdlGamepadOutput.h"
 #include "SdlDevice/GameClient/SdlInputScript.h"
 
 #include <SDL3/SDL.h>
@@ -32,7 +32,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <string>
 #include <vector>
 
@@ -66,7 +65,7 @@ const char *const theAxisNames[] = { "LeftX", "LeftY", "RightX", "RightY", "Left
 Int lookup( const char *name, const char *const *names )
 {
 	for (Int i = 0; names[i] != NULL; ++i)
-		if (strcasecmp( name, names[i] ) == 0)
+		if (SDL_strcasecmp( name, names[i] ) == 0)
 			return i;
 	return -1;
 }
@@ -74,35 +73,9 @@ Int lookup( const char *name, const char *const *names )
 Int buttonNamed( const char *name )
 {
 	for (const LookupListRec *rec = TheGamepadButtonNames; rec->name != NULL; ++rec)
-		if (strcasecmp( name, rec->name ) == 0)
+		if (SDL_strcasecmp( name, rec->name ) == 0)
 			return rec->value;
 	return -1;
-}
-
-void pushMouse( Uint32 type, Int x, Int y, Uint8 button, bool down )
-{
-	SDL_Window *window = SdlInput_gameWindow();
-	Real wx, wy;
-	SdlInput_toWindowPoints( x, y, wx, wy );
-	SDL_Event event;
-	SDL_zero( event );
-	event.type = type;
-	if (type == SDL_EVENT_MOUSE_MOTION)
-	{
-		event.motion.windowID = window != NULL ? SDL_GetWindowID( window ) : 0;
-		event.motion.x = wx;
-		event.motion.y = wy;
-	}
-	else
-	{
-		event.button.windowID = window != NULL ? SDL_GetWindowID( window ) : 0;
-		event.button.button = button;
-		event.button.down = down;
-		event.button.clicks = 1;
-		event.button.x = wx;
-		event.button.y = wy;
-	}
-	SDL_PushEvent( &event );
 }
 
 /// One action; FALSE when the line is not one this knows
@@ -144,15 +117,14 @@ Bool play( const char *line )
 	{
 		if (strcmp( a, "move" ) == 0 && sscanf( line, "%*s %*s %*s %d %d", &x, &y ) == 2)
 		{
-			pushMouse( SDL_EVENT_MOUSE_MOTION, x, y, 0, false );
+			SdlGamepadOutput_handMouseMove( x, y );
 			return TRUE;
 		}
-		const Uint8 button = strcmp( a, "left" ) == 0 ? SDL_BUTTON_LEFT : (strcmp( a, "middle" ) == 0 ? SDL_BUTTON_MIDDLE
-			: (strcmp( a, "right" ) == 0 ? SDL_BUTTON_RIGHT : 0));
-		if (button == 0 || fields < 5)
+		const Int button = strcmp( a, "left" ) == 0 ? GAMEPAD_OUTPUT_LEFT : (strcmp( a, "middle" ) == 0 ? GAMEPAD_OUTPUT_MIDDLE
+			: (strcmp( a, "right" ) == 0 ? GAMEPAD_OUTPUT_RIGHT : -1));
+		if (button < 0 || fields < 5)
 			return FALSE;
-		const bool down = strcmp( b, "down" ) == 0;
-		pushMouse( down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP, x, y, button, down );
+		SdlGamepadOutput_handMouseButton( (SdlGamepadOutputButton)button, strcmp( b, "down" ) == 0, x, y );
 		return TRUE;
 	}
 	if (strcmp( kind, "key" ) == 0 && fields >= 3)
@@ -160,19 +132,7 @@ Bool play( const char *line )
 		for (char *c = a; *c != 0; ++c)
 			if (*c == '_')
 				*c = ' ';		// SDL's names have spaces ("Left Ctrl"); a script's field has none
-		const SDL_Scancode scancode = SDL_GetScancodeFromName( a );
-		if (scancode == SDL_SCANCODE_UNKNOWN)
-			return FALSE;
-		SDL_Window *window = SdlInput_gameWindow();
-		SDL_Event event;
-		SDL_zero( event );
-		const bool down = strcmp( b, "down" ) == 0;
-		event.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
-		event.key.windowID = window != NULL ? SDL_GetWindowID( window ) : 0;
-		event.key.scancode = scancode;
-		event.key.down = down;
-		SDL_PushEvent( &event );
-		return TRUE;
+		return SdlGamepadOutput_handKey( a, strcmp( b, "down" ) == 0 );
 	}
 	return FALSE;
 }
@@ -241,7 +201,7 @@ Bool SdlInputScript_start( void )
 			{ NULL, 0, 0, NULL } };
 		const char *family = getenv( "ZH_INPUT_SCRIPT_PAD" );
 		for (const Family *f = families; family != NULL && f->name != NULL; ++f)
-			if (strcasecmp( family, f->name ) == 0)
+			if (SDL_strcasecmp( family, f->name ) == 0)
 			{
 				desc.vendor_id = f->vendor;
 				desc.product_id = f->product;

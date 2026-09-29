@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -31,8 +32,11 @@
 #include <windows.h>
 
 #include "Common/Debug.h"
+#include "Common/file.h"
+#include "Common/FileSystem.h"
 #include "GameClient/Display.h"
 #include "GameClient/GameClient.h"
+#include "SdlDevice/GameClient/AniCursor.h"
 #include "Win32Device/GameClient/Win32Mouse.h"
 #include "WinMain.h"
 
@@ -286,6 +290,7 @@ Win32Mouse::Win32Mouse( void )
 	m_cursorInWindow = TRUE;
 	m_positionReported = FALSE;
 	m_cursorClipped = FALSE;
+	m_lastEventX = m_lastEventY = 0;
 }  // end Win32Mouse
 
 //-------------------------------------------------------------------------------------------------
@@ -412,6 +417,11 @@ void Win32Mouse::addWin32Event( UINT msg, WPARAM wParam, LPARAM lParam, DWORD ti
 	// every one of these carries a position, so from here on the event stream owns where the
 	// pointer is and update() stops seeding it from the OS
 	m_positionReported = TRUE;
+	if( msg != 0x020A )		// WM_MOUSEWHEEL's is on the screen, and the pointer has not moved for it
+	{
+		m_lastEventX = LOWORD( lParam );
+		m_lastEventY = HIWORD( lParam );
+	}
 
 	// add to this index
 	m_eventBuffer[ m_nextFreeIndex ].msg = msg;
@@ -426,6 +436,13 @@ void Win32Mouse::addWin32Event( UINT msg, WPARAM wParam, LPARAM lParam, DWORD ti
 
 }  // end addWin32Event
 
+//-------------------------------------------------------------------------------------------------
+void Win32Mouse::getPointerPosition( Int &x, Int &y ) const
+{
+	x = m_positionReported ? m_lastEventX : m_currMouse.pos.x;
+	y = m_positionReported ? m_lastEventY : m_currMouse.pos.y;
+}
+
 extern HINSTANCE ApplicationHInstance;
 
 void Win32Mouse::setVisibility(Bool visible)
@@ -434,6 +451,32 @@ void Win32Mouse::setVisibility(Bool visible)
 	Mouse::setVisibility(visible);
 	//Maybe need to set cursor to force hiding of some cursors.
 	Win32Mouse::setCursor(getMouseCursor());
+}
+
+/** The .ANI read through the game's file system, the archives' as well as a loose file's, and decoded as
+	* SdlMouse does it: LoadCursorFromFile's HCURSOR does not give its pixels back as they are in the file. */
+Bool Win32Mouse::firstCursorFrame( MouseCursor cursor, AniCursorFrame &frame ) const
+{
+	if (cursor <= NONE || cursor >= NUM_MOUSE_CURSORS || m_cursorInfo[cursor].textureName.isEmpty() || TheFileSystem == NULL)
+		return FALSE;
+	char path[256];
+	if (m_cursorInfo[cursor].numDirections > 1)
+		snprintf( path, ARRAY_SIZE( path ), "data\\cursors\\%s0.ANI", m_cursorInfo[cursor].textureName.str() );
+	else
+		snprintf( path, ARRAY_SIZE( path ), "data\\cursors\\%s.ANI", m_cursorInfo[cursor].textureName.str() );
+	File *file = TheFileSystem->openFile( path, File::READ | File::BINARY );
+	if (file == NULL)
+		return FALSE;
+	const Int size = file->size();
+	std::vector<UnsignedByte> bytes( size > 0 ? size : 0 );
+	const Bool read = size > 0 && file->read( &bytes[0], size ) == size;
+	file->close();
+	AniCursor decoded;
+	if (!read || !AniCursor_decode( &bytes[0], bytes.size(), decoded ) || decoded.steps.empty()
+			|| decoded.steps[0].frame < 0 || decoded.steps[0].frame >= (Int)decoded.frames.size())
+		return FALSE;
+	frame = decoded.frames[ decoded.steps[0].frame ];
+	return TRUE;
 }
 
 /**Preload all the cursors we may need during the game.  This must be done before the D3D device

@@ -75,7 +75,6 @@ if [ -z "$WORK" ] || [ ! -d "$WORK" ]; then
 	echo "gamepad-crc-check: cannot make a work folder under ${TMPDIR:-/tmp}" >&2
 	exit 2
 fi
-ROOT="$WORK/root"
 USERDATA="$WORK/user"
 TAG="gp$$_"
 
@@ -103,14 +102,12 @@ cleanup() {
 trap cleanup EXIT
 install_snapshot "$INSTALL" "$WORK/install-before.list"
 
-mkdir -p "$ROOT" "$USERDATA"
+mkdir -p "$USERDATA"
 # Aim assist (GamepadAim.h) moves a resting pad's pointer onto a unit near it, so the pad would click beside
 # the hand's pixel: this check is about the same click at the same pixel, so the assist is off here
 printf 'GamepadAim = no\n' > "$USERDATA/Options.ini"
-( cd "$INSTALL" && find . -type d ! -name '._*' ) | while IFS= read -r d; do mkdir -p "$ROOT/$d"; done
-( cd "$INSTALL" && find . -type f ! -name '._*' ) | while IFS= read -r f; do ln -s "$INSTALL/${f#./}" "$ROOT/$f"; done
-OVERLAY="$WORK/overlay"
-"$(dirname "$0")/stage-overlay.sh" "$CODE/Data" "$CODE/../Run" "$OVERLAY"
+. "$(dirname "$0")/gamepad-game.sh"	# ROOT, the farm the game runs in, and GAME, how it starts: here or on Windows
+gamepad_game_setup
 
 # ---- the two scripts: the same commands on the same frames ----------------------------------------
 # A click's release follows its press in the same pass ("n", SdlInputScript.h), pad and hand alike: EA tells a
@@ -165,7 +162,7 @@ run_game() {	# run_game <name> [script [frames]]: sets RUN_CRC and RUN_FRAME (at
 	( cd "$ROOT" && ZH_USER_DATA_DIR="$USERDATA" ZH_UNATTENDED=1 ZH_INPUT_SCRIPT="$script" ZH_AUDIO_BACKEND=null \
 		ZH_TEST_FRAME_LIMIT_OVERSHOOT="$OVERSHOOT" \
 		perl -e 'setpgrp(0, 0); $SIG{ALRM} = sub { kill "KILL", -$$; exit 124 }; alarm shift; system @ARGV; exit($? >> 8)' "$TIMEOUT" \
-		"$GENERALS" -offscreen -noaudio -win -xres 1024 -yres 768 -root "$ROOT" -overlay "$OVERLAY" -quickstart -noshellmap \
+		"${GAME[@]}" -noaudio -win -xres 1024 -yres 768 -quickstart -noshellmap \
 		-multiInstance -noFPSLimit -maxframes "$frames" -logPrefix "$prefix" \
 		-randommap 0 2 -autoskirmish 2 -aidiff brutal -seed 0 \
 		> "$WORK/${prefix}.out" 2> "$WORK/${prefix}.err" )

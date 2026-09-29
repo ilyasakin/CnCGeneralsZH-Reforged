@@ -20,7 +20,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
-#include "GameClient/DIKeyCodes.h"
+#include "GameClient/KeyDefs.h"		// the DIK_ codes: <dinput.h> on Windows, DIKeyCodes.h elsewhere (G1b)
 #include "SdlDevice/GameClient/SdlKeyTable.h"
 
 // In DIK order, which is the PC keyboard's scan-code order.

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -81,6 +82,10 @@ public:
 	virtual void update( void );  ///< update call, extending update functionality
 	virtual Bool getCapsState( void );		///< get state of caps lock key, return TRUE if down
 
+	/** A key a gamepad presses or lets go (SdlGamepadOutput.h), handed out before DirectInput's, in order,
+		* as SdlKeyboard hands out SDL's; FALSE when the queue is full */
+	Bool addKey( UnsignedByte dik, Bool down );
+
 protected:
 
 	// extended methods from the base class
@@ -95,6 +100,12 @@ protected:
 	// direct input data members
 	LPDIRECTINPUT8 m_pDirectInput;  ///< pointer to direct input interface
 	LPDIRECTINPUTDEVICE8 m_pKeyboardDevice;  ///< pointer to keyboard device
+
+	enum { QUEUE_SIZE = 64 };
+	struct QueuedKey { UnsignedByte dik; Bool down; };
+	QueuedKey m_queue[ QUEUE_SIZE ];		///< addKey's keys, not yet handed out
+	Int m_head;
+	Int m_count;
  
 };  // end class DirectInputKeyboard
 
