@@ -54,6 +54,7 @@
 #include "WW3D2/assetmgr.h"
 #include "WW3D2/render2dsentence.h"
 #include "GameClient/GlobalLanguage.h"
+#include "GameClient/GamepadHints.h"
 
 // DEFINES ////////////////////////////////////////////////////////////////////
 
@@ -119,8 +120,11 @@ Bool W3DFontLibrary::loadFontData( GameFont *font )
 
 	FontCharsClass *unicodeFontChar = NULL;
 
-	// load unicode of same point size
-	if(TheGlobalLanguageData)
+	// load unicode of same point size - except for a controller glyph font, whose own characters are all above
+	// U+00FF and would otherwise be drawn from the alternate, which has none of them (GamepadHints.h)
+	if( GamepadHints::isGlyphFont( font->nameString.str() ) )
+		unicodeFontChar = NULL;
+	else if(TheGlobalLanguageData)
 		unicodeFontChar = WW3DAssetManager::
 									Get_Instance()->Get_FontChars( TheGlobalLanguageData->m_unicodeFontName.str(), pointSize,
 																								 font->bold ? true : false );

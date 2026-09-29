@@ -44,6 +44,7 @@
 #include "GameClient/Mouse.h"
 
 struct AniCursor;
+struct AniCursorFrame;
 struct SDL_Cursor;
 struct SDL_Window;
 
@@ -68,7 +69,15 @@ public:
 	enum Button { BUTTON_LEFT, BUTTON_MIDDLE, BUTTON_RIGHT };
 	void addEvent( EventKind kind, Int x, Int y, Button button, Int clicks, Int wheelDelta, UnsignedInt timeMs );
 
+	/** Where the pointer is, in the game's pixels: the last event's position, or SDL's until an event comes.
+		* A gamepad's clicks and wheel go where the pointer is (SdlGamepad). */
+	void getPointerPosition( Int &x, Int &y ) const;
+
 	void lostFocus( Bool state ) { m_lostFocus = state; }	///< Win32Mouse's, for the focus handling
+
+	/** The first frame of a cursor's .ANI (its first direction): the art the platform's cursor shows, for a
+		* renderer that draws the cursor itself (W3DMouse's RM_POLYGON, when a pad drives); FALSE without one */
+	Bool firstCursorFrame( MouseCursor cursor, AniCursorFrame &frame ) const;
 
 	/// The mouse SDL's events go to: the one the game made, or none yet
 	static SdlMouse *active( void ) { return s_active; }
@@ -96,6 +105,7 @@ protected:
 	SdlMouseEvent m_eventBuffer[ Mouse::NUM_MOUSE_EVENTS ];
 	UnsignedInt m_nextFreeIndex;
 	UnsignedInt m_nextGetIndex;
+	Int m_lastEventX, m_lastEventY;			///< the last event's position, for getPointerPosition
 
 	MouseCursor m_currentSdlCursor;
 	Int m_directionFrame;				///< current frame of a directional cursor, as Win32Mouse's (W3DMouse sets it)

@@ -887,16 +887,20 @@ if(ZH_PLATFORM_POSIX)
   # GPU (the renderer - Metal on macOS, Vulkan on Linux) and dialog (the first launch's folder chooser,
   # PosixMain.cpp: NSOpenPanel on macOS, the portal or zenity on Linux; with it off, SDL answers every
   # dialog at once with "not built with dialog support", and the chooser quit before showing anything).
+  # Joystick is on for G1's gamepads (SdlGamepad.h), with HIDAPI, which reads the Deck's own controls and
+  # PlayStation and Switch pads directly and gives their real button labels, and the virtual joystick
+  # driver, which test_sdl_gamepad drives in place of a pad.  HIDAPI's libusb backend stays off: no
+  # libusb to link or ship; HIDAPI uses the platform's own HID (hidraw on Linux, IOKit on macOS).
   # Off: audio (miniaudio has that job), render (SDL's 2D renderer; D4 uses the GPU API directly),
-  # camera, joystick, haptic, hidapi, power, sensor and tray, and the OpenGL/GLES video drivers, which
-  # the GPU API does not use.  C3 turns joystick back on if it wants gamepads.  Tests, examples and
-  # install are off.
+  # camera, haptic (no rumble), power, sensor (no gyro) and tray, and the OpenGL/GLES video drivers,
+  # which the GPU API does not use.  Tests, examples and install are off.
   foreach(_sdl_off SDL_SHARED SDL_TEST_LIBRARY SDL_TESTS SDL_EXAMPLES SDL_INSTALL SDL_UNINSTALL
-                   SDL_AUDIO SDL_RENDER SDL_CAMERA SDL_JOYSTICK SDL_HAPTIC SDL_HIDAPI SDL_POWER
+                   SDL_AUDIO SDL_RENDER SDL_CAMERA SDL_HAPTIC SDL_HIDAPI_LIBUSB SDL_POWER
                    SDL_SENSOR SDL_TRAY SDL_OPENGL SDL_OPENGLES)
     set(${_sdl_off} OFF CACHE BOOL "" FORCE)
   endforeach()
-  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU SDL_DIALOG)
+  foreach(_sdl_on SDL_STATIC SDL_VIDEO SDL_GPU SDL_DIALOG SDL_JOYSTICK SDL_HIDAPI SDL_HIDAPI_JOYSTICK
+                  SDL_VIRTUAL_JOYSTICK)
     set(${_sdl_on} ON CACHE BOOL "" FORCE)
   endforeach()
   add_subdirectory(${LIBSRC}/SDL3 ${CMAKE_CURRENT_BINARY_DIR}/SDL3)
@@ -1994,6 +1998,19 @@ if(ZH_PLATFORM_POSIX)
     set_tests_properties(test_sdl_input PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
 
+  # G1's test 1: a gamepad, SDL's virtual joystick on the offscreen driver, against the SDL mouse and key
+  # events a hand makes for the same thing; equal MouseIO and KeyboardIO (Tests/test_sdl_gamepad.cpp).
+  # The shipped Data/INI/GamepadReforged.ini, read by the engine's INI code.
+  add_executable(test_sdl_gamepad ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gamepad.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_gameengine_stubs.cpp)
+  target_include_directories(test_sdl_gamepad PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_definitions(test_sdl_gamepad PRIVATE $<TARGET_PROPERTY:gameengine,COMPILE_DEFINITIONS>
+    GAMEPAD_INI="${CMAKE_CURRENT_SOURCE_DIR}/Data/INI/GamepadReforged.ini"
+    KENNEY_DIR="${LIBSRC}/KenneyInputPrompts")
+  set_target_properties(test_sdl_gamepad PROPERTIES CXX_STANDARD 17)
+  target_link_libraries(test_sdl_gamepad PRIVATE sdldevice test_harness)
+  add_test(NAME test_sdl_gamepad COMMAND test_sdl_gamepad)
+
   # The entry sequence without game data: see the script.
   add_test(NAME generals_smoke
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_generals_smoke.sh $<TARGET_FILE:generals>)
@@ -2040,10 +2057,37 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(net_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # G1's test 2: one skirmish driven by a pad and by hand ends on one CRC, and differs from no input
+  # (Tools/gamepad-crc-check.sh).  -offscreen, no sound; skipped without data.
+  add_test(NAME gamepad_crc_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-crc-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(gamepad_crc_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 3600)	# eight matches: plain, radial, base chord
+  if(ZH_GAME_DATA)
+    set_tests_properties(gamepad_crc_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+  # G1's menus: a virtual pad walks the shell's screens and the focus must land where
+  # docs/mac-port/tasks/G1-gamepad-screens.md says, every step (Tools/gamepad-menu-check.sh).
+  add_test(NAME gamepad_menu_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-menu-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(gamepad_menu_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(gamepad_menu_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
+  # G1's D-pad: fixed paths over the main menu, every Options page, skirmish setup and a match's command card,
+  # and the focus must land where the recorded lists say (Tools/gamepad-dpad-check.sh).
+  add_test(NAME gamepad_dpad_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-dpad-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(gamepad_dpad_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1200)
+  if(ZH_GAME_DATA)
+    set_tests_properties(gamepad_dpad_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # P1 step 3: the staged overlay, <build>/overlay - what the app bundle will copy verbatim and what the
   # harnesses pass with -overlay - and <build>/overlay-dev, the -scenario and -cinema folders that never
   # ship.  Tools/stage-overlay.sh is the one place the list lives.  Small (10 MB; the art is linked).
   file(GLOB_RECURSE ZH_OVERLAY_INPUTS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Data/*)
+  # G1's button hint fonts, staged into the overlay when vendor.sh has them (stage-overlay.sh)
+  file(GLOB ZH_PROMPT_INPUTS CONFIGURE_DEPENDS ${LIBSRC}/KenneyInputPrompts/*)
+  list(APPEND ZH_OVERLAY_INPUTS ${ZH_PROMPT_INPUTS})
   add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/overlay.staged
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/stage-overlay.sh ${CMAKE_CURRENT_SOURCE_DIR}/Data
@@ -2779,6 +2823,7 @@ if(RELEASE_DEBUG_LOGGING)
     # under DEBUG_LOGGING (ScriptEngine's timing fields) has to be laid out alike in every TU that uses it.
     target_compile_definitions(posixdevice PRIVATE RELEASE_DEBUG_LOGGING)
     target_compile_definitions(sdldevice PRIVATE RELEASE_DEBUG_LOGGING)
+    target_compile_definitions(sdlinput PRIVATE RELEASE_DEBUG_LOGGING)	# the SDL layer's input half: SdlGamepad's lines
     target_compile_definitions(w3ddevice PRIVATE RELEASE_DEBUG_LOGGING)	# gameenginedevice's W3D half
     target_compile_definitions(generals PRIVATE RELEASE_DEBUG_LOGGING)
   endif()

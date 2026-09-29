@@ -83,6 +83,7 @@
 #include "GameClient/GameWindowID.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/Image.h"
+#include "GameClient/GamepadHints.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/PlayerColorScheme.h"
 #include "GameClient/VideoPlayer.h"
@@ -2442,6 +2443,24 @@ static void updateReplaySeek( void )
 /** The key a command bar slot is bound to right now, "Q" for KEY_Q, so the page names the key the
 	* player really has after a rebinding in Options > Keyboard.  Empty when unbound. */
 //-------------------------------------------------------------------------------------------------
+// G1: the command grid as the bar last laid it out (InGameUI_commandPlaces)
+static IRegion2D theCommandPlaceRects[ COMMAND_PLACE_COUNT ];
+static Int theCommandPlaceHolds[ COMMAND_PLACE_COUNT ];
+static Bool theCommandPlacesShown = FALSE;
+static UnsignedInt theCommandPlacesFrame = 0;
+
+Bool InGameUI_commandPlaces( IRegion2D *rects, Int *holds )
+{
+	const UnsignedInt now = TheGameClient != NULL ? TheGameClient->getFrame() : 0;
+	const Bool fresh = theCommandPlacesShown && now - theCommandPlacesFrame <= 1;
+	for( Int each = 0; each < COMMAND_PLACE_COUNT; each++ )
+	{
+		rects[ each ] = theCommandPlaceRects[ each ];
+		holds[ each ] = fresh ? theCommandPlaceHolds[ each ] : COMMAND_PLACE_HOLDS_NOTHING;
+	}
+	return fresh;
+}
+
 static std::string commandSlotKey( Int commandSlot )
 {
 	static const std::string KEY_PREFIX = "KEY_";
@@ -11730,9 +11749,21 @@ Bool InGameUI::drawControlBarPage( const IRegion2D *panels, const Bool *shown, I
 	putPageRect( values, "attackkey", place[ COMMAND_PLACE_ATTACK ], centreShown && fights, scale );
 	putPageRect( values, "holdkey", place[ COMMAND_PLACE_HOLD ], centreShown && fights, scale );
 	putPageRect( values, "movekey", place[ COMMAND_PLACE_MOVE ], centreShown && fights, scale );
-	values[ "attackkey.key" ] = commandSlotKey( COMMAND_PLACE_ATTACK );
-	values[ "holdkey.key" ] = commandSlotKey( COMMAND_PLACE_HOLD );
-	values[ "movekey.key" ] = commandSlotKey( COMMAND_PLACE_MOVE );
+	// a gamepad has none of the keys: while one plays, its glyph goes where the letter was (GamepadHints)
+	const Bool padKeys = GamepadHints::getShown() != GAMEPAD_GLYPHS_NONE;
+	values[ "attackkey.key" ] = padKeys ? std::string() : commandSlotKey( COMMAND_PLACE_ATTACK );
+	values[ "holdkey.key" ] = padKeys ? std::string() : commandSlotKey( COMMAND_PLACE_HOLD );
+	values[ "movekey.key" ] = padKeys ? std::string() : commandSlotKey( COMMAND_PLACE_MOVE );
+	// G1: the grid for a gamepad's D-pad and radial
+	for( Int each = 0; each < COMMAND_PLACE_COUNT; each++ )
+	{
+		theCommandPlaceRects[ each ] = place[ each ];
+		const Bool orderKey = fights && ( each == COMMAND_PLACE_ATTACK || each == COMMAND_PLACE_HOLD || each == COMMAND_PLACE_MOVE );
+		theCommandPlaceHolds[ each ] = !centreShown || !taken[ each ] ? COMMAND_PLACE_HOLDS_NOTHING
+			: orderKey ? COMMAND_PLACE_HOLDS_ORDER : COMMAND_PLACE_HOLDS_WINDOW;
+	}
+	theCommandPlacesShown = centreShown;
+	theCommandPlacesFrame = TheGameClient != NULL ? TheGameClient->getFrame() : 0;
 
 	// the portrait bar on the screen's bottom edge right of the command panel: the portrait, then a
 	// single unit's upgrades or a multi-selection's types, the owner's rule, and only as long as what
@@ -13851,6 +13882,7 @@ Bool InGameUI::drawTooltipPage( const UnicodeString &cursorText, const RGBColor 
 	const Int screenHeight = TheDisplay->getHeight();
 	const ICoord2D &mouse = TheMouse->getMouseStatus()->pos;
 	const Int gap = REAL_TO_INT( TOOLTIP_ANCHOR_GAP * ControlBarUniformScale() );
+	IRegion2D shownBox = { { 0, 0 }, { 0, 0 } };
 	for( Int pass = 0; pass < TOOLTIP_LAYOUT_PASSES; pass++ )
 	{
 		IRegion2D box;
@@ -13873,6 +13905,7 @@ Bool InGameUI::drawTooltipPage( const UnicodeString &cursorText, const RGBColor 
 		putPageRect( values, "box", box, TRUE );
 		m_tooltipOverlay->setPage( HtmlTemplate_expand( m_tooltipPage, values, lists, lookupGameText ) );
 
+		shownBox = box;
 		std::vector< IRegion2D > laidOut;
 		m_tooltipOverlay->rectsOf( "#box", laidOut );
 		DEBUG_ASSERTCRASH( laidOut.size() == 1, ( "%s has %d #box elements, wants one\n", TOOLTIP_PAGE, (Int)laidOut.size() ) );
@@ -13882,6 +13915,9 @@ Bool InGameUI::drawTooltipPage( const UnicodeString &cursorText, const RGBColor 
 		m_tooltipSize = size;
 	}
 	m_tooltipOverlay->draw();
+	// G1: a pad in command-bar mode presses what the card describes with South; its glyph in the corner
+	if( card )
+		GamepadHints::drawTooltipCorner( shownBox );
 	return TRUE;
 }
 

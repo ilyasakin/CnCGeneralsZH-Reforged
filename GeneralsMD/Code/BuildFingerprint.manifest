@@ -29,6 +29,7 @@ Data/INI/CommandMapReforged.ini
 Data/INI/CommandSetReforged.ini
 Data/INI/FXListReforged.ini
 Data/INI/FixesReforged.ini
+Data/INI/GamepadReforged.ini
 Data/INI/MappedImages/HandCreated/ReforgedOrders.ini
 Data/INI/ObjectCreationListReforged.ini
 Data/INI/ParticleSystemReforged.ini
@@ -316,6 +317,13 @@ GameEngine/Include/GameClient/GameWindowGlobal.h
 GameEngine/Include/GameClient/GameWindowID.h
 GameEngine/Include/GameClient/GameWindowManager.h
 GameEngine/Include/GameClient/GameWindowTransitions.h
+GameEngine/Include/GameClient/GamepadAim.h
+GameEngine/Include/GameClient/GamepadCancel.h
+GameEngine/Include/GameClient/GamepadCycle.h
+GameEngine/Include/GameClient/GamepadFocus.h
+GameEngine/Include/GameClient/GamepadHints.h
+GameEngine/Include/GameClient/GamepadMap.h
+GameEngine/Include/GameClient/GamepadRadial.h
 GameEngine/Include/GameClient/GlobalLanguage.h
 GameEngine/Include/GameClient/GraphDraw.h
 GameEngine/Include/GameClient/HeaderTemplate.h
@@ -969,6 +977,13 @@ GameEngine/Source/GameClient/GraphDraw.cpp
 GameEngine/Source/GameClient/HtmlOverlay.cpp
 GameEngine/Source/GameClient/HtmlTemplate.cpp
 GameEngine/Source/GameClient/InGameUI.cpp
+GameEngine/Source/GameClient/Input/GamepadAim.cpp
+GameEngine/Source/GameClient/Input/GamepadCancel.cpp
+GameEngine/Source/GameClient/Input/GamepadCycle.cpp
+GameEngine/Source/GameClient/Input/GamepadFocus.cpp
+GameEngine/Source/GameClient/Input/GamepadHints.cpp
+GameEngine/Source/GameClient/Input/GamepadMap.cpp
+GameEngine/Source/GameClient/Input/GamepadRadial.cpp
 GameEngine/Source/GameClient/Input/Keyboard.cpp
 GameEngine/Source/GameClient/Input/Mouse.cpp
 GameEngine/Source/GameClient/LanguageFilter.cpp
@@ -1340,7 +1355,9 @@ GameEngineDevice/Include/SdlDevice/Common/SdlGameEngine.h
 GameEngineDevice/Include/SdlDevice/Common/SdlMessageBox.h
 GameEngineDevice/Include/SdlDevice/Common/SdlPanel.h
 GameEngineDevice/Include/SdlDevice/GameClient/AniCursor.h
+GameEngineDevice/Include/SdlDevice/GameClient/SdlGamepad.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlInput.h
+GameEngineDevice/Include/SdlDevice/GameClient/SdlInputScript.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyTable.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlKeyboard.h
 GameEngineDevice/Include/SdlDevice/GameClient/SdlMouse.h
@@ -1484,7 +1501,9 @@ GameEngineDevice/Source/SdlDevice/Common/SdlGameEngine.cpp
 GameEngineDevice/Source/SdlDevice/Common/SdlMessageBox.cpp
 GameEngineDevice/Source/SdlDevice/Common/SdlPanel.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/AniCursor.cpp
+GameEngineDevice/Source/SdlDevice/GameClient/SdlGamepad.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlInput.cpp
+GameEngineDevice/Source/SdlDevice/GameClient/SdlInputScript.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyTable.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlKeyboard.cpp
 GameEngineDevice/Source/SdlDevice/GameClient/SdlMouse.cpp
@@ -1665,6 +1684,7 @@ Libraries/Source/EABrowserDispatch/BrowserDispatch.idl
 Libraries/Source/EABrowserDispatch/EABrowserDispatch.dsp
 Libraries/Source/FFmpeg/.gitignore
 Libraries/Source/GameSpy/.gitignore
+Libraries/Source/KenneyInputPrompts/.gitignore
 Libraries/Source/SDL3/.gitignore
 Libraries/Source/SDL_shadercross/.gitignore
 Libraries/Source/SPIRV-Cross/.gitignore
@@ -2748,6 +2768,7 @@ Tests/test_production_input.inc
 Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
 Tests/test_road_buffer.cpp
+Tests/test_sdl_gamepad.cpp
 Tests/test_sdl_gpu_frame.cpp
 Tests/test_sdl_input.cpp
 Tests/test_sdl_pipeline_state.cpp
@@ -3584,6 +3605,9 @@ Tools/ffprogram-values-check.sh
 Tools/fingerprint-check.sh
 Tools/fingerprint-manifest.sh
 Tools/fingerprint/build_fingerprint.cpp
+Tools/gamepad-crc-check.sh
+Tools/gamepad-dpad-check.sh
+Tools/gamepad-menu-check.sh
 Tools/gametext.py
 Tools/gdi-font-metrics-header.py
 Tools/gdi-font-metrics.ps1

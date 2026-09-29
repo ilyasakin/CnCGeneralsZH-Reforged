@@ -43,6 +43,11 @@ right to use them (LICENSE.md, additional terms). They appear here only to say w
   their added lines are marked.
 - **FreeType** is used under the GNU GPL (version 2 or later) option of its dual licence.
 - **FFmpeg** is built under LGPL-2.1-or-later only: its build scripts refuse GPL or non-free configurations.
+- **Controller button hints** are Kenney's "Input Prompts" 1.5A (kenney.nl/assets/input-prompts), under Creative
+  Commons CC0 1.0.
+  - `vendor.sh` fetches them at a pinned SHA-256, so nothing of them is committed.
+  - Only its plain, single-colour glyph fonts are drawn. No logo glyph and no platform's name appears in the game.
+  - The button symbols belong to their makers as trademarks, and are shown only to say which button to press.
 
 ## Game data
 

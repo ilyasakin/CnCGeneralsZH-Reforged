@@ -642,6 +642,38 @@ install_freetype() {
   step "FreeType 2.14.3 -> Libraries/Source/freetype"
 }
 
+# --- Kenney's "Input Prompts" 1.5A, Creative Commons CC0 (kenney.nl/assets/input-prompts): G1's button
+# hints (GamepadHints.h). Only the glyph fonts of the four pad families G1 draws, each with its map of
+# glyph names to code points, and the licence. A font is one colour by nature, so no brand colour can
+# come through; the logo glyphs are in the fonts, and GamepadHints.cpp's tables never name them.
+# Pinned by the archive's SHA-256: Kenney's download path changes with each release, and a changed
+# archive stops the vendoring here rather than slipping in.
+install_input_prompts() {
+  local destination="$libraries/Source/KenneyInputPrompts"
+  local sha='ac2fcf599080b0f3ba2d174c9474db6df1a0e96ff0662580e2da79a122ab78a1'
+  if [ -e "$destination/License.txt" ] && [ -z "$force" ]; then return 0; fi
+  local archive hash source pad
+  archive=$(get_file 'https://kenney.nl/media/pages/assets/input-prompts/8de120163f-1783763952/kenney_input-prompts_1.5.zip' "$work/kenney_input-prompts_1.5a.zip")
+  hash=$(sha256_of "$archive")
+  if [ "$hash" != "$sha" ]; then
+    rm -f "$archive"
+    echo "[vendor] ERROR: kenney_input-prompts_1.5.zip has hash $hash, and 1.5A was pinned as $sha" >&2
+    exit 1
+  fi
+  source=$(expand_source "$archive" 'input-prompts')
+  if ! grep -q 'Creative Commons Zero, CC0' "$source/License.txt"; then
+    echo "[vendor] ERROR: Input Prompts' License.txt no longer says CC0" >&2
+    exit 1
+  fi
+  find "$destination" -mindepth 1 ! -name .gitignore -delete 2>/dev/null || true
+  mkdir -p "$destination"
+  cp -f "$source/License.txt" "$destination/License.txt"
+  for pad in 'Xbox Series' 'PlayStation Series' 'Nintendo Switch' 'Steam Deck'; do
+    cp -f "$source/$pad/Fonts/"*.ttf "$source/$pad/Fonts/"*_map.txt "$destination/"
+  done
+  step "Kenney Input Prompts 1.5A (CC0) -> Libraries/Source/KenneyInputPrompts"
+}
+
 # --- FFmpeg 8.1.2, the release Windows' dist/ is built from (Tools/ffmpeg-build.sh): the decoder
 # under the Bink API off Windows (V1). Only the tarball is kept, checked against its published hash;
 # CMake's POSIX build unpacks it into the build tree, builds the few components the movies need
@@ -773,5 +805,6 @@ install_spirv_cross
 install_shadercross
 install_freetype
 install_ffmpeg
+install_input_prompts
 install_art
 step 'everything the build needs is in place'

@@ -949,6 +949,9 @@ GlobalData::GlobalData()
 	m_playerColorScheme = PLAYER_COLORS_ORIGINAL;
 	// the words the game shipped with until somebody picks a translation
 	m_textLanguage = TEXT_LANGUAGE_ENGLISH;
+	m_gamepadEnabled = TRUE;
+	m_gamepadAim = TRUE;
+	m_gamepadSwapConfirm = FALSE;
 	// the lines have been on since they were added, so nobody loses them until they say so
 	m_showOrderLines = TRUE;
 

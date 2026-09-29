@@ -826,6 +826,106 @@ GUI:OptionsGroupInput
 "Input"
 END
 
+GUI:Gamepad
+"Controller"
+END
+
+GUI:GamepadSelect
+"Select"
+END
+
+GUI:GamepadBack
+"Back"
+END
+
+GUI:GamepadStart
+"Start"
+END
+
+GUI:GamepadTabs
+"Tabs"
+END
+
+GUI:GamepadOrder
+"Order"
+END
+
+GUI:GamepadAttackMove
+"Attack move"
+END
+
+GUI:GamepadCommands
+"Commands"
+END
+
+GUI:GamepadIdleWorker
+"Idle worker"
+END
+
+GUI:GamepadAdd
+"Add"
+END
+
+GUI:GamepadQueue
+"Queue"
+END
+
+GUI:GamepadGroupsHigh
+"Groups 5-8"
+END
+
+GUI:GamepadForceFire
+"Force fire"
+END
+
+GUI:GamepadMakeGroup
+"Make group"
+END
+
+GUI:GamepadScatter
+"Scatter"
+END
+
+GUI:GamepadStop
+"Stop"
+END
+
+GUI:GamepadHold
+"Hold position"
+END
+
+GUI:GamepadMove
+"Move"
+END
+
+GUI:GamepadZoomTurn
+"Zoom and turn"
+END
+
+GUI:GamepadArmy
+"Whole army"
+END
+
+TOOLTIP:Gamepad
+"Play with a controller: the left stick moves the pointer, A selects, X gives the order, B takes back, and RT held opens the command menu. The strip at the top shows the rest. Off, a connected controller is ignored."
+END
+
+GUI:GamepadAim
+"Controller Aim Assist"
+END
+
+TOOLTIP:GamepadAim
+"In a match, the controller's pointer settles onto the nearest unit or building you can see, and slows as it passes over one. Off, it goes exactly where the stick puts it."
+END
+
+GUI:GamepadSwapConfirm
+"Swap Confirm and Cancel"
+END
+
+TOOLTIP:GamepadSwapConfirm
+"Confirm with the other face button. Xbox, PlayStation and Steam Deck controllers confirm with the bottom button and Nintendo controllers with A, the right one; ticked, each does it the other way round, and the button hints follow."
+END
+
 GUI:ChromaLighting
 "Razer Chroma Lighting"
 END
