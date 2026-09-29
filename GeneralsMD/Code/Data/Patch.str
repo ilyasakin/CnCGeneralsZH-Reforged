@@ -898,6 +898,10 @@ GUI:GamepadMove
 "Move"
 END
 
+GUI:GamepadChange
+"Change"
+END
+
 GUI:GamepadZoomTurn
 "Zoom and turn"
 END

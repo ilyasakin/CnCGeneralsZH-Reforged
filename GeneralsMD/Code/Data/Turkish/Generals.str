@@ -15457,6 +15457,10 @@ GUI:GamepadMove
 "Hareket et"
 END
 
+GUI:GamepadChange
+"Değiştir"
+END
+
 GUI:GamepadZoomTurn
 "Yakınlaştır ve döndür"
 END
