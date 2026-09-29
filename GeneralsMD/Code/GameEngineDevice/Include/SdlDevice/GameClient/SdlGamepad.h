@@ -19,9 +19,11 @@
 // SdlGamepad.h: SDL3's gamepads, turned into the mouse's and the keyboard's own input (G1).
 //
 // G1's rule (docs/mac-port/tasks/G1-gamepad.md): a gamepad only produces what the mouse and keyboard
-// already produce.  So this has exactly two outputs, the calls SDL's own mouse and key events make:
-// SdlMouse::addEvent and SdlKeyboard::addKey.  Everything after them - Mouse and Keyboard turning them
-// into MSG_RAW_* messages, the command maps, the translators - is the code a mouse and keyboard run.
+// already produce.  So this has exactly two outputs, the platform's mouse and keyboard, reached through
+// SdlGamepadOutput.h: off Windows the calls SDL's own mouse and key events make (SdlMouse::addEvent and
+// SdlKeyboard::addKey), on Windows what a window message and DirectInput give Win32Mouse and
+// DirectInputKeyboard.  Everything after them - Mouse and Keyboard turning them into MSG_RAW_* messages,
+// the command maps, the translators - is the code a mouse and keyboard run.
 //
 //   - Buttons follow GamepadMap (Data\INI\GamepadReforged.ini): a mouse button pressed where the pointer
 //     is, a key with its modifiers, or a command: the key the command map binds it to, or where the
@@ -47,8 +49,8 @@
 //     and up when the last lets go.  A pad pulled out, or the window losing the focus, lets go of all
 //     it holds, so nothing is left stuck down.
 //
-// Only a game with a window starts it (SdlGameEngine), and an -offscreen one only for a test's virtual
-// pad (ZH_INPUT_SCRIPT); a -headless run never does.
+// Only a game with a window starts it (SdlGameEngine; on Windows Win32GameEngine), and an -offscreen one
+// only for a test's virtual pad (ZH_INPUT_SCRIPT); a -headless run never does, unless it plays such a pad.
 
 #pragma once
 
@@ -62,6 +64,8 @@ union SDL_Event;
 /// SDL's gamepad subsystem; FALSE when it cannot start (the game runs on without gamepads)
 Bool SdlGamepad_start( void );
 void SdlGamepad_stop( void );
+/// Did SdlGamepad_start start it: Windows pumps SDL's events only then (Win32GameEngine)
+Bool SdlGamepad_isStarted( void );
 
 /// One event; TRUE when it was a gamepad's or a joystick's and was taken
 Bool SdlGamepad_dispatch( const SDL_Event &event );

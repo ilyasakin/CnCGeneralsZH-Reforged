@@ -5,8 +5,8 @@
 # is in place costs one directory check per library and nothing else.
 #
 #   -Force   re-fetch even what is already there
-#   -D3D12   also fetch what the -d3d12 renderer builds on Windows (X1): SDL3, glslang, SPIRV-Cross and
-#            SDL_shadercross, for a configure with -DZH_D3D12=ON
+#   -D3D12   also fetch what the -d3d12 renderer builds on Windows (X1): glslang, SPIRV-Cross and
+#            SDL_shadercross, for a configure with -DZH_D3D12=ON (SDL3 itself is fetched always: the gamepad)
 #
 # What it cannot get is the game itself: the .big files from a Zero Hour install go next to
 # generals.exe in GeneralsMD\Run, and the base game's in Run\ZH_Generals. The game says so on
@@ -353,6 +353,32 @@ function Install-Sdl3D3d12Patch {
   Step "sdl3-d3d12-descriptors.patch -> Libraries\Source\SDL3"
 }
 
+# --- Kenney's "Input Prompts" 1.5A, Creative Commons CC0 (kenney.nl/assets/input-prompts): the gamepad's
+# button hints (GamepadHints.h), as vendor.sh fetches them, pinned by the same SHA-256.  Only the glyph fonts of
+# the four pad families, each with its map of glyph names to code points, and the licence.
+function Install-InputPrompts {
+  $destination = Join-Path $libraries 'Source\KenneyInputPrompts'
+  if ((Test-Path (Join-Path $destination 'License.txt')) -and -not $Force) { return }
+  $archive = Get-File 'https://kenney.nl/media/pages/assets/input-prompts/8de120163f-1783763952/kenney_input-prompts_1.5.zip' (Join-Path $work 'kenney_input-prompts_1.5a.zip')
+  $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+  if ($hash -ne 'ac2fcf599080b0f3ba2d174c9474db6df1a0e96ff0662580e2da79a122ab78a1') {
+    Remove-Item -Force $archive
+    throw "kenney_input-prompts_1.5.zip has hash $hash, and 1.5A was pinned as ac2fcf599080b0f3ba2d174c9474db6df1a0e96ff0662580e2da79a122ab78a1"
+  }
+  $source = Expand-Source $archive 'input-prompts'
+  if (-not (Select-String -LiteralPath (Join-Path $source 'License.txt') -Pattern 'Creative Commons Zero, CC0' -SimpleMatch -Quiet)) {
+    throw "Input Prompts' License.txt no longer says CC0"
+  }
+  Get-ChildItem -Force $destination -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne '.gitignore' } | Remove-Item -Recurse -Force
+  New-Item -ItemType Directory -Force -Path $destination | Out-Null
+  Copy-Item (Join-Path $source 'License.txt') $destination -Force
+  foreach ($pad in 'Xbox Series', 'PlayStation Series', 'Nintendo Switch', 'Steam Deck') {
+    Get-ChildItem (Join-Path $source "$pad\Fonts") -File | Where-Object { $_.Extension -eq '.ttf' -or $_.Name -like '*_map.txt' } |
+      ForEach-Object { Copy-Item $_.FullName $destination -Force }
+  }
+  Step "Kenney Input Prompts 1.5A (CC0) -> Libraries\Source\KenneyInputPrompts"
+}
+
 function Install-Glslang {
   $destination = Join-Path $libraries 'Source\glslang'
   if ((Test-Path (Join-Path $destination 'glslang\HLSL\hlslParseHelper.cpp')) -and -not $Force) { return }
@@ -398,12 +424,15 @@ Install-Litehtml
 Install-LitehtmlPatch
 Install-Nanosvg
 # SDL3 and miniaudio are the platform layer for everything that is not Windows (decision 3 in
-# docs/mac-port/README.md). Windows keeps Win32Device and Miles, so they are not fetched here;
-# vendor.sh fetches them, and says it skips DirectX the same way. The same holds for SDL3's Metal patch,
-# Libraries\Source\sdl3-metal-windowless.patch: vendor.sh applies it, and there is nothing here to apply.
-# With -D3D12 (X1, the scoped amendment to decision 3) SDL3 comes too, for the -d3d12 renderer only: Win32
-# stays the platform layer, and miniaudio is still not fetched.
-if ($D3D12) { Install-Sdl3; Install-Sdl3D3d12Patch } else { Step 'skipping SDL3 (and its patch) and miniaudio: not Windows, and vendor.sh is what fetches them' }
+# docs/mac-port/README.md). Windows keeps Win32Device and Miles, so miniaudio is not fetched here, and
+# vendor.sh says it skips DirectX the same way. SDL3's Metal patch, Libraries\Source\sdl3-metal-windowless.patch,
+# is vendor.sh's too: there is nothing of it here to apply. SDL3 itself comes on every Windows build, for two
+# scoped amendments to decision 3: the gamepad (G1b: its joystick and gamepad subsystems, beside Win32Device's
+# mouse and keyboard) and the -d3d12 renderer (X1: its GPU device). Win32 stays the platform layer.
+Install-Sdl3
+Install-Sdl3D3d12Patch
+Step 'skipping miniaudio: not Windows, and vendor.sh is what fetches it'
+Install-InputPrompts
 # glslang, SPIRV-Cross and SDL_shadercross compile the shader generators' SDL3 GPU target (decision 4).
 # Windows compiles the D3D11 target with d3dcompiler_47.dll, so they are fetched only for -d3d12.
 if ($D3D12) {
