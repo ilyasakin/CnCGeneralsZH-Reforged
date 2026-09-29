@@ -1163,7 +1163,14 @@ GlobalData::GlobalData()
 	m_moneyPerMinute = 0;
 	m_buildPlacementOpacity = PLACEMENT_SILHOUETTE_OPACITY;
 	m_buildPlacementShadows = TRUE;
+	// The corner readout (InGameUI::drawHudOverlay): on in the developer builds (Debug, _INTERNAL), off in
+	// Release, RELEASE_DEBUG_LOGGING included, which is a Release build that also logs.  A player turns it on
+	// with "ShowHudOverlay = Yes" in GameData.ini; a harness whose pictures must show it passes -showHudOverlay.
+#if defined(_DEBUG) || defined(_INTERNAL)
 	m_showHudOverlay = TRUE;
+#else
+	m_showHudOverlay = FALSE;
+#endif
 	m_showPlacementRangeRing = TRUE;
 	m_showSkillStrip = TRUE;
 	m_showSuperweaponStrip = TRUE;

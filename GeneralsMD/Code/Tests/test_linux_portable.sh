@@ -21,8 +21,8 @@
 #   1. the folder (no art, no archive): the launcher, generals stripped with its debuglink, the debug file,
 #      the overlay, the licences, the icon (a 48 px PNG), the .desktop file, README.txt, and VERSION naming
 #      this commit; generals needs nothing newer than GLIBC_2.31 and no libstdc++ symbol;
-#   2. armed controls, from the same build without rebuilding: an overlay file that turns the HUD overlay
-#      off, and a static library on the link line that macos-app-licenses.txt does not name, are each refused;
+#   2. armed controls, from the same build without rebuilding: an overlay file that forces the HUD overlay
+#      on (off by default in Release), and a static library on the link line that macos-app-licenses.txt does not name, are each refused;
 #   3. with ZH_DATA_DIR and the platform image: E1 through the packaged launcher (replay-check.sh --package),
 #      inside the platform image, no network - the recording, its playback and a second run agree.
 #
@@ -86,12 +86,12 @@ check '[ "$(printf "%s\n%s\n" "$glibc" GLIBC_2.31 | sort -V | tail -1)" = GLIBC_
 fake="$T/fake-build"
 mkdir -p "$fake"
 for f in generals generated ffmpeg; do ln -s "$PB/$f" "$fake/$f"; done
-cp -R -L "$PB/overlay" "$fake/overlay" && printf 'ShowHudOverlay = No\n' > "$fake/overlay/HudOff.ini"
+cp -R -L "$PB/overlay" "$fake/overlay" && printf 'ShowHudOverlay = Yes\n' > "$fake/overlay/HudOn.ini"
 cp "$PB/build.ninja" "$fake/build.ninja"
-out="$(bash "$CODE/Tools/linux-portable.sh" --build "$fake" --out "$T/hud-off" --no-build --no-art --no-tar 2>&1)"; status=$?
-check '[ $status -ne 0 ] && printf "%s" "$out" | grep -q "HUD overlay must stay on" && [ ! -e "$T/hud-off" ]' \
-	"armed: an overlay turning the HUD off is refused, and no folder is left"
-rm -f "$fake/overlay/HudOff.ini"
+out="$(bash "$CODE/Tools/linux-portable.sh" --build "$fake" --out "$T/hud-on" --no-build --no-art --no-tar 2>&1)"; status=$?
+check '[ $status -ne 0 ] && printf "%s" "$out" | grep -q "may force the HUD overlay on" && [ ! -e "$T/hud-on" ]' \
+	"armed: an overlay forcing the HUD on is refused, and no folder is left"
+rm -f "$fake/overlay/HudOn.ini"
 sed -i 's#libwwlib\.a#libwwlib.a libnotlicensed.a#' "$fake/build.ninja"
 out="$(bash "$CODE/Tools/linux-portable.sh" --build "$fake" --out "$T/unlicensed" --no-build --no-art --no-tar 2>&1)"; status=$?
 check '[ $status -ne 0 ] && printf "%s" "$out" | grep -q "does not cover: notlicensed"' \

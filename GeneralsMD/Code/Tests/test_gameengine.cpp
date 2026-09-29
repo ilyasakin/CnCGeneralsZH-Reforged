@@ -11940,8 +11940,14 @@ TEST(gameplay_conveniences_are_forced_on_and_left_the_catalog)
 	CHECK( scratch->m_showPlacementRangeRing );
 	CHECK( scratch->m_workersReturnToSupply );
 	CHECK( scratch->m_detailedBuildTooltips );
-	CHECK( scratch->m_showHudOverlay );
 	CHECK( scratch->m_archiveReplays );
+	/* The HUD overlay is out of the catalog too, but its default is the build's: on in the developer
+		 builds, off in Release (the user's rule; GameData.ini or -showHudOverlay turns it on). */
+#if defined(_DEBUG) || defined(_INTERNAL)
+	CHECK( scratch->m_showHudOverlay );
+#else
+	CHECK( !scratch->m_showHudOverlay );
+#endif
 
 	/* HealthBars is what is left, and it is still a menu row. */
 	const OptionDef *bars = findOptionDef( "HealthBars" );

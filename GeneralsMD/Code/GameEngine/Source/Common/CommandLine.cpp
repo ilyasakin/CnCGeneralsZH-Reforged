@@ -1482,6 +1482,16 @@ Int parseMaxGameFrames(char *args[], int num)
 	 * graphics work in the upstream ledger sits unclosed - not because the code is hard, because
 	 * nobody could see the result. Combine with -autoskirmish, -map and -maxframes; -headless draws
 	 * nothing and says so. The file goes next to the save games, as sshotNNN.bmp. */
+/** -showHudOverlay: the corner readout on, whatever the build's default (off in Release) and GameData.ini
+	* say.  The harnesses whose screenshots are evidence pass it, so every picture names its renderer, clock
+	* and frame; the command line is read after GameData.ini, so nothing there turns it back off. */
+Int parseShowHudOverlay(char *args[], int)
+{
+	if (TheWritableGlobalData)
+		TheWritableGlobalData->m_showHudOverlay = TRUE;
+	return 1;
+}
+
 Int parseScreenShot(char *args[], int num)
 {
 	if (TheWritableGlobalData && num > 1)
@@ -2539,6 +2549,7 @@ static CommandLineParam params[] =
 	{ "-noaudio", parseNoAudio },
 	{ "-maxframes", parseMaxGameFrames },
 	{ "-screenshot", parseScreenShot },
+	{ "-showHudOverlay", parseShowHudOverlay },
 	{ "-video", parseVideo },
 	{ "-wav", parseWav },
 	{ "-turbo", parseTurbo },

@@ -2269,7 +2269,8 @@ if(ZH_PLATFORM_POSIX)
   endif()
   # Their install check (Tools/install-guard.sh) on a made-up install: a change, and a check that could not
   # be made, are told apart.  No game data.
-  # The stager keeps the HUD overlay on: it refuses a staged ShowHudOverlay = No, loose or in an archive.
+  # The stager keeps the HUD overlay's default the build's (off in Release): it refuses a staged ShowHudOverlay =
+  # Yes, loose or in an archive.
   add_test(NAME stage_overlay_hud_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_stage_overlay_hud.sh)
   add_test(NAME install_guard_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_guard.sh)
   # Every harness stops when its work folder cannot be made, instead of going on with the name empty

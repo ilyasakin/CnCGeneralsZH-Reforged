@@ -86,7 +86,8 @@ $cases = @(
 # switch went in twice.
 function Shoot($c, $tag, $switches) {
   Get-ChildItem "$shots\sshot*.bmp" -ErrorAction SilentlyContinue | Remove-Item -Force
-  $arguments = @('-win','-xres','1280','-yres','720','-quickstart','-noshellmap','-multiInstance',
+  # -showHudOverlay: off by default in Release, and every evidence picture shows the corner readout
+  $arguments = @('-win','-xres','1280','-yres','720','-quickstart','-noshellmap','-multiInstance','-showHudOverlay',
     '-msaa','0','-dx11post','off','-map',"`"Maps\$($c.map)\$($c.map).map`"",'-autoskirmish','4','-aidiff','easy',
     '-seed','5','-maxframes',($c.f+80),'-screenshot',$c.f,'-camera',$c.x,$c.y,
     '-logPrefix',"dx11chk_$tag`_",'-turbo') + $switches + $Extra

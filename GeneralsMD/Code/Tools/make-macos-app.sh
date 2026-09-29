@@ -26,8 +26,8 @@
 #
 # Refused, before anything is written:
 #   - a static library on generals' link line (build.ninja) that macos-app-licenses.txt does not name;
-#   - a file in the overlay that turns the HUD overlay off (ShowHudOverlay = No: the user's directive,
-#     as Tools/stage-overlay.sh enforces), checked again over the finished bundle;
+#   - a file in the overlay that forces the HUD overlay on (ShowHudOverlay = Yes: off by default in Release,
+#     the user's rule, as Tools/stage-overlay.sh enforces), checked again over the finished bundle;
 #   - an object in any static library on the link line, or a Mach-O in the bundle, built for a newer
 #     macOS than --min-macos (P2): the final executable's own stamp would hide a vendored library built
 #     for the build machine's version, and the player's Mac would find it at the first call.
@@ -84,11 +84,11 @@ linked="$(package_link_libraries "$NINJA" "$LIBPATHS")" || fail "cannot read gen
 [ -n "$linked" ] || fail "generals' link line in $NINJA names no static library"
 ENTRIES="$(package_license_entries "$TABLE" $linked)" || fail "refused: generals links libraries macos-app-licenses.txt does not cover:$ENTRIES"
 
-# ---- the HUD directive, over what will be staged in --------------------------------------------------------
-hud_check() {	# hud_check <dir>: fails naming the files that turn the HUD overlay off
+# ---- the HUD rule, over what will be staged in -------------------------------------------------------------
+hud_check() {	# hud_check <dir>: fails naming the files that force the HUD overlay on
 	local found
 	found="$(hud_check_files "$1")"
-	[ -z "$found" ] || fail "refused: the HUD overlay must stay on (ShowHudOverlay = No in: $(printf '%s ' $found))"
+	[ -z "$found" ] || fail "refused: nothing shipped may force the HUD overlay on (ShowHudOverlay = Yes in: $(printf '%s ' $found))"
 }
 hud_check "$OVERLAY"
 
