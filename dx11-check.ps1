@@ -57,7 +57,9 @@
 param([double]$Margin = 1.0, [double]$MeanMargin = 1.0, [string]$Map = '',
   [switch]$BackendNoise, [switch]$CountRule, [string[]]$Extra = @(), [ValidateSet('dx11','d3d12')][string]$Backend = 'dx11')
 $env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
-$backendSwitch = if ($Backend -eq 'd3d12') { @('-d3d12') } else { @() }
+# @(...) around the whole: an if whose branch is an empty array hands back $null, not the array, and a
+# $null in the argument list stops Start-Process, so -Backend dx11 (the default) never ran.
+$backendSwitch = @(if ($Backend -eq 'd3d12') { '-d3d12' })
 
 Add-Type -AssemblyName System.Drawing
 $run = Join-Path $PSScriptRoot "GeneralsMD\Run"
@@ -79,12 +81,15 @@ $cases = @(
 # -msaa 0 for tree-check.ps1's reason: a multisampled back buffer cannot be read back, the capture
 # falls through to a desktop grab, and whatever window is over the game lands in the .bmp.  The shot
 # folder is emptied first so an empty one is a stated failure rather than the previous view's file.
-function Shoot($c, $tag, $extra) {
+# The run's own switches are $switches: PowerShell's names ignore case, so a parameter called $extra was the
+# script's -Extra too, and -Extra (-noDynamicLOD, -noaudio ...) never reached the game while the renderer
+# switch went in twice.
+function Shoot($c, $tag, $switches) {
   Get-ChildItem "$shots\sshot*.bmp" -ErrorAction SilentlyContinue | Remove-Item -Force
   $arguments = @('-win','-xres','1280','-yres','720','-quickstart','-noshellmap','-multiInstance',
     '-msaa','0','-dx11post','off','-map',"`"Maps\$($c.map)\$($c.map).map`"",'-autoskirmish','4','-aidiff','easy',
     '-seed','5','-maxframes',($c.f+80),'-screenshot',$c.f,'-camera',$c.x,$c.y,
-    '-logPrefix',"dx11chk_$tag`_",'-turbo') + $extra + $Extra
+    '-logPrefix',"dx11chk_$tag`_",'-turbo') + $switches + $Extra
   try {
     $process = Start-Process (Join-Path $run 'generals.exe') -ArgumentList $arguments -WorkingDirectory $run -PassThru
     $process.PriorityClass = 'AboveNormal'
