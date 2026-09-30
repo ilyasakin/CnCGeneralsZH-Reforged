@@ -899,13 +899,17 @@ void StateMachine::xfer( Xfer *xfer )
 		}
 
 	}	else {
-		if( m_currentState == NULL )
-		{
-			DEBUG_ASSERTCRASH(m_currentState != NULL, ("currentState was NULL on xfer, trying to heal..."));
-			// Hmm... too late to find out why we are getting NULL in our state, but if we let it go, we will Throw in xferSnapshot.
-			m_currentState = internalGetState(m_defaultStateID);
-		}
-		xfer->xferSnapshot(m_currentState);
+		//
+		// A machine can stand with no current state (halt and clear both leave it so), and the file
+		// needs some state's block here, so the default one is written in its place.  It used to be
+		// assigned as well.  A replay checkpoint is a save taken mid-playback: a unit with no state in
+		// the recording got an idle one in the playback and went on thinking.  A load has already
+		// taken the default for an id it cannot find, a few lines up.
+		//
+		State *state = m_currentState;
+		if( state == NULL )
+			state = internalGetState(m_defaultStateID);
+		xfer->xferSnapshot(state);
 	}
 
 

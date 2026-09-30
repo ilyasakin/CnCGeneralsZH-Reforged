@@ -401,7 +401,7 @@ own changes, "upstream" by a specific upstream commit; the rest are in EA's rele
 | 17 | Fork: the logic catch-up let the water grid the simulation reads fall behind | fixed |
 | 18 | A screenshot reads past its image when the width is not a multiple of 8 | fixed |
 | 19 | Fork: a random map smaller than the generator's sizes can put two starts together | recorded |
-| 20 | Fork: saving nudged every object's heading, so checkpointed replays diverged | fixed |
+| 20 | Fork: saving nudged every object's heading, so checkpointed replays diverged | fixed upstream too (d4c1f156) |
 | 21 | Fork: under Direct3D 11 a scrolling texture does not scroll | fixed |
 | 22 | Fork: generated vertex programs ignored `D3DRS_LOCALVIEWER` | fixed |
 | 23 | Fork: under Direct3D 11 a light's own ambient colour is dropped | fixed |

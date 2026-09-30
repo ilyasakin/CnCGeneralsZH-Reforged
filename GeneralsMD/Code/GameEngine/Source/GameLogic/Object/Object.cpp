@@ -4102,8 +4102,14 @@ void Object::onDisabledEdge(Bool becomingDisabled)
 	for( BehaviorModule **module = m_behaviors; *module; ++module )
 		(*module)->onDisabledEdge( becomingDisabled );
 
+	//
+	// Going into any container holds the object, and held is a disabled type, so this is also what a
+	// builder hears on the step into a tunnel mouth - before it is recorded as inside anything.  One
+	// that took the tunnel as the shorter way to its job (DozerActionPickActionPosState::update) is
+	// not giving the job up: it keeps it and carries on from the far mouth.
+	//
 	DozerAIInterface *dozerAI = getAI() ? getAI()->getDozerAIInterface() : NULL;
-	if( becomingDisabled  &&  dozerAI )
+	if( becomingDisabled  &&  dozerAI  &&  !( isDisabledByType( DISABLED_HELD ) && getAI()->hasTunnelTrip() ) )
 	{
 		// Have to say goodbye to the thing we might be building or repairing so someone else can do it.
 		if( dozerAI->getCurrentTask() != DOZER_TASK_INVALID )
@@ -4339,12 +4345,14 @@ void Object::xfer( Xfer *xfer )
 	{
 		Matrix3D mtx = *getTransformMatrix();
 		xfer->xferMatrix3D(&mtx);
-		/* Only when loading.  Setting the matrix it was just read from is not a no-op: Thing's setter
-			 recomputes the cached angle from the matrix (Get_Z_Rotation), which is not the angle the logic
-			 set, so every save nudged every object's heading by an ULP or two.  Harmless while a save
-			 ended the game; the replay viewer saves a checkpoint every 900 frames, and a checkpointed
-			 playback then parted from its recording (port defect 20). */
-		if (xfer->getXferMode() == XFER_LOAD)
+
+		//
+		// Only a load has a matrix to take in.  Setting it again on the way out re-derives the cached
+		// angle from the matrix, a few bits off the angle setOrientation stored, and a replay checkpoint
+		// is a save taken mid-playback: the playback then turned its idle units from a different angle
+		// than the recording had.
+		//
+		if( xfer->getXferMode() == XFER_LOAD )
 			setTransformMatrix(&mtx);
 	}
 	else
