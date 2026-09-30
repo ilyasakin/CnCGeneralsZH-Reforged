@@ -2201,18 +2201,19 @@ if(ZH_PLATFORM_POSIX)
   add_custom_target(zh_overlay_dev ALL DEPENDS ${CMAKE_BINARY_DIR}/overlay-dev.staged)
 
   # P1 step 5: the macOS app, "Zero Hour Reforged.app" beside the executable, its dSYM beside it
-  # (Tools/make-macos-app.sh: Info.plist, the icon, the staged overlay with its art as APFS clones, the
-  # licences checked against generals' link line, the HUD directive, an ad-hoc signature, verified).
-  # Outside ALL: build it with `ninja macos_app`.  The bundle id belongs to whoever ships; the default is
-  # the project's home (the README's).  ZH_APP_ART=OFF leaves the 1.6 GB of art out of a local bundle.
+  # (Tools/make-macos-app.sh: Info.plist, the icon, the staged overlay without the art, which the game fetches
+  # on its first start (fetch-art.sh), the licences checked against generals' link line, the HUD directive,
+  # an ad-hoc signature, verified).  Outside ALL: build it with `ninja macos_app`.  The bundle id belongs to
+  # whoever ships; the default is the project's home (the README's).
   if(APPLE)
     set(ZH_APP_BUNDLE_ID "io.github.olcayseygan.zero-hour-reforged" CACHE STRING "CFBundleIdentifier of the macOS app")
-    option(ZH_APP_ART "Put the Reforged*.big art archives into the macOS app" ON)
+    # Where the app's fetch-art.sh takes the art from (art-source.txt in the bundle); empty: upstream's art-latest
+    set(ZH_ART_URL "" CACHE STRING "The art release the macOS app fetches from (https:// or file://); empty for upstream's art-latest")
     set(ZH_APP_ARGS --generals $<TARGET_FILE:generals> --overlay ${CMAKE_BINARY_DIR}/overlay
         --build ${CMAKE_BINARY_DIR} --out "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app" --bundle-id ${ZH_APP_BUNDLE_ID}
         --min-macos ${CMAKE_OSX_DEPLOYMENT_TARGET})
-    if(NOT ZH_APP_ART)
-      list(APPEND ZH_APP_ARGS --no-art)
+    if(ZH_ART_URL)
+      list(APPEND ZH_APP_ARGS --art-url ${ZH_ART_URL})
     endif()
     # P2 universal2, option A (release time, E2): an x86_64 build's generals, lipo'd into the bundle's
     set(ZH_X86_64_GENERALS "" CACHE FILEPATH "An x86_64 build's generals, to make the macOS app universal2 (P2)")
@@ -2250,6 +2251,13 @@ if(ZH_PLATFORM_POSIX)
     set_tests_properties(first_launch_chooser_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
 
+  # The art download of the Linux packages and the macOS app (Tools/fetch-art.sh) against a local file://
+  # release: the sha256 check, a second fetch that downloads nothing, a wrong hash and a path-like name
+  # refused, a withdrawn file removed, the opt-out, the background mode, and the platform's own user data
+  # folder.  No network, no game.
+  add_test(NAME fetch_art_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_fetch_art.sh)
+  set_tests_properties(fetch_art_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+
   # P3: Tools/linux-portable.sh's folder for the Steam Deck, built inside the Steam Runtime's SDK, and E1 through
   # its own launcher in the Steam Runtime's platform image.  Skipped (77) without docker, the SDK image, or a
   # portable CMake (ZH_PORTABLE_CMAKE: 3.29 or later, running inside the container - Kitware's release tarball).
@@ -2262,11 +2270,6 @@ if(ZH_PLATFORM_POSIX)
       list(APPEND _zh_portable_env "ZH_DATA_DIR=${ZH_GAME_DATA}")
     endif()
     set_tests_properties(linux_portable_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 7200 ENVIRONMENT "${_zh_portable_env}")
-    # The Linux packages' art download (Tools/linux-fetch-art.sh) against a local file:// release: the sha256
-    # check, a second fetch that downloads nothing, a wrong hash and a path-like name refused, a withdrawn file
-    # removed, the opt-out, and the launcher's background mode.  No network, no game.
-    add_test(NAME linux_fetch_art_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_linux_fetch_art.sh)
-    set_tests_properties(linux_fetch_art_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
   endif()
 
   # P1 step 1: the fork's overlay as a read root gives the game what Windows' one folder gives it - the

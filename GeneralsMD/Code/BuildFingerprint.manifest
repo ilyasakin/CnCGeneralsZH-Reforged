@@ -2732,6 +2732,7 @@ Tests/test_dx11texture.cpp
 Tests/test_dx11twin.cpp
 Tests/test_early_command_line.cpp
 Tests/test_engineshader.cpp
+Tests/test_fetch_art.sh
 Tests/test_ffprogram.cpp
 Tests/test_ffref_capture.cpp
 Tests/test_ffref_gpu.cpp
@@ -2755,7 +2756,6 @@ Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
 Tests/test_lan_broadcast.cpp
-Tests/test_linux_fetch_art.sh
 Tests/test_linux_portable.sh
 Tests/test_macos_app.sh
 Tests/test_main.cpp
@@ -3607,6 +3607,7 @@ Tools/buildVersionUpdate/buildVersionUpdate.dsp
 Tools/cheat_check.py
 Tools/control_client.py
 Tools/d3d9posix_check.py
+Tools/fetch-art.sh
 Tools/ffmpeg-build-posix.sh
 Tools/ffmpeg-build.bat
 Tools/ffmpeg-build.sh
@@ -3628,7 +3629,6 @@ Tools/include_case_check.py
 Tools/install-guard.sh
 Tools/license-headers.py
 Tools/linux-check.sh
-Tools/linux-fetch-art.sh
 Tools/linux-packages-check.sh
 Tools/linux-packages.sh
 Tools/linux-packages/CMakeLists.txt

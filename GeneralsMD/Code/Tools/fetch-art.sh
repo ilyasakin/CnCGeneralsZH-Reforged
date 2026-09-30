@@ -14,34 +14,49 @@
 #
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# linux-fetch-art.sh: a Linux package's upscaled art, fetched the way upstream's Windows player gets it.
+# fetch-art.sh: the upscaled art of a Linux package or the macOS app, fetched the way upstream's Windows
+# player gets it.
 #
 # The packages carry the engine only; the Reforged*.big art (over a gigabyte) comes from the art release,
 # the same source and check as Tools/vendor.sh (and vendor.ps1): art.json lists each file with its size and
-# sha256, and a file is used only once its sha256 matches.  The package installs this script as
-# share/zero-hour-reforged/fetch-art.sh, and its launcher starts it in the background before the game, so
-# a first start plays at the original textures while the art arrives, and the next one has it.
+# sha256, and a file is used only once its sha256 matches.  A Linux package installs this script as
+# share/zero-hour-reforged/fetch-art.sh and its launcher starts it in the background before the game; the
+# macOS app carries it as Contents/Resources/fetch-art.sh and the game starts it (PosixMain.cpp).  So a
+# first start plays at the original textures while the art arrives, and the next one has it.
 #
 #   <user data>/ReforgedArt/              the verified files, which the game reads as an overlay
 #                                         (PosixMain.cpp, appendUserArtOverlay); .verified records them
 #   <user data>/ReforgedArt.download/     downloads in progress (resumed on the next start)
 #   <user data>/Logs/art-fetch.log        what the last fetch did
 #
-# <user data> is the game's own: $ZH_USER_DATA_DIR, else $XDG_DATA_HOME (an absolute one), else
-# ~/.local/share, then "Command and Conquer Generals Zero Hour Data" (EarlyOptions.h).
+# <user data> is the game's own (EarlyOptions.h): $ZH_USER_DATA_DIR; else on macOS ~/Library/Application
+# Support, and elsewhere $XDG_DATA_HOME (an absolute one) or ~/.local/share; then "Command and Conquer
+# Generals Zero Hour Data".  POSIX sh, and only what a desktop has: curl or wget, sha256sum or shasum, and
+# flock where there is one (a lock folder where there is not, as on macOS).
 #
 # Environment: ZHR_NO_ART_FETCH=1 fetches nothing; ZHR_ART_URL replaces the release's address (a test
-# passes a file:// folder).  Offline, or on any failure, it logs why and leaves what is verified in place;
+# passes a file:// folder), and art-source.txt beside the script the built-in one (see ART_URL below).  Offline, or on any failure, it logs why and leaves what is verified in place;
 # the next start tries again.  A file in ReforgedArt that art.json no longer lists is removed.
 #
-# Usage: linux-fetch-art.sh [--background]
+# Usage: fetch-art.sh [--background]
 #   --background   detach, lower its priority, and write only the log (the launcher's way)
 # Exit status: 0 the art is complete; 1 it is not (the log says why); 2 bad usage.
 
-ART_URL="${ZHR_ART_URL:-https://github.com/olcayseygan/CnCGeneralsZH-Reforged/releases/download/art-latest}"
+# Where the art is: ZHR_ART_URL; else the first line of art-source.txt beside this script, which the package or the
+# app was built with (make-macos-app.sh and linux-portable.sh --art-url, CMake's ZH_ART_URL); else upstream's
+# art-latest release.  Only an https:// or file:// address is taken from the file.
+source_file="$(dirname "$0")/art-source.txt"
+default_url="https://github.com/olcayseygan/CnCGeneralsZH-Reforged/releases/download/art-latest"
+if [ -f "$source_file" ]; then
+	built="$(head -n 1 "$source_file" | tr -d '\r')"
+	case "$built" in https://*|file://*) default_url="${built%/}";; esac
+fi
+ART_URL="${ZHR_ART_URL:-$default_url}"
 leaf="Command and Conquer Generals Zero Hour Data"
 if [ -n "${ZH_USER_DATA_DIR:-}" ]; then
 	data="${ZH_USER_DATA_DIR%/}"
+elif [ "$(uname -s)" = Darwin ]; then
+	data="$HOME/Library/Application Support/$leaf"
 else
 	case "${XDG_DATA_HOME:-}" in
 		/*) data="${XDG_DATA_HOME%/}/$leaf";;
@@ -59,10 +74,10 @@ case "${1:-}" in
 		nohup nice -n 10 sh "$0" > "$log" 2>&1 < /dev/null &
 		exit 0;;
 	"") ;;
-	*) echo "linux-fetch-art: unknown argument $1" >&2; exit 2;;
+	*) echo "fetch-art: unknown argument $1" >&2; exit 2;;
 esac
 
-say() { echo "linux-fetch-art: $*"; }
+say() { echo "fetch-art: $*"; }
 [ "${ZHR_NO_ART_FETCH:-0}" = 1 ] && { say "ZHR_NO_ART_FETCH=1: nothing fetched"; exit 0; }
 mkdir -p "$art" "$stage" || { say "cannot make $art"; exit 1; }
 
@@ -70,6 +85,15 @@ mkdir -p "$art" "$stage" || { say "cannot make $art"; exit 1; }
 if command -v flock > /dev/null 2>&1; then
 	exec 9> "$stage/.lock" || exit 1
 	flock -n 9 || { say "another fetch is running"; exit 0; }
+else		# no flock (macOS): a lock folder holding its owner's pid; one whose owner is gone is taken over
+	lockdir="$stage/.lock.d"
+	if ! mkdir "$lockdir" 2> /dev/null; then
+		owner="$(cat "$lockdir/pid" 2> /dev/null)"
+		if [ -n "$owner" ] && kill -0 "$owner" 2> /dev/null; then say "another fetch is running"; exit 0; fi
+		rm -rf "$lockdir" && mkdir "$lockdir" 2> /dev/null || { say "another fetch is running"; exit 0; }
+	fi
+	echo $$ > "$lockdir/pid"
+	trap 'rm -rf "$lockdir"' EXIT
 fi
 
 if command -v curl > /dev/null 2>&1; then
@@ -81,12 +105,22 @@ elif command -v wget > /dev/null 2>&1; then
 else
 	say "neither curl nor wget: the game plays at its original textures"; exit 1
 fi
-command -v sha256sum > /dev/null 2>&1 || { say "no sha256sum: nothing can be checked, so nothing is fetched"; exit 1; }
-sha() { sha256sum "$1" | cut -d ' ' -f 1; }
+if command -v sha256sum > /dev/null 2>&1; then
+	sha() { sha256sum "$1" | cut -d ' ' -f 1; }
+elif command -v shasum > /dev/null 2>&1; then
+	sha() { shasum -a 256 "$1" | cut -d ' ' -f 1; }
+else
+	say "neither sha256sum nor shasum: nothing can be checked, so nothing is fetched"; exit 1
+fi
 size_of() { wc -c < "$1" | tr -d ' '; }
 
 say "$(date -u +%Y-%m-%dT%H:%M:%SZ): art from $ART_URL into $art"
-get "$ART_URL/art.json" "$stage/art.json.new" || { say "cannot read art.json (offline?): trying again next start"; exit 1; }
+if ! get "$ART_URL/art.json" "$stage/art.json.new"; then
+	# offline, or no art published there (upstream's art-latest is not, at times): not an error to worry anyone
+	say "no public art source reachable ($ART_URL): playing at the original textures; the next start tries again"
+	rm -f "$stage/art.json.new"
+	exit 1
+fi
 
 # art.json -> "name size sha256" lines.  Its names become file names here, so each must be a plain
 # Reforged*.big name, its size digits and its hash 64 hex digits; anything else refuses the whole list.
