@@ -2209,6 +2209,7 @@ static void captureVideoFrame(void);
 extern Real TheSceneDrawMS;
 extern Real TheUIDrawMS;
 extern Real TheParticleUpdateMS;
+extern UnsignedInt TheSceneDrawCalls;
 
 //=============================================================================
 // R1, smooth motion (W3DSmoothMotion.h).  Three steps around the scene's render, and only the picture:
@@ -2654,6 +2655,7 @@ AGAIN:
 				tUIEnd = Clock_Ticks();
 				TheSceneDrawMS = w3dElapsedMS( tSceneStart, tSceneEnd );
 				TheUIDrawMS = w3dElapsedMS( tSceneEnd, tUIEnd );
+				TheSceneDrawCalls = DX8Wrapper::Get_Draw_Calls();
 #endif
 
 				// end of video example code

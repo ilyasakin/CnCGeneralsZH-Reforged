@@ -4225,6 +4225,9 @@ static Bool hasEnemyInSight( Object *obj )
 	 off it wins over one that cannot, however far back it is standing, because the upgrade is worth
 	 more than the walk; failing that the nearest unit takes the cash.
 
+	 Only a computer player's units are sent.  A human's units stay where the human put them and
+	 pick salvage up when the human drives them over it.
+
 	 How it is sent depends on what it was doing.  An idle unit is ordered to the crate and then walks
 	 back to the spot it left - idle is not the same as free, which is what the first version of this
 	 got wrong.  A line of infantry dug in across a road is idle, every one of them, and a fight in
@@ -4285,6 +4288,9 @@ static void salvageCrateTick( void )
 
 			const Player *owner = them->getControllingPlayer();
 			if( owner == NULL || crate->getShroudedStatus( owner->getPlayerIndex() ) >= OBJECTSHROUD_FOGGED )
+				continue;
+			// a human's units go where the human sends them; only the computer's are sent for salvage
+			if( owner->getPlayerType() != PLAYER_COMPUTER )
 				continue;
 
 			const Bool upgrades = wantsSalvageUpgrade( them );

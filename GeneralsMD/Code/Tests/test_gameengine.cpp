@@ -1333,6 +1333,174 @@ TEST(drawn_path_orders_units_by_where_they_already_stand)
 	CHECK_NEAR( 200.0f, distanceAlongPath( path, arc, 100.0f, 400.0f ), 0.001f );
 }
 
+/* DrawnPath.cpp: the attack circle stands both sides around its centre and deals the shots so the
+   counts differ by one at most. 10 guns on 3 targets is 3, 4, 3. 3 guns on 10 targets queue
+   3, 4, 3. */
+#include <algorithm>
+
+static AttackAssignSlot attackSlot( Int id, Real x, Real y )
+{
+	AttackAssignSlot slot;
+	slot.id = (ObjectID)id;
+	slot.x = x;
+	slot.y = y;
+	return slot;
+}
+
+TEST(attack_circle_splits_shots_as_evenly_as_the_counts_allow)
+{
+	std::vector<AttackAssignPair> pairs;
+
+	/* ten guns, three targets: each gun one shot, the shares 3, 4 and 3, middle block the long one. */
+	assignAttacks( 10, 3, pairs );
+	CHECK_EQ( 10, (int)pairs.size() );
+	int onTarget[3] = { 0, 0, 0 };
+	for( int i = 0; i < 10; i++ )
+	{
+		CHECK_EQ( i, pairs[i].attacker );
+		CHECK( pairs[i].target >= 0 && pairs[i].target < 3 );
+		onTarget[ pairs[i].target ]++;
+	}
+	CHECK_EQ( 3, onTarget[0] );
+	CHECK_EQ( 4, onTarget[1] );
+	CHECK_EQ( 3, onTarget[2] );
+
+	/* three guns, ten targets: every target is shot once, and the queues are 3, 4, 3 in order. */
+	assignAttacks( 3, 10, pairs );
+	CHECK_EQ( 10, (int)pairs.size() );
+	int perAttacker[3] = { 0, 0, 0 };
+	for( int i = 0; i < 10; i++ )
+	{
+		CHECK_EQ( i, pairs[i].target );
+		CHECK( pairs[i].attacker >= 0 && pairs[i].attacker < 3 );
+		if( i > 0 )
+			CHECK( pairs[i].attacker >= pairs[i - 1].attacker );
+		perAttacker[ pairs[i].attacker ]++;
+	}
+	CHECK_EQ( 3, perAttacker[0] );
+	CHECK_EQ( 4, perAttacker[1] );
+	CHECK_EQ( 3, perAttacker[2] );
+
+	/* one each, in the order they stand. */
+	assignAttacks( 5, 5, pairs );
+	CHECK_EQ( 5, (int)pairs.size() );
+	for( int i = 0; i < 5; i++ )
+	{
+		CHECK_EQ( i, pairs[i].attacker );
+		CHECK_EQ( i, pairs[i].target );
+	}
+
+	/* one target: everybody shoots it. one attacker: that one queues the lot. */
+	assignAttacks( 6, 1, pairs );
+	CHECK_EQ( 6, (int)pairs.size() );
+	for( int i = 0; i < 6; i++ )
+		CHECK_EQ( 0, pairs[i].target );
+
+	assignAttacks( 1, 4, pairs );
+	CHECK_EQ( 4, (int)pairs.size() );
+	for( int i = 0; i < 4; i++ )
+	{
+		CHECK_EQ( 0, pairs[i].attacker );
+		CHECK_EQ( i, pairs[i].target );
+	}
+
+	/* nothing to shoot, or nobody to shoot it. */
+	assignAttacks( 0, 4, pairs );
+	CHECK_EQ( 0, (int)pairs.size() );
+	assignAttacks( 4, 0, pairs );
+	CHECK_EQ( 0, (int)pairs.size() );
+
+	/* seven and three still differ by one, and every index is used. */
+	assignAttacks( 7, 3, pairs );
+	CHECK_EQ( 7, (int)pairs.size() );
+	int seven[3] = { 0, 0, 0 };
+	for( int i = 0; i < 7; i++ )
+		seven[ pairs[i].target ]++;
+	CHECK_EQ( 2, seven[0] );
+	CHECK_EQ( 3, seven[1] );
+	CHECK_EQ( 2, seven[2] );
+}
+
+TEST(attack_circle_stands_both_sides_around_the_centre)
+{
+	/* shuffled on purpose. counter-clockwise from +x, nearer first on the same ray, id after that,
+	   and a man standing on the centre itself leads. */
+	std::vector<AttackAssignSlot> slots;
+	slots.push_back( attackSlot( 4,   0.0f, -10.0f ) ); /* -y */
+	slots.push_back( attackSlot( 1,  10.0f,   0.0f ) ); /* +x, far */
+	slots.push_back( attackSlot( 8,  10.0f,   0.0f ) ); /* +x, far, higher id */
+	slots.push_back( attackSlot( 2,   0.0f,  10.0f ) ); /* +y */
+	slots.push_back( attackSlot( 5,   0.0f,   0.0f ) ); /* centre */
+	slots.push_back( attackSlot( 6,   5.0f,   0.0f ) ); /* +x, near */
+	slots.push_back( attackSlot( 3, -10.0f,   0.0f ) ); /* -x */
+	slots.push_back( attackSlot( 9,  10.0f,  10.0f ) ); /* diagonal, between +x and +y */
+
+	std::vector<AttackAssignSlot> reversed = slots;
+	std::reverse( reversed.begin(), reversed.end() );
+
+	orderAroundPoint( slots, 0.0f, 0.0f );
+	orderAroundPoint( reversed, 0.0f, 0.0f );
+
+	const int expect[] = { 5, 6, 1, 8, 9, 2, 3, 4 };
+	CHECK_EQ( 8, (int)slots.size() );
+	for( int i = 0; i < 8; i++ )
+	{
+		CHECK_EQ( expect[i], (int)slots[i].id );
+		CHECK_EQ( expect[i], (int)reversed[i].id );
+	}
+}
+
+/* DrawnPath.cpp: the attack line stands both sides along the stroke, nearest the start first,
+   the same total order a move line uses. The deal itself is assignAttacks. */
+TEST(attack_line_stands_both_sides_along_the_stroke)
+{
+	/* an L: 100 along x, then 100 along y. */
+	std::vector<Coord3D> path;
+	path.push_back( drawnPathPoint(   0.0f,   0.0f ) );
+	path.push_back( drawnPathPoint( 100.0f,   0.0f ) );
+	path.push_back( drawnPathPoint( 100.0f, 100.0f ) );
+
+	std::vector<Real> arc;
+	buildPathArcLengths( path, arc );
+
+	/* shuffled. off the stroke but nearest the start, then the same point twice so the id
+	   breaks the tie, then the corner, then halfway up the second leg. */
+	std::vector<AttackAssignSlot> slots;
+	slots.push_back( attackSlot( 4, 100.0f,  50.0f ) );
+	slots.push_back( attackSlot( 8,  50.0f,   0.0f ) );
+	slots.push_back( attackSlot( 2,  50.0f,   0.0f ) );
+	slots.push_back( attackSlot( 1,   0.0f,  10.0f ) );
+	slots.push_back( attackSlot( 3, 100.0f,   0.0f ) );
+
+	std::vector<AttackAssignSlot> reversed = slots;
+	std::reverse( reversed.begin(), reversed.end() );
+
+	orderAlongPath( slots, path, arc );
+	orderAlongPath( reversed, path, arc );
+
+	const int expect[] = { 1, 2, 8, 3, 4 };
+	CHECK_EQ( 5, (int)slots.size() );
+	for( int i = 0; i < 5; i++ )
+	{
+		CHECK_EQ( expect[i], (int)slots[i].id );
+		CHECK_EQ( expect[i], (int)reversed[i].id );
+	}
+
+	/* the enemy nearest the start is the first target, and the gun nearest the start takes it. */
+	std::vector<AttackAssignSlot> enemies;
+	enemies.push_back( attackSlot( 20, 100.0f, 50.0f ) );
+	enemies.push_back( attackSlot( 10,   0.0f,  0.0f ) );
+	orderAlongPath( enemies, path, arc );
+
+	std::vector<AttackAssignPair> pairs;
+	assignAttacks( (Int)slots.size(), (Int)enemies.size(), pairs );
+	CHECK_EQ( 5, (int)pairs.size() );
+	CHECK_EQ( 0, pairs[0].attacker );
+	CHECK_EQ( 0, pairs[0].target );
+	CHECK_EQ( 1, (int)slots[0].id );
+	CHECK_EQ( 10, (int)enemies[0].id );
+}
+
 /* AssaultTransportAIUpdate.cpp: the troop crawler deploys its passengers at a target and used to
    leave them walking behind it for the rest of the attack move once that target died - and on a
    plain attack order it re-boarded them the instant the target died, once per dead enemy.  Both
@@ -2346,66 +2514,92 @@ TEST(placement_grid_snap_puts_footprint_edges_on_cell_lines)
 	CHECK_NEAR(InGameUI::snapPlacementAxis(13.0f, 0.0f), 14.5f, 0.0001f);
 }
 
-TEST(placement_row_packs_the_footprint_along_the_drag)
+TEST(placement_row_pins_both_ends_and_opens_the_middle)
 {
 	Coord2D step;
 	const Real half = 0.70710678f;	/* cos and sin of an eighth of a turn */
 
-	/* facing along x, a 40 by 30 footprint: one piece per 40 dragged and the hair the logic's
-	 * clearance test needs between them, the first free */
-	CHECK_EQ(InGameUI::placementRow(119.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 3);
+	/* facing along x, a 40 by 30 footprint. three exact gaps of 40.5: four pieces, the last
+	 * on the cursor, the step the footprint and the hair the clearance test needs */
+	CHECK_EQ(InGameUI::placementRow(121.5f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 4);
 	CHECK_NEAR(step.x, 40.5f, 0.0001f);
 	CHECK_NEAR(step.y, 0.0f, 0.0001f);
-	CHECK_EQ(InGameUI::placementRow(122.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 4);
+	CHECK_NEAR(step.x * 3.0f, 121.5f, 0.0001f);
 
-	/* backwards runs backwards */
-	CHECK_EQ(InGameUI::placementRow(-100.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 3);
+	/* a length that is not a multiple still ends on the cursor: the spare is spread, the
+	 * step grows past 40.5, and both ends stay */
+	CHECK_EQ(InGameUI::placementRow(130.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 4);
+	CHECK_NEAR(step.x, 130.0f / 3.0f, 0.0001f);
+	CHECK(step.x > 40.5f);
+
+	/* backwards runs backwards, and the last piece is the far end */
+	CHECK_EQ(InGameUI::placementRow(-81.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 3);
 	CHECK_NEAR(step.x, -40.5f, 0.0001f);
 	CHECK_NEAR(step.y, 0.0f, 0.0001f);
 
-	/* a line dragged 20 degrees off the axis runs at 20 degrees, not flat: the pieces meet through
-	 * the facing face, 40 / cos 20 apart, and the hair */
+	/* a line dragged 20 degrees off the axis runs at 20 degrees, not flat, and the pieces
+	 * meet through the facing face */
 	const Real twenty = 20.0f * PI / 180.0f;
-	InGameUI::placementRow(100.0f * Cos(twenty), 100.0f * Sin(twenty), 1.0f, 0.0f, 20.0f, 15.0f, 50, &step);
+	const Real touch20 = 40.0f / Cos(twenty) + 0.5f;
+	const Real drag20 = touch20 * 2.0f;
+	CHECK_EQ(InGameUI::placementRow(drag20 * Cos(twenty), drag20 * Sin(twenty), 1.0f, 0.0f,
+	                                20.0f, 15.0f, 50, &step), 3);
 	CHECK_NEAR(step.y / step.x, Sin(twenty) / Cos(twenty), 0.0001f);
-	CHECK_NEAR(sqrt(step.x * step.x + step.y * step.y), 40.0f / Cos(twenty) + 0.5f, 0.001f);
+	CHECK_NEAR(sqrt(step.x * step.x + step.y * step.y), touch20, 0.001f);
 
-	/* along y the step is the footprint's other side */
-	InGameUI::placementRow(0.0f, -90.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step);
+	/* along y the step is the footprint's other side, two exact gaps */
+	CHECK_EQ(InGameUI::placementRow(0.0f, -61.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 3);
 	CHECK_NEAR(step.x, 0.0f, 0.0001f);
 	CHECK_NEAR(step.y, -30.5f, 0.0001f);
 
 	/* a diagonal slides each piece along the last one's long side instead of meeting it corner
 	 * to corner: 30 on each axis and the hair, where 40 by 30 left a triangle of ground */
-	CHECK_EQ(InGameUI::placementRow(80.0f, 80.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 3);
-	CHECK_NEAR(step.x, 30.0f + 0.5f * half, 0.001f);
-	CHECK_NEAR(step.y, 30.0f + 0.5f * half, 0.001f);
+	const Real diag = 30.0f + 0.5f * half;
+	CHECK_EQ(InGameUI::placementRow(diag * 2.0f, diag * 2.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 3);
+	CHECK_NEAR(step.x, diag, 0.001f);
+	CHECK_NEAR(step.y, diag, 0.001f);
 
 	/* turned a quarter, the footprint's sides swap axes, Cos's float dust and all */
-	InGameUI::placementRow(100.0f, 0.0f, -0.00000004f, 1.0f, 20.0f, 15.0f, 50, &step);
+	CHECK_EQ(InGameUI::placementRow(61.0f, 0.0f, -0.00000004f, 1.0f, 20.0f, 15.0f, 50, &step), 3);
 	CHECK_NEAR(step.x, 30.5f, 0.0001f);
 
-	/* turned an eighth, a row along the structure's own line stands face to face with the
-	 * next: a step 40 long, and the hair */
-	InGameUI::placementRow(100.0f, 100.0f, half, half, 20.0f, 15.0f, 50, &step);
+	/* turned an eighth, a row along the structure's own line stands face to face: a step 40.5
+	 * long. across that line it meets on the short side */
+	CHECK_EQ(InGameUI::placementRow(81.0f * half, 81.0f * half, half, half, 20.0f, 15.0f, 50, &step), 3);
 	CHECK_NEAR(step.x * step.x + step.y * step.y, 40.5f * 40.5f, 0.01f);
-	InGameUI::placementRow(-100.0f, 100.0f, half, half, 20.0f, 15.0f, 50, &step);
+	CHECK_EQ(InGameUI::placementRow(-61.0f * half, 61.0f * half, half, half, 20.0f, 15.0f, 50, &step), 3);
 	CHECK_NEAR(step.x * step.x + step.y * step.y, 30.5f * 30.5f, 0.01f);
 
 	/* and across the structure's line the row can do no better than corner to corner: the
 	 * shorter half-side's diagonal, 30 / cos 45 */
-	InGameUI::placementRow(100.0f, 0.0f, half, half, 20.0f, 15.0f, 50, &step);
-	CHECK_NEAR(step.x, 30.0f / half + 0.5f, 0.001f);
+	const Real corner = 30.0f / half + 0.5f;
+	CHECK_EQ(InGameUI::placementRow(corner * 2.0f, 0.0f, half, half, 20.0f, 15.0f, 50, &step), 3);
+	CHECK_NEAR(step.x, corner, 0.001f);
 	CHECK_NEAR(step.y, 0.0f, 0.0001f);
 
 	/* the step is the footprint, not the build grid's next whole cell */
-	InGameUI::placementRow(100.0f, 0.0f, 1.0f, 0.0f, 22.0f, 30.0f, 50, &step);
+	CHECK_EQ(InGameUI::placementRow(89.0f, 0.0f, 1.0f, 0.0f, 22.0f, 30.0f, 50, &step), 3);
 	CHECK_NEAR(step.x, 44.5f, 0.0001f);
 
-	/* never more than the cap, never fewer than one, and no drag is one piece */
+	/* never more than the cap, and what is affordable still reaches both ends */
 	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 5, &step), 5);
+	CHECK_NEAR(step.x * 4.0f, 1000.0f, 0.001f);
 	CHECK_EQ(InGameUI::placementRow(1000.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 0, &step), 1);
 	CHECK_EQ(InGameUI::placementRow(0.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step), 1);
+
+	/* ten units of extra gap: a line that held four flush now holds three, and the two ends
+	 * are still the anchor and the cursor */
+	CHECK_EQ(InGameUI::placementRow(121.5f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step, 10.0f), 3);
+	CHECK_NEAR(step.x, 60.75f, 0.0001f);
+	CHECK_NEAR(step.y, 0.0f, 0.0001f);
+
+	/* a gap longer than the line leaves the two ends and nothing between them */
+	CHECK_EQ(InGameUI::placementRow(121.5f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step, 500.0f), 2);
+	CHECK_NEAR(step.x, 121.5f, 0.0001f);
+
+	/* a negative gap is ignored: the row never packs tighter than the footprints allow */
+	InGameUI::placementRow(81.0f, 0.0f, 1.0f, 0.0f, 20.0f, 15.0f, 50, &step, -20.0f);
+	CHECK_NEAR(step.x, 40.5f, 0.0001f);
 }
 
 
@@ -10233,6 +10427,43 @@ TEST(massing_waits_for_a_force_but_never_waits_for_ever)
 	CHECK( !data.m_skill[ AISKILL_EASY ].m_massBeforeAttacking );
 	CHECK( !data.m_skill[ AISKILL_MEDIUM ].m_massBeforeAttacking );
 	CHECK( data.m_skill[ AISKILL_BRUTAL ].m_massBeforeAttacking );
+}
+
+
+/** Another factory when the queue is backing up, and another tech building until three are standing.
+	 Easy and Normal never reach the caller: economy buildings stay off below Brutal. */
+TEST(extra_factory_follows_the_queue_and_tech_stops_at_three)
+{
+	// nothing left standing: put one back
+	CHECK( aiWantsAnotherFactory( 0, 0, 0, 0, FALSE ) );
+
+	// one already going up is the building this would ask for
+	CHECK( !aiWantsAnotherFactory( 0, 1, 0, 0, FALSE ) );
+	CHECK( !aiWantsAnotherFactory( 2, 1, 0, 4, FALSE ) );
+
+	// a factory with an empty queue is the spare
+	CHECK( !aiWantsAnotherFactory( 2, 0, 1, 3, FALSE ) );
+
+	// every finished factory is busy, and a unit is waiting behind the one being built
+	CHECK( aiWantsAnotherFactory( 2, 0, 0, 2, FALSE ) );
+
+	// busy, but the queue is only the unit under construction
+	CHECK( !aiWantsAnotherFactory( 1, 0, 0, 1, FALSE ) );
+
+	// airfields and the income buildings: another whenever one is not already going up,
+	// even while a finished one sits idle
+	CHECK( aiWantsAnotherFactory( 3, 0, 2, 0, TRUE ) );
+	CHECK( !aiWantsAnotherFactory( 3, 1, 0, 5, TRUE ) );
+
+	CHECK( aiWantsAnotherTechBuilding( 0, 0 ) );
+	CHECK( aiWantsAnotherTechBuilding( AI_TECH_BUILDING_COPIES - 1, 0 ) );
+	CHECK( !aiWantsAnotherTechBuilding( 2, 1 ) );
+	CHECK( !aiWantsAnotherTechBuilding( AI_TECH_BUILDING_COPIES, 0 ) );
+
+	TAiData ladder;
+	CHECK( !ladder.m_skill[ AISKILL_EASY ].m_economyBuildings );
+	CHECK( !ladder.m_skill[ AISKILL_MEDIUM ].m_economyBuildings );
+	CHECK( ladder.m_skill[ AISKILL_BRUTAL ].m_economyBuildings );
 }
 
 

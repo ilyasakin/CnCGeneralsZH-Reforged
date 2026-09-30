@@ -822,6 +822,30 @@ TOOLTIP:HealthBars
 "Smart shows a bar over anything hurt, plus the selection and whatever is under the cursor. Selection only is what retail did."
 END
 
+GUI:HudScale
+"HUD Size"
+END
+
+GUI:HudScale0
+"100%"
+END
+
+GUI:HudScale1
+"115%"
+END
+
+GUI:HudScale2
+"130%"
+END
+
+GUI:HudScale3
+"150%"
+END
+
+TOOLTIP:HudScale
+"Draws the command bar and the rest of the bottom HUD larger than your resolution would."
+END
+
 GUI:OptionsGroupInput
 "Input"
 END

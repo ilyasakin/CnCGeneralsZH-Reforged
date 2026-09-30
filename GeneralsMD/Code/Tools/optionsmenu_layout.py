@@ -148,6 +148,8 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxHealthBars",     None),
     (LABEL,  "LabelPlayerColors",      "GUI:PlayerColors"),
     (COMBO,  "ComboBoxPlayerColors",   None),
+    (LABEL,  "LabelHudScale",          "GUI:HudScale"),
+    (COMBO,  "ComboBoxHudScale",       None),
     (LABEL,  "LabelLanguage",          "GUI:Language"),
     (COMBO,  "ComboBoxLanguage",       None),
     (CHECK,  "CheckOrderLines",        "GUI:OrderLines"),
@@ -277,6 +279,7 @@ GROUP_LAYOUT = [
     ("PageGameplay", 0, "GUI:OptionsGroupBattlefield", [
         setting("LabelHealthBars", "ComboBoxHealthBars"),
         setting("LabelPlayerColors", "ComboBoxPlayerColors"),
+        setting("LabelHudScale", "ComboBoxHudScale"),
         ("check", "CheckOrderLines")]),
     ("PageGameplay", 1, "GUI:OptionsGroupLanguage", [
         setting("LabelLanguage", "ComboBoxLanguage")]),

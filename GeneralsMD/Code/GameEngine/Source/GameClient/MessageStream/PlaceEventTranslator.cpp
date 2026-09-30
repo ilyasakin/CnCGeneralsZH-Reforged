@@ -143,6 +143,24 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 
 	switch(msg->getType())
 	{
+		//---------------------------------------------------------------------------------------------
+		//
+		// While a shift-dragged row is on the ground, the wheel opens and closes the gap instead of
+		// zooming.  The same message is what LookAtTranslator zooms with, and this translator runs
+		// first, so eating it here is what keeps the camera still.  A row that has not been started
+		// yet leaves the wheel alone: ctrl still turns the building, and a plain roll still zooms.
+		//
+		case GameMessage::MSG_RAW_MOUSE_WHEEL:
+		{
+			if( TheInGameUI->getPendingPlaceType() && TheInGameUI->isPlacementAnchored() &&
+					TheInGameUI->placesRow() )
+			{
+				TheInGameUI->adjustPlacementRowGap( msg->getArgument( 1 )->real );
+				return DESTROY_MESSAGE;
+			}
+			break;
+		}
+
 		case GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_DOWN:
 		case GameMessage::MSG_RAW_MOUSE_RIGHT_DOUBLE_CLICK:
 		{
@@ -494,9 +512,14 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 					//
 					// get out of pending placement mode, this will also clear the arrow anchor status -
 					// unless shift is held, which keeps placing the same structure until released.
+					// A shift-dragged row is the exception: shift is what drew the line, and it is still
+					// down when the button comes up, so leaving the ghost up would start another building
+					// on the next click.  The row is the whole order.
 					//
 					Drawable *nextBuilder = builderObj ? builderObj->getDrawable() : NULL;
-					if( TheKeyboard && TheKeyboard->isShift() && nextBuilder )
+					if( row )
+						TheInGameUI->placeBuildAvailable( NULL, NULL );
+					else if( TheKeyboard && TheKeyboard->isShift() && nextBuilder )
 						TheInGameUI->placeBuildAvailable( build, nextBuilder );
 					else
 						TheInGameUI->placeBuildAvailable( NULL, NULL );

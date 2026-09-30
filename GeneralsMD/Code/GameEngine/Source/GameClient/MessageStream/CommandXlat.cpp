@@ -1492,9 +1492,9 @@ void CommandTranslator::finishFormationDrag( const ICoord2D& lift )
 		line.push_back( world );
 	}
 
-	// a line drawn with the attack key across enemies is aimed at them: each one it crosses goes on
-	// the target list, in the order the line meets them, and the ground under the line is not shot
-	// at.  Only a line that crosses nobody fires on the ground along it
+	// a line drawn with the attack key across enemies is aimed at them: the units that can shoot
+	// share those enemies along the stroke, and the ground under the line is not shot at.  Only a
+	// line that crosses nobody fires on the ground along it
 	const Bool aimedAtTargets = formationType == GameMessage::MSG_DO_FORMATION_FORCEATTACK
 															&& TheInGameUI->issueAttackLine( line ) > 0;
 	if( !aimedAtTargets )

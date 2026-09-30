@@ -1686,6 +1686,16 @@ extern Real TheTranslucentMS;
 extern UnsignedInt TheTranslucentDraws;
 extern UnsignedInt TheSortingPolygonsRefused;
 extern UnsignedInt TheParticlesPastGroupLimit;
+extern Real TheShadowMapMS;
+extern Int TheShadowMapCasters;
+extern UnsignedInt TheShadowMapDraws;
+extern Real ThePostChainMS;
+extern Real TheIconDrawMS;
+extern UnsignedInt TheSceneDrawCalls;
+extern Real TheSortingSortMS;
+extern Real TheSortingCopyMS;
+extern Real TheSortingDrawMS;
+extern UnsignedInt TheSortingEntries;
 
 /** Particle cost summed over an unattended run, per drawn frame, for HEADLESS PARTICLECOST. */
 struct ParticleCostTotals
@@ -2571,6 +2581,12 @@ void GameEngine::update( void )
 		static Real fpsRadarTotal = 0.0f, fpsAudioTotal = 0.0f, fpsDrawTotal = 0.0f, fpsDrawMax = 0.0f;
 		static Real fpsSceneTotal = 0.0f, fpsUITotal = 0.0f, fpsPostTotal = 0.0f, fpsWinTotal = 0.0f;
 		static Real fpsStripGatherTotal = 0.0f, fpsStripDrawTotal = 0.0f;
+		static Real fpsShadowTotal = 0.0f, fpsFillTotal = 0.0f, fpsTranslucentTotal = 0.0f;
+		static Real fpsPostChainTotal = 0.0f, fpsIconTotal = 0.0f;
+		static Real fpsSortTotal = 0.0f, fpsCopyTotal = 0.0f, fpsSortDrawTotal = 0.0f;
+		static Int fpsCasterTotal = 0;
+		static UnsignedInt fpsShadowDrawTotal = 0, fpsSceneDrawTotal = 0, fpsTranslucentDrawTotal = 0;
+		static UnsignedInt fpsSortEntryTotal = 0, fpsOnScreenTotal = 0;
 		Int64 tClientStart, tClientEnd, tLogicStart, tLogicEnd, tRadarEnd, tAudioEnd;
 		Real clientMS = 0.0f, logicMS = 0.0f, radarMS = 0.0f, audioMS = 0.0f;
 		Int logicTicks = 0;
@@ -2578,6 +2594,11 @@ void GameEngine::update( void )
 		TheStripGatherMS = TheStripDrawMS = 0.0f;
 		TheParticleUpdateMS = TheParticleFillMS = TheTranslucentMS = 0.0f;
 		TheTranslucentDraws = TheSortingPolygonsRefused = TheParticlesPastGroupLimit = 0;
+		TheShadowMapMS = ThePostChainMS = TheIconDrawMS = 0.0f;
+		TheSortingSortMS = TheSortingCopyMS = TheSortingDrawMS = 0.0f;
+		TheSortingEntries = 0;
+		TheShadowMapCasters = 0;
+		TheShadowMapDraws = TheSceneDrawCalls = 0;
 		tClientStart = Clock_Ticks();
 #endif
 
@@ -2811,6 +2832,21 @@ void GameEngine::update( void )
 		fpsWinTotal += TheWindowRepaintMS;
 		fpsStripGatherTotal += TheStripGatherMS;
 		fpsStripDrawTotal += TheStripDrawMS;
+		fpsShadowTotal += TheShadowMapMS;
+		fpsFillTotal += TheParticleFillMS;
+		fpsTranslucentTotal += TheTranslucentMS;
+		fpsPostChainTotal += ThePostChainMS;
+		fpsIconTotal += TheIconDrawMS;
+		fpsCasterTotal += TheShadowMapCasters;
+		fpsShadowDrawTotal += TheShadowMapDraws;
+		fpsSceneDrawTotal += TheSceneDrawCalls;
+		fpsTranslucentDrawTotal += TheTranslucentDraws;
+		fpsSortTotal += TheSortingSortMS;
+		fpsCopyTotal += TheSortingCopyMS;
+		fpsSortDrawTotal += TheSortingDrawMS;
+		fpsSortEntryTotal += TheSortingEntries;
+		if( TheParticleSystemManager )
+			fpsOnScreenTotal += TheParticleSystemManager->getOnScreenParticleCount();
 		if( theFrameTimesStarted && TheParticleSystemManager )
 		{
 			const UnsignedInt particles = TheParticleSystemManager->getParticleCount();
@@ -2858,6 +2894,15 @@ void GameEngine::update( void )
 										 ( fpsClientTotal - fpsDrawTotal - fpsRadarTotal - fpsAudioTotal ) / fpsFrames,
 										 fpsLogicTotal / fpsFrames, fpsLogicMax,
 										 (Real)windowMS - fpsClientTotal - fpsLogicTotal));
+					DEBUG_LOG(("SCENE SPLIT frame %d: shadow %.1f ms, %d casters, %u shadow draws | fill %.1f translucent %.1f (%u draws) | sort %.1f copy %.1f draw %.1f (%u entries, %u on screen) | icons %.1f | postchain %.1f | scene draws %u\n",
+										 TheGameLogic->getFrame(),
+										 fpsShadowTotal / fpsFrames, fpsCasterTotal / fpsFrames, fpsShadowDrawTotal / fpsFrames,
+										 fpsFillTotal / fpsFrames, fpsTranslucentTotal / fpsFrames,
+										 fpsTranslucentDrawTotal / fpsFrames,
+										 fpsSortTotal / fpsFrames, fpsCopyTotal / fpsFrames, fpsSortDrawTotal / fpsFrames,
+										 fpsSortEntryTotal / fpsFrames, fpsOnScreenTotal / fpsFrames,
+										 fpsIconTotal / fpsFrames, fpsPostChainTotal / fpsFrames,
+										 fpsSceneDrawTotal / fpsFrames));
 				}
 				fpsFrames = 0;
 				fpsLogicTicks = fpsCatchupPasses = 0;
@@ -2865,6 +2910,12 @@ void GameEngine::update( void )
 				fpsRadarTotal = fpsAudioTotal = fpsDrawTotal = fpsDrawMax = 0.0f;
 				fpsSceneTotal = fpsUITotal = fpsPostTotal = fpsWinTotal = 0.0f;
 				fpsStripGatherTotal = fpsStripDrawTotal = 0.0f;
+				fpsShadowTotal = fpsFillTotal = fpsTranslucentTotal = 0.0f;
+				fpsPostChainTotal = fpsIconTotal = 0.0f;
+				fpsSortTotal = fpsCopyTotal = fpsSortDrawTotal = 0.0f;
+				fpsCasterTotal = 0;
+				fpsShadowDrawTotal = fpsSceneDrawTotal = fpsTranslucentDrawTotal = 0;
+				fpsSortEntryTotal = fpsOnScreenTotal = 0;
 				fpsClientMax = fpsLogicMax = 0.0f;
 				fpsWindowStart = nowMS;
 			}

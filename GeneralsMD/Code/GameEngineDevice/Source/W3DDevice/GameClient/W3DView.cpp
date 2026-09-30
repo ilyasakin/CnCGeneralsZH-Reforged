@@ -2002,6 +2002,20 @@ void W3DView::drawView( void )
 }
 
 DECLARE_PERF_TIMER(W3DView_drawView)
+
+#ifdef DEBUG_LOGGING
+extern Real ThePostChainMS;
+extern Real TheIconDrawMS;
+static Real viewElapsedMS( const Int64 &from, const Int64 &to )
+{
+	Int64 freq;
+	freq = Clock_Ticks_Per_Second();
+	if( freq < 1 )
+		return 0.0f;
+	return (Real)((double)(to - from) * 1000.0 / (double)freq);
+}
+#endif
+
 void W3DView::draw( void )
 {
 	USE_PERF_TIMER(W3DView_drawView)
@@ -2345,12 +2359,27 @@ void W3DView::draw( void )
 	// the command bar first, where it was doubling the strokes of the font.
 	//
 	// Nothing happens here unless a chain was asked for, and only the first view of a frame runs it.
+#ifdef DEBUG_LOGGING
+	Int64 tPostChainStart, tPostChainEnd, tIconStart, tIconEnd;
+	tPostChainStart = Clock_Ticks();
+#endif
 	Direct3D11_Finish_Scene();
+#ifdef DEBUG_LOGGING
+	tPostChainEnd = Clock_Ticks();
+	ThePostChainMS = viewElapsedMS( tPostChainStart, tPostChainEnd );
+#endif
 
 	TheGameClient->resetRenderedObjectCount();
 	// the post draw is where health bars are drawn, and each one records where it landed
 	TheGameClient->clearHealthBarPickRegions();
+#ifdef DEBUG_LOGGING
+	tIconStart = Clock_Ticks();
+#endif
 	TheGameClient->iterateDrawablesInRegion( &axisAlignedRegion, drawablePostDraw, this );
+#ifdef DEBUG_LOGGING
+	tIconEnd = Clock_Ticks();
+	TheIconDrawMS = viewElapsedMS( tIconStart, tIconEnd );
+#endif
 
 	TheGameClient->flushTextBearingDrawables();
 
