@@ -1502,6 +1502,8 @@ WWINLINE void DX8Wrapper::Set_Transform(D3DTRANSFORMSTATETYPE transform,const Ma
 		DX8_RECORD_MATRIX_CHANGE();
 		Matrix4x4 m2=m.Transpose();
 		DX8CALL(SetTransform(transform,(D3DMATRIX*)&m2));
+		// the texture-stage transforms (the scrolling and projecting mappers) reach Direct3D 11 as they reach Direct3D 9
+		Direct3D11_Mirror_Transform(transform,(const float*)&m2);
 		break;
 	}
 }
@@ -1524,6 +1526,7 @@ WWINLINE void DX8Wrapper::Set_Transform(D3DTRANSFORMSTATETYPE transform,const Ma
 		DX8_RECORD_MATRIX_CHANGE();
 		m2=m2.Transpose();
 		DX8CALL(SetTransform(transform,(D3DMATRIX*)&m2));
+		Direct3D11_Mirror_Transform(transform,(const float*)&m2);
 		break;
 	}
 }
