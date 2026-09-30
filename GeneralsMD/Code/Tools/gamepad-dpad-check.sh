@@ -216,6 +216,7 @@ OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHealthBars
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxPlayerColors
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHudScale
 OptionsMenu.wnd OptionsMenu.wnd:CheckOrderLines
 OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
