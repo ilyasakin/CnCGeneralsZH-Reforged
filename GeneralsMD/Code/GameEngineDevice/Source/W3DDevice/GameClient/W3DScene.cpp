@@ -866,6 +866,10 @@ DECLARE_PERF_TIMER(translucentRender)
 extern Real TheTranslucentMS;
 extern UnsignedInt TheTranslucentDraws;
 extern UnsignedInt TheSortingPolygonsRefused;
+extern Real TheSortingSortMS;
+extern Real TheSortingCopyMS;
+extern Real TheSortingDrawMS;
+extern UnsignedInt TheSortingEntries;
 
 static Real sceneElapsedMS( const Int64 &from, const Int64 &to )
 {
@@ -916,6 +920,7 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 		Int64 tTranslucentStart, tTranslucentEnd;
 		const unsigned drawsBefore = DX8Wrapper::Get_Draw_Calls();
 		const unsigned refusedBefore = SortingRendererClass::Get_Refused_Polygon_Count();
+		SortingRendererClass::Reset_Flush_Profile();
 		tTranslucentStart = Clock_Ticks();
 #endif
 
@@ -929,6 +934,15 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 		TheTranslucentMS += sceneElapsedMS( tTranslucentStart, tTranslucentEnd );
 		TheTranslucentDraws += DX8Wrapper::Get_Draw_Calls() - drawsBefore;
 		TheSortingPolygonsRefused += SortingRendererClass::Get_Refused_Polygon_Count() - refusedBefore;
+		{
+			unsigned entries = 0;
+			float sortMS = 0.0f, copyMS = 0.0f, drawMS = 0.0f;
+			SortingRendererClass::Get_Flush_Profile( entries, sortMS, copyMS, drawMS );
+			TheSortingEntries += entries;
+			TheSortingSortMS += sortMS;
+			TheSortingCopyMS += copyMS;
+			TheSortingDrawMS += drawMS;
+		}
 #endif
 	}
 	TheDX8MeshRenderer.Clear_Pending_Delete_Lists();

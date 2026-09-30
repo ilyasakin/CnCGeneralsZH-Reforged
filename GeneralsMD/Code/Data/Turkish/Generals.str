@@ -15381,6 +15381,14 @@ TOOLTIP:HealthBars
 "Akıllı; hasar almış her şeyin, seçili birliklerin ve imlecin altındakinin üzerinde çubuk gösterir. Yalnızca seçili, orijinal oyunun davranışıdır."
 END
 
+GUI:HudScale
+"Arayüz Boyutu"
+END
+
+TOOLTIP:HudScale
+"Komuta çubuğunu ve alttaki arayüzü çözünürlüğün seçtiğinden daha büyük çizer."
+END
+
 GUI:OptionsGroupInput
 "Kontrol Düzeni"
 END

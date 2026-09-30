@@ -187,6 +187,44 @@ static GameMessage::Type orderAtPlace( Int place )
 }
 
 //-------------------------------------------------------------------------------------------------
+static GameWindow *barWindow( const char *name )
+{
+	return TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( name ) );
+}
+
+/** Shown, and every parent of it shown.  winIsHidden stops at the window itself, and a context
+	parent hides its buttons by hiding itself. */
+static Bool barWindowShown( GameWindow *window )
+{
+	if( window == NULL || window->winIsHidden() )
+		return FALSE;
+	for( GameWindow *parent = window->winGetParent(); parent; parent = parent->winGetParent() )
+		if( parent->winIsHidden() )
+			return FALSE;
+	return TRUE;
+}
+
+/** The button a hidden command group still offers at `place`: cancel while a building goes up,
+	sell or the rally point on a building counting down to a unit. */
+static GameWindow *contextButtonAtPlace( Int place )
+{
+	if( place == COMMAND_PLACE_STOP )
+	{
+		GameWindow *cancel = barWindow( "ControlBar.wnd:ButtonCancelConstruction" );
+		if( barWindowShown( cancel ) )
+			return cancel;
+	}
+
+	GameWindow *sell = barWindow( "ControlBar.wnd:OCLTimerSellButton" );
+	if( !barWindowShown( sell ) )
+		return NULL;
+	const CommandButton *command = (const CommandButton *)GadgetButtonGetData( sell );
+	if( command && fixedCommandPlace( command->getCommandType() ) == place )
+		return sell;
+	return NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** What a set builds, which takes the free places before the rest of the set. */
 static Bool isProduction( Int type )
 {
@@ -265,8 +303,9 @@ Bool ControlBar_commandPlaces( const Int *types, const Int *pinned, Int count, I
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar::getCommandPlaces( Int *places ) const
 {
-	// a context without the command group (nothing selected, a building going up, a beacon) hides the
-	// group's parent and leaves the buttons as the last selection set them: those are not on the bar
+	// a context without the command group hides the group's parent.  Its buttons stay as the last
+	// selection set them and are not on the bar.  A building going up and one counting down to a
+	// unit put their own button on the grid in placeContextOnGrid.
 	const Bool groupShown = !m_contextParent[ CP_COMMAND ]->winIsHidden();
 	Int types[ MAX_COMMANDS_PER_SET ];
 	Int pinned[ MAX_COMMANDS_PER_SET ];
@@ -321,6 +360,8 @@ void ControlBar::pressCommandButton( Int place )
 
 	const Int slot = resolveCommandSlot( place );
 	GameWindow *win = ( slot == SLOT_NOTHING ) ? NULL : m_commandWindows[ slot ];
+	if( win == NULL )
+		win = contextButtonAtPlace( place );
 	const CommandButton *command = win ? (const CommandButton *)GadgetButtonGetData( win ) : NULL;
 	const GameMessage::Type order = orderAtPlace( place );
 	if( order != GameMessage::MSG_INVALID && ( command == NULL || fixedCommandPlace( command->getCommandType() ) == place ) )
@@ -1504,7 +1545,13 @@ Real ControlBarHudScale( void )
 	if( TheDisplay == NULL )
 		return 1.0f;
 
-	return ControlBarHudScaleFor( TheDisplay->getWidth(), TheDisplay->getHeight() );
+	// the player's HudScale option on top, 100/115/130/150%
+	static const Real steps[] = { 1.0f, 1.15f, 1.3f, 1.5f };
+	Int step = TheGlobalData ? TheGlobalData->m_hudScale : 0;
+	if( step < 0 || step > 3 )
+		step = 0;
+
+	return ControlBarHudScaleFor( TheDisplay->getWidth(), TheDisplay->getHeight() ) * steps[ step ];
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4893,26 +4940,91 @@ void ControlBar::setControlCommand( GameWindow *button, const CommandButton *com
 }  // end setControlCommand
 
 //-------------------------------------------------------------------------------------------------
+void ControlBar::labelPlaceButton( GameWindow *button, Int place )
+{
+	if( button == NULL )
+		return;
+
+	const UnicodeString label = place >= 0 ? getGridHotKeyLabel( place ) : UnicodeString();
+	if( label.isEmpty() )
+		button->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON );
+	else
+		button->winSetStatus( WIN_STATUS_SHORTCUT_BUTTON );
+
+	// every frame, so only a changed key goes to the button
+	if( button->winGetText().compare( label ) != 0 )
+		GadgetButtonSetText( button, label );
+
+}
+
 void ControlBar::labelCommandPlaces( const Int *places )
 {
 	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-	{
-		GameWindow *button = m_commandWindows[ slot ];
-		if( button == NULL )
-			continue;
-
-		const UnicodeString label = places[ slot ] >= 0 ? getGridHotKeyLabel( places[ slot ] ) : UnicodeString();
-		if( label.isEmpty() )
-			button->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON );
-		else
-			button->winSetStatus( WIN_STATUS_SHORTCUT_BUTTON );
-
-		// every frame, so only a changed key goes to the button
-		if( button->winGetText().compare( label ) != 0 )
-			GadgetButtonSetText( button, label );
-	}
+		labelPlaceButton( m_commandWindows[ slot ], places[ slot ] );
 
 }  // end labelCommandPlaces
+
+//-------------------------------------------------------------------------------------------------
+static IRegion2D spanCells( const IRegion2D *cells, Int first, Int last )
+{
+	IRegion2D span = cells[ first ];
+	span.hi.x = cells[ last ].hi.x;
+	if( cells[ last ].lo.y < span.lo.y )
+		span.lo.y = cells[ last ].lo.y;
+	if( cells[ last ].hi.y > span.hi.y )
+		span.hi.y = cells[ last ].hi.y;
+	return span;
+}
+
+void ControlBar::placeContextOnGrid( const IRegion2D &frame, const IRegion2D *cells, Bool *taken )
+{
+	// the command group is up, so its own buttons already fill the grid
+	if( m_contextParent[ CP_COMMAND ] && !m_contextParent[ CP_COMMAND ]->winIsHidden() )
+		return;
+
+	GameWindow *building = m_contextParent[ CP_UNDER_CONSTRUCTION ];
+	if( building && !building->winIsHidden() )
+	{
+		// the parent has to cover the cell or the click never arrives
+		placeWindowAt( building, frame );
+		GameWindow *cancel = barWindow( "ControlBar.wnd:ButtonCancelConstruction" );
+		if( barWindowShown( cancel ) )
+		{
+			taken[ COMMAND_PLACE_STOP ] = TRUE;
+			placeWindowAt( cancel, cells[ COMMAND_PLACE_STOP ] );
+			labelPlaceButton( cancel, COMMAND_PLACE_STOP );
+		}
+		GameWindow *desc = barWindow( "ControlBar.wnd:UnderConstructionDesc" );
+		if( barWindowShown( desc ) )
+			placeWindowAt( desc, spanCells( cells, COMMAND_PLACE_Q, COMMAND_PLACE_Y ) );
+		return;
+	}
+
+	GameWindow *timer = m_contextParent[ CP_OCL_TIMER ];
+	if( timer == NULL || timer->winIsHidden() )
+		return;
+
+	placeWindowAt( timer, frame );
+	GameWindow *sell = barWindow( "ControlBar.wnd:OCLTimerSellButton" );
+	if( barWindowShown( sell ) )
+	{
+		const CommandButton *command = (const CommandButton *)GadgetButtonGetData( sell );
+		const Int where = command ? fixedCommandPlace( command->getCommandType() ) : -1;
+		if( where >= 0 )
+		{
+			taken[ where ] = TRUE;
+			placeWindowAt( sell, cells[ where ] );
+			labelPlaceButton( sell, where );
+		}
+	}
+	GameWindow *text = barWindow( "ControlBar.wnd:OCLTimerStaticText" );
+	if( barWindowShown( text ) )
+		placeWindowAt( text, spanCells( cells, COMMAND_PLACE_Q, COMMAND_PLACE_Y ) );
+	GameWindow *bar = barWindow( "ControlBar.wnd:OCLTimerProgressBar" );
+	if( barWindowShown( bar ) )
+		placeWindowAt( bar, spanCells( cells, COMMAND_PLACE_A, COMMAND_PLACE_H ) );
+
+}  // end placeContextOnGrid
 
 //-------------------------------------------------------------------------------------------------
 void CommandButton::cacheButtonImage()

@@ -945,6 +945,7 @@ GlobalData::GlobalData()
 	m_showObjectHealth = FALSE;
 	// what this fork has always done, so nobody's game changes until they say so
 	m_healthBarMode = HEALTH_BAR_ALWAYS;
+	m_hudScale = 0;
 	// the lobby's own colours until somebody asks for something else
 	m_playerColorScheme = PLAYER_COLORS_ORIGINAL;
 	// the words the game shipped with until somebody picks a translation

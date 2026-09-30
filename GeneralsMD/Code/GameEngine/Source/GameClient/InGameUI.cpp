@@ -1167,6 +1167,8 @@ InGameUI::InGameUI()
 	m_placeAngleType = NULL;
 	m_placementLegal = TRUE;
 	m_placementNudge.zero();
+	m_placementRowGap = 0.0f;
+	m_placementRowGapWheel = 0.0f;
 
 	m_videoStream = NULL;
 	m_videoBuffer = NULL;
@@ -5672,13 +5674,14 @@ Bool InGameUI::getAttackCircleGround( Coord3D& center, Real& radius ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Everything hostile standing in the circle becomes a list of attacks, nearest first, and the group
-	* is put on the head of it.  Without shift the list replaces whatever the group was doing; with it,
-	* the list goes on the end of the group's shift queue.  Shroud decides membership: a target the
-	* player cannot see is not in the circle, whatever the partition manager knows about it.  The
-	* targets go through the same queue a shift-clicked attack uses, so the whole list is drawn on the
-	* ground as threads and markers instead of only the one target the group happens to be shooting
-	* at. */
+/** The enemies standing in the circle are shared across the units that can shoot.  Both sides are
+	* stood in the order they sit around the centre the player drew, the same order a move line uses
+	* along its curve, and the shots are then dealt so the counts differ by one at most.  With enough
+	* guns each takes one target.  With more targets than guns, each gun queues its own run of them
+	* instead of the whole selection walking one list.  The pair is two ids on the attack message, the
+	* target first, so every other machine fires what this one decided and nobody recomputes the
+	* circle.  Without shift, a unit's first shot replaces whatever it was doing; with shift, the run
+	* goes on the end of that unit's own queue.  Shroud decides which enemies count. */
 //-------------------------------------------------------------------------------------------------
 Bool InGameUI::issueAttackCircle( void )
 {
@@ -5695,25 +5698,91 @@ Bool InGameUI::issueAttackCircle( void )
 
 	const Player *local = ThePlayerList->getLocalPlayer();
 
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &center, radius,
-																																		FROM_CENTER_2D, NULL,
-																																		ITER_SORTED_NEAR_TO_FAR );
+	// who can actually shoot. a dozer standing in the selection is not given somebody else's target.
+	// a passenger whose transport is also selected is left out too: the transport's own order already
+	// tells everyone inside it to fire.
+	const DrawableList *selected = getAllSelectedLocalDrawables();
+	std::vector<const Object *> shooters;
+	shooters.reserve( selected->size() );
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+	{
+		const Object *obj = (*it) ? (*it)->getObject() : NULL;
+		if( obj == NULL || obj->isEffectivelyDead() || !obj->isAbleToAttack() )
+			continue;
+		shooters.push_back( obj );
+	}
+
+	std::vector<AttackAssignSlot> attackers;
+	attackers.reserve( shooters.size() );
+	for( std::vector<const Object *>::const_iterator it = shooters.begin(); it != shooters.end(); ++it )
+	{
+		const Object *obj = *it;
+		const Object *holder = obj->getContainedBy();
+		if( holder != NULL )
+		{
+			Bool holderSelected = FALSE;
+			for( std::vector<const Object *>::const_iterator other = shooters.begin(); other != shooters.end(); ++other )
+			{
+				if( *other == holder )
+				{
+					holderSelected = TRUE;
+					break;
+				}
+			}
+			if( holderSelected )
+				continue;
+		}
+
+		AttackAssignSlot slot;
+		slot.id = obj->getID();
+		slot.x = obj->getPosition()->x;
+		slot.y = obj->getPosition()->y;
+		attackers.push_back( slot );
+	}
+
+	std::vector<AttackAssignSlot> targets;
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &center, radius, FROM_CENTER_2D, NULL );
 	MemoryPoolObjectHolder holder( iter );
-	Int targetCount = 0;
 	for( Object *obj = iter->first(); obj; obj = iter->next() )
 	{
 		if( !isAttackListTarget( obj, local ) )
 			continue;
 
-		const Bool startsList = targetCount == 0 && !isInWaypointMode();
-		markNextOrderQueued( startsList ? ORDER_QUEUE_FRESH : ORDER_QUEUE_APPEND );
-		GameMessage *attack = TheMessageStream->appendMessage( GameMessage::MSG_DO_ATTACK_OBJECT );
-		attack->appendObjectIDArgument( obj->getID() );
-		targetCount++;
+		AttackAssignSlot slot;
+		slot.id = obj->getID();
+		slot.x = obj->getPosition()->x;
+		slot.y = obj->getPosition()->y;
+		targets.push_back( slot );
 	}
 
-	DEBUG_LOG(("attack circle: radius %.0f, %d targets, %d selected\n", radius, targetCount,
-						 getSelectCount()));
+	orderAroundPoint( attackers, center.x, center.y );
+	orderAroundPoint( targets, center.x, center.y );
+
+	std::vector<AttackAssignPair> pairs;
+	assignAttacks( (Int)attackers.size(), (Int)targets.size(), pairs );
+
+	ObjectID previousAttacker = INVALID_ID;
+	for( std::vector<AttackAssignPair>::const_iterator pair = pairs.begin(); pair != pairs.end(); ++pair )
+	{
+		const AttackAssignSlot& attacker = attackers[ pair->attacker ];
+		const AttackAssignSlot& target = targets[ pair->target ];
+		if( attacker.id == target.id )
+			continue;
+
+		const Bool firstForThisAttacker = attacker.id != previousAttacker;
+		previousAttacker = attacker.id;
+
+		// each unit's first shot starts that unit's list. the rest of its run is queued behind it.
+		// shift appends the whole run onto whatever that one unit was already doing.
+		const Bool startsList = firstForThisAttacker && !isInWaypointMode();
+		markNextOrderQueued( startsList ? ORDER_QUEUE_FRESH : ORDER_QUEUE_APPEND );
+		GameMessage *attack = TheMessageStream->appendMessage( GameMessage::MSG_DO_ATTACK_OBJECT );
+		attack->appendObjectIDArgument( target.id );
+		attack->appendObjectIDArgument( attacker.id );
+	}
+
+	DEBUG_LOG(("attack circle: radius %.0f, %d targets, %d attackers, %d shots\n", radius,
+						 (Int)targets.size(), (Int)attackers.size(), (Int)pairs.size()));
 	return TRUE;
 }
 
@@ -5749,11 +5818,13 @@ Bool InGameUI::isAttackListTarget( const Object *obj, const Player *local ) cons
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The line drawn with the attack key: every enemy it runs across goes on the target list, in the
-	* order the line reaches it, so the direction it was drawn in is the direction the group fights
-	* along.  "Across" is the line passing over the object's own footprint, give or take a few feet for
-	* a hand that is not steady.  Returns how many targets went out; with none, the caller fires on
-	* the ground along the line instead. */
+/** The line drawn with the attack key: every enemy it runs across is shared across the units that
+	* can shoot, in the order both sides stand along the stroke, nearest the start first.  The shots
+	* are dealt the same way as the circle, so the counts differ by one at most, and each unit works
+	* down its own share.  "Across" is the line passing over the object's own footprint, give or take
+	* a few feet for a hand that is not steady.  Returns how many enemies the line crossed.  With
+	* none, the caller fires on the ground along the line instead.  Enemies that nobody selected can
+	* shoot still count, so the ground is not fired in their place. */
 //-------------------------------------------------------------------------------------------------
 Int InGameUI::issueAttackLine( const std::vector<Coord3D>& line )
 {
@@ -5790,8 +5861,9 @@ Int InGameUI::issueAttackLine( const std::vector<Coord3D>& line )
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &center, reach, FROM_CENTER_2D, NULL );
 	MemoryPoolObjectHolder holder( iter );
 
-	// how far along the line each target is, so they can go out in the order the line meets them
-	std::vector< std::pair<Real, ObjectID> > targets;
+	// enemies the stroke actually crosses. who stands where along it is sorted afterwards, guns and
+	// enemies the same way, so the deal does not depend on the order the range query handed them over
+	std::vector<AttackAssignSlot> targets;
 	for( Object *obj = iter->first(); obj; obj = iter->next() )
 	{
 		if( !isAttackListTarget( obj, local ) )
@@ -5823,21 +5895,89 @@ Int InGameUI::issueAttackLine( const std::vector<Coord3D>& line )
 		}
 
 		if( along >= 0.0f )
-			targets.push_back( std::make_pair( along, obj->getID() ) );
+		{
+			AttackAssignSlot slot;
+			slot.id = obj->getID();
+			slot.x = pos->x;
+			slot.y = pos->y;
+			targets.push_back( slot );
+		}
 	}
 
-	std::sort( targets.begin(), targets.end() );
-
-	for( size_t i = 0; i < targets.size(); ++i )
+	// who can actually shoot. a dozer standing in the selection is not given somebody else's target.
+	// a passenger whose transport is also selected is left out too: the transport's own order already
+	// tells everyone inside it to fire. the circle collects the same list.
+	std::vector<AttackAssignSlot> attackers;
+	std::vector<AttackAssignPair> pairs;
+	if( !targets.empty() )
 	{
-		const Bool startsList = i == 0 && !isInWaypointMode();
-		markNextOrderQueued( startsList ? ORDER_QUEUE_FRESH : ORDER_QUEUE_APPEND );
-		GameMessage *attack = TheMessageStream->appendMessage( GameMessage::MSG_DO_ATTACK_OBJECT );
-		attack->appendObjectIDArgument( targets[ i ].second );
+		const DrawableList *selected = getAllSelectedLocalDrawables();
+		std::vector<const Object *> shooters;
+		shooters.reserve( selected->size() );
+		for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+		{
+			const Object *obj = (*it) ? (*it)->getObject() : NULL;
+			if( obj == NULL || obj->isEffectivelyDead() || !obj->isAbleToAttack() )
+				continue;
+			shooters.push_back( obj );
+		}
+
+		attackers.reserve( shooters.size() );
+		for( std::vector<const Object *>::const_iterator it = shooters.begin(); it != shooters.end(); ++it )
+		{
+			const Object *obj = *it;
+			const Object *container = obj->getContainedBy();
+			if( container != NULL )
+			{
+				Bool containerSelected = FALSE;
+				for( std::vector<const Object *>::const_iterator other = shooters.begin(); other != shooters.end(); ++other )
+				{
+					if( *other == container )
+					{
+						containerSelected = TRUE;
+						break;
+					}
+				}
+				if( containerSelected )
+					continue;
+			}
+
+			AttackAssignSlot slot;
+			slot.id = obj->getID();
+			slot.x = obj->getPosition()->x;
+			slot.y = obj->getPosition()->y;
+			attackers.push_back( slot );
+		}
+
+		std::vector<Real> arc;
+		buildPathArcLengths( line, arc );
+		orderAlongPath( attackers, line, arc );
+		orderAlongPath( targets, line, arc );
+		assignAttacks( (Int)attackers.size(), (Int)targets.size(), pairs );
+
+		ObjectID previousAttacker = INVALID_ID;
+		for( std::vector<AttackAssignPair>::const_iterator pair = pairs.begin(); pair != pairs.end(); ++pair )
+		{
+			const AttackAssignSlot& attacker = attackers[ pair->attacker ];
+			const AttackAssignSlot& target = targets[ pair->target ];
+			if( attacker.id == target.id )
+				continue;
+
+			const Bool firstForThisAttacker = attacker.id != previousAttacker;
+			previousAttacker = attacker.id;
+
+			// each unit's first shot starts that unit's list. the rest of its run is queued behind it.
+			// shift appends the whole run onto whatever that one unit was already doing.
+			const Bool startsList = firstForThisAttacker && !isInWaypointMode();
+			markNextOrderQueued( startsList ? ORDER_QUEUE_FRESH : ORDER_QUEUE_APPEND );
+			GameMessage *attack = TheMessageStream->appendMessage( GameMessage::MSG_DO_ATTACK_OBJECT );
+			attack->appendObjectIDArgument( target.id );
+			attack->appendObjectIDArgument( attacker.id );
+		}
 	}
 
-	DEBUG_LOG(("attack line: %d points, %d targets, %d selected\n", (Int)line.size(), (Int)targets.size(),
-						 getSelectCount()));
+	DEBUG_LOG(("attack line: %d points, %d targets, %d attackers, %d shots\n", (Int)line.size(),
+						 (Int)targets.size(), (Int)attackers.size(), (Int)pairs.size()));
 	return (Int)targets.size();
 }
 
@@ -6670,6 +6810,12 @@ void InGameUI::destroyPlacementIcons( void )
 //-------------------------------------------------------------------------------------------------
 void InGameUI::placeBuildAvailable( const ThingTemplate *build, Drawable *buildDrawable )
 {
+	//
+	// Each placement starts packed. The wheel opens the row while its line is being drawn, and that
+	// gap belongs to the line, not to the next building.
+	//
+	m_placementRowGap = 0.0f;
+	m_placementRowGapWheel = 0.0f;
 
 	// if building something, no radius cursor, thankew
 	if (build != NULL)
@@ -6997,6 +7143,37 @@ Bool InGameUI::placesRow( void )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** One grid square a notch, added to the packed step.  A notch toward the user closes it back,
+	* and it stops at the buildings touching: tighter than that is two structures on one footprint.
+	* Fractions pile up, so a touchpad swipe that arrives as halves still moves the row. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::adjustPlacementRowGap( Real spin )
+{
+	const Real cell = (Real)PLACEMENT_CELL;
+	const Real cap = 20.0f * cell;
+
+	m_placementRowGapWheel += spin;
+	const Int steps = (Int)m_placementRowGapWheel;
+	if( steps == 0 )
+		return;
+
+	m_placementRowGapWheel -= (Real)steps;
+	m_placementRowGap += (Real)steps * cell;
+
+	if( m_placementRowGap < 0.0f )
+	{
+		m_placementRowGap = 0.0f;
+		m_placementRowGapWheel = 0.0f;
+	}
+	else if( m_placementRowGap > cap )
+	{
+		m_placementRowGap = cap;
+		m_placementRowGapWheel = 0.0f;
+	}
+
+}  // end adjustPlacementRowGap
+
+//-------------------------------------------------------------------------------------------------
 /** Every piece faces 'angle', the heading on the ghost before the drag began: the drag is spent on
 	* the row, so it cannot aim as well.  The row stops where the money does, which is what the logic
 	* would do to the orders past it anyway (canMakeUnit per MSG_DOZER_CONSTRUCT); the player sees the
@@ -7026,7 +7203,8 @@ void InGameUI::computePlacementRow( const ThingTemplate *what, Real angle, const
 
 	Coord2D step;
 	const Int count = placementRow( end->x - start->x, end->y - start->y, (Real)Cos( angle ),
-																	(Real)Sin( angle ), halfFacing, minor, most, &step );
+																	(Real)Sin( angle ), halfFacing, minor, most, &step,
+																	m_placementRowGap );
 	positions->clear();
 	for( Int i = 0; i < count; i++ )
 	{
@@ -10160,10 +10338,10 @@ void InGameUI::addSuperweaponIcon( const Image *image, Int seconds, Int percent,
 //-------------------------------------------------------------------------------------------------
 void InGameUI::drawSuperweaponStrip( void )
 {
-	// watching, the spectator page's left panel lists the countdowns instead
-	// playing under the bar's page, the countdowns are on the Tab scoreboard
-	if( m_superweaponIconCount < 1 || stripSwitchedOff( &GlobalData::m_showSuperweaponStrip ) || m_spectatorPageShown ||
-			( m_controlBarPageShown && !localPlayerWatching() ) )
+	// a player gets the strip, top right; an observer or a replay does not - the spectator page
+	// and the Tab scoreboard carry the countdowns for them
+	if( m_superweaponIconCount < 1 || m_spectatorPageShown || localPlayerWatching() ||
+			( TheRecorder && TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK ) )
 		return;
 
 	if( TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
@@ -10179,23 +10357,39 @@ void InGameUI::drawSuperweaponStrip( void )
 	Int trayStep = 0;
 	stripTrayMetrics( &traySize, &cameoSize, &trayHole, &trayStep );
 
+	// the HUD Size option grows this strip with the bar: the player's step on top of the bar's own
+	const Real hudStep = ControlBarHudScale() / ControlBarHudScaleFor( TheDisplay->getWidth(), TheDisplay->getHeight() );
+	traySize.x = REAL_TO_INT_CEIL( traySize.x * hudStep );
+	traySize.y = REAL_TO_INT_CEIL( traySize.y * hudStep );
+	cameoSize.x = REAL_TO_INT_CEIL( cameoSize.x * hudStep );
+	cameoSize.y = REAL_TO_INT_CEIL( cameoSize.y * hudStep );
+	trayHole.x = REAL_TO_INT_CEIL( trayHole.x * hudStep );
+	trayHole.y = REAL_TO_INT_CEIL( trayHole.y * hudStep );
+	trayStep = REAL_TO_INT_CEIL( trayStep * hudStep );
+
 	const Int trayW = traySize.x;
 	const Int trayH = traySize.y;
 	const Int cameoW = cameoSize.x;
 	const Int cameoH = cameoSize.y;
 	const Image *tray = TheControlBar ? TheControlBar->getSpecialPowerTrayImage() : NULL;
 
-	const Int gap = stripPixels( PRODUCTION_STRIP_GAP );
-	const Int more = stripPixels( PRODUCTION_STRIP_MORE );
+	const Int gap = REAL_TO_INT_CEIL( stripPixels( PRODUCTION_STRIP_GAP ) * hudStep );
+	const Int more = REAL_TO_INT_CEIL( stripPixels( PRODUCTION_STRIP_MORE ) * hudStep );
 	const Int plate = stripPixels( 3 );
 
 	//
-	// The corner clock plate owns the top right, so the strip starts under it whenever it is up -
-	// a countdown drawn behind the readout is one nobody can read.
+	// The corner readout owns the top right - the clock plate, or with the bar's page up the network
+	// box, which is a page of its own - so the strip starts under whichever is up.  A countdown
+	// drawn behind the readout is one nobody can read.
 	//
-	Int top = plate;
-	if( m_hudOverlayBottom + plate > top )
-		top = m_hudOverlayBottom + plate;
+	Int cornerBottom = m_hudOverlayBottom;
+	if( m_controlBarPageShown && m_netOverlay != NULL )
+	{
+		const Int netBottom = m_netOverlay->bottomOf( "#net" );
+		if( netBottom > cornerBottom )
+			cornerBottom = netBottom;
+	}
+	const Int top = cornerBottom + plate;
 
 	//
 	// one pulse for the whole strip rather than one per icon, so every charged superweapon breathes
@@ -11732,13 +11926,18 @@ Bool InGameUI::drawControlBarPage( const IRegion2D *panels, const Bool *shown, I
 	TheControlBar->placeWindowAt( controlBarWindow( "CenterBackground" ), frameRect );
 	TheControlBar->placeWindowAt( controlBarWindow( "CommandWindow" ), frameRect );
 
-	// a cell only for a place a command stands in; an empty one is the panel's steel
+	// a cell only for a place a command stands in; an empty one is the panel's steel.  A building
+	// going up and one counting down to a unit hide the command group, and their own button takes
+	// its place before the cells are drawn
 	IRegion2D place[ COMMAND_PLACE_COUNT ];
+	for( Int each = 0; each < COMMAND_PLACE_COUNT; each++ )
+		place[ each ] = gridCell( commandBox, each % COMMAND_COLUMNS, each / COMMAND_COLUMNS,
+															COMMAND_CELL_WIDTH, COMMAND_CELL_HEIGHT );
+	if( centreShown )
+		TheControlBar->placeContextOnGrid( frameRect, place, taken );
 	std::vector< HtmlValues > &commandCells = lists[ "commandcells" ];
 	for( Int each = 0; each < COMMAND_PLACE_COUNT; each++ )
 	{
-		place[ each ] = gridCell( commandBox, each % COMMAND_COLUMNS, each / COMMAND_COLUMNS,
-															COMMAND_CELL_WIDTH, COMMAND_CELL_HEIGHT );
 		if( !centreShown || !taken[ each ] )
 			continue;
 		HtmlValues entry;

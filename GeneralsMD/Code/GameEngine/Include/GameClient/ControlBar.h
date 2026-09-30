@@ -819,7 +819,9 @@ public:
 	/** press the command at grid place `place` (a CommandPlace), exactly as a mouse click would.
 		This is what the COMMAND_SLOTnn grid keys are wired to.  Where the place holds one of the
 		orders every unit shares, or nothing, the key sends that order's own message, the one its
-		key sent before the grid took it: A force fire, S stop, D attack move, X guard, C hold. */
+		key sent before the grid took it: A force fire, S stop, D attack move, X guard, C hold.
+		A building going up and a building counting down to a unit answer from their own button
+		when the command group is hidden. */
 	void pressCommandButton( Int place );
 
 	/** The place each command window stands at right now, -1 for a hidden one, and whether the
@@ -828,6 +830,9 @@ public:
 
 	/** paint each command window's key, its place's, in its top left corner; `places` as above */
 	void labelCommandPlaces( const Int *places );
+
+	/** paint `button`'s key, the one `place` is bound to.  `place` below 0 clears it. */
+	void labelPlaceButton( GameWindow *button, Int place );
 
 	/** The general's powers are laid out SPECIAL_POWER_SHORTCUT_COLS to a row, so one key press
 		cannot reach eleven of them.  The first press picks a row (F1 is the row in the corner,
@@ -1098,6 +1103,12 @@ public:
 		* they were on screen.  The place layoutPanels recorded for it moves with it, so a rebuild of the
 		* layout reads the window as put there and not as moved in the loader's stretched space. */
 	void placeWindowAt( GameWindow *window, const IRegion2D &rect );
+
+	/** A context that hides the command group still has its own button, and it stands where that
+		command stands on a finished building: cancel on S, sell on N, the rally point on B.  The
+		countdown keeps the top row and a reinforcement pad's bar the middle one.  `cells` is one
+		screen rect per CommandPlace, and `taken` gains the button's place so the page draws its cell. */
+	void placeContextOnGrid( const IRegion2D &frame, const IRegion2D *cells, Bool *taken );
 	GameWindow *getSpecialPowerShortcutParent( void ) { return m_specialPowerShortcutParent; }
 	/// a multi-selection's type cells, one a selected type, shown or hidden; see updateMultiSelectStrip
 	const std::vector< GameWindow * > &getMultiSelectTiles( void ) const { return m_multiSelectTiles; }

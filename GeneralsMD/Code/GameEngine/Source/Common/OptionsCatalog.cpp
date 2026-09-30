@@ -73,6 +73,7 @@ OPTION_INT_ACCESSORS( m_msaaLevel )
 OPTION_BOOL_ACCESSORS( m_vsync )
 OPTION_BOOL_ACCESSORS( m_classicGraphics )
 OPTION_INT_ACCESSORS( m_healthBarMode )
+OPTION_INT_ACCESSORS( m_hudScale )
 OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_BOOL_ACCESSORS( m_gamepadEnabled )
@@ -343,6 +344,12 @@ const OptionDef TheOptionCatalog[] =
 	{ "HealthBars",								OPT_WND( "ComboBoxHealthBars" ), "GUI:HealthBars",
 		OPTION_ENUM, APPLY_LIVE, 0, HEALTH_BAR_MODE_COUNT - 1,
 		get_m_healthBarMode, set_m_healthBarMode },
+
+	// How big the command bar and the rest of the bottom HUD are drawn: 100%, 115%, 130% or 150% of
+	// the size the resolution picks.  The page lays itself out again when the scale changes.
+	{ "HudScale",									OPT_WND( "ComboBoxHudScale" ), "GUI:HudScale",
+		OPTION_ENUM, APPLY_LIVE, 0, HUD_SCALE_COUNT - 1,
+		get_m_hudScale, set_m_hudScale },
 
 	// Whose colour a player is drawn in.  Purely local: the match still agrees on the lobby's
 	// colours and this only changes what this screen puts on top of them, so two people in the same

@@ -69,6 +69,7 @@
 #include "WW3D2/sortingrenderer.h"
 #include "GameClient/View.h"
 #include "Platform/RenderTypes.h"
+#include "Lib/Clock.h"		// Clock_Ticks: QueryPerformanceCounter on Windows, a monotonic clock elsewhere
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -3838,6 +3839,17 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	if (!Direct3D11_Begin_Shadow_Map( SHADOW_MAP_TEXELS ))
 		return;		//no Direct3D 11 device, or it refused the surface: the volumes keep the frame
 
+#ifdef DEBUG_LOGGING
+	// The scene timer includes this pass and cannot say so.
+	extern Real TheShadowMapMS;
+	extern Int TheShadowMapCasters;
+	extern UnsignedInt TheShadowMapDraws;
+	Int castersCounted = 0;
+	Int64 tShadowStart;
+	const unsigned shadowDrawsBefore = DX8Wrapper::Get_Draw_Calls();
+	tShadowStart = Clock_Ticks();
+#endif
+
 	Coord3D look;
 	TheTacticalView->getPosition( &look );
 	const Vector3 focus( look.x, look.y, TheTerrainLogic->getGroundHeight( look.x, look.y ) );
@@ -3890,7 +3902,9 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	DX8Wrapper::Set_DX8_Render_State( D3DRS_CULLMODE, D3DCULL_CW );
 
 	RenderInfoClass sunInfo( sun );
-	Int casters = 0;
+#ifndef DEBUG_LOGGING
+	Int castersCounted = 0;
+#endif
 	for (W3DVolumetricShadow *shadow = m_shadowList; shadow; shadow = shadow->m_next)
 	{
 		RenderObjClass *robj = shadow->getRenderObject();
@@ -3908,7 +3922,7 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 			continue;
 
 		robj->Render( sunInfo );
-		++casters;
+		++castersCounted;
 	}
 	TheDX8MeshRenderer.Flush();
 	/* A mesh the material system calls translucent goes to the sort lists rather than to the mesh
@@ -3965,17 +3979,29 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		 shadows changed style and back again as the camera moved. */
 	theShadowMapHoldsTheFrame = TRUE;
 
+#ifdef DEBUG_LOGGING
+	{
+		Int64 tShadowEnd, freq;
+		tShadowEnd = Clock_Ticks();
+		freq = Clock_Ticks_Per_Second();
+		if( freq > 0 )
+			TheShadowMapMS += (Real)((double)(tShadowEnd - tShadowStart) * 1000.0 / (double)freq);
+		TheShadowMapCasters += castersCounted;
+		TheShadowMapDraws += DX8Wrapper::Get_Draw_Calls() - shadowDrawsBefore;
+	}
+#endif
+
 	// The report costs a full stall of the pipeline, so it is one line a second rather than one a
 	// frame: what it answers is whether the pass draws the world at all, and that does not change
 	// thirty times a second.
-	if (TheGlobalData->m_shadowMapReport && casters > 0)
+	if (TheGlobalData->m_shadowMapReport && castersCounted > 0)
 	{
 		static UnsignedInt nextReportFrame = 0;
 		const UnsignedInt frame = TheGameLogic ? TheGameLogic->getFrame() : 0;
 		if (frame >= nextReportFrame)
 		{
 			nextReportFrame = frame + LOGICFRAMES_PER_SECOND;
-			DEBUG_LOG(("SHADOWMAP: %d casters, %s\n", casters,
+			DEBUG_LOG(("SHADOWMAP: %d casters, %s\n", castersCounted,
 				Direct3D11_Shadow_Map_Report().c_str()));
 		}
 	}

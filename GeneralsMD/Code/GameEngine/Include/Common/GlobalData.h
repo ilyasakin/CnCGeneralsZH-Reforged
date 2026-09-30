@@ -73,6 +73,9 @@ enum HealthBarModeType
 	HEALTH_BAR_MODE_COUNT	= 4,
 };
 
+/** The HudScale option's steps, 100/115/130/150% of the bottom HUD's own size (ControlBarHudScale). */
+enum { HUD_SCALE_COUNT = 4 };
+
 /** The language the game's words are shown in.  English is the string table EA shipped; every other
 	* entry names a translation GameText lays over it.  Speech and video stay what the install has. */
 enum TextLanguageType
@@ -316,6 +319,7 @@ public:
 	Bool m_debugAIObstacles;			///< Used to display AI obstacle debug information
 	Bool m_showObjectHealth;			///< debug display object health
 	Int m_healthBarMode;					///< HealthBarModeType: which units wear a bar at all
+	Int m_hudScale;								///< HUD size step, 0 = 100%; see ControlBarHudScale (client only)
 	Int m_playerColorScheme;			///< PlayerColorSchemeType: whose colour the client draws (client only)
 	Int m_textLanguage;						///< TextLanguageType: the translation GameText lays over the CSF, read once at startup (client only)
 	Bool m_gamepadEnabled;				///< G1: a connected controller plays; off, every controller is ignored (client only)

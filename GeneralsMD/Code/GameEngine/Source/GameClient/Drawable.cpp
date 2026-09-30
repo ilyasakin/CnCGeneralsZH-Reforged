@@ -505,6 +505,8 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_lastConstructDisplayed = -1.0f;
 	m_supplyCashDisplayString = NULL;
 	m_lastSupplyCashDisplayed = -1;
+	m_productionTimeDisplayString = NULL;
+	m_chargeTimeDisplayString = NULL;
 	
 	//Added By Sadullah Nader
 	//Fix for the building percent
@@ -668,6 +670,14 @@ Drawable::~Drawable()
 	if( m_supplyCashDisplayString )
 		TheDisplayStringManager->freeDisplayString( m_supplyCashDisplayString );
 	m_supplyCashDisplayString = NULL;
+
+	if( m_productionTimeDisplayString )
+		TheDisplayStringManager->freeDisplayString( m_productionTimeDisplayString );
+	m_productionTimeDisplayString = NULL;
+
+	if( m_chargeTimeDisplayString )
+		TheDisplayStringManager->freeDisplayString( m_chargeTimeDisplayString );
+	m_chargeTimeDisplayString = NULL;
 
 	if ( m_captionDisplayString )
 		TheDisplayStringManager->freeDisplayString( m_captionDisplayString );
@@ -4197,6 +4207,43 @@ void Drawable::drawCaptureProgress( void )
 /** Draw health bar information for drawable */
 // ------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
+/** Seconds left, drawn just above a bar. The line belongs to this drawable. One string shared by
+	* every building in view was set to a different countdown for each of them, and every change
+	* built a new text texture, so a base full of timers paid that cost every frame. */
+//-------------------------------------------------------------------------------------------------
+static void freeOwnCountdown( DisplayString *&countdown )
+{
+	if( countdown == NULL )
+		return;
+
+	TheDisplayStringManager->freeDisplayString( countdown );
+	countdown = NULL;
+}
+
+static Int drawOwnCountdown( DisplayString *&countdown, Int seconds, Int x, Int y )
+{
+	if( countdown == NULL )
+	{
+		countdown = TheDisplayStringManager->newDisplayString();
+		if( countdown == NULL )
+			return 0;
+
+		countdown->setFont( TheFontLibrary->getFont( TheInGameUI->getDrawableCaptionFontName(),
+							TheGlobalLanguageData->adjustFontSize( TheInGameUI->getDrawableCaptionPointSize() - 2 ),
+							FALSE ) );
+	}
+
+	UnicodeString text;
+	text.format( u"%ds", seconds );
+	countdown->setText( text );
+
+	Int textW, textH;
+	countdown->getSize( &textW, &textH );
+	countdown->draw( x, y - textH, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+	return textH;
+}
+
+//-------------------------------------------------------------------------------------------------
 void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 {
 	if (!healthBarRegion)
@@ -4436,27 +4483,13 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 												: pe->getProductionUpgrade()->calcTimeToBuild( player );
 			Int secondsLeft = ControlBar_secondsFromFrames( totalFrames * (1.0f - pct * 0.01f) );
 
-			// one shared string: draw() renders immediately, and the manager lives for the whole app
-			static DisplayString *prodTimeString = NULL;
-			if( prodTimeString == NULL )
-			{
-				prodTimeString = TheDisplayStringManager->newDisplayString();
-				prodTimeString->setFont( TheFontLibrary->getFont( TheInGameUI->getDrawableCaptionFontName(),
-																TheGlobalLanguageData->adjustFontSize( TheInGameUI->getDrawableCaptionPointSize() - 2 ),
-																FALSE ) );
-			}
-			UnicodeString text;
-			text.format( u"%ds", secondsLeft );
-			if( prodTimeString->getText().compare( text ) != 0 )
-				prodTimeString->setText( text );
-			Int textW, textH;
-			prodTimeString->getSize( &textW, &textH );
-			prodTimeString->draw( healthBarRegion->lo.x, prodY - textH,
-														GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+			Int textH = drawOwnCountdown( m_productionTimeDisplayString, secondsLeft, healthBarRegion->lo.x, prodY );
 
 			// whatever comes next goes above the seconds, not through them
 			stackY = prodY - textH - 1;
 		}
+		else
+			freeOwnCountdown( m_productionTimeDisplayString );
 
 		//
 		// A superweapon charging, or a building on a timed payout (the supply drop zone), gets the
@@ -4595,29 +4628,17 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 				// a clock.
 				//
 				if( chargeFramesLeft > 0 )
-				{
-					// one shared string: draw() renders immediately and the manager lives for the app
-					static DisplayString *chargeTimeString = NULL;
-					if( chargeTimeString == NULL )
-					{
-						chargeTimeString = TheDisplayStringManager->newDisplayString();
-						chargeTimeString->setFont( TheFontLibrary->getFont( TheInGameUI->getDrawableCaptionFontName(),
-																TheGlobalLanguageData->adjustFontSize( TheInGameUI->getDrawableCaptionPointSize() - 2 ),
-																FALSE ) );
-					}
-
-					UnicodeString text;
-					text.format( u"%ds", ControlBar_secondsFromFrames( INT_TO_REAL( chargeFramesLeft ) ) );
-					if( chargeTimeString->getText().compare( text ) != 0 )
-						chargeTimeString->setText( text );
-
-					Int textW, textH;
-					chargeTimeString->getSize( &textW, &textH );
-					chargeTimeString->draw( healthBarRegion->lo.x, chargeY - textH,
-																	GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
-				}
+					drawOwnCountdown( m_chargeTimeDisplayString,
+														ControlBar_secondsFromFrames( INT_TO_REAL( chargeFramesLeft ) ),
+														healthBarRegion->lo.x, chargeY );
+				else
+					freeOwnCountdown( m_chargeTimeDisplayString );
 			}
+			else
+				freeOwnCountdown( m_chargeTimeDisplayString );
 		}
+		else
+			freeOwnCountdown( m_chargeTimeDisplayString );
 
 	}  // end if
 

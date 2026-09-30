@@ -318,9 +318,9 @@ protected:
 	Object *findHijacker(void);					///< a unit of ours that takes a vehicle by walking into it
 	Object *nearestStealableVehicle(const Coord3D *from, Real reach);	///< the closest enemy vehicle in sight; reach <= 0 is the map
 
-	/** Past the hoard, buy what the build list never had: another production building beside the last
-		* expansion when every one of a kind is busy, another income building when production keeps up,
-		* and money units (China's hackers) from any factory standing idle. */
+	/** Past the hoard, buy what the build list never had.  A tank factory or a barracks when that
+		* queue is backing up, an airfield with no count cap, income buildings the same way, and money
+		* units (China's hackers) from any factory with room in its queue. */
 	virtual void doEconomy(void);
 
 	/** Buy a power plant before the margin runs out rather than after, and put it on the far side of
@@ -328,7 +328,8 @@ protected:
 	virtual void doPower(void);
 
 	/** Hard: the superweapon as soon as it can be bought, and the tech building it waits on before
-		* that, with no clock; as many as the game's rules allow. */
+		* that, with no clock; as many superweapons as the game's rules allow, and a few copies of the
+		* tech building so one of them blowing up leaves the tree standing. */
 	virtual void doSuperweapons(void);
 
 	Bool enemyDirection(Coord3D *dir);	///< unit vector from this base towards the nearest enemy's best known address
@@ -339,7 +340,8 @@ protected:
 	void buyMoneyUnits(void);
 	Int moneyUnitRoom(void) const;	///< how many more money units this player's army and internet centers carry
 	Bool hasEnoughMoneyUnitsFor(TeamPrototype *proto) const;	///< this team is all hackers and there is no room for more
-	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius);	///< a legal, safe spot on a ring round center, queued for a dozer
+	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward);	///< a legal, safe spot on a ring round center, queued for a dozer. walkOutward keeps searching further out as the inner rings fill
+	Bool queueExtraFactory(Object *dozer, KindOfType kind, Bool unlimited);	///< one more of this factory, beside a held expansion or around the base
 	Real knownFirepowerAlongPath(Waypoint *way);	///< what this AI has seen that can shoot, along an approach
 	AsciiString secondApproachLabel(const Coord3D *from, const AsciiString &taken, Int pathSuffix);	///< the quietest other road, or empty
 	void loadGunships(void);	///< the parked wave's infantry boards the gunships at home
@@ -476,6 +478,7 @@ protected:
 	Coord3D m_baseCenter; // Center of the initial build list of structures.
 	Bool		m_baseCenterSet; // True if baseCenter is valid.
 	Real m_baseRadius; // Radius of the initial build list of structures.
+	Int			m_placementRing;	///< first ring placeNear tries when the search is allowed to walk outward
 
 	// Bridge repair info.
 	enum {MAX_STRUCTURES_TO_REPAIR = 2};

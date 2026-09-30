@@ -344,6 +344,7 @@ m_role(AIROLE_AGGRESSIVE)
 	m_buildProbePos.zero();
 	m_baseCenter.zero();
 	m_baseCenterSet = false;
+	m_placementRing = 0;
 	m_difficulty = TheScriptEngine->getGlobalDifficulty(); 
 	m_skillLevel = skillLevelForDifficulty( m_difficulty );
 
@@ -2665,8 +2666,8 @@ Bool AIPlayer::selectTeamToBuild( void )
 	// terms ride on top:
 	//
 	//   - how well the team answers what this AI can *see* the enemy fielding (B1), scaled by the
-	//     rung's counterCompositionWeight - zero on the bottom two rungs, which is EA's behaviour
-	//     exactly, up to one at the top;
+	//     rung's counterCompositionWeight - zero on Easy, which is EA's behaviour exactly, half
+	//     on Normal, and one on Hard;
 	//   - what this AI is trying to do (D8): an aggressive one leans towards attack teams, a
 	//     defensive one towards the teams the data flags as base or perimeter defence.  A
 	//     preference, not a bonus - both spend the same money.
@@ -4596,7 +4597,9 @@ static const Int DEFENSES_PER_SUPERWEAPON = 4;
 static const Int MAX_ECONOMY_DOZERS = 4;
 
 /** Tries on each ring when looking for somewhere to put a purchase down.  Every try is a legality
-	* check that costs about a millisecond, so this bounds the spike rather than the search. */
+	* check that costs about a millisecond, so a call still only walks two rings: that is the spike,
+	* not the reach of the search.  A search allowed to walk outward remembers the ring it reached
+	* and starts the next call there, so a full opening base does not end the search. */
 static const Int PLACEMENT_ANGLES = 12;
 static const Int PLACEMENT_RINGS = 2;
 
@@ -4689,26 +4692,54 @@ static void upgradeTransportHelicopter( Object *obj, void * )
 	}
 }
 
-/** Every finished production building of this kind has something in its queue.  One still going up
-	* counts as spare: it is the answer already on its way. */
-static Bool everyFactoryBusy( Player *player, KindOfType kind )
+/** How loaded this player's factories of one kind are.  Counted off the objects, because a factory
+	* bought past the build list is still a factory. */
+struct FactoryLoad
 {
-	Int factories = 0;
-	for( BuildListInfo *info = player->getBuildList(); info; info = info->getNext() )
+	KindOfType kind;
+	Int finished;
+	Int constructing;
+	Int idle;
+	Int deepest;
+};
+
+static void readFactoryLoad( Object *obj, void *userData )
+{
+	FactoryLoad *load = (FactoryLoad *)userData;
+	if( obj->isEffectivelyDead() || !obj->isKindOf( load->kind ) )
+		return;
+	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 	{
-		Object *factory = TheGameLogic->findObjectByID( info->getObjectID() );
-		if( factory == NULL || factory->getControllingPlayer() != player || !factory->isKindOf( kind ) )
-			continue;
-		if( factory->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
-			return FALSE;
-		ProductionUpdateInterface *pu = factory->getProductionUpdateInterface();
-		if( pu == NULL )
-			continue;
-		if( pu->getProductionCount() == 0 )
-			return FALSE;
-		++factories;
+		++load->constructing;
+		return;
 	}
-	return factories > 0;
+	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
+	if( pu == NULL )
+		return;
+	++load->finished;
+	const Int queued = (Int)pu->getProductionCount();
+	if( queued == 0 )
+		++load->idle;
+	if( queued > load->deepest )
+		load->deepest = queued;
+}
+
+struct TechCount
+{
+	KindOfType kind;
+	Int standing;
+	Int onTheWay;
+};
+
+static void countTechBuildings( Object *obj, void *userData )
+{
+	TechCount *tech = (TechCount *)userData;
+	if( obj->isEffectivelyDead() || !obj->isKindOf( tech->kind ) )
+		return;
+	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+		++tech->onTheWay;
+	else
+		++tech->standing;
 }
 
 /** Where this player's hackers go to work: into an internet center with room, or else the quiet side
@@ -5001,9 +5032,10 @@ void AIPlayer::doPower( void )
 		spot.y -= dir.y * m_baseRadius * POWER_SETBACK;
 	}
 
-	// the back of a grown base fills up, and a plant with nowhere to go there goes anywhere in the base
-	if( !placeNear( tmpl, &spot, 0.0f ) )
-		placeNear( tmpl, &m_baseCenter, m_baseRadius );
+	// the back of a grown base fills up.  the spot behind the base walks outward with it; a miss there
+	// still tries the inner rings of the base itself, and that try does not move the outward walk
+	if( !placeNear( tmpl, &spot, 0.0f, TRUE ) )
+		placeNear( tmpl, &m_baseCenter, m_baseRadius, FALSE );
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -5011,11 +5043,11 @@ void AIPlayer::doPower( void )
 	* list is a fixed plan - two war factories and a barracks - and the scripts never add to it, so
 	* once the plan stood the money had nowhere to go.
 	*
-	* What the plan cannot buy.  Another production building when every one of a kind is busy, put down
-	* beside the last expansion so the army comes out nearer the fighting.  Another income building - a
-	* supply drop zone, a black market - on every pass, neither has a limit.  Hackers from every factory
-	* that trains them, because China's income building takes one copy and a hacker earns wherever it
-	* stands.  And base defenses.
+	* What the plan cannot buy.  A tank factory or a barracks when that queue is backing up, and an
+	* airfield on every pass the money allows, with no cap on how many stand.  Income buildings the
+	* same way: a supply drop zone, a black market, an internet center, whichever of those the faction
+	* can build, on every pass.  Hackers from every factory that trains them.  And base defenses,
+	* still one per four fighting units.
 	*/
 //----------------------------------------------------------------------------------------------------------
 void AIPlayer::doEconomy( void )
@@ -5083,13 +5115,14 @@ void AIPlayer::doEconomy( void )
 	if( dozer == NULL )
 		return;
 
-	const Int INCOME_KINDS = 2;
-	static const KindOfType INCOME[ INCOME_KINDS ] = { KINDOF_FS_SUPPLY_DROPZONE, KINDOF_FS_BLACK_MARKET };
+	const Int INCOME_KINDS = 3;
+	static const KindOfType INCOME[ INCOME_KINDS ] = {
+		KINDOF_FS_SUPPLY_DROPZONE, KINDOF_FS_BLACK_MARKET, KINDOF_FS_INTERNET_CENTER };
 	for( Int i = 0; i < INCOME_KINDS; ++i )
 	{
 		const ThingTemplate *tmpl = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, INCOME[ i ] );
 		if( tmpl && !priorityBuildPending( m_player, tmpl ) )
-			placeNear( tmpl, &m_baseCenter, m_baseRadius );
+			placeNear( tmpl, &m_baseCenter, m_baseRadius, TRUE );
 	}
 
 	// ... and what does not pay back for twice it, so the opening build order is not what pays for it
@@ -5116,25 +5149,28 @@ void AIPlayer::doEconomy( void )
 			spot.x += dir.x * m_baseRadius * DEFENSE_STANDOFF;
 			spot.y += dir.y * m_baseRadius * DEFENSE_STANDOFF;
 		}
-		placeNear( defense, &spot, 0.0f );
+		placeNear( defense, &spot, 0.0f, FALSE );
 	}
 
-	const Int PRODUCTION_KINDS = 3;
-	static const KindOfType PRODUCTION[ PRODUCTION_KINDS ] = { KINDOF_FS_WARFACTORY, KINDOF_FS_BARRACKS, KINDOF_FS_AIRFIELD };
-	for( Int i = 0; i < PRODUCTION_KINDS; ++i )
+	/* Airfields have no count, so a tank queue that never empties would take every pass and the
+		 airfield would wait forever.  Even economy ticks ask for the airfield first, odd ticks ask for
+		 the queues first, and a kind that wants nothing simply yields the pass. */
+	const KindOfType QUEUED_KINDS[ 2 ] = { KINDOF_FS_WARFACTORY, KINDOF_FS_BARRACKS };
+	const Bool airFirst = ((TheGameLogic->getFrame() + phase) / ECONOMY_CHECK_RATE) % 2 == 0;
+	for( Int pass = 0; pass < 2; ++pass )
 	{
-		if( !everyFactoryBusy( m_player, PRODUCTION[ i ] ) )
-			continue;
-		const ThingTemplate *tmpl = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, PRODUCTION[ i ] );
-		if( tmpl == NULL || priorityBuildPending( m_player, tmpl ) )
-			continue;
-
-		const Object *warehouse = TheGameLogic->findObjectByID( m_curWarehouseID );
-		if( warehouse && isHeldExpansion( warehouse ) && placeNear( tmpl, warehouse->getPosition(),
-																warehouse->getGeometryInfo().getBoundingCircleRadius() + SUPPLY_CENTER_CLOSE_DIST*0.5f ) )
-			return;
-		if( placeNear( tmpl, &m_baseCenter, m_baseRadius ) )
-			return;
+		const Bool airPass = (pass == 0) == airFirst;
+		if( airPass )
+		{
+			if( queueExtraFactory( dozer, KINDOF_FS_AIRFIELD, TRUE ) )
+				return;
+		}
+		else
+		{
+			for( Int i = 0; i < 2; ++i )
+				if( queueExtraFactory( dozer, QUEUED_KINDS[ i ], FALSE ) )
+					return;
+		}
 	}
 }
 
@@ -5263,7 +5299,7 @@ void AIPlayer::doTunnels( Object *dozer )
 	{
 		if( hasTunnelNear( m_player, &spots[ i ] ) )
 			continue;
-		placeNear( tunnel, &spots[ i ], innerRadius[ i ] );
+		placeNear( tunnel, &spots[ i ], innerRadius[ i ], FALSE );
 		return;
 	}
 }
@@ -5317,20 +5353,6 @@ Bool AIPlayer::isHeldExpansion( const Object *warehouse )
 	return TRUE;
 }
 
-/** Whether this player owns anything of the kind, standing or going up. */
-struct KindSearch
-{
-	KindOfType kind;
-	Bool found;
-};
-
-static void findOwnedKind( Object *obj, void *userData )
-{
-	KindSearch *search = (KindSearch *)userData;
-	if( !search->found && obj->isKindOf( search->kind ) && !obj->isEffectivelyDead() )
-		search->found = TRUE;
-}
-
 /** The plan has an entry for this building that is not standing and not yet asked for. */
 static Bool hasUnbuiltPlanEntry( Player *player, const ThingTemplate *tmpl )
 {
@@ -5360,7 +5382,7 @@ void AIPlayer::buildAsap( const ThingTemplate *tmpl )
 		spot.x -= dir.x * m_baseRadius * POWER_SETBACK;
 		spot.y -= dir.y * m_baseRadius * POWER_SETBACK;
 	}
-	if( placeNear( tmpl, &spot, 0.0f ) )
+	if( placeNear( tmpl, &spot, 0.0f, TRUE ) )
 		return;
 
 	/* A superweapon's footprint rarely fits one of placeNear's two dozen tries in a grown base, so the
@@ -5383,8 +5405,9 @@ void AIPlayer::buildAsap( const ThingTemplate *tmpl )
 	* is in the bank, the first one goes up. More follow as the base grows, one per
 	* DEFENSES_PER_SUPERWEAPON guns, as the guns grow with the army; unrationed, they took the money
 	* the army needed. The lobby's superweapon setting and Pro Rules still bind, canMakeUnit asks both.
-	* If the tech building it needs is missing, that goes up first. Hard only, like the rest of the
-	* economy. */
+	* If the tech building it needs is missing, that goes up first, and copies follow once the first
+	* superweapon is standing, up to AI_TECH_BUILDING_COPIES, so one of them blowing up leaves the tree
+	* standing. Hard only, like the rest of the economy. */
 //----------------------------------------------------------------------------------------------------------
 void AIPlayer::doSuperweapons( void )
 {
@@ -5402,25 +5425,35 @@ void AIPlayer::doSuperweapons( void )
 		return;
 
 	const ThingTemplate *superweapon = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, KINDOF_FS_SUPERWEAPON );
-	if( superweapon )
+	const ThingTemplate *techBuilding = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, KINDOF_FS_ADVANCED_TECH );
+
+	TechCount tech;
+	tech.kind = KINDOF_FS_ADVANCED_TECH;
+	tech.standing = 0;
+	tech.onTheWay = 0;
+	m_player->iterateObjects( countTechBuildings, &tech );
+	if( techBuilding && priorityBuildPending( m_player, techBuilding ) )
+		++tech.onTheWay;
+
+	/* The first tech building before any superweapon, the first superweapon before the spares, then
+		 the tech building up to AI_TECH_BUILDING_COPIES, then more superweapons by the gun ratio.  A
+		 faction that cannot buy the tech building falls straight through to the superweapon. */
+	const BaseTally tally = tallyBase( m_player );
+	const Bool wantTech = techBuilding && aiWantsAnotherTechBuilding( tech.standing, tech.onTheWay );
+	const Bool firstTech = wantTech && tech.standing < 1;
+	const Bool spareTech = wantTech && tally.superweapons >= 1;
+	if( firstTech || spareTech )
 	{
-		const BaseTally tally = tallyBase( m_player );
-		const Bool baseHoldsAnother = tally.superweapons < 1 + tally.defenses / DEFENSES_PER_SUPERWEAPON;
-		if( baseHoldsAnother && !priorityBuildPending( m_player, superweapon ) )
-			buildAsap( superweapon );
+		buildAsap( techBuilding );
 		return;
 	}
 
-	KindSearch tech;
-	tech.kind = KINDOF_FS_ADVANCED_TECH;
-	tech.found = FALSE;
-	m_player->iterateObjects( findOwnedKind, &tech );
-	if( tech.found )
-		return;		// what is missing is money, or the lobby said no
-
-	const ThingTemplate *techBuilding = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, KINDOF_FS_ADVANCED_TECH );
-	if( techBuilding && !priorityBuildPending( m_player, techBuilding ) )
-		buildAsap( techBuilding );
+	if( superweapon )
+	{
+		const Bool baseHoldsAnother = tally.superweapons < 1 + tally.defenses / DEFENSES_PER_SUPERWEAPON;
+		if( baseHoldsAnother && !priorityBuildPending( m_player, superweapon ) )
+			buildAsap( superweapon );
+	}
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -5461,16 +5494,71 @@ void AIPlayer::buyMoneyUnits( void )
 }
 
 //----------------------------------------------------------------------------------------------------------
-/** Walk rings round center until a spot is legal and safe, and hand it to the dozers as a priority
-	* build.  ponytail: a fixed dozen angles on two rings, so a crowded spot can miss room that a wider
-	* search would find; the next check tries again with whatever has changed. */
+/** One more factory of this kind, beside a held expansion or around the base.  The expansion try is
+	* local: a miss out there must not walk the base's ring cursor past the ground around the command
+	* center, or the first crowded dock skips the base itself. */
 //----------------------------------------------------------------------------------------------------------
-Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius )
+Bool AIPlayer::queueExtraFactory( Object *dozer, KindOfType kind, Bool unlimited )
+{
+	const ThingTemplate *tmpl = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, kind );
+	if( tmpl == NULL || priorityBuildPending( m_player, tmpl ) )
+		return FALSE;
+
+	FactoryLoad load;
+	load.kind = kind;
+	load.finished = 0;
+	load.constructing = 0;
+	load.idle = 0;
+	load.deepest = 0;
+	m_player->iterateObjects( readFactoryLoad, &load );
+	if( !aiWantsAnotherFactory( load.finished, load.constructing, load.idle, load.deepest, unlimited ) )
+		return FALSE;
+
+	const Object *warehouse = TheGameLogic->findObjectByID( m_curWarehouseID );
+	if( warehouse && isHeldExpansion( warehouse ) &&
+			placeNear( tmpl, warehouse->getPosition(),
+				warehouse->getGeometryInfo().getBoundingCircleRadius() + SUPPLY_CENTER_CLOSE_DIST * 0.5f, FALSE ) )
+		return TRUE;
+	return placeNear( tmpl, &m_baseCenter, m_baseRadius, TRUE );
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** Walk rings round center until a spot is legal and safe, and hand it to the dozers as a priority
+	* build.  A call still tries two rings, two dozen legality checks.  walkOutward carries the first
+	* ring in m_placementRing, so the search moves out across calls instead of giving up at the opening
+	* base, and wraps back to the middle once that ring is past the pathfind extent. */
+//----------------------------------------------------------------------------------------------------------
+Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward )
 {
 	const Real structureRadius = tmpl->getTemplateGeometryInfo().getBoundingCircleRadius();
 	const Real placeAngle = tmpl->getPlacementViewAngle();
 
-	for( Int ring = 0; ring < PLACEMENT_RINGS; ++ring )
+	Int startRing = 0;
+	if( walkOutward )
+	{
+		Region3D extent;
+		TheTerrainLogic->getMaximumPathfindExtent( &extent );
+		Real farthest = 0.0f;
+		const Real cornerX[ 2 ] = { extent.lo.x, extent.hi.x };
+		const Real cornerY[ 2 ] = { extent.lo.y, extent.hi.y };
+		for( Int cx = 0; cx < 2; ++cx )
+		{
+			for( Int cy = 0; cy < 2; ++cy )
+			{
+				const Real dx = cornerX[ cx ] - center->x;
+				const Real dy = cornerY[ cy ] - center->y;
+				const Real dist = sqrt( dx * dx + dy * dy );
+				if( dist > farthest )
+					farthest = dist;
+			}
+		}
+		const Real reach = innerRadius + structureRadius * (2 * m_placementRing + 1);
+		if( m_placementRing < 0 || reach > farthest )
+			m_placementRing = 0;
+		startRing = m_placementRing;
+	}
+
+	for( Int ring = startRing; ring < startRing + PLACEMENT_RINGS; ++ring )
 	{
 		const Real distance = innerRadius + structureRadius * (2 * ring + 1);
 		for( Int step = 0; step < PLACEMENT_ANGLES; ++step )
@@ -5487,6 +5575,8 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 			TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback
 			if( legal && isLocationSafe( &pos, tmpl ) )
 			{
+				if( walkOutward )
+					m_placementRing = ring;
 				DEBUG_LOG(("AI ECONOMY frame %d player %d builds '%s' at (%.0f,%.0f), %d in the bank\n", TheGameLogic->getFrame(),
 					m_player->getPlayerIndex(), tmpl->getName().str(), pos.x, pos.y, m_player->getMoney()->countMoney()));
 				m_player->addToPriorityBuildList( tmpl->getName(), &pos, placeAngle );
@@ -5494,6 +5584,8 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 			}
 		}
 	}
+	if( walkOutward )
+		m_placementRing = startRing + PLACEMENT_RINGS;
 	return FALSE;
 }
 
@@ -8512,7 +8604,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 10;		// 2: scout  3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders
+	XferVersion currentVersion = 11;		// 2: scout  3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -8764,6 +8856,10 @@ void AIPlayer::xfer( Xfer *xfer )
 		for( UnsignedShort i = 0; i < dropped; ++i )
 			xfer->xferObjectID( &m_droppedRiders[ i ] );
 	}
+	// where the next outward search starts, so a loaded game does not pack its new buildings back
+	// into the opening rings the base has already filled
+	if( version >= 11 )
+		xfer->xferInt( &m_placementRing );
 
 	// the ladder rung and the role, which are rolled once and must come back the same way
 	if( version >= 3 )

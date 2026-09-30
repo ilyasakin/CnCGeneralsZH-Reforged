@@ -1524,19 +1524,51 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			// Check enemy, as it is possible that he died this frame.
 			if (enemy)
 			{
-				if (currentlySelectedGroup)
+				AIGroup *attackers = currentlySelectedGroup;
+				AIGroup *named = NULL;
+
+				// The second id is the one unit this shot is for, written by the attack circle. A
+				// message with only the target still means the whole selection. The queue re-enters
+				// here with a group that is already that one unit; a message that arrives on the full
+				// selection has to be narrowed here or it focus-fires.
+				if( msg->getArgumentCount() >= 2 )
+				{
+					const ObjectID attackerID = msg->getArgument( 1 )->objectID;
+					Object *attacker = TheGameLogic->findObjectByID( attackerID );
+					if( attacker == NULL || !isPlayerCommandingOwnObject( thisPlayer, attacker->getControllingPlayer() ) )
+					{
+						if( attacker != NULL )
+						{
+							DEBUG_CRASH( ("MSG_DO_ATTACK_OBJECT: a command from player %d named object %d, which it does not control",
+								msg->getPlayerIndex(), (Int)attackerID) );
+						}
+						break;
+					}
+
+					if( attackers == NULL || attackers->getCount() != 1 || !attackers->isMember( attacker ) )
+					{
+						named = TheAI->createGroup();
+						named->add( attacker );
+						attackers = named;
+					}
+				}
+
+				if (attackers)
 				{
 
 					// how many units the order actually reached, against how many the player had
 					// selected on their own screen: the two disagreeing is what "only one of them
 					// went" looks like from the outside
-					DEBUG_LOG(("attack order: %d units on %s\n", currentlySelectedGroup->getCount(),
+					DEBUG_LOG(("attack order: %d units on %s\n", attackers->getCount(),
 										 enemy->getTemplate()->getName().str()));
 
-					currentlySelectedGroup->releaseWeaponLockForGroup(LOCKED_TEMPORARILY);	// release any temporary locks.
-					currentlySelectedGroup->groupAttackObject( enemy, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER );
+					attackers->releaseWeaponLockForGroup(LOCKED_TEMPORARILY);	// release any temporary locks.
+					attackers->groupAttackObject( enemy, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER );
 
 				}
+
+				if( named )
+					TheAI->destroyGroup( named );
 
 			}
 
