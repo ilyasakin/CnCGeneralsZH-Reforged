@@ -593,6 +593,11 @@ TEST(window_points_scale_to_the_games_pixels_and_hold_to_its_screen)
 	CHECK( x == 512 && y == 384 );
 	SdlInput_scaleToGame( 1439.9f, 899.9f, 1440, 900, 2880, 1800, x, y );	// a Retina window, the game at pixels
 	CHECK( x == 2879 && y == 1799 );
+	// Wayland at 150 %: a 1280x720 game in a window of 853x480 points (sizeWindow), its centre and its far corner
+	SdlInput_scaleToGame( 426.5f, 240.0f, 853, 480, 1280, 720, x, y );
+	CHECK( x == 640 && y == 360 );
+	SdlInput_scaleToGame( 852.9f, 479.9f, 853, 480, 1280, 720, x, y );
+	CHECK( x == 1279 && y == 719 );
 	SdlInput_scaleToGame( -12.0f, 950.0f, 800, 600, 800, 600, x, y );		// a captured drag outside the window
 	CHECK( x == 0 && y == 599 );
 	SdlInput_scaleToGame( 7.5f, 3.2f, 0, 0, 0, 0, x, y );								// nothing to scale by

@@ -75,9 +75,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <spawn.h>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
+
+extern char **environ;
 
 #include <string>
 #include <vector>
@@ -348,9 +352,10 @@ static Bool chooseInstallRoot( int argc, char *argv[], const std::vector<std::st
 	return TRUE;
 }
 
-/** A Linux package's art overlay: "<user data>/ReforgedArt", when it is a folder.  The package ships no
-	* Reforged*.big (they are over a gigabyte); its launcher fetches them from the art release into that
-	* folder, each checked against art.json's sha256 before it is moved in, as vendor.sh does for a build. */
+/** A package's art overlay, the macOS app's or a Linux package's: "<user data>/ReforgedArt", when it is a
+	* folder.  Neither ships the Reforged*.big (they are over a gigabyte): fetch-art.sh fetches them from the
+	* art release into that folder, each checked against art.json's sha256 before it is moved in, as vendor.sh
+	* does for a build.  A Linux package's launcher starts it; the macOS app's start does (startArtFetch). */
 static void appendUserArtOverlay( std::vector<std::string> &overlays )
 {
 	char folder[ 4096 ];
@@ -364,6 +369,34 @@ static void appendUserArtOverlay( std::vector<std::string> &overlays )
 	struct stat status;
 	if (realpath( candidate.c_str(), real ) != NULL && stat( real, &status ) == 0 && S_ISDIR( status.st_mode ))
 		overlays.push_back( real );
+}
+
+/** The macOS app's art: it has no launcher script, so its start runs Contents/Resources/fetch-art.sh
+	* --background itself, which detaches the fetch and returns at once; the first start plays at the original
+	* textures and the next has the art.  Never in a run nobody watches (-headless, ZH_UNATTENDED: a harness's,
+	* which never touches the network); ZHR_NO_ART_FETCH=1 is the script's own opt-out.  A Linux package's
+	* launcher does the same before it starts the game. */
+static void startArtFetch( int argc, char *argv[] )
+{
+#if defined(__APPLE__)
+	if (!isExecutableInAppBundle() || unattendedByEnvironment())
+		return;
+	for (int i = 1; i < argc; ++i)
+		if (strcasecmp( argv[i], "-headless" ) == 0)
+			return;
+	char exe[ 4096 ];
+	getExecutableDirectory( exe, sizeof( exe ), FALSE );
+	const std::string script = std::string( exe ) + "/../Resources/fetch-art.sh";
+	if (exe[0] == 0 || access( script.c_str(), R_OK ) != 0)
+		return;
+	char *const args[] = { (char *)"/bin/sh", (char *)script.c_str(), (char *)"--background", NULL };
+	pid_t pid;
+	if (posix_spawn( &pid, "/bin/sh", NULL, NULL, args, environ ) == 0)
+		waitpid( pid, NULL, 0 );		// only the detaching: the fetch itself goes on without the game
+#else
+	(void)argc;
+	(void)argv;
+#endif
 }
 
 /** The fork's overlay (P1, decision 9): read roots searched before the install for every relative path
@@ -405,8 +438,7 @@ static Bool chooseOverlays( int argc, char *argv[], std::vector<std::string> &ov
 		if (realpath( candidate.c_str(), real ) != NULL && stat( real, &status ) == 0 && S_ISDIR( status.st_mode ))
 		{
 			overlays.push_back( real );
-			if (i == 1)		// a Linux package
-				appendUserArtOverlay( overlays );
+			appendUserArtOverlay( overlays );
 			break;
 		}
 	}
@@ -456,6 +488,7 @@ int main( int argc, char *argv[] )
 		std::vector<std::string> overlays;
 		if (!chooseOverlays( argc, argv, overlays ))
 			return 1;
+		startArtFetch( argc, argv );
 		char root[ 4096 ];
 		root[0] = 0;
 		if (!chooseInstallRoot( argc, argv, overlays, root, sizeof( root ) ))

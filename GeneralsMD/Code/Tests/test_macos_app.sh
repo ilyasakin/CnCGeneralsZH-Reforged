@@ -21,8 +21,8 @@
 #      id, this build's version, the executable's minimum macOS, high resolution, the category), PkgInfo,
 #      a stripped arm64/x86_64 executable with its dSYM beside the bundle, the icon, the overlay, one
 #      licence file per entry the link line needs; its ad-hoc signature verifies --deep --strict; and no
-#      file in it turns the HUD overlay off (so neither does the real staged overlay);
-#   2. the HUD directive's control: the same overlay with one INI line "ShowHudOverlay = No" planted in a
+#      file in it forces the HUD overlay on (off by default in Release; so neither does the real staged overlay);
+#   2. the HUD rule's control: the same overlay with one INI line "ShowHudOverlay = Yes" planted in a
 #      copy is refused, naming the file, and leaves no bundle;
 #   3. the licence check's control: a link line with a library the table does not cover is refused,
 #      naming it, and leaves no bundle;
@@ -34,9 +34,15 @@
 #      refused by the bundle-side check, naming it;
 #   6. universal2 (option A's path, tested with tiny stand-ins, no second build): an x86_64 executable
 #      for the target lipo'd in makes a bundle whose executable holds both slices and still verifies;
-#      one built for a newer macOS is refused, and so is an arm64 file passed as the x86_64 one.
-# What it cannot see: the art (built only by `ninja macos_app`, cloned), a quarantined download and
-# Gatekeeper (E2), the dialog of the root chooser (by hand).
+#      one built for a newer macOS is refused, and so is an arm64 file passed as the x86_64 one;
+#   7. the art, fetched as on Linux (the user's rule: the app carries none): a fresh bundle built with
+#      --art-url <a local file:// release> holds no Reforged*.big, whatever the staged overlay links, and carries
+#      fetch-art.sh with that source in art-source.txt; the script, run from the bundle without ZHR_ART_URL,
+#      verifies the file into the user data folder's ReforgedArt and writes nothing into the bundle (its seal
+#      still verifies); an --art-url that is not https:// or file:// is refused; and the bundle's game, started
+#      headless on an empty root with a ReforgedArt folder in its user data, reads that folder as an overlay.
+# What it cannot see: a quarantined download and Gatekeeper (E2), the dialog of the root chooser (by hand),
+# and the fetch the game starts by itself (only in a run someone watches; test_fetch_art.sh proves the script).
 # Usage: test_macos_app.sh <generals> <staged overlay> <build dir> <deployment target>.
 # Exit 0, 1, or 77 off macOS.
 set -u
@@ -87,20 +93,20 @@ check '[ "$nlic" -ge 13 ] && [ -f "$APP/Contents/Resources/Licenses/Zero-Hour-Re
 check 'grep -q "this notice may not be removed or altered" "$APP/Contents/Resources/Licenses/LZH-Light-LICENSE.txt" && grep -q "GNU GPL option, version 2 or later" "$APP/Contents/Resources/Licenses/FreeType-OPTION.txt" && [ -f "$APP/Contents/Resources/Licenses/FreeType-GPLv2.txt" ]' \
 	"LZH-Light's notice, and FreeType's GPLv2-or-later option with its GPLv2 text"
 check 'codesign --verify --deep --strict "$APP" 2>/dev/null && codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc"' "signed ad hoc, and it verifies --deep --strict"
-check '[ -z "$(find -L "$APP" -type f -exec grep -a -i -l -E "^[[:space:]]*ShowHudOverlay[[:space:]]*=[[:space:]]*(no|false|0)([^[:alnum:]]|$)" -- {} + 2>/dev/null)" ]' \
-	"and nothing in it turns the HUD overlay off"
+check '[ -z "$(find -L "$APP" -type f -exec grep -a -i -l -E "^[[:space:]]*ShowHudOverlay[[:space:]]*=[[:space:]]*(yes|true|1)([^[:alnum:]]|$)" -- {} + 2>/dev/null)" ]' \
+	"and nothing in it forces the HUD overlay on"
 
 # 4. the seal's control, on that bundle
 touch "$APP/Contents/Resources/written-after-signing"
 check '! codesign --verify --deep --strict "$APP" 2>/dev/null' "a file written after signing breaks the seal (so a clean verify after a run means nothing was written)"
 
-# 2. the HUD directive's control
+# 2. the HUD rule's control
 mkdir -p "$T/overlay"
 for e in "$OVERLAY"/*; do case "$e" in *.big) ;; *) cp -R -L "$e" "$T/overlay/";; esac; done
-printf '\nGameData\n  ShowHudOverlay = No\nEnd\n' > "$T/overlay/Data/INI/HudOff.ini"
+printf '\nGameData\n  ShowHudOverlay = Yes\nEnd\n' > "$T/overlay/Data/INI/HudOn.ini"
 out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$T/overlay" --build "$BUILD" --out "$T/two/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --no-art 2>&1)"; status=$?
-check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "HUD overlay must stay on" && printf "%s" "$out" | grep -q "HudOff.ini" && [ ! -e "$T/two/Zero Hour Reforged.app" ]' \
-	"an overlay turning the HUD off is refused, naming the file, and leaves no bundle (exit $status)"
+check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "may force the HUD overlay on" && printf "%s" "$out" | grep -q "HudOn.ini" && [ ! -e "$T/two/Zero Hour Reforged.app" ]' \
+	"an overlay forcing the HUD on is refused, naming the file, and leaves no bundle (exit $status)"
 
 # 3. the licence check's control
 python3 - "$BUILD/build.ninja" "$T/build.ninja" <<'NINJA_EOF'
@@ -121,7 +127,7 @@ check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "linked libraries built
 	"a minimum below the build's is refused, naming the libraries, and leaves no bundle (exit $status)"
 printf 'int main(void) { return 0; }\n' > "$T/newer.c"
 if cc -mmacosx-version-min=26.0 -o "$T/overlay/newer-tool" "$T/newer.c" 2>/dev/null; then
-	rm -f "$T/overlay/Data/INI/HudOff.ini"
+	rm -f "$T/overlay/Data/INI/HudOn.ini"
 	out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$T/overlay" --build "$BUILD" --out "$T/five/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --no-art 2>&1)"; status=$?
 	check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "the bundle.s executables built for a newer macOS" && printf "%s" "$out" | grep -q "newer-tool: minimum macOS 26.0" && [ ! -e "$T/five/Zero Hour Reforged.app" ]' \
 		"a Mach-O for a newer macOS inside the bundle is refused, naming it (exit $status)"
@@ -146,5 +152,27 @@ check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "the x86_64 executable 
 	"an x86_64 slice for macOS 26 is refused before a bundle exists (exit $status)"
 out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$T/eight/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --no-art --x86-64-generals "$T/not-x86" 2>&1)"; status=$?
 check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "is not an x86_64 executable"' "an arm64 file passed as the x86_64 slice is refused (exit $status)"
+
+# 7. the art, fetched, never bundled; from the source the bundle was built with
+mkdir -p "$T/release" "$T/artuser"
+head -c 200000 /dev/urandom > "$T/release/ReforgedTest.big"
+printf '{\n  "files": [\n    {\n      "name": "ReforgedTest.big",\n      "size": %s,\n      "sha256": "%s"\n    }\n  ]\n}\n' \
+	"$(wc -c < "$T/release/ReforgedTest.big" | tr -d ' ')" "$(shasum -a 256 "$T/release/ReforgedTest.big" | cut -d ' ' -f 1)" > "$T/release/art.json"
+N="$T/nine/Zero Hour Reforged.app"
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$N" --bundle-id "$ID" --min-macos "$TARGET" --art-url "file://$T/release" 2>&1)"; status=$?
+check '[ $status -eq 0 ] && [ -z "$(find "$N" -name "Reforged*.big")" ] && [ -x "$N/Contents/Resources/fetch-art.sh" ] && [ "$(cat "$N/Contents/Resources/art-source.txt")" = "file://$T/release" ]' \
+	"a bundle holds no Reforged*.big (the staged overlay links $(find -L "$OVERLAY" -maxdepth 1 -name 'Reforged*.big' | wc -l | tr -d ' ')), carries fetch-art.sh and the --art-url source (exit $status)"
+env -u ZHR_ART_URL ZH_USER_DATA_DIR="$T/artuser" sh "$N/Contents/Resources/fetch-art.sh" > "$T/fetch.out" 2>&1; status=$?
+check '[ $status -eq 0 ] && cmp -s "$T/release/ReforgedTest.big" "$T/artuser/ReforgedArt/ReforgedTest.big" && codesign --verify --deep --strict "$N" 2>/dev/null' \
+	"the bundle's fetch-art.sh verifies the art from its built-in source into the user data folder, and the seal still verifies (exit $status)"
+out="$(bash "$SCRIPT" --generals "$GENERALS" --overlay "$OVERLAY" --build "$BUILD" --out "$T/ten/Zero Hour Reforged.app" --bundle-id "$ID" --min-macos "$TARGET" --art-url "ftp://example.invalid/art" 2>&1)"; status=$?
+check '[ $status -eq 1 ] && printf "%s" "$out" | grep -q "art-url must be an https:// or file:// address" && [ ! -e "$T/ten/Zero Hour Reforged.app" ]' \
+	"armed: an --art-url that is not https:// or file:// is refused, and leaves no bundle (exit $status)"
+mkdir -p "$T/emptyroot"
+( ZH_UNATTENDED=1 ZH_USER_DATA_DIR="$T/artuser/" perl -e 'alarm shift; exec @ARGV' 120 "$N/Contents/MacOS/generals" -headless \
+	-root "$T/emptyroot" -maxframes 1 > "$T/start.out" 2> "$T/start.err" )
+art_real="$(cd "$T/artuser/ReforgedArt" && pwd -P)"
+check 'grep -q "^generals: overlay $art_real, searched before the install" "$T/start.err" && codesign --verify --deep --strict "$N" 2>/dev/null' \
+	"the bundle's game reads <user data>/ReforgedArt as an overlay, and writes nothing into the bundle"
 
 exit $failed

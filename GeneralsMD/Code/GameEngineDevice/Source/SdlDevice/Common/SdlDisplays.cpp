@@ -42,6 +42,27 @@ static float densityOf( SDL_DisplayID display )
 	return (desktop != NULL && desktop->pixel_density > 0.0f) ? desktop->pixel_density : 1.0f;
 }
 
+float SdlDisplays_densityOf( const MonitorRect &rect, SDL_Window *window )
+{
+	int count = 0;
+	SDL_DisplayID *displays = SDL_GetDisplays( &count );
+	float found = 0.0f;
+	for (int index = 0; displays != NULL && index < count && found == 0.0f; ++index)
+	{
+		SDL_Rect bounds;
+		if (!SDL_GetDisplayBounds( displays[index], &bounds ))
+			continue;
+		const float density = densityOf( displays[index] );
+		if (toPixels( bounds.x, density ) == rect.left && toPixels( bounds.y, density ) == rect.top
+				&& toPixels( bounds.w, density ) == rect.right - rect.left && toPixels( bounds.h, density ) == rect.bottom - rect.top)
+			found = density;
+	}
+	SDL_free( displays );
+	if (found == 0.0f && window != NULL && SDL_GetDisplayForWindow( window ) != 0)
+		found = densityOf( SDL_GetDisplayForWindow( window ) );
+	return found > 0.0f ? found : 1.0f;
+}
+
 static int sdlListMonitors( MonitorEntry *entries, int capacity )
 {
 	int count = 0;

@@ -2201,18 +2201,19 @@ if(ZH_PLATFORM_POSIX)
   add_custom_target(zh_overlay_dev ALL DEPENDS ${CMAKE_BINARY_DIR}/overlay-dev.staged)
 
   # P1 step 5: the macOS app, "Zero Hour Reforged.app" beside the executable, its dSYM beside it
-  # (Tools/make-macos-app.sh: Info.plist, the icon, the staged overlay with its art as APFS clones, the
-  # licences checked against generals' link line, the HUD directive, an ad-hoc signature, verified).
-  # Outside ALL: build it with `ninja macos_app`.  The bundle id belongs to whoever ships; the default is
-  # the project's home (the README's).  ZH_APP_ART=OFF leaves the 1.6 GB of art out of a local bundle.
+  # (Tools/make-macos-app.sh: Info.plist, the icon, the staged overlay without the art, which the game fetches
+  # on its first start (fetch-art.sh), the licences checked against generals' link line, the HUD directive,
+  # an ad-hoc signature, verified).  Outside ALL: build it with `ninja macos_app`.  The bundle id belongs to
+  # whoever ships; the default is the project's home (the README's).
   if(APPLE)
     set(ZH_APP_BUNDLE_ID "io.github.olcayseygan.zero-hour-reforged" CACHE STRING "CFBundleIdentifier of the macOS app")
-    option(ZH_APP_ART "Put the Reforged*.big art archives into the macOS app" ON)
+    # Where the app's fetch-art.sh takes the art from (art-source.txt in the bundle); empty: upstream's art-latest
+    set(ZH_ART_URL "" CACHE STRING "The art release the macOS app fetches from (https:// or file://); empty for upstream's art-latest")
     set(ZH_APP_ARGS --generals $<TARGET_FILE:generals> --overlay ${CMAKE_BINARY_DIR}/overlay
         --build ${CMAKE_BINARY_DIR} --out "${CMAKE_BINARY_DIR}/Zero Hour Reforged.app" --bundle-id ${ZH_APP_BUNDLE_ID}
         --min-macos ${CMAKE_OSX_DEPLOYMENT_TARGET})
-    if(NOT ZH_APP_ART)
-      list(APPEND ZH_APP_ARGS --no-art)
+    if(ZH_ART_URL)
+      list(APPEND ZH_APP_ARGS --art-url ${ZH_ART_URL})
     endif()
     # P2 universal2, option A (release time, E2): an x86_64 build's generals, lipo'd into the bundle's
     set(ZH_X86_64_GENERALS "" CACHE FILEPATH "An x86_64 build's generals, to make the macOS app universal2 (P2)")
@@ -2250,6 +2251,13 @@ if(ZH_PLATFORM_POSIX)
     set_tests_properties(first_launch_chooser_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
 
+  # The art download of the Linux packages and the macOS app (Tools/fetch-art.sh) against a local file://
+  # release: the sha256 check, a second fetch that downloads nothing, a wrong hash and a path-like name
+  # refused, a withdrawn file removed, the opt-out, the background mode, and the platform's own user data
+  # folder.  No network, no game.
+  add_test(NAME fetch_art_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_fetch_art.sh)
+  set_tests_properties(fetch_art_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
+
   # P3: Tools/linux-portable.sh's folder for the Steam Deck, built inside the Steam Runtime's SDK, and E1 through
   # its own launcher in the Steam Runtime's platform image.  Skipped (77) without docker, the SDK image, or a
   # portable CMake (ZH_PORTABLE_CMAKE: 3.29 or later, running inside the container - Kitware's release tarball).
@@ -2262,11 +2270,6 @@ if(ZH_PLATFORM_POSIX)
       list(APPEND _zh_portable_env "ZH_DATA_DIR=${ZH_GAME_DATA}")
     endif()
     set_tests_properties(linux_portable_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 7200 ENVIRONMENT "${_zh_portable_env}")
-    # The Linux packages' art download (Tools/linux-fetch-art.sh) against a local file:// release: the sha256
-    # check, a second fetch that downloads nothing, a wrong hash and a path-like name refused, a withdrawn file
-    # removed, the opt-out, and the launcher's background mode.  No network, no game.
-    add_test(NAME linux_fetch_art_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_linux_fetch_art.sh)
-    set_tests_properties(linux_fetch_art_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
   endif()
 
   # P1 step 1: the fork's overlay as a read root gives the game what Windows' one folder gives it - the
@@ -2290,7 +2293,8 @@ if(ZH_PLATFORM_POSIX)
   endif()
   # Their install check (Tools/install-guard.sh) on a made-up install: a change, and a check that could not
   # be made, are told apart.  No game data.
-  # The stager keeps the HUD overlay on: it refuses a staged ShowHudOverlay = No, loose or in an archive.
+  # The stager keeps the HUD overlay's default the build's (off in Release): it refuses a staged ShowHudOverlay =
+  # Yes, loose or in an archive.
   add_test(NAME stage_overlay_hud_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_stage_overlay_hud.sh)
   add_test(NAME install_guard_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_install_guard.sh)
   # Every harness stops when its work folder cannot be made, instead of going on with the name empty
@@ -2340,7 +2344,15 @@ endif()
 # default build and out of ctest, because a test that cannot be linked is not a failing test, it is
 # a test that does not exist here yet.  On Windows the keyword changes nothing at all.
 function(add_lib_test name)
+  # add_lib_test(<name> <libs...> [ARGS <arguments for the ctest entry...>])
   set(libs ${ARGN})
+  set(test_args "")
+  list(FIND libs ARGS _zh_args_at)
+  if(NOT _zh_args_at EQUAL -1)
+    list(SUBLIST libs ${_zh_args_at} -1 test_args)
+    list(REMOVE_AT test_args 0)
+    list(SUBLIST libs 0 ${_zh_args_at} libs)
+  endif()
   set(exclude "")
   if("PENDING_MACOS" IN_LIST libs)
     list(REMOVE_ITEM libs PENDING_MACOS)
@@ -2348,7 +2360,7 @@ function(add_lib_test name)
   endif()
   add_executable(${name} ${exclude} ${TESTS}/${name}.cpp)
   target_link_libraries(${name} PRIVATE test_harness ${libs})
-  add_test(NAME ${name} COMMAND ${name})
+  add_test(NAME ${name} COMMAND ${name} ${test_args})
   if(NOT exclude STREQUAL "")
     # PENDING_MACOS used to skip add_test() altogether, so `ctest` on macOS
     # listed 11 tests where Windows lists 16 and said nothing about the other
@@ -2487,7 +2499,16 @@ endif()
 
 # Phase 3 checkpoint: boots the memory manager, name keys and file system, then
 # runs a real INI file through the parser.
-add_lib_test(test_gameengine gameengine)
+# The money sweep (every_start_reaches_its_money_and_has_two_ways_out, 62 generated maps) was 125 s of
+# test_gameengine's 162 s on one Linux host: it is three cases, one per player count, each its own entry
+# below, so ctest -j runs them beside each other and beside the rest.  Only they are split out: the rest
+# stays one process, in one order, so a failure that depends on what ran before still shows.
+add_lib_test(test_gameengine gameengine ARGS --exclude=every_start_reaches_its_money_and_has_two_ways_out_)
+foreach(_zh_players 2 4 8)
+  add_test(NAME test_gameengine_money_sweep_${_zh_players}_players
+           COMMAND test_gameengine every_start_reaches_its_money_and_has_two_ways_out_${_zh_players}_players)
+  set_tests_properties(test_gameengine_money_sweep_${_zh_players}_players PROPERTIES TIMEOUT 2700)
+endforeach()
 # T1's terrain golden against the moved code (GameLogic/WorldHeightMapData, TerrainHeightSampling):
 # nine shipped maps out of the install's archives, which must sample exactly as Tests/terrain_golden.txt
 # says the original W3D code did.  Needs ZH_GAME_DATA; Skipped (77) without it.
