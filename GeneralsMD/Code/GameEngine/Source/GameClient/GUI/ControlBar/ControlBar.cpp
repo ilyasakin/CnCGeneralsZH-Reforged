@@ -2203,6 +2203,9 @@ Int ControlBar::getPanelSlideOffset( Int panel ) const
 //-------------------------------------------------------------------------------------------------
 void ControlBar::placeWindowAt( GameWindow *window, const IRegion2D &rect )
 {
+	// a layout without the named window (a modded ControlBar.wnd, a panel not built yet) hands in null
+	if( window == nullptr )
+		return;
 	ICoord2D screen, size;
 	window->winGetScreenPosition( &screen.x, &screen.y );
 	window->winGetSize( &size.x, &size.y );

@@ -269,8 +269,8 @@ structure, so a disagreement stops the build instead of desynchronising a game.
 
 **E1**, the replay check (`Tools/replay-check.sh`, `replay-check.ps1` on Windows), plays a headless skirmish,
 plays its replay back and plays the seed again, and compares the three runs' world CRCs. The pinned results
-are seed 0 at 1200 frames `0x43105931`, seed 0 at 12000 `0x3E744B9E` and seed 1 at 12000 `0x6CC0BDAD`, since
-upstream bef14036 (v2.3.1) was merged; they are identical on macOS arm64, macOS x86_64 under Rosetta,
+are seed 0 at 1200 frames `0x43105931`, seed 0 at 12000 `0x9667EA29` and seed 1 at 12000 `0x4AA09367`, since
+upstream efd3070a (v2.3.2) was merged; they are identical on macOS arm64, macOS x86_64 under Rosetta,
 Linux x86_64 (GCC), Windows x64 and Windows ARM64 (MSVC; ARM64 from a Windows ARM64 CI run on the integrated
 tree). Replays recorded on one platform play back on the others, and a two-host LAN match between macOS and
 Linux keeps one world. Upstream gameplay data changes move the pins.

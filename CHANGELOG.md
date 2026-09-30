@@ -8,6 +8,10 @@ found and fixed â€” EA's own, not port damage.**
 
 ---
 
+## Groups attack-move at their own speed
+
+- An attack move used to hold the whole group to its slowest member when you held Ctrl on the click, and the computer's groups did that every time. A damaged truck walked the tanks in. Each unit now goes at its own speed. A replay recorded before this, of a group attack-moving that way, will not play back the same.
+
 ## The frame rate cap is gone
 
 - The picture now runs uncapped; the rules keep their own steady clock.
@@ -1205,6 +1209,8 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - A network game with a computer player no longer falls apart because two players' processors do the maths slightly differently. v2.0.0 is the first 64-bit build, and the 64-bit Windows runtime picks between two versions of a logarithm depending on the processor, one bit apart. The computer player's unit choice used one, so two machines could see it buy different units. Every machine uses the same one now.
 - When the game does go down, the reason and where it happened are written into the game log beside the game as well as into the crash file under Documents. Two players on v2.0.0 saw "Technical Difficulties" and their crash file never turned up, so the report that reached us said nothing about why.
 - A Particle Uplink Cannon fired by a script along a path no longer crashes at the path's last waypoint.
+- A Chinook that a map's script sends along a waypoint path no longer takes the game down. The script gave the order before the helicopter had picked how to fly, and the check for where it may land went looking for it.
+- The command bar no longer crashes the game as a match starts. One custom map, "[rank] akas magic zh v1", leaves out a piece of the bar's layout, and the game drew the bar anyway and read from the empty place. It skips the missing piece now.
 - A damage effect whose attacker died first no longer crashes the game, and neither does a flash-bang into a building with fewer soldiers than it was meant to kill.
 - A disguised bomb truck losing its disguise used to rebuild itself onto the image it had just thrown away. It gets a fresh one now.
 - A second exit order while a railed transport is still pushing a unit out no longer leaves the first one frozen half out of the door, unselectable, for the rest of the match.
@@ -1495,6 +1501,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 ## Sound, video, and getting it to start at all
 
 - Audio is real, through the audio library the retail game ships with.
+- Installs from outside Steam start again. Their copy of the game's data files differs from Steam's in a few places, and one of our fixes, to the Aurora's fuel-air bomb, looked for a piece that copy does not have and stopped the game at start with a parsing error. A fix that finds nothing to change now leaves that piece as it is and the game carries on.
 - A death cry plays to the end. So does "construction complete", and the tail of a gun. Telling a sound to stop used to cut it off that frame, where the 2003 game let it finish and only kept it from repeating; our own fix for the audio thread broke that, and it is put back. A looping sound caught in the pause between two plays can be stopped too, instead of carrying on after whatever made it is gone.
 - A sound on the right of the screen comes out of the right speaker. Since the game went 64-bit its sound library worked left and right out the wrong way round, so a tank firing off to the right was heard on the left. Only a sound well off to one side swings far enough to notice, which is why it seemed to come and go.
 - Your units answer you over the battle. A reply plays at whichever of the effects and voice sliders is higher, lifted again on top of that, so "Moving out" is heard in the middle of an artillery duel. Nothing else is turned down to make room for it. EVA and briefings stay where the voice slider puts them.

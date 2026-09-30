@@ -1128,8 +1128,8 @@ TEST(physics_forward_speed_is_the_projection_not_a_per_axis_norm)
 	CHECK_NEAR( PhysicsBehavior::calcForwardSpeed( climb, up ), 12.0f, 0.01f );
 }
 
-/* CommandXlat.cpp: only the attack key arms force fire.  Holding ctrl did it too, and ctrl is the
-   "one shared pace" modifier, so a ctrl click on the ground shelled the dirt instead of moving. */
+/* CommandXlat.cpp: only the attack key arms force fire. Holding ctrl used to do it too, so a
+   ctrl click on the ground shelled the dirt instead of moving. */
 extern Bool CommandXlat_isForceAttackTargeting( Bool forceAttackArmed, Bool attackMoveArmed );
 
 TEST(force_fire_is_the_attack_key_and_nothing_else)

@@ -6616,7 +6616,7 @@ void InGameUI::createCommandHint( const GameMessage *msg )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Force fire is the attack key alone; ctrl held is the shared pace on a move. */
+/** Force fire is the attack key alone. */
 //-------------------------------------------------------------------------------------------------
 Bool InGameUI::isForceFireOn( void ) const
 {

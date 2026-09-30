@@ -58,7 +58,7 @@ PKGS="$(cd "$PKGS" && pwd -P)"; DATA="$(cd "$DATA" && pwd -P)"
 file_of() { ls "$PKGS"/$1 2>/dev/null | head -1; }
 DEB="$(file_of 'zero-hour-reforged_*_amd64.deb')"; RPM="$(file_of 'zero-hour-reforged-*.x86_64.rpm')"
 ARCHPKG="$(file_of 'zero-hour-reforged-*-x86_64.pkg.tar.zst')"; APPIMAGE="$(file_of 'zero-hour-reforged-*-x86_64.AppImage')"
-PIN_1200=0x43105931 PIN_0=0x3E744B9E PIN_1=0x6CC0BDAD	# E1's pins since upstream bef14036 (v2.3.1)
+PIN_1200=0x43105931 PIN_0=0x9667EA29 PIN_1=0x4AA09367	# E1's pins since upstream efd3070a (v2.3.2)
 failed=0 pulled=""
 say() { echo "linux-packages-check: $*"; }
 crc() { printf '%s\n' "$1" | sed -n "s/.*seed $2, 2 players: HEADLESS CRC \(0x[0-9A-Fa-f]*\) at frame $3.*/\1/p" | head -1; }	# <E1 output> <seed> <frame>

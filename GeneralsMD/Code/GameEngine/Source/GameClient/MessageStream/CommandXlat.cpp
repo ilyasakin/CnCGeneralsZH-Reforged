@@ -108,8 +108,7 @@
 //-------------------------------------------------------------------------------------------------
 /**
  * Is the next order click a force fire?
- * Under Modern only the attack key arms it: ctrl is the "one shared pace" modifier on a move (see
- * issueMoveToLocationCommand), so a ctrl click could not ask for both.
+ * Only the attack key arms it. An attack-move click stays an attack move.
  */
 Bool CommandXlat_isForceAttackTargeting( Bool forceAttackArmed, Bool attackMoveArmed )
 {
@@ -1006,11 +1005,6 @@ GameMessage::Type CommandTranslator::issueMoveToLocationCommand( const Coord3D *
 				movemsg->appendObjectIDArgument( obj->getID() );
 			else
 				movemsg->appendLocationArgument( *pos );
-
-			// ctrl on an attack move click asks for one shared pace - the force attack modifier is
-			// the ctrl key, and it means nothing else while the attack move cursor is up
-			if (msgType == GameMessage::MSG_DO_ATTACKMOVETO)
-				movemsg->appendBooleanArgument( TheInGameUI->isInForceAttackMode() );
 
 			// a posted unit holds its spot and shoots what walks into range, rather than chasing it
 			// off the post the player put it on

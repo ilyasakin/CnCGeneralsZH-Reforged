@@ -964,13 +964,11 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		{
 			Coord3D dest = msg->getArgument( 0 )->location;
 
-			// ctrl held on the click means "arrive together" - see AIGroup::groupAttackMoveToPosition
-			Bool matchSpeeds = ( msg->getArgumentCount() > 1 ) ? msg->getArgument( 1 )->boolean : FALSE;
-
+			// Older recordings append a boolean after the point. It is not read.
 			if (currentlySelectedGroup)
 			{
 				currentlySelectedGroup->releaseWeaponLockForGroup(LOCKED_TEMPORARILY);	// release any temporary locks.
-				currentlySelectedGroup->groupAttackMoveToPosition( &dest, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER, matchSpeeds );
+				currentlySelectedGroup->groupAttackMoveToPosition( &dest, NO_MAX_SHOTS_LIMIT, CMD_FROM_PLAYER );
 			}
 
 			break;
