@@ -69,7 +69,7 @@ int main()
 	// Where the claim can be measured: MSVC's own cast against the helper, over the wrap in range and
 	// then past the int range, NaN and the infinities, where the claim is INT_MIN's low byte.  Each value
 	// goes through a volatile so the compiler converts it at run time, as the game's code does, rather
-	// than folding a constant (a contributor's second read).
+	// than folding a constant (a second review's finding).
 	for (float step = -1000.0f; step <= 1000.0f; step += 0.37f) {
 		volatile float value = step;
 		const unsigned char raw = (unsigned char)value;
@@ -93,7 +93,7 @@ int main()
 
 	// strdup as the Windows build has it (Platform/StrdupAsWindows.h): a copy of any string, and NULL for
 	// NULL, the UCRT's _strdup; Darwin's and glibc's strdup read through a NULL.  A cloned particle emitter's
-	// NULL user string crashed the fog of war off Windows (defect #31).
+	// NULL user string crashed the fog of war off Windows (port defect 31).
 	// uint16 and uint32 (S8): the table MSVC 19.44 x64 printed on Windows 11 (W2), value by value.
 	// (unsigned short) is the low 16 bits of the 32-bit conversion; (unsigned) the low 32 bits of the
 	// 64-bit one, which is not the int path: 3e9 survives it, and 2^32, NaN and the infinities are 0.

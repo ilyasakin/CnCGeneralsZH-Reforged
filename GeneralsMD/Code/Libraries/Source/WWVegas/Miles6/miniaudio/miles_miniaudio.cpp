@@ -20,10 +20,10 @@
  * Miles Sound System 6.5 surface, implemented on miniaudio.
  *
  * The sibling of Miles6/xaudio2/miles_xaudio2.cpp for every platform that is not Windows (decision 3
- * in docs/mac-port/README.md), and written against it function by function: MilesAudioManager.cpp
+ * in PORTING.md), and written against it function by function: MilesAudioManager.cpp
  * compiles unchanged against either, and should sound the same through either.  Where the two
  * libraries differ, this file matches what miles_xaudio2 *produces*, not what miniaudio would do by
- * default, and says so at the site.  docs/mac-port/tasks/C4-audio.md lists every such choice.
+ * default, and says so at the site.
  *
  * What maps onto what:
  *   HSAMPLE / H3DSAMPLE  -> a voice that plays the caller's PCM WAV image in place, through its own
@@ -329,7 +329,7 @@ bool prepareResampler(VoiceMix *mix, unsigned channels, unsigned sourceRate, uns
 		return false;
 	}
 	// Linear with miniaudio's default low-pass, where XAudio2 has its own higher-order converter:
-	// the one place the output is knowingly not the same samples (C4's task file, choice 1).
+	// the one place the output is knowingly not the same samples (C4, choice 1).
 	ma_resampler_config config = ma_resampler_config_init(ma_format_f32, channels, sourceRate, deviceRate,
 		ma_resample_algorithm_linear);
 	mix->resamplerReady = ma_resampler_init(&config, NULL, &mix->resampler) == MA_SUCCESS;

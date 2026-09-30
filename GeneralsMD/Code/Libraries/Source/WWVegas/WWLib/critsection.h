@@ -61,7 +61,7 @@
 
 	It is ported anyway, because leaving the last raw CRITICAL_SECTION in WWVegas in a file marked
 	"dead" is how the next sweep finds a fourth copy.  Deleting it instead is probably right and is
-	somebody's decision rather than this task's: B14's brief says not to unify the three
+	a separate decision: B14 deliberately did not unify the three
 	implementations, and deleting one is close enough to that to ask first.
 
 	Unlike mutex.h's, this class is deliberately NOT recursive - Enter() asserted inside==false.

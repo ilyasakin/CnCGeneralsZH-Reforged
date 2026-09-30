@@ -1195,7 +1195,7 @@ GlobalData::GlobalData()
 	
 	// lets CRC the executable!  Whee!
 	/* Not the executable's bytes any more, on any platform: the build fingerprint (N1, decision 5 in
-		 docs/mac-port/README.md), a CRC-32 over the tracked sources that Tools/fingerprint/build_fingerprint
+		 PORTING.md), a CRC-32 over the tracked sources that Tools/fingerprint/build_fingerprint
 		 generates at build time.  A Mac or Linux binary can never have generals.exe's bytes, so hashing them
 		 made cross-platform play impossible by construction; two builds of the same source now agree
 		 whatever compiled them, and any source change still separates builds.  What it gives up: noticing

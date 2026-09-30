@@ -21,7 +21,7 @@
 // Its own header, so that a library which needs the type but not the engine's preamble can have it.
 // WW3D2's text renderer is the reason: it takes the engine's strings, and pulling Lib/BaseType.h into
 // WW3D2 would bring `#define NULL 0` against four WWLib headers that already define NULL differently,
-// which is ill-formed (measured, B1's handoff §5a).  So this file includes nothing and defines one name.
+// which is ill-formed (measured during B1).  So this file includes nothing and defines one name.
 // BaseType.h includes it, so nothing that already had WideChar loses it.
 
 #pragma once

@@ -15,7 +15,7 @@
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# G1's D-pad, screen by screen (docs/mac-port/tasks/G1-gamepad-screens.md): a virtual pad presses fixed D-pad
+# G1's D-pad, screen by screen: a virtual pad presses fixed D-pad
 # paths over the main menu, every page of Options, the Solo Play pane, skirmish setup, and a match's command card,
 # and the focus must land where the lists below say, step by step.  The lists are what GamepadFocus::pickNeighbourBox
 # gives: rows and columns, a 45-degree cone, the column kept through a shorter row; each was looked over by eye when

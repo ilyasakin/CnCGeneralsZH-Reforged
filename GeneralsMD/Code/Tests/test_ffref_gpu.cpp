@@ -16,7 +16,7 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// A3b's harness: the device's fixed-function draws on this machine's GPU against FFReference, a contributor's
+// A3b's harness: the device's fixed-function draws on this machine's GPU against FFReference, an independent
 // reading of Direct3D 9's documented pipeline (Tests/ffreference/ffreference.h; this file reads that
 // header only, as agreed).
 //
@@ -288,7 +288,7 @@ public:
 	}
 
 	/// Reads the GPU back and compares.  `expect_outside`: an armed control, which must fail.  `known`: a
-	/// finding recorded in the task doc and waiting on a decision; its failure is reported and not
+	/// finding recorded during A3 and waiting on a decision; its failure is reported and not
 	/// counted, and its passing is counted, so the list cannot outlive the finding.
 	void check(const char *label, bool expect_outside = false, const char *known = NULL)
 	{
@@ -647,7 +647,7 @@ static void scenarios_cascade(Harness &h)
 	h.begin(0xFF000000);
 	h.rs(D3DRS_SPECULARENABLE, 1);
 	h.draw(D3DFVF_XYZRHW | D3DFVF_DIFFUSE, D3DPT_TRIANGLELIST, screen_quad(4, 4, 60, 60, CORNERS));
-	// F7, settled by Windows' own D3D9 (WARP, HAL and REF, a contributor): an absent vertex specular reads as
+	// F7, settled by Windows' own D3D9 (WARP, HAL and REF): an absent vertex specular reads as
 	// 0x00000000, so SPECULARENABLE adds nothing.  FFReference's N7 says so now; an ordinary check again.
 	h.check("specular add, no vertex specular (N7)");
 }
@@ -712,7 +712,7 @@ static void scenarios_lighting(Harness &h)
 	h.check("two lights, colour from the vertex");
 
 	// The reflection vector, R = 2(N.E)N - E, with E the vertex's own direction to the eye under
-	// LOCALVIEWER and the fixed (0, 0, -1) without it, as Windows' D3D9 draws it (a contributor's knownprobe, N14).
+	// LOCALVIEWER and the fixed (0, 0, -1) without it, as Windows' D3D9 draws it (knownprobe_windows.cpp, N14).
 	// Unlit, through a COUNT2 transform that puts R.xy's -1..1 onto the texture, over a bumped grid so
 	// the normals vary.
 	for (int local = 1; local >= 0; --local) {

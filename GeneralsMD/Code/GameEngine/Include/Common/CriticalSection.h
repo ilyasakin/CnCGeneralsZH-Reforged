@@ -89,7 +89,7 @@ extern PerfGather TheCritSecPerfGather;
 
 	On Apple the lock is os_unfair_lock with an owner and a count (PERF1, 2026-09-27), not libc++'s
 	std::recursive_mutex, which is a recursive pthread mutex there.  The allocator takes these locks
-	on every block it hands out or takes back, and on the M3 Pro Mac's profile that mutex was 10% of the main
+	on every block it hands out or takes back, and on an M3 Pro's profile that mutex was 10% of the main
 	thread in a skirmish and 14% under mobstress.  What it keeps:
 	  - recursion, exactly: the owner re-entering counts up, and the lock is released at zero;
 	  - the pairing of every enter with its exit, and every caller's order of locks above;
@@ -98,7 +98,7 @@ extern PerfGather TheCritSecPerfGather;
 	    never ordered (neither a CRITICAL_SECTION nor a pthread mutex is FIFO), so nothing that
 	    replays the same could depend on it, and this lock stays inside that same freedom.
 	An exit by a thread that does not hold the lock is a programming error on every platform, and here
-	it stops the process in every build: one relaxed load and a compare per exit (a contributor's second read).
+	it stops the process in every build: one relaxed load and a compare per exit (a second review's finding).
 	Without it a non-owner exit at depth above one would quietly count down someone else's depth.  A
 	thread that ends while holding the lock is a bug on every platform too; here a later thread given
 	the same pthread_t would find itself the owner.

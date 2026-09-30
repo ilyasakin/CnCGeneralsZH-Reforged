@@ -22,7 +22,7 @@
 // user32.lib; run it in a desktop session (a D3D9 device needs one): knownprobe_windows.exe out.txt [ref].
 // 2026-09-27, Windows 11 26200 in the project's VM: the Microsoft Basic Render Driver (WARP, d3d10warp.dll
 // 10.0.26100.5074) as HAL, and the reference rasteriser (d3dref9.dll, loaded, as the output shows) as REF.
-// The values are in test_ffreference.cpp's known-list tests and docs/mac-port/tasks/L2-vulkan-recon.md.
+// The values are in test_ffreference.cpp's known-list tests.
 
 // knownprobe: what Direct3D 9 itself draws for each item on the device's known list (F1-F4, F6, F8, F11)
 // and for the page readings FFReference rests on there (N3, N4, N11, N13, N15, N17, N27, N28, N29).

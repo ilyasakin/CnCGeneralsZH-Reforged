@@ -38,7 +38,7 @@
  * through one substitution table: fixed files on macOS, Liberation through fontconfig on Linux.  No
  * Microsoft font is bundled.
  *
- * POSIX only; no Win32 types.  D6's task file has the measurements and what they cannot see.
+ * POSIX only; no Win32 types.  (D6.)
  */
 #ifndef GLYPHRASTERISER_H
 #define GLYPHRASTERISER_H

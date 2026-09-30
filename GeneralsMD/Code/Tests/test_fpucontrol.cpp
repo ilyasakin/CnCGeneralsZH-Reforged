@@ -34,7 +34,7 @@
 	 by architecture and cannot be set: the NaN that an invalid operation GENERATES (0/0) is 0xFFC00000
 	 on x86 (Windows included) and 0x7FC00000 on arm64, whatever FPCR says.  That is pinned below per
 	 architecture so a change is noticed; whether any NaN's bits reach a CRC or a save is a separate
-	 question (docs/mac-port/tasks/B5-win32-types.md). */
+	 question (B5). */
 
 /* FPUControl.h alone, not PreRTS.h: the engine headers define key functions inline outside their
 	 classes (GameMemory.h's EMPTY_DTOR), and GCC emits those classes' vtables in every TU that sees

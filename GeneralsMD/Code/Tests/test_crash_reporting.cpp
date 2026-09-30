@@ -35,7 +35,7 @@
 
 	 Not covered: the named pass's names for code outside this executable, a crash while the report is
 	 being written, and a debugger taking breakIntoDebugger's SIGTRAP before the handler does (measured
-	 by hand under lldb; C5's task file has the result).  "--crash break" is the child to run for it. */
+	 by hand under lldb, C5).  "--crash break" is the child to run for it. */
 
 #include "PreRTS.h"
 

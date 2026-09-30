@@ -49,7 +49,7 @@ struct Action
 };
 
 /// How long the menu must stand still before an "s" step: a second, where the default focus's own rule is 250 ms,
-/// because a pane can hold its widgets still while its hover and focus are still catching up (seen on the M3 Pro Mac: a
+/// because a pane can hold its widgets still while its hover and focus are still catching up (seen on an M3 Pro: a
 /// Back that came 250 ms after the difficulty pane stood still moved the focus to Hard instead)
 const UnsignedInt SETTLED_MS = 1000;
 const UnsignedInt AGAIN_MS = 2000;		///< how long after a press that moved nothing it is pressed again (the menu still settled)

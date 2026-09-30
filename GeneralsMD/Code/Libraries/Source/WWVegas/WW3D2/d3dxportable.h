@@ -53,7 +53,7 @@
 // basis has four nonzero terms.  There the two disagree on 46.8% of Tests/d3dx_oracle's inputs
 // shaped like BezFwdIterator's, the ones a shell's flight is built from (35.7% over all its basis
 // inputs, which include random-t vectors the game never evaluates).  While Windows took this function from the DLL, that was a defect of the shipping
-// Windows game (docs/mac-port/README.md, defect #7), and no Mac build could match an Intel and an
+// Windows game (port defect 7), and no Mac build could match an Intel and an
 // AMD Windows machine at once.  So Windows now uses this file too, and every machine sums in this
 // order.
 //

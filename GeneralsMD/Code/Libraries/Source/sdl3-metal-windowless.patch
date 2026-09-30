@@ -1,6 +1,6 @@
 The fork's one change to SDL3 3.4.16: a Metal GPU device with no window, for -offscreen.
 
-Why: a host with no window server (the M3 Pro Mac, reached over ssh as an account with no GUI login; CI) has
+Why: a host with no window server (a build Mac reached over ssh as an account with no GUI login; CI) has
 Metal - MTLCreateSystemDefaultDevice, render passes and read-backs all work there - but SDL3 will not
 make its GPU device. Its video subsystem must be up, the cocoa driver adds no displays without a window
 server, and the dummy driver, which does start, has no Metal_CreateView, which METAL_PrepareDriver

@@ -15,7 +15,7 @@
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# linux-portable.sh: the portable Linux build (P3, docs/mac-port/tasks/P3-steam-deck.md) - one folder that runs
+# linux-portable.sh: the portable Linux build (P3) - one folder that runs
 # on the Steam Deck's SteamOS and any desktop Linux of the last five years, with nothing installed.
 #
 #   <out>/zero-hour-reforged.sh                   the launcher: runs bin/generals with the player's arguments (a .sh:
@@ -35,14 +35,14 @@
 #
 # THE BUILD runs inside Valve's Steam Runtime 3 "sniper" SDK container (Debian 11, glibc 2.31, g++-14, mold),
 # as the user running this, with the repository, the build folder and CMake mounted at their own paths.
-# libstdc++ and libgcc are linked statically, so the Deck's C++ runtime version does not matter.
+# libstdc++ and libgcc are linked statically, so the Steam Deck's C++ runtime version does not matter.
 #
 # Refused, before the folder is written:
 #   - generals needing a glibc symbol newer than GLIBC_2.31, or any libstdc++ symbol (GLIBCXX_, CXXABI_);
 #   - generals needing a shared library outside the ones every SteamOS and desktop Linux has (glibc's own,
 #     and fontconfig); everything else is static or loaded at run time by SDL and miniaudio;
 #   - a static library on generals' link line that macos-app-licenses.txt does not name;
-#   - a file in the folder that forces the HUD overlay on (off by default in Release: the user's rule).
+#   - a file in the folder that forces the HUD overlay on (off by default in Release: a project rule).
 #
 # Usage: linux-portable.sh --build <folder> --out <folder> --cmake <cmake>
 #          [--image <sdk image>] [--jobs <n>] [--no-art] [--no-tar] [--no-build]
@@ -53,7 +53,7 @@
 #               configure this project, and a distribution's CMake needs its distribution's glibc.
 #               Kitware's release tarball (cmake-3.31.6-linux-x86_64) is what P3 uses
 #   --image     default registry.gitlab.steamos.cloud/steamrt/sniper/sdk:latest
-#   --jobs      the build's parallelism (default: ZHEAVY_JOBS, else the CPU count)
+#   --jobs      the build's parallelism (default: ZH_BUILD_JOBS, else the CPU count)
 #   --no-art    leaves the 1.6 GB of Reforged*.big art out (the game then looks as ClassicGraphics does)
 #   --no-build  stages from what <build> already holds
 #   --appimage  also makes <out>.AppImage with that appimagetool (its extracted AppRun is fine), from a copy of
@@ -92,7 +92,7 @@ REPO="$(cd "$CODE/../.." && pwd)"
 TABLE="$CODE/Tools/macos-app-licenses.txt"
 mkdir -p "$BUILD" && BUILD="$(cd "$BUILD" && pwd)" || fail "cannot make $BUILD"
 case "$OUT" in /*) ;; *) OUT="$PWD/$OUT";; esac
-[ -n "$JOBS" ] || JOBS="${ZHEAVY_JOBS:-$(nproc)}"
+[ -n "$JOBS" ] || JOBS="${ZH_BUILD_JOBS:-$(nproc)}"
 . "$CODE/Tools/package-common.sh"
 
 # everything the container reads or writes, mounted at its own path
@@ -294,7 +294,7 @@ WHERE YOUR ZERO HOUR IS
   Steam Deck's Game Mode there is no folder dialog: give the folder in Steam's launch options instead.
   Select the game in Steam, then Properties > General > Launch Options, and enter:
 
-    -root "~/Games/Command & Conquer Generals Zero Hour"
+    -root "/home/you/Games/Command & Conquer Generals Zero Hour"
 
   with the path of your own Zero Hour folder (the one with INIZH.big in it) between the quotes.
 

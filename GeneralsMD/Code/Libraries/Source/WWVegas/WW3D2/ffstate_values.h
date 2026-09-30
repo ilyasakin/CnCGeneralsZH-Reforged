@@ -24,7 +24,7 @@
 ** only read that state, and the state is numbers: a texture stage's operation, a vertex format's
 ** bits.  The numbers are Direct3D 9's, because that is what the engine and the D3D11 backend hand
 ** them.  Off Windows there is no <d3d9.h> to name them, and a header that defined D3DTOP_MODULATE or
-** DWORD there would be defining names the Windows SDK owns (docs/mac-port, B5), so the generators
+** DWORD there would be defining names the Windows SDK owns (B5), so the generators
 ** name them FF_* instead and this file gives each one its Direct3D 9 value.
 **
 ** It is the only table there is: Windows reads it too, and ffstate.h asserts every entry equal to

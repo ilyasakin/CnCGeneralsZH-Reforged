@@ -35,7 +35,7 @@
 	 - getMaxHeight(), the render object's highest sample, is the parameter maxHeight;
 		 findMinMaxHeights is the pass in initHeightData that sets it.
 	 Tests/terrain_golden.txt is what these must print for nine shipped maps, from the original code
-	 run three ways (T1's task file). */
+	 run three ways (T1). */
 
 #pragma once
 

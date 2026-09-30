@@ -47,7 +47,7 @@ static const unsigned int MAX_FRAMES = 64;
 
 /* One frame in StackDump.cpp's WriteStackLine shape, "  <file>(<line>) : <function> 0x<address>", into
 	 a caller's buffer.  In-process there is no line table, so the module stands where the file does and
-	 the line is 0 (C5's task file records this for whoever ports the launcher): "  generals(0) :
+	 the line is 0 (a launcher that symbolicates would have to add it): "  generals(0) :
 	 GameEngine::update+0x1C4 0x0000000100E1F3A0".  Without a symbol the function is the module and its
 	 offset, which atos resolves offline.  The trailing newline is the caller's, as on Windows. */
 static void formatFrame( void *address, char *line, size_t lineSize )

@@ -15,7 +15,7 @@
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# make-macos-app.sh: builds "Zero Hour Reforged.app" (P1 step 5, the task file's section 3), the
+# make-macos-app.sh: builds "Zero Hour Reforged.app" (P1 step 5), the
 # macos_app CMake target's one step.
 #
 #   Contents/Info.plist, PkgInfo       with ZHReforgedCommit and ZHReforgedBuildDate: which build this is
@@ -30,14 +30,14 @@
 # Refused, before anything is written:
 #   - a static library on generals' link line (build.ninja) that macos-app-licenses.txt does not name;
 #   - a file in the overlay that forces the HUD overlay on (ShowHudOverlay = Yes: off by default in Release,
-#     the user's rule, as Tools/stage-overlay.sh enforces), checked again over the finished bundle;
+#     a project rule, as Tools/stage-overlay.sh enforces), checked again over the finished bundle;
 #   - an object in any static library on the link line, or a Mach-O in the bundle, built for a newer
 #     macOS than --min-macos (P2): the final executable's own stamp would hide a vendored library built
 #     for the build machine's version, and the player's Mac would find it at the first call.
 # Last, an ad-hoc signature (codesign --sign - --timestamp=none) over the final contents, and
 # codesign --verify --deep --strict of it.  Anything written into the bundle afterwards breaks that seal.
 #
-# THE ART is not in the app (the user's rule, as on Linux and upstream's Windows): the Reforged*.big the
+# THE ART is not in the app (a project rule, as on Linux and upstream's Windows): the Reforged*.big the
 # staged overlay links are left out, and the game fetches them on its first start into the user data
 # folder, each checked against art.json's sha256 (fetch-art.sh).  --no-art is still taken, and changes
 # nothing.
@@ -177,7 +177,7 @@ cp "$EXE" "$C/MacOS/generals" && strip -S -x "$C/MacOS/generals" || fail "cannot
 version="$(awk '/#define VERSION_MAJOR/ {a=$3} /#define VERSION_MINOR/ {b=$3} /#define VERSION_BUILDNUM/ {c=$3} END {print a"."b"."c}' "$BUILD/generated/BuildVersion.h")"
 minos="$MIN_MACOS"
 [ "$version" != ".." ] || fail "cannot read the version from $BUILD/generated/BuildVersion.h"
-# which build this is, for the player and for Tools/update-local-app.sh: the source commit (with -dirty when
+# which build this is, for the player and for tools that update an installed copy: the source commit (with -dirty when
 # tracked files differ from it) and the time the bundle was made, in UTC; "unknown" outside a git checkout
 source_dir="$(cd "$(dirname "$0")/.." && pwd)"
 commit="$(git -C "$source_dir" rev-parse --short=10 HEAD 2>/dev/null || echo unknown)"

@@ -15,7 +15,7 @@
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# The game's data going away under it (README's latent list: the lid-close crash).  A player whose install
+# The game's data going away under it (the lid-close crash; PORTING.md, "Defects found while porting").  A player whose install
 # is on a drive that is disconnected, ejected or asleep: the archives are open, and the next read of one
 # fails.  The game must say so and stop - exit status 3 (GAME_DATA_GONE_EXIT_STATUS, Common/Debug.h), the
 # "GAME DATA GONE" line in its log - and never crash.

@@ -300,7 +300,7 @@ void reallySaveReplay(void)
 			errorStr.set(buffer);
 #else
 			// The system's reason, as the Windows branch shows it.  strerror is ASCII in the "C" locale
-			// the game keeps (see the plan's locale rule), so translate() is exact here.
+			// the game keeps (see the port's locale rule), so translate() is exact here.
 			UnicodeString errorStr;
 			errorStr.translate(AsciiString(strerror(errno)));
 #endif

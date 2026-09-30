@@ -16,7 +16,7 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// a contributor's (decision 7, phase A2): D3DX's texture helpers off Windows, which d3dx9posix.cpp's
+// Decision 7, phase A2: D3DX's texture helpers off Windows, which d3dx9posix.cpp's
 // Bind_D3DX9_Runtime points D3DXCreateTexture and the rest at (d3dx9posix.h names them).
 //
 // They do what D3DX does, on the device's own resources (posixd3d9): creating textures through the

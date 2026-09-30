@@ -17,7 +17,7 @@
 */
 
 /*
- * Defect #29 across machines (W1): the LAN lobby's sockets, as LANAPI builds them off Windows, on two
+ * Port defect 29 across machines (W1): the LAN lobby's sockets, as LANAPI builds them off Windows, on two
  * hosts of a real network.  The real Transport and UDP classes:
  *
  *   lan_broadcast_probe listen <this host's LAN address> <port> <seconds>

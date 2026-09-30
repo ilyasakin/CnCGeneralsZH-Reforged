@@ -76,7 +76,7 @@ inline const char *SmoothMotion_SnapName(SmoothMotionSnap s)
 	return (s >= 0 && s < SMOOTH_SNAP_COUNT) ? NAMES[s] : "?";
 }
 
-/// Per-tick counts of how each captured model was treated, for the snap rules' tuning (a contributor, the maintainer).
+/// Per-tick counts of how each captured model was treated, for the snap rules' tuning.
 inline unsigned long long *SmoothMotion_Counts()
 {
 	static unsigned long long counts[SMOOTH_SNAP_COUNT] = { 0 };

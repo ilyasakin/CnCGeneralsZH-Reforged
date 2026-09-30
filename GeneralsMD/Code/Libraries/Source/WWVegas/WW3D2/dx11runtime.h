@@ -30,13 +30,13 @@
 ** past DX8Wrapper, and until those calls go through the wrapper a -dx11 run has a backend that
 ** only the wrapper's own state calls reach.
 **
-** Measured 2026-09-22 on 4b08cb58: 125 references to _Get_D3D_Device()/_Get_D3D() in
+** Measured 2026-09-22, before the port changed the renderer: 125 references to _Get_D3D_Device()/_Get_D3D() in
 ** GeneralsMD/Code, 89 of them outside dx8wrapper.{cpp,h}, which between them make 148 calls on the
 ** device - 47 straight through the accessor and 101 through a pointer captured into a local or a
 ** member first.  There are 22 DX8CALL sites outside the wrapper on top of that.
 **
 ** This comment used to say 236, counted on 2026-09-09 by bfb60e17, which is the same measure taken
-** before ef8303a9 removed 111 of them the same day.  docs/mac-port/D1-call-site-survey.md has the
+** before ef8303a9 removed 111 of them the same day.  A call-site survey (D1) recorded the
 ** categories, the file list and the order the rest of them move in; re-measure rather than quoting
 ** either number.
 **

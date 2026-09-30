@@ -155,7 +155,7 @@ TEST(ffvertex_a_spot_light_adds_the_cone_to_the_point_light_terms)
 
 // D3D9 spends the scene ambient once, through the ambient material:
 //     sum(atten * spot * Ldiffuse * Cdiffuse * N.L) + Cambient * (Gambient + sum(atten * spot * Lambient)) + Cemissive
-// (each light's own ambient joins the scene's since defect #23, 0fa58343)
+// (each light's own ambient joins the scene's since the fix for port defect 23)
 // The generator used to seed the light sum with GlobalAmbient as well, which scaled it by the
 // diffuse material a second time and made every lit model brighter than Direct3D 9 draws it.  On a
 // dusk map that was 13.2% of the frame with the geometry in exactly the right place, so nothing
@@ -223,8 +223,8 @@ TEST(ffvertex_each_coordinate_generation_mode_produces_its_own_vector)
 	CHECK(contains(normal, "generated0 = float4(view_normal, 1.0)"));
 
 	// The reflection vector reads LOCALVIEWER: the vertex's own eye with it (D3D9's default, and every draw
-	// the engine makes), and without it the fixed eye E = (0, 0, -1), as Windows' own D3D9 draws it (a contributor's
-	// knownprobe, N14; 52b842ba).  reflect(I, N) = I - 2(N.I)N with I = -E = (0, 0, 1) is 2(N.E)N - E.
+	// the engine makes), and without it the fixed eye E = (0, 0, -1), as Windows' own D3D9 draws it
+	// (knownprobe_windows.cpp, N14).  reflect(I, N) = I - 2(N.I)N with I = -E = (0, 0, 1) is 2(N.E)N - E.
 	description.Stages[0].TextureCoordinateIndex = FF_TSS_TCI_CAMERASPACEREFLECTIONVECTOR;
 	description.LocalViewer = true;
 	std::string reflection;
@@ -382,7 +382,7 @@ TEST(ffvertex_refuses_what_it_cannot_generate)
 	too_many_stages.StageCount = MAXIMUM_VERTEX_STAGES + 1;
 	CHECK(!VertexShader_Generate(too_many_stages, VERTEX_SHADER_TARGET_D3D9, hlsl));
 
-	// D3DMCS_COLOR2 is no longer refused: since defect #26 (6f9237eb) it reads a mesh's second vertex
+	// D3DMCS_COLOR2 is no longer refused: since the fix for port defect 26 it reads a mesh's second vertex
 	// colour, and where the format carries none it falls back to the material, as D3D9 does.  This
 	// test was registered on Windows only and kept the old refusal until W2's first Windows ctest.
 	VertexPipelineDescription specular_source = plain_description();

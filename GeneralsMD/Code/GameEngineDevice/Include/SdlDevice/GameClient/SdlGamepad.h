@@ -18,7 +18,7 @@
 
 // SdlGamepad.h: SDL3's gamepads, turned into the mouse's and the keyboard's own input (G1).
 //
-// G1's rule (docs/mac-port/tasks/G1-gamepad.md): a gamepad only produces what the mouse and keyboard
+// G1's rule: a gamepad only produces what the mouse and keyboard
 // already produce.  So this has exactly two outputs, the platform's mouse and keyboard, reached through
 // SdlGamepadOutput.h: off Windows the calls SDL's own mouse and key events make (SdlMouse::addEvent and
 // SdlKeyboard::addKey), on Windows what a window message and DirectInput give Win32Mouse and

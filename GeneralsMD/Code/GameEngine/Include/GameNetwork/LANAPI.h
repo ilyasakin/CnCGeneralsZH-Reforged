@@ -266,7 +266,7 @@ protected:
 	UnsignedInt					m_localIP;
 	Transport*					m_transport;
 #if !defined(_WIN32)
-	/* Defect #29: the wildcard socket that takes the broadcasts m_transport, bound to m_localIP, cannot
+	/* Port defect 29: the wildcard socket that takes the broadcasts m_transport, bound to m_localIP, cannot
 		 hear off Windows (udp.h).  listenForBroadcasts (re)binds it whenever m_transport is bound to an
 		 address; collectBroadcasts moves what it heard into m_transport's inbox, so every lobby message
 		 goes through the one loop in update(), and its own-address filter, exactly once. */

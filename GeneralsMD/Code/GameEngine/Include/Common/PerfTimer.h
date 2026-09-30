@@ -67,7 +67,7 @@ class DebugDisplayInterface;
 	 CMake option turns it on in a Release build too.  It was only ever invisible because nobody
 	 builds those configurations.  This project is x64 only (CMakeLists.txt refuses anything else)
 	 and MSVC does not accept __asm on x64 at all, so a Debug build of this tree does not compile
-	 today.  docs/mac-port/tasks/B2-time-shim.md carries the finding.
+	 today (port defect 1).
 
 	 And the reading did not match the rate.  InitPrecisionTimer calibrated the time stamp counter
 	 against the performance counter and stored a TSC rate, which is only correct while this reads

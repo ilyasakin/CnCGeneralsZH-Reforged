@@ -25,7 +25,7 @@
 	 handler may do almost nothing: CrashHandlerPosix.cpp writes the same file, in the same sections, with
 	 only async-signal-safe calls, from what installCrashHandlers prepared beforehand, and then lets the
 	 signal kill the process as it would have, so the operating system's own crash report is still made.
-	 C5's task file has the design. */
+	 (C5.) */
 
 #pragma once
 

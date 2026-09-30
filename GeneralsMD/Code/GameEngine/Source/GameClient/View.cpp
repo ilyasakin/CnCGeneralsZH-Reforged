@@ -335,7 +335,7 @@ void View::xfer( Xfer *xfer )
 
 	// Only when loading: setting the camera to where it already is re-applies it, and the replay
 	// viewer saves a checkpoint every 900 frames, so the camera was nudged, or a move in progress
-	// stopped, at each one (the client twin of defect #20).
+	// stopped, at each one (the client twin of port defect 20).
 	if( xfer->getXferMode() == XFER_LOAD )
 	{
 		setAngle( angle );

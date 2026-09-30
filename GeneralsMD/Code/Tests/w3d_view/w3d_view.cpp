@@ -20,8 +20,8 @@
  *
  * Reads a W3D model and its DDS textures from the game's own .big archives (read only), and draws
  * it with an orbit camera: Metal underneath on macOS, Vulkan on Linux.  It exists to meet the
- * game's data with the API decision 3 chose before D2 designs an interface around that API;
- * docs/mac-port/tasks/D-spike-sdl3-gpu-model.md has what it found.  Not a test, not in ctest.
+ * game's data with the API decision 3 chose before D2 designs an interface around that API
+ * (PORTING.md, decision 4, has what it found).  Not a test, not in ctest.
  *
  *   w3d_view [--data DIR] [--model NAME] [--shaders glsl|hlsl|hand] [--depth auto|d24s8|d32s8]
  *            [--size WxH] [--yaw DEG] [--pitch DEG] [--zoom F]
@@ -68,7 +68,7 @@ namespace {
 // ---------------------------------------------------------------------------------------------
 // The one mapping from what the game asks for to what this device can do.  The game creates
 // D24S8 (WW3D2/dx11device.cpp) and its shadow volumes need the stencil, so the fallback must keep
-// a stencil: D32S8.  Apple GPUs have no D24S8 at all (measured by sdl_gpu_probe, D2's task file).
+// a stencil: D32S8.  Apple GPUs have no D24S8 at all (measured by sdl_gpu_probe, D2).
 // D2's backend needs exactly this function; here it is written once, before D2 exists.
 // ---------------------------------------------------------------------------------------------
 SDL_GPUTextureFormat mapDepthStencilFormat(SDL_GPUDevice *device, const char *force)

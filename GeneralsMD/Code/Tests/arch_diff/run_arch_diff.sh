@@ -59,7 +59,7 @@
 # constant too.  Feed a probe from a volatile, or from a global the compiler cannot prove unchanged.
 #
 # So: a green run here is NOT a green run against Windows.  E1's standing item in
-# WINDOWS-DEBT.md is reduced by this task, not discharged by it.  If you find yourself about to
+# docs/porting/windows-impact.md is reduced by this task, not discharged by it.  If you find yourself about to
 # write "determinism verified" because this passed, read this paragraph again.
 # =============================================================================================
 #

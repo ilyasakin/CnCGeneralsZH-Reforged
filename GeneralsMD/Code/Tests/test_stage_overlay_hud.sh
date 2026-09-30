@@ -15,8 +15,8 @@
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Tools/stage-overlay.sh keeps the HUD overlay's default a build's own (off in Release, on in Debug: the
-# user's rule, 2026-09-29): staging refuses a GameData.ini line that forces ShowHudOverlay on, loose or
+# Tools/stage-overlay.sh keeps the HUD overlay's default a build's own (off in Release, on in Debug: a
+# project rule, 2026-09-29): staging refuses a GameData.ini line that forces ShowHudOverlay on, loose or
 # inside an archive the overlay links, and stages everything else. Made-up Code/Data and Run folders; no
 # game data.
 #   1. ShowHudOverlay = No, and a commented-out Yes        -> staged

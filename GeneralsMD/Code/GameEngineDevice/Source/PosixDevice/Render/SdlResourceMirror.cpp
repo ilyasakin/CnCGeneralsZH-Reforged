@@ -361,7 +361,7 @@ SDL_GPUTexture * SdlResourceMirrors::Surface(IDirect3DSurface9 * surface, bool d
 		return found->second.Texture;
 	}
 	// A standalone render target or depth surface: the GPU's alone, never uploaded.  A CPU write into
-	// one reaches the GPU through a contributor's download-then-write rule and a StretchRect or a draw.
+	// one reaches the GPU through the resource code's download-then-write rule and a StretchRect or a draw.
 	SDL_GPUTextureCreateInfo info;
 	SDL_zero(info);
 	info.type = SDL_GPU_TEXTURETYPE_2D;

@@ -202,7 +202,7 @@ Int UDP::Bind(UnsignedInt IP,UnsignedShort Port)
     return(UNKNOWN);
 
 #if !defined(_WIN32)
-  // Defect #29: the options have to be on the socket before bind (udp.h, BindForBroadcasts)
+  // Port defect 29: the options have to be on the socket before bind (udp.h, BindForBroadcasts)
 #if defined(__linux__)
   // Linux's SO_REUSEADDR lets a second UDP socket bind the very same address and port, which BSD refuses,
   // and a unicast datagram then goes to only one of them: two copies could share one address unseen.  So

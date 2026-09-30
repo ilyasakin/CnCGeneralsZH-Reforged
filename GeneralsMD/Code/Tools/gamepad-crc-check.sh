@@ -15,7 +15,7 @@
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# G1's test 2 (docs/mac-port/tasks/G1-gamepad.md, §5): the same skirmish, driven once by a pad and once
+# G1's test 2: the same skirmish, driven once by a pad and once
 # by hand, must end on the same CRC, and both must differ from the match left alone.
 #
 # Three runs of one fixed-seed skirmish, each with no window at all (-offscreen, which starts SDL's gamepads

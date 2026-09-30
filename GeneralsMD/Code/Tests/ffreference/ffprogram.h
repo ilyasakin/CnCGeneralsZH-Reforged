@@ -139,7 +139,7 @@ bool assemblePixelProgram( const std::string &text, std::vector<uint32_t> &token
  * "Map between D3D9 and D3D8 declarations" and the D3DVSDE_ numbers (D3D8 below): POSITION0 v0,
  * BLENDWEIGHT0 v1, BLENDINDICES0 v2, NORMAL0 v3, PSIZE0 v4, COLOR0 v5, COLOR1 v6, TEXCOORD0-7 v7-v14,
  * POSITION1 v15 (NORMAL1 is v16, past vs_1_1's inputs).  The port's device converts the engine's D3D8
- * declarations with the same table (a contributor, capture v2); capture v3 also holds the engine's own tokens,
+ * declarations with the same table (capture v2); capture v3 also holds the engine's own tokens,
  * which decodeD3D8Declaration reads without it.
  */
 struct DeclarationElement

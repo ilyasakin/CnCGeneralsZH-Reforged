@@ -1,6 +1,6 @@
 // test_glyph_rasteriser's regression golden: GlyphRasteriserClass on the vendored FreeType 2.14.3 over
-// macOS's font files, gasp-faithful.  Printed by the test with ZH_GLYPH_GOLDEN_PRINT=1; the census in
-// D6's task file chose the faces and sizes.  { face, bold, points, lfWidth, file version, string
+// macOS's font files, gasp-faithful.  Printed by the test with ZH_GLYPH_GOLDEN_PRINT=1; a census of
+// the game's text (D6) chose the faces and sizes.  { face, bold, points, lfWidth, file version, string
 // advance, ink left, top, right, bottom, coverage hash }.
 const Golden GOLDEN[] =
 {

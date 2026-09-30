@@ -32,7 +32,7 @@
 // difference nobody could see until a replay diverged".  That turned out to be true of the
 // DLL itself: d3dx9_43.dll picks its D3DXVec4Transform body by CPU vendor, and its
 // GenuineIntel body sums in a different order from the others, so two Windows machines
-// could already disagree (docs/mac-port/README.md, defect #7).  Both names are now the
+// could already disagree (port defect 7).  Both names are now the
 // inline functions at the bottom of this file, on every platform, and both go to
 // d3dxportable.h.  Tests/d3dx_oracle measured that code bit-identical to the DLL's scalar and
 // non-Intel bodies, so on a machine running either of those nothing changed.  If the reading of

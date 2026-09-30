@@ -1695,8 +1695,8 @@ protected:
 	/* One difference from the loader: running is read only while the lock is held.  Read before taking
 	   it, as the loader does, the worker can release the lock, be preempted, and read running false
 	   after the test thread took the lock and called Stop() - so it exits without ever blocking, and
-	   Stop() returns early.  That window failed the deadlock test under ctest -j4 on the Linux x86_64 host's four
-	   cores (twice, the second in a contributor's ci-matrix gate at 8dba78a1).  Read under the lock, a worker
+	   Stop() returns early.  That window failed the deadlock test under ctest -j4 on a four-core Linux
+	   host (twice, the second in a CI run).  Read under the lock, a worker
 	   can only see running after acquiring the lock, which the test holds through Stop(), so the stall
 	   the test pins is certain; unlocked, the worker takes the lock, sees running false and exits. */
 	virtual void Thread_Function()
@@ -1726,7 +1726,7 @@ TEST(threadclass_stop_deadlocks_if_the_caller_holds_the_workers_lock)
 	LockLoopWorker worker(lock);
 	worker.Execute();
 	/* In its loop before the lock is taken here, not after a fixed 20 ms sleep.  This check failed once
-	   (elapsed < 250) under ctest -j4 on a four-core machine (L1b, the Linux x86_64 host) and not in 60 runs since;
+	   (elapsed < 250) under ctest -j4 on a four-core machine (L1b, Linux x86_64) and not in 60 runs since;
 	   the likely reading is a worker not yet started, which sees running false and exits at once, so
 	   Stop() returns early.  Waiting for the loop removes that reading whichever it was. */
 	CHECK(worker.Wait_Until_Looping());

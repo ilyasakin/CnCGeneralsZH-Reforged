@@ -67,7 +67,7 @@
 // sentence someone later builds on.  Both overloads now produce a 32-bit result explicitly, which
 // is what cvtss2si and cvtsd2si produce and what every call site in the tree assigns to an int.
 //
-// Found by a contributor's cross-architecture harness, which runs the real x86 instructions under
+// Found by the cross-architecture harness (Tests/arch_diff), which runs the real x86 instructions under
 // Rosetta and compares them against these: 11 of 75 rows differed, all of them here, none of them
 // a tie or an in-range value.  Worth knowing why this file's own sweep could not see it: the sweep
 // checks against the C library's round-to-nearest, and the C library on this machine has the same

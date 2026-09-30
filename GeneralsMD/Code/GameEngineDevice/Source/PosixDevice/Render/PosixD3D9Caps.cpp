@@ -16,9 +16,9 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// a contributor's (decision 7, phase A2): the caps, the Check* answers and the adapter identifier - what this device
+// Decision 7, phase A2: the caps, the Check* answers and the adapter identifier - what this device
 // says it can do.  A3 draws exactly what is claimed here, so nothing is claimed that A3 will not honour
-// (the profile agreed with a contributor, 2026-09-26):
+// (the profile agreed with the draw side's author, 2026-09-26):
 //
 //   - The identifier names no vendor (VendorId and DeviceId 0), so neither DX8Caps' vendor quirks nor
 //     W3DShaderManager::getChipset's vendor tables fire.  getChipset classifies such a device by its
@@ -209,7 +209,7 @@ RenderResult PosixDirect3D9::GetDeviceCaps( unsigned int adapter, D3DDEVTYPE typ
 	caps->VertexShaderVersion = D3DVS_VERSION(1, 1);
 	caps->PixelShaderVersion = D3DPS_VERSION(1, 1);
 	caps->MaxVertexShaderConst = 96;
-	// The documented minimum for ps 1.0 to 1.3 (the maintainer's decision, 2026-09-26): inside +-1 every conforming
+	// The documented minimum for ps 1.0 to 1.3 (a project decision, 2026-09-26): inside +-1 every conforming
 	// device agrees, so this claims only what all of them guarantee.  Registers hold [-1, 1].
 	caps->PixelShader1xMaxValue = 1.0f;
 	caps->NumSimultaneousRTs = 1;

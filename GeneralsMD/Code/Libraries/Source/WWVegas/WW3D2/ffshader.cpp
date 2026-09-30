@@ -53,13 +53,13 @@ static unsigned coordinate_register(FixedFunctionValue texture_coordinate_index)
 // (ffvertex.cpp, "output.TexCoord%u = generated%u.xy").  So a stage reads its own register, by
 // construction.  Reading the set's instead gave a stage that generates its coordinates (the shroud,
 // camera-space position, set 0) the first stage's texture coordinates, and a blend-tile stage 0 on set
-// 1 a disabled stage's zeroes (defect #27).
+// 1 a disabled stage's zeroes (port defect 27).
 //
 // D3D9: the vertex half is D3D9's own fixed function, and what it puts in each register was measured
 // when a D3D9 device was there to compare with (bfb60e17).  Routing a generating stage to its own
 // stage register took Flash Effect at frame 400 from 0.25% against the fixed-function frame to 0.81%,
 // so the set is what the device means, and the D3D9 profile reads the set's register.  A reading of
-// the documentation pointed the other way by inference (a contributor, for #27); the measurement stands until a
+// the documentation pointed the other way by inference (for port defect 27); the measurement stands until a
 // Windows D3D9 frame says otherwise.
 static unsigned stage_register(CombinerShaderTarget target, unsigned stage, FixedFunctionValue texture_coordinate_index)
 {

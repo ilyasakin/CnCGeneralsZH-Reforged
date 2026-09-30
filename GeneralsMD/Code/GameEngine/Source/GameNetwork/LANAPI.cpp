@@ -98,7 +98,7 @@ LANAPI::LANAPI( void ) : m_transport(NULL)
 	m_transport = new Transport;
 	m_isActive = TRUE;
 #if !defined(_WIN32)
-	m_transport->shareAddress(TRUE);		// defect #29: another copy's broadcast listener may hold the port
+	m_transport->shareAddress(TRUE);		// port defect 29: another copy's broadcast listener may hold the port
 	m_broadcastListener = new Transport;
 #endif
 }

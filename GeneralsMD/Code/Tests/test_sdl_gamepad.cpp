@@ -16,7 +16,7 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 /*
- * G1's test 1 (docs/mac-port/tasks/G1-gamepad.md): a gamepad produces exactly the input a mouse and
+ * G1's test 1: a gamepad produces exactly the input a mouse and
  * keyboard produce.  On SDL3's offscreen video driver, with SDL's virtual joystick as the pad.
  *
  * Each case drives the pad through SDL (SDL_SetJoystickVirtualButton/Axis, then SDL_PollEvent into
@@ -39,7 +39,7 @@
  * Nintendo and a PlayStation pad and with the swap option; a pad pulled out mid-press lets go of all it
  * held; and every binding in the shipped file parsed, each Command bound.
  *
- * What it cannot see: a real pad's feel, and Steam Input's virtual pad (the Deck, G1's step 1).
+ * What it cannot see: a real pad's feel, and Steam Input's virtual pad (the Steam Deck, G1's step 1).
  */
 
 #include "test_harness.h"

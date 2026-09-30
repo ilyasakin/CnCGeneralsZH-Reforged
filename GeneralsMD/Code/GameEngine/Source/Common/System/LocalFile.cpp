@@ -188,7 +188,7 @@ static int closeFile(int handle) { return ::close(handle); }
 #endif
 
 /* A read or a seek that failed because the file's device went away while it was open: the drive holding
-	 the game's data disconnected, ejected, or put to sleep (the lid-close crash, README's latent list).
+	 the game's data disconnected, ejected, or put to sleep (the lid-close crash; PORTING.md, "Defects found while porting").
 	 Off Windows the call fails with EIO (measured on macOS 26, HFS+ and exFAT disk images detached under an
 	 open file); ENXIO and ENODEV are the same loss on other devices and systems.  On Windows the CRT's
 	 _read and _lseek leave the system's error in _doserrno; the codes below are the device-gone ones.  On

@@ -76,7 +76,7 @@ D3DXVECTOR4 * D3DXVec3Transform(D3DXVECTOR4 * out, const D3DXVECTOR3 * vector, c
 }
 
 //-------------------------------------------------------------------------------------------------
-// The shader functions: failures, each said once.  The texture functions are a contributor's, in
+// The shader functions: failures, each said once.  The texture functions are in
 // d3dx9posix_texture.cpp.
 //-------------------------------------------------------------------------------------------------
 

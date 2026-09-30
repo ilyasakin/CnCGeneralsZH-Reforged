@@ -179,7 +179,7 @@ static void append_light(std::string & body, unsigned index, FixedFunctionValue 
 	// The specular term is Blinn's half vector ("Specular Lighting"): between the light and the eye,
 	// where the eye is the vertex's own direction to the camera with D3DRS_LOCALVIEWER, which is D3D9's
 	// default and which the engine never turns off, and the fixed (0, 0, -1) without it.  The page says
-	// (0, 0, 1); Windows' own D3D9 (WARP and REF, a contributor's knownprobe, N27) draws with (0, 0, -1), which is
+	// (0, 0, 1); Windows' own D3D9 (WARP and REF, Tests/ffreference/knownprobe_windows.cpp, N27) draws with (0, 0, -1), which is
 	// also where the local viewer's direction points for a vertex straight ahead.
 	body += local_viewer
 		? "        float3 half_vector = normalize(to_light + normalize(-view_position.xyz));\n"
@@ -238,7 +238,7 @@ static bool append_texture_coordinates(std::string & body,
 
 		case FF_TSS_TCI_CAMERASPACEREFLECTIONVECTOR:
 			// R = 2(N.E)N - E, E the unit direction to the eye: the vertex's own with D3DRS_LOCALVIEWER,
-			// and the fixed (0, 0, -1) without it, as Windows' D3D9 draws it (a contributor's knownprobe, N14).
+			// and the fixed (0, 0, -1) without it, as Windows' D3D9 draws it (knownprobe_windows.cpp, N14).
 			// reflect(I, N) is I - 2(N.I)N, so I is -E: the camera-space position, or (0, 0, 1).
 			snprintf(line, sizeof(line), description.LocalViewer
 				? "    float4 generated%u = float4(reflect(normalize(view_position.xyz), view_normal), 1.0);\n"

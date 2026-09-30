@@ -241,7 +241,7 @@ inline bool findUserDataDirectory( char *out, size_t outSize )
 	 every `+ "Save\"` and `endsWith("\")` works unchanged: the engine's paths keep their
 	 Windows spelling and are resolved where they reach the operating system (posixpath.h).
 	 Documents, where Windows keeps it, was considered for macOS and set aside: Apple's guidelines
-	 keep an application's own data in Application Support (C1's task file, D5). */
+	 keep an application's own data in Application Support (C1, D5). */
 
 /** This user's home directory: $HOME, or the password database's entry when $HOME is unset. */
 inline bool findHomeDirectory( char *out, size_t outSize )
@@ -354,7 +354,7 @@ inline bool findUserDataDirectory( char *out, size_t outSize )
 
 /** Registry.ini, which stands in for the registry off Windows (registry.cpp): the user data directory
 	* plus the leaf, spelled as the engine spells paths.  Open it with zh_fopen.  Every reader and writer
-	* of the file takes its path from here (C1 (d), agreed with registry.cpp's and WWDownload's owners). */
+	* of the file takes its path from here (C1 (d): registry.cpp and WWDownload included). */
 inline bool findRegistryFile( char *out, size_t outSize )
 {
 	if (!findUserDataDirectory( out, outSize ))

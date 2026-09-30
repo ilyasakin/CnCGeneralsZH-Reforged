@@ -33,8 +33,8 @@
   the games are started with -noaudio.
 
 .EXAMPLE
-  .\gamepad-check.ps1 -DataDir C:\work\data
-  .\gamepad-check.ps1 -DataDir C:\work\data -Checks combo -DllPath C:\work\dll-x64
+  .\gamepad-check.ps1 -DataDir D:\ZeroHourData
+  .\gamepad-check.ps1 -DataDir D:\ZeroHourData -Checks combo -DllPath D:\x64-dlls
 
   Exit status: 0 when every check passed, 1 otherwise.
 #>

@@ -15,7 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-// GamepadAim.h: aim assist for a pad's pointer in a match (docs/mac-port/tasks/G1-gamepad-screens.md, "The cursor").
+// GamepadAim.h: aim assist for a pad's pointer in a match.
 //
 // A stick is a poor mouse for picking out one small unit, so the pointer is helped, on the client only:
 //   - magnetism: while the stick rests, the pointer eases onto the nearest aimable thing within a small radius;

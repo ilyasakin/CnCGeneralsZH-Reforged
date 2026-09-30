@@ -21,8 +21,8 @@
 // binary stream Recorder.cpp opens - each code unit as two bytes, low first, nothing translated -
 // while the same FILE* carries fwrite, fprintf and fread.
 //
-// The expected bytes below are MSVC's documented binary-mode behaviour, written out.  C1's task file
-// records the Wine run of Tests/replay_wide_oracle.cpp, which writes the same strings with the real
+// The expected bytes below are MSVC's documented binary-mode behaviour, written out.  C1
+// made a Wine run of Tests/replay_wide_oracle.cpp, which writes the same strings with the real
 // wide calls through Wine's msvcrt and gets these bytes.
 //
 // Built without wide or UTF-16 literals, so the file does not depend on WideChar's width or on how a

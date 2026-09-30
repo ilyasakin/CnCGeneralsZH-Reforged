@@ -26,7 +26,7 @@
  *
  * Both print the list as the engine holds it - a set ordered without regard to case, as
  * FilenameList is - and, with "text", how each file reads in text mode, for chunk sizes from one
- * byte up.  The two outputs are compared with diff.  C1's task file records the runs.
+ * byte up.  The two outputs are compared with diff (C1).
  *
  *   fs_oracle list <root> <originalDirectory> <searchName> <0|1 subdirectories>
  *   fs_oracle text <root> <originalDirectory> <searchName> <0|1 subdirectories>

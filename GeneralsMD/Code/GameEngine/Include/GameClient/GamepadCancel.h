@@ -15,7 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-// GamepadCancel.h: a pad's B in a match (docs/mac-port/tasks/G1-gamepad-screens.md, "The buttons in a match").
+// GamepadCancel.h: a pad's B in a match.
 //
 // Every console strategy game gives the right face button (the bottom one on a Nintendo pad) one meaning: take
 // back.  The mouse has no single button for that - a right click cancels what is armed and gives

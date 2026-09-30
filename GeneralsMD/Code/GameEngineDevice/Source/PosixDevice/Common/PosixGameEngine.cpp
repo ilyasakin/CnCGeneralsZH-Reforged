@@ -56,7 +56,7 @@ LocalFileSystem *PosixGameEngine::createLocalFileSystem( void )
 }
 
 // Win32BIGFileSystem is the BIG reader on every platform: nothing in it is Win32 now but ntohl and one
-// message box, both behind #if (C1's task file, PR (f)).
+// message box, both behind #if (C1, PR (f)).
 ArchiveFileSystem *PosixGameEngine::createArchiveFileSystem( void )
 {
 	return NEW Win32BIGFileSystem;

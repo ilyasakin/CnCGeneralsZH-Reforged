@@ -52,8 +52,8 @@
 ** time, when this header was written: all of them are measurement that ends in a DEBUG_LOG or an
 ** on-screen statistic, and none of them reaches a branch the simulation takes.  Keep it that way.
 ** If you are about to read a clock to decide something the simulation decides, stop: two machines
-** will answer differently and the replay will not match.  docs/mac-port/tasks/B2-time-shim.md has
-** the sweep that established this.
+** will answer differently and the replay will not match.  A sweep of every clock read (B2)
+** established this.
 */
 
 #pragma once

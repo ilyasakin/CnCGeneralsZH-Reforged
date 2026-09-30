@@ -15,8 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-// GamepadRadial.h: the radial command menu for a pad in a match (docs/mac-port/tasks/G1-gamepad-screens.md, "The
-// radial command menu"), the way console RTS games put the command card under the thumb.
+// GamepadRadial.h: the radial command menu for a pad in a match, the way console RTS games put the command card under the thumb.
 //
 // RT held (the CommandBar binding's button, GamepadReforged.ini) opens a ring of the command grid's places that hold
 // something around the screen's centre, in the grid's reading order: the selection's command card (production,

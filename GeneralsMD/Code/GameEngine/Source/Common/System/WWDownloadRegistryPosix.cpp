@@ -26,7 +26,7 @@
 	 counts, PopupPlayerInfo and SkirmishGameOptionsMenu the Preorder flag, MainMenuUtils the version
 	 and the patch-server URLs.  On Windows they are WWDownload/registry.cpp and urlBuilder.cpp, on
 	 Zero Hour's registry key.  Here they are that key in Registry.ini, through Common/RegistryFile.h,
-	 the protocol every reader and writer of the file shares (C1's task file) - so a value written here
+	 the protocol every reader and writer of the file shares (C1) - so a value written here
 	 is the value registry.cpp's readers see, and the other way round.  B6.
 
 	 The getters are the engine's own (registry.cpp, AsciiString forms): same key, same file, same

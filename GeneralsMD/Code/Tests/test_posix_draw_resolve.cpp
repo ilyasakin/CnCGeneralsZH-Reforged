@@ -177,7 +177,7 @@ static void check_combiner(PosixDevice9 *device)
 	CHECK(VertexShader_Key(vertex).find(":V") == std::string::npos);
 	device->SetRenderState(D3DRS_LOCALVIEWER, 1);
 	device->SetRenderState(D3DRS_SPECULARENABLE, 0);
-	// Lit without specular still writes the halfway vector, so its key still says which (a contributor's read).
+	// Lit without specular still writes the halfway vector, so its key still says which (a review's reading).
 	CHECK(device->Build_Vertex_Description(vertex) && VertexShader_Key(vertex).find(":V") != std::string::npos);
 	device->SetRenderState(D3DRS_FOGENABLE, 1);
 	device->SetRenderState(D3DRS_FOGTABLEMODE, D3DFOG_LINEAR);

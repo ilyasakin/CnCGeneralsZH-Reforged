@@ -20,7 +20,7 @@
 .DESCRIPTION
   The Direct3D 11 backend compiles each generated program with d3dcompiler_47 the first time a pipeline
   needs it, and keeps the bytecode in the player's dx11shaders.cache. Under Wine, d3dcompiler_47 is
-  vkd3d-shader, and one of those compiles took minutes (X2, a contributor on the Deck): the game looked hung on its
+  vkd3d-shader, and one of those compiles took minutes (X2, on a Steam Deck): the game looked hung on its
   first frame. The backend reads dx11shaders.shipped, next to the exe, before it compiles anything, so the
   programs recorded here are never compiled on a player's machine.
 
@@ -41,8 +41,8 @@
   machine would drop, and so their programs, in the recording.
 
 .EXAMPLE
-  .\record-dx11-shaders.ps1 -DataDir C:\work\data
-  .\record-dx11-shaders.ps1 -DataDir C:\work\data -Maps "Bitter Winter","Lights Out" -Missions MD_USA01
+  .\record-dx11-shaders.ps1 -DataDir D:\ZeroHourData
+  .\record-dx11-shaders.ps1 -DataDir D:\ZeroHourData -Maps "Bitter Winter","Lights Out" -Missions MD_USA01
   .\record-dx11-shaders.ps1 -DataDir D:\ZeroHourData -Renderer d3d12 -ExtraArgs -noDynamicLOD
 #>
 param(

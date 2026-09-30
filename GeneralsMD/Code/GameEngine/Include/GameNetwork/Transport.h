@@ -63,7 +63,7 @@ public:
 	inline Bool allowBroadcasts(Bool val) { if (!m_udpsock) return false; return (m_udpsock->AllowBroadcasts(val))?true:false; }
 
 #if !defined(_WIN32)
-	/* Defect #29 (udp.h): shareAddress(TRUE) before init lets this socket share its port with another
+	/* Port defect 29 (udp.h): shareAddress(TRUE) before init lets this socket share its port with another
 		 copy's broadcast listener; initBroadcastListener binds the wildcard address to take only the
 		 broadcasts sent to that port.  Both persist across reset(). */
 	void shareAddress( Bool val ) { m_shareAddress = val; }

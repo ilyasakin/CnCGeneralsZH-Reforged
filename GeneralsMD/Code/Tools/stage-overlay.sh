@@ -23,7 +23,7 @@
 #   stage-overlay.sh <Code/Data> <Run folder, or ""> <out> [--dev]
 #
 # The shipped overlay, from generals' Windows post-build list (CMakeLists.txt) less what package.bat
-# leaves out, as P1's task file infers it (to be confirmed against upstream's release tooling):
+# leaves out, as P1 inferred it (to be confirmed against upstream's release tooling):
 #   Data/INI/, Data/Patch.str, Data/Scripts/, Data/Turkish/, Install_Final.bmp, Art/Textures/, Window/
 # and the fork's art archives, Reforged*.big from the Run folder when vendor.sh has fetched them,
 # LINKED here (1.65 GB): the bundle step copies them through the links.
@@ -86,7 +86,7 @@ else
 		done
 	fi
 fi
-# The corner readout (InGameUI::drawHudOverlay) is off by default in Release and on in Debug, the user's
+# The corner readout (InGameUI::drawHudOverlay) is off by default in Release and on in Debug, a project
 # rule (2026-09-29): a player turns it on in GameData.ini, and a harness whose pictures must show it passes
 # -showHudOverlay.  Nothing staged may force it on for every player: a GameData.ini line setting it Yes,
 # True or 1, loose or inside an archive the overlay carries, stops the staging here.

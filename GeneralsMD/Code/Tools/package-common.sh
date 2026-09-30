@@ -23,7 +23,7 @@
 #       the licence entries those libraries need, with the table's "+" lines; status 1, printing the
 #       libraries the table does not name, when any is missing
 #   hud_check_files <dir>
-#       the files under <dir> that force the HUD overlay on (the user's rule: off by default in Release), if any
+#       the files under <dir> that force the HUD overlay on (a project rule: off by default in Release), if any
 #   license_entry <entry> <folder>
 #       copies that entry's files into <folder>; CODE, REPO and BUILD are the caller's
 

@@ -222,7 +222,7 @@ GameState::SnapshotBlock *GameState::findBlockInfoByToken( AsciiString token, Sn
 /* Off Windows the same two strings come from strftime, in whatever LC_TIME the process has - the
 	 user's, once the platform layer calls setlocale(LC_TIME, "") at startup, and "C" until then.
 	 strftime writes LC_TIME's codeset, which is UTF-8 in practice, while LC_CTYPE stays "C" on
-	 purpose (the plan's rules say why), so the bytes are decoded as UTF-8 explicitly: mbstowcs would
+	 purpose (the port's rules say why), so the bytes are decoded as UTF-8 explicitly: mbstowcs would
 	 decode them by LC_CTYPE and mangle every non-ASCII month name.  Display only; nothing here
 	 reaches the simulation. */
 static UnicodeString formatWallClock( const WallClockTime &timeVal, const char *format )

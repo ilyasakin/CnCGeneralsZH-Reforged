@@ -15,7 +15,7 @@
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# The first launch's folder question, end to end and headless (the user's rule: no run may need a human).
+# The first launch's folder question, end to end and headless (no test run may need a human).
 # PosixMain's test stand-in for SDL's dialog, ZH_TEST_CHOOSER_ANSWERS, feeds the real generals a list of
 # answers; each refusal's reason goes to stderr where the dialog's message box would have shown it.
 #
@@ -31,7 +31,7 @@
 #
 # The root is always a farm of ZH_DATA_DIR's zerohour (rule 9), HOME an empty folder (no known place can answer),
 # the user data folder a scratch one.  Skipped (77) without ZH_DATA_DIR.  What it cannot see: the SDL panel
-# itself, which the user saw in front on the MacBook Air on 2026-09-27; this is everything around it.
+# itself, which was checked by hand on a MacBook Air on 2026-09-27; this is everything around it.
 #
 # Each start plays a seeded two-player AI skirmish to 30 frames (so -maxframes ends it), with the build's staged
 # overlay as a package carries it, under a 300 s alarm: nothing can wait on a person.

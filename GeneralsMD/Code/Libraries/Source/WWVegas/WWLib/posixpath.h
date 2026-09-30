@@ -17,8 +17,7 @@
 */
 
 /*
-** The one place a path the engine spelled becomes a path the operating system can open (C1, decision
-** D1 in docs/mac-port/tasks/C1-mac-game-engine.md).
+** The one place a path the engine spelled becomes a path the operating system can open (C1).
 **
 ** The engine spells paths the way Windows took them: "Data\INI\GameData.ini", in whatever case the
 ** code or the data happened to use, and it keeps them that way - INI load order, the INI CRC,

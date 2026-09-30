@@ -15,7 +15,7 @@
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# G1's menus on a pad (docs/mac-port/tasks/G1-gamepad-screens.md): a virtual pad walks the shell's
+# G1's menus on a pad: a virtual pad walks the shell's
 # screens, and the focus must land where the list of screens says, step by step.
 #
 # One run, with no window at all (-offscreen, which starts SDL's gamepads only for ZH_INPUT_SCRIPT, so a

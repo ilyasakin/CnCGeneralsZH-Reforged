@@ -20,10 +20,10 @@
 ** The Direct3D 9-shaped device off Windows (decision 7): what d3d9.dll is on Windows, behind the same
 ** interfaces (Platform/D3D9Posix.h), so WW3D2 and W3DDevice keep every D3D9 call they make.
 **
-** Two owners, one file each, so neither edits the other's (agreed 2026-09-26):
-**   - a contributor: this header; PosixDirect3D9.cpp (the adapter, its modes, CreateDevice and Reset);
+** The device's files, and what each holds:
+**   - this header; PosixDirect3D9.cpp (the adapter, its modes, CreateDevice and Reset);
 **     PosixDevice9.cpp (the device's state, bindings, scenes, presentation, shaders and draws);
-**   - a contributor (phase A2): PosixDevice9Resources.cpp (every resource-creating and surface method, Clear,
+**   - phase A2: PosixDevice9Resources.cpp (every resource-creating and surface method, Clear,
 **     and Create_Implicit_Surfaces); PosixD3D9Caps.cpp (the caps, the Check* answers and the adapter
 **     identifier); the resource classes, in files of their own.
 **
@@ -122,19 +122,19 @@ public:
 	PosixDirect3D9();
 
 	unsigned int GetAdapterCount() override;
-	RenderResult GetAdapterIdentifier(unsigned int adapter, RenderUInt32 flags, D3DADAPTER_IDENTIFIER9 *identifier) override;	// a contributor
+	RenderResult GetAdapterIdentifier(unsigned int adapter, RenderUInt32 flags, D3DADAPTER_IDENTIFIER9 *identifier) override;
 	unsigned int GetAdapterModeCount(unsigned int adapter, D3DFORMAT format) override;
 	RenderResult EnumAdapterModes(unsigned int adapter, D3DFORMAT format, unsigned int mode, D3DDISPLAYMODE *display_mode) override;
 	RenderResult GetAdapterDisplayMode(unsigned int adapter, D3DDISPLAYMODE *mode) override;
 	RenderResult CheckDeviceType(unsigned int adapter, D3DDEVTYPE type, D3DFORMAT display_format,
-		D3DFORMAT back_buffer_format, int windowed) override;																	// a contributor
+		D3DFORMAT back_buffer_format, int windowed) override;
 	RenderResult CheckDeviceFormat(unsigned int adapter, D3DDEVTYPE type, D3DFORMAT adapter_format, RenderUInt32 usage,
-		D3DRESOURCETYPE resource_type, D3DFORMAT check_format) override;														// a contributor
+		D3DRESOURCETYPE resource_type, D3DFORMAT check_format) override;
 	RenderResult CheckDeviceMultiSampleType(unsigned int adapter, D3DDEVTYPE type, D3DFORMAT surface_format,
-		int windowed, D3DMULTISAMPLE_TYPE multisample, RenderUInt32 *quality_levels) override;								// a contributor
+		int windowed, D3DMULTISAMPLE_TYPE multisample, RenderUInt32 *quality_levels) override;
 	RenderResult CheckDepthStencilMatch(unsigned int adapter, D3DDEVTYPE type, D3DFORMAT adapter_format,
-		D3DFORMAT render_target_format, D3DFORMAT depth_stencil_format) override;											// a contributor
-	RenderResult GetDeviceCaps(unsigned int adapter, D3DDEVTYPE type, D3DCAPS9 *caps) override;								// a contributor
+		D3DFORMAT render_target_format, D3DFORMAT depth_stencil_format) override;
+	RenderResult GetDeviceCaps(unsigned int adapter, D3DDEVTYPE type, D3DCAPS9 *caps) override;
 	RenderResult CreateDevice(unsigned int adapter, D3DDEVTYPE type, RenderWindow focus_window,
 		RenderUInt32 behaviour_flags, D3DPRESENT_PARAMETERS *parameters, IDirect3DDevice9 **device) override;
 };
@@ -164,7 +164,7 @@ public:
 
 	PosixDevice9(PosixDirect3D9 *adapter, RenderWindow window, const D3DPRESENT_PARAMETERS &parameters);
 
-	// What a contributor's resource code reads.
+	// What the resource code (PosixDevice9Resources.cpp) reads.
 	const D3DPRESENT_PARAMETERS & Get_Present_Parameters() const { return Parameters; }
 	RenderWindow Get_Window() const { return Window; }
 
@@ -181,16 +181,16 @@ public:
 	const std::map<std::string, unsigned int> & Draw_Refusals() const { return DrawRefusals; }
 
 	/// Clear with a window, where the back buffer's pixels are the GPU's (the A3 design's render-target
-	/// seam): a contributor's Clear calls this when Get_Gpu() is not null.  Each rectangle is cut to the viewport, as
+	/// seam): Clear calls this when Get_Gpu() is not null.  Each rectangle is cut to the viewport, as
 	/// D3D9's are; one covering the whole target is a load operation, a smaller one a clear draw.  A
 	/// colour clear of another render target is refused until A3d.
 	RenderResult Gpu_Clear(RenderUInt32 count, const D3DRECT *rects, RenderUInt32 flags, D3DCOLOR color, float z,
 		RenderUInt32 stencil);
 
-	// ---- The render-target seam (A3d), agreed with a contributor 2026-09-26.  With a window, the pixels of every
+	// ---- The render-target seam (A3d), agreed 2026-09-26.  With a window, the pixels of every
 	// surface a render target or depth-stencil can be - the back buffer, the depth surfaces, CreateRenderTarget
 	// surfaces and the levels of D3DUSAGE_RENDERTARGET textures - are the GPU's; A2's CPU image is stale
-	// until downloaded.  a contributor's surface code (PosixDevice9Resources.cpp) calls these:
+	// until downloaded.  The surface code (PosixDevice9Resources.cpp) calls these:
 	//   - Clear: colour to the GPU when Gpu_Owns(RenderTargets[0]), depth and stencil when
 	//     Gpu_Owns(DepthStencil), each decided on its own.
 	//   - GetRenderTargetData, and LockRect on a GPU-owned surface: Gpu_Download first.
@@ -233,13 +233,13 @@ public:
 
 	/// Makes the implicit back buffer (and depth surface, when the present parameters ask for one) from
 	/// the present parameters, and binds them as render target 0 and the depth surface.  CreateDevice and
-	/// Reset call it, with every implicit surface already released.  a contributor's, in PosixDevice9Resources.cpp.
+	/// Reset call it, with every implicit surface already released.  In PosixDevice9Resources.cpp.
 	RenderResult Create_Implicit_Surfaces();
 
 	RenderResult TestCooperativeLevel() override;
 	unsigned int GetAvailableTextureMem() override;
 	RenderResult EvictManagedResources() override;
-	RenderResult GetDeviceCaps(D3DCAPS9 *caps) override;																		// a contributor
+	RenderResult GetDeviceCaps(D3DCAPS9 *caps) override;
 	RenderResult GetDisplayMode(unsigned int swap_chain, D3DDISPLAYMODE *mode) override;
 	RenderResult SetCursorProperties(unsigned int hotspot_x, unsigned int hotspot_y, IDirect3DSurface9 *bitmap) override;
 	void SetCursorPosition(int x, int y, RenderUInt32 flags) override;
@@ -249,10 +249,10 @@ public:
 	RenderResult Present(const RenderRect *source, const RenderRect *dest, RenderWindow override_window,
 		const void *dirty_region) override;
 	RenderResult GetBackBuffer(unsigned int swap_chain, unsigned int index, D3DBACKBUFFER_TYPE type,
-		IDirect3DSurface9 **surface) override;																					// a contributor
+		IDirect3DSurface9 **surface) override;
 	void SetGammaRamp(unsigned int swap_chain, RenderUInt32 flags, const D3DGAMMARAMP *ramp) override;
 
-	// a contributor's: resources and surfaces.
+	// Resources and surfaces (PosixDevice9Resources.cpp).
 	RenderResult CreateTexture(unsigned int width, unsigned int height, unsigned int levels, RenderUInt32 usage,
 		D3DFORMAT format, D3DPOOL pool, IDirect3DTexture9 **texture, void **shared) override;
 	RenderResult CreateVolumeTexture(unsigned int width, unsigned int height, unsigned int depth, unsigned int levels,
@@ -408,7 +408,7 @@ protected:
 	RenderWindow Window;				///< null under -headless
 	D3DPRESENT_PARAMETERS Parameters;
 
-	// The surfaces: the implicit ones CreateDevice makes, and what is bound.  a contributor's code fills them; all of
+	// The surfaces: the implicit ones CreateDevice makes, and what is bound.  The resource code fills them; all of
 	// them are references this device holds, released by Release_Surfaces.
 	IDirect3DSurface9 *BackBuffer;
 	IDirect3DSurface9 *DepthSurface;

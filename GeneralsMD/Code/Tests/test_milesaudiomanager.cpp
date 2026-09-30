@@ -20,10 +20,10 @@
  *
  * The manager is the game's own class, the one SdlGameEngine::createAudioManager now returns, running
  * on miniaudio's null backend (ZH_AUDIO_BACKEND=null: a device with no hardware that still mixes in
- * real time, as a contributor's tests run).  Its INIs and sounds come from the install's archives through the
+ * real time, as the other audio tests run).  Its INIs and sounds come from the install's archives through the
  * engine's own file systems, read only: the archives are linked into a folder in the build tree, which
  * is made read-only and is the working directory, as test_bigfilesystem does (rule 9 - nothing here
- * starts the engine).  What it hears is a contributor's mix tap, AIL_ex_start_capture, into a WAV in the build
+ * starts the engine).  What it hears is the mix tap, AIL_ex_start_capture, into a WAV in the build
  * tree, measured here.
  *
  * AudioManager::update places the microphone from TheTacticalView and the terrain, which need the

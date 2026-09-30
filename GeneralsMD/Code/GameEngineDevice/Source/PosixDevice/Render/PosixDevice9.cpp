@@ -17,8 +17,8 @@
 */
 
 // The device off Windows (decision 7): its state, bindings, scenes, presentation, shaders and draws.
-// The resource and surface methods, Clear and the caps are a contributor's (PosixDevice9Resources.cpp,
-// PosixD3D9Caps.cpp).  See PosixDevice9.h for who owns what and how a device without a window behaves.
+// The resource and surface methods, Clear and the caps are in PosixDevice9Resources.cpp and
+// PosixD3D9Caps.cpp.  See PosixDevice9.h for which file holds what and how a device without a window behaves.
 
 #include "PosixDevice9.h"
 #include "SdlCreationLog.h"

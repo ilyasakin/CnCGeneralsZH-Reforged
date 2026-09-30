@@ -49,7 +49,7 @@ GlyphRasteriserClass::AntialiasModeType theAntialiasMode = GlyphRasteriserClass:
 
 /* One FreeType library for the process, with the TrueType interpreter set to v35: the classic one,
 	 which takes hdmx advances where the file has them.  FreeType's default, v40, does not, and its
-	 advances are not GDI's (D6's task file). */
+	 advances are not GDI's (D6). */
 FT_Library theLibrary( void )
 {
 	static FT_Library library = NULL;
@@ -329,7 +329,7 @@ bool GlyphRasteriserClass::Create_Font( const char *face, int pixel_height, int 
 
 	/* lfWidth is the average character width GDI makes the font have: the x scale is it over the
 		 file's own average, OS/2 xAvgCharWidth, at this height.  Rounded to whole pixels per em, as the
-		 hinted rasteriser works in; GDI's exact rounding is not known here (D6's task file). */
+		 hinted rasteriser works in; GDI's exact rounding is not known here (D6). */
 	int xPpem = pixel_height;
 	TT_OS2 *os2 = (TT_OS2 *)FT_Get_Sfnt_Table( ftFace, FT_SFNT_OS2 );
 	if (average_width > 0 && os2 != NULL && os2->xAvgCharWidth > 0)

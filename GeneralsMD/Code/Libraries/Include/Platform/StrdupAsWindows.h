@@ -18,11 +18,11 @@
 
 // strdup as the Windows build computes it, for the whole tree: one spelling.
 //
-// On Windows strdup is the UCRT's _strdup, which returns NULL for a NULL argument (as a contributor reads the UCRT;
+// On Windows strdup is the UCRT's _strdup, which returns NULL for a NULL argument (as the UCRT's source reads;
 // not measured by this project).  Darwin's and glibc's strdup read through the pointer instead.  The tree
 // was written where copying a NULL name gave a NULL name, and at least one path depends on it: a particle
 // emitter's user string is NULL until set, and the fog of war clones every emitter it ghosts, which crashed
-// the Mac and Linux within seconds of a match on Seaside Mutiny (README, defect #31).
+// the Mac and Linux within seconds of a match on Seaside Mutiny (port defect 31).
 //
 // Windows calls _strdup itself, exactly the function strdup already was there, so nothing changes on
 // Windows by construction.  Elsewhere a NULL argument gives NULL, and anything else is strdup's copy.

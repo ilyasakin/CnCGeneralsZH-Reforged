@@ -92,7 +92,7 @@ static Bool holdsBaseGameArchives(const char *directory)
 static void reportMissingBaseGame(void)
 {
 	DEBUG_LOG(("Win32BIGFileSystem::init - no base game archives anywhere; most of the art and audio will be missing.\n"));
-	// An unattended run (-headless or ZH_UNATTENDED) has nobody to press OK: a box here held a gate for 38
+	// An unattended run (-headless or ZH_UNATTENDED) has nobody to press OK: a box here held a CI run for 38
 	// minutes (W-ARM64), and a run without the base game's art could not have told anyone anything anyway.
 	// The reason on stderr, and out.
 	if (isUnattendedProcess())
@@ -252,7 +252,7 @@ ArchiveFile * Win32BIGFileSystem::openArchiveFile(const Char *filename) {
 		// Quietly, and once for each such file: macOS leaves a "._" AppleDouble companion beside every
 		// file it copies onto exFAT or FAT, and "*.big" finds them, so an install that came off such a
 		// volume has twenty of these.  They are not archives and nothing is lost by leaving them out
-		// (C1's task file, PR (f)).
+		// (C1, PR (f)).
 		DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - %s is not a BIG archive (no BIGF), left out\n", filename));
 #endif
 		fp->close();

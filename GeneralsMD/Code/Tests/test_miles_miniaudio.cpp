@@ -40,7 +40,7 @@
  *
  * What it does not establish: that anything sounds right to a person (tools: miles_listen), the
  * behaviour of a real device's clock rather than the null backend's, and anything about XAudio2's
- * own resampler - the one stage known not to produce the same samples (C4's task file).
+ * own resampler - the one stage known not to produce the same samples (C4).
  */
 #include "test_harness.h"
 
@@ -640,8 +640,8 @@ TEST(every_wav_header_and_adpcm_decode_matches_dr_wav)
 // 576 for MPEG-2 and 2.5 (Silence60.mp3 is MPEG-2 at 22050 Hz).  The Xing/Info frame a VBR or LAME
 // file opens with carries no audio; LAME's tag says how many samples of encoder delay and padding
 // the decoder is to drop.  Only whole frames count: USA_09.mp3's last frame is cut off 436 bytes
-// short, and dr_mp3 drops a frame it cannot finish where FFmpeg decodes it anyway (a deviation in
-// C4's task file).
+// short, and dr_mp3 drops a frame it cannot finish where FFmpeg decodes it anyway (a recorded
+// deviation, C4).
 struct Mp3Count
 {
 	unsigned frames;

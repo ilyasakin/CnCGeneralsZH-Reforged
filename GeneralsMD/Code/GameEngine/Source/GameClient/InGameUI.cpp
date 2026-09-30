@@ -9488,7 +9488,7 @@ void InGameUI::updateFloatingText( void )
 //-------------------------------------------------------------------------------------------------
 /** A one-line heads-up overlay: render rate and elapsed game time.
 	* GlobalData's m_showHudOverlay: on by default in the developer builds (Debug, _INTERNAL) and off in
-	* Release, the user's rule.  A player turns it on with ShowHudOverlay = Yes in GameData.ini; the harnesses
+	* Release, a project rule.  A player turns it on with ShowHudOverlay = Yes in GameData.ini; the harnesses
 	* whose screenshots are evidence pass -showHudOverlay.  Nothing shipped forces it on: the staged overlay
 	* and the packages refuse a ShowHudOverlay = Yes.  Retail only ever showed the frame rate, and only behind
 	* -displayDebug together with a screenful of engine internals. */

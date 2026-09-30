@@ -27,7 +27,7 @@
 // are on every platform.
 //
 // Checked, not transcribed: every value was compared by static_assert with a DirectInput header
-// (MinGW-w64's, from Wine), compiled by MinGW.  See docs/mac-port/tasks/B5-win32-types.md.
+// (MinGW-w64's, from Wine), compiled by MinGW.
 // Only the names the engine uses are here; a new key wants its value checked the same way.
 
 #pragma once

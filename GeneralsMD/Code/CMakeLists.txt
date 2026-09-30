@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.20)
 # P2: the oldest macOS the app runs on.  It has to be set before project(), and every target and
 # vendored library built here inherits it (SDL3, freetype, glslang and the rest through add_subdirectory;
 # FFmpeg through FFMPEG_POSIX_CFLAGS below).  Unset, the tools stamp the build machine's own version into
-# every binary and the app refuses every Mac not on the newest macOS.  13.0: see docs/mac-port/tasks/
-# P2-macos-reach.md for why this and not an older one.  An explicit -DCMAKE_OSX_DEPLOYMENT_TARGET wins;
+# every binary and the app refuses every Mac not on the newest macOS.  13.0 (Ventura): every Apple
+# silicon Mac and Intel Macs from 2017 on run it, and nothing in the tree needs a newer one.  An explicit -DCMAKE_OSX_DEPLOYMENT_TARGET wins;
 # an empty one (as every earlier build cache holds) takes the default.
 if(CMAKE_HOST_APPLE AND "${CMAKE_OSX_DEPLOYMENT_TARGET}" STREQUAL "")
   set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "The oldest macOS the build runs on (P2)" FORCE)
@@ -17,7 +17,7 @@ project(GeneralsMD CXX C)
 # line to its last.  They are different questions now.  Everything that is really about the
 # platform - the CRT, the Windows SDK import libraries, MIDL, DirectX, the window - asks
 # ZH_PLATFORM_WINDOWS; only a flag written in one compiler's own syntax asks which compiler is
-# reading it.  docs/mac-port/README.md has the rest of the plan.
+# reading it.  PORTING.md has the rest of the design.
 # Windows against POSIX, not Windows against macOS.  The port targets macOS first but is meant to
 # reach Linux and other POSIX systems, so "is this not Windows" is ZH_PLATFORM_POSIX, and the two
 # refinements below are for the few things that genuinely differ between POSIX systems (a window,
@@ -43,7 +43,7 @@ endif()
 # The default follows the target.  On Windows ARM64 it is ON: -d3d12 is that platform's default renderer, and the
 # Direct3D 9 path it falls back to without zh_d3d12.dll has no d3dx9_43.dll there and draws without its terrain,
 # so a plain build.bat without it gave players the broken picture.  On x64 it stays OFF: -d3d12 is opt-in there
-# (docs/mac-port/tasks/X1-d3d12.md).  An explicit -DZH_D3D12=ON or OFF wins, as with any option.  The target is
+# (PORTING.md, known issues).  An explicit -DZH_D3D12=ON or OFF wins, as with any option.  The target is
 # the compiler's (MSVC reports ARM64 or x64 whatever the generator), then the Visual Studio platform, so an x64
 # build on an ARM64 machine is x64 here.
 set(_zh_d3d12_target "")
@@ -328,7 +328,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   # -Wno-unknown-pragmas: the tree's #pragma warning lines (67, B4) are MSVC's diagnostics controls,
   # and clang has none of those warnings to control.  Off now so that a future -Wall is usable rather
   # than 19,000 lines of them.  B4 checked every pragma for meaning first: none that clang ignores
-  # changes code (docs/mac-port/tasks/B4-pragma-audit.md).
+  # changes code.
   add_compile_options(-Wno-unknown-pragmas)
   # -g for the reason /Zi is there: there is no debugger on the porting machine, so a symbolised
   # stack is the only stack anyone gets (atos reads the frames C5's crash handler writes).  No
@@ -441,7 +441,7 @@ target_compile_definitions(compression PRIVATE Z_PREFIX)
 # includes Lib/BaseType.h, which includes <windef.h>, so a command-line UINT32 macro is live when
 # the SDK's typedef is preprocessed and turns it into `typedef unsigned int unsigned int, *PUINT32;`.
 # clang only warns at that and limps on; MSVC is stricter about duplicate declaration specifiers and
-# neither machine here can tell us how much stricter.  Found by a contributor before it was merged.
+# neither machine here can tell us how much stricter.  Found in review before it was merged.
 if(ZH_PLATFORM_POSIX)
   target_compile_definitions(compression PRIVATE UINT32=unsigned\ int UINT16=unsigned\ short)
 endif()
@@ -939,7 +939,7 @@ if(ZH_PLATFORM_POSIX)
   # GPU (the renderer - Metal on macOS, Vulkan on Linux) and dialog (the first launch's folder chooser,
   # PosixMain.cpp: NSOpenPanel on macOS, the portal or zenity on Linux; with it off, SDL answers every
   # dialog at once with "not built with dialog support", and the chooser quit before showing anything).
-  # Joystick is on for G1's gamepads (SdlGamepad.h), with HIDAPI, which reads the Deck's own controls and
+  # Joystick is on for G1's gamepads (SdlGamepad.h), with HIDAPI, which reads the Steam Deck's own controls and
   # PlayStation and Switch pads directly and gives their real button labels, and the virtual joystick
   # driver, which test_sdl_gamepad drives in place of a pad.  HIDAPI's libusb backend stays off: no
   # libusb to link or ship; HIDAPI uses the platform's own HID (hidraw on Linux, IOKit on macOS).
@@ -1463,13 +1463,13 @@ if(ZH_PLATFORM_POSIX)
   set(ZH_POSIX_D3D9_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include/Platform/PosixD3D9)
 
   # ---- d3dx9runtime: the same library name as Windows's, with d3dx9posix.cpp's bodies ---------------
-  # d3dx9posix_texture.cpp is A2's (a contributor's), d3dx9posix.cpp the rest (a contributor's).
+  # d3dx9posix_texture.cpp is phase A2's texture helpers, d3dx9posix.cpp the rest.
   add_library(d3dx9runtime STATIC
     ${WW}/WW3D2/d3dx9posix.cpp ${WW}/WW3D2/d3dx9posix_texture.cpp ${WW}/WW3D2/d3d8shadertranslate.cpp
     ${WW}/WW3D2/d3dx9portable.cpp)
   set_target_properties(d3dx9runtime PROPERTIES CXX_STANDARD 17)
   target_include_directories(d3dx9runtime PUBLIC ${WW}/WW3D2 ${ZH_POSIX_D3D9_INCLUDE}
-    # The texture helpers are CPU work over the device's own images (a contributor's PosixImageOps), so they see
+    # The texture helpers are CPU work over the device's own images (PosixImageOps), so they see
     # the device's headers - privately: nothing else outside the device does.
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
   target_link_libraries(d3dx9runtime PRIVATE posixd3d9)
@@ -1565,7 +1565,7 @@ if(ZH_PLATFORM_POSIX)
   set_tests_properties(ffref_capture_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
   set_tests_properties(sdl_gpu_frame_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
-  # A2's half of the device (a contributor): the resources, the pixel codec, the image operations, the device's
+  # A2's half of the device: the resources, the pixel codec, the image operations, the device's
   # resource methods and Clear, the caps, and D3DX's texture helpers, against D3D9's and D3DX's rules.  See Tests/test_posix_resources.cpp.
   add_executable(test_posix_resources ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_resources.cpp)
   target_include_directories(test_posix_resources PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
@@ -1611,7 +1611,7 @@ if(ZH_PLATFORM_POSIX)
     set(FFMPEG_POSIX_CFLAGS "-mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
   endif()
   # The SDK CMake gives our own targets.  Only /usr/bin/cc, the xcrun shim, finds one by itself; CMake may
-  # choose the toolchain's own cc (/Library/Developer/CommandLineTools/usr/bin/cc, as on the the M3 Pro Mac worker),
+  # choose the toolchain's own cc (/Library/Developer/CommandLineTools/usr/bin/cc, as on one build Mac here),
   # and FFmpeg's configure then cannot link its test program ("library 'System' not found") nor compile its
   # host tools ("ctype.h not found").  SDKROOT reaches every compiler call configure makes - target and
   # host alike - where an -isysroot flag would reach only the target's (and -arch must not reach the host).
@@ -1726,7 +1726,7 @@ if(ZH_PLATFORM_WINDOWS AND ZH_D3D12)
   target_compile_options(posixd3d9 PRIVATE ${ZH_D3D12_DEVICE_OPTIONS})
   target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile engineshader ffshader ffvertex)
 
-  # d3dx9portable.cpp: the arithmetic half of D3DX, which d3dx9posix.cpp forwards to (a contributor, ARM64).  Never
+  # d3dx9portable.cpp: the arithmetic half of D3DX, which d3dx9posix.cpp forwards to (as on ARM64).  Never
   # d3dx9runtime.cpp beside these: its Bind_D3DX9_Runtime is the DLL binder's, and would clash with ours.
   add_library(d3dx9posix_d3d12 STATIC
     ${WW}/WW3D2/d3dx9posix.cpp ${WW}/WW3D2/d3dx9posix_texture.cpp ${WW}/WW3D2/d3dx9portable.cpp
@@ -2103,13 +2103,13 @@ if(ZH_PLATFORM_POSIX)
   # and an edited replay is reported DIVERGED.  Same-machine determinism only: see the script.
   add_test(NAME replay_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_replay_check.sh $<TARGET_FILE:generals>)
-  # Four 12000-frame matches since #34.  The cap is there for a hang, not for speed: replay_check takes 279-392 s
+  # Four 12000-frame matches since port defect 34.  The cap is there for a hang, not for speed: replay_check takes 279-392 s
   # alone, and up to 991 s inside a full suite on a loaded 8-core Linux worker, where 1200 s had begun to cut it off.
   set_tests_properties(replay_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 2400)
   if(ZH_GAME_DATA)
     set_tests_properties(replay_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
-  # Defect #33: no override leaves a unit without the locomotors EA gave it (a ReplaceModule of its AI
+  # Port defect 33: no override leaves a unit without the locomotors EA gave it (a ReplaceModule of its AI
   # module discards them unless the block re-states them).  One short run of the game on its data.
   add_test(NAME locomotor_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_locomotor_check.sh $<TARGET_FILE:generals>)
@@ -2152,8 +2152,8 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(gamepad_crc_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
-  # G1's menus: a virtual pad walks the shell's screens and the focus must land where
-  # docs/mac-port/tasks/G1-gamepad-screens.md says, every step (Tools/gamepad-menu-check.sh).
+  # G1's menus: a virtual pad walks the shell's screens and the focus must land where its
+  # expected path says, every step (Tools/gamepad-menu-check.sh).
   add_test(NAME gamepad_menu_check
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-menu-check.sh --generals $<TARGET_FILE:generals>)
   set_tests_properties(gamepad_menu_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
@@ -2241,7 +2241,7 @@ if(ZH_PLATFORM_POSIX)
     endif()
   endif()
 
-  # The first launch's folder question, headless (the user's rule: no run may need a human): the real generals
+  # The first launch's folder question, headless (no test run may need a human): the real generals
   # through PosixMain's test stand-in for the dialog (ZH_TEST_CHOOSER_ANSWERS) - refusals and their reasons,
   # asking again, accepting and remembering, cancelling, and the second start asking nothing.  Needs ZH_GAME_DATA.
   add_test(NAME first_launch_chooser_check
@@ -2415,7 +2415,7 @@ add_lib_test(test_compression compression)
 # below: it is header-only, asserts sizeof/offsetof and links nothing but the
 # harness, so it builds on a platform where ww3d2 itself does not compile yet -
 # which is the whole of M1 and the only time these asserts can still catch
-# something.  See docs/mac-port/B7-w3d-layout.md.
+# something.
 add_lib_test(test_w3dlayout)
 target_include_directories(test_w3dlayout PRIVATE
   # Libraries/Include is here because always.h reaches Platform/MSVCCompat.h, which B3 added after
@@ -2424,7 +2424,7 @@ target_include_directories(test_w3dlayout PRIVATE
   ${WW}/WW3D2 ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/WWSaveLoad ${WW}/Wwutil)
 
 # The vertex program generator is shared (ffvertex builds everywhere), so its unit test runs everywhere:
-# registered on Windows only, it went stale through defects #23 and #26, which changed the generator
+# registered on Windows only, it went stale through port defects 23 and 26, which changed the generator
 # off Windows (W2).
 add_lib_test(test_ffvertex ffvertex)
 
@@ -2512,7 +2512,7 @@ endforeach()
 # T1's terrain golden against the moved code (GameLogic/WorldHeightMapData, TerrainHeightSampling):
 # nine shipped maps out of the install's archives, which must sample exactly as Tests/terrain_golden.txt
 # says the original W3D code did.  Needs ZH_GAME_DATA; Skipped (77) without it.
-# Defect #29: the LAN lobby's broadcast listener off Windows, through the real Transport and UDP, in the
+# Port defect 29: the LAN lobby's broadcast listener off Windows, through the real Transport and UDP, in the
 # layout two copies of the game on one host build (see the test's header).  POSIX only: the listener is.
 if(ZH_PLATFORM_POSIX)
   add_lib_test(test_lan_broadcast gameengine)
@@ -2787,7 +2787,7 @@ if(ZH_GAME_DATA)
 endif()
 
 # The POSIX half of the Wine listing oracle (Tests/fs_oracle.cpp; its Windows half is built with
-# mingw-w64 and run under Wine, as C1's task file records).
+# mingw-w64 and run under Wine, as C1 did).
 add_executable(fs_oracle ${TESTS}/fs_oracle.cpp)
 target_include_directories(fs_oracle PRIVATE ${WW}/WWLib)
 target_link_libraries(fs_oracle PRIVATE wwlib wwdebug)
@@ -3033,12 +3033,13 @@ endif()
 #
 # And every test's own TMPDIR, in the build tree, made here at configure time (a deleted one comes back
 # with the next configure).  The system's is one folder for every process of the user: ctest -j4 on
-# 2026-09-26 lost a replay_check's work folder mid-run while other sessions' harnesses, of several
+# 2026-09-26 lost a replay_check's work folder mid-run while other checkouts' harnesses, of several
 # versions, ran in the same folder.  A test's temporary trees are its own now, and whatever is left
 # behind stays in this build, where it can be seen.
 #
 # And every test on miniaudio's null backend (ZH_AUDIO_BACKEND=null, honoured where the one audio device
-# is opened, AIL_quick_startup in miles_miniaudio.cpp): the rule of no sound and no windows in automated runs.  It reaches the games a test script starts too, so no ctest can make a sound, whatever
+# is opened, AIL_quick_startup in miles_miniaudio.cpp): automated runs make no sound
+# and show no window.  It reaches the games a test script starts too, so no ctest can make a sound, whatever
 # its switches.  The null device still mixes in real time, which is what the audio tests measure.
 if(ZH_PLATFORM_POSIX)
   get_property(_zh_tests DIRECTORY PROPERTY TESTS)
@@ -3065,7 +3066,7 @@ if(ZH_PLATFORM_POSIX)
   # where it used to skip them, and every Mac takes the one path.  On Linux they take SDL's offscreen
   # video driver, which gives Vulkan a VK_EXT_headless_surface and needs no patch: without a display they
   # skipped ("SDL_Init: No available video device"), and with it all six pass on Mesa's ANV (L1b,
-  # measured on the Linux x86_64 host).  Not dummy there: it has no Vulkan_CreateSurface, so SDL finds no GPU backend.
+  # measured on a Linux x86_64 host).  Not dummy there: it has no Vulkan_CreateSurface, so SDL finds no GPU backend.
   if(APPLE)
     foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
                      posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck)

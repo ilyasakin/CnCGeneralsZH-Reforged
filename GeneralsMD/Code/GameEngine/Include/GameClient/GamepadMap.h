@@ -18,7 +18,7 @@
 
 // GamepadMap.h: a gamepad's buttons, each bound to what a mouse button or a key already does (G1).
 //
-// The rule of G1 (docs/mac-port/tasks/G1-gamepad.md): a gamepad only produces the input the mouse and
+// The rule of G1: a gamepad only produces the input the mouse and
 // keyboard already produce.  So a binding names a mouse button, a key with its modifiers, or a command the
 // command maps name, and the device layer (SdlGamepad) presses exactly that through the mouse's and
 // keyboard's own devices.  The command maps then turn the key into their message, so a rebound key carries
@@ -98,7 +98,7 @@ enum GamepadButtonType
 	GAMEPAD_BUTTON_DPAD_LEFT,
 	GAMEPAD_BUTTON_DPAD_RIGHT,
 	GAMEPAD_BUTTON_MISC1,
-	GAMEPAD_BUTTON_RIGHT_PADDLE1,		///< the Deck's R4
+	GAMEPAD_BUTTON_RIGHT_PADDLE1,		///< the Steam Deck's R4
 	GAMEPAD_BUTTON_LEFT_PADDLE1,		///< the Deck's L4
 	GAMEPAD_BUTTON_RIGHT_PADDLE2,		///< the Deck's R5
 	GAMEPAD_BUTTON_LEFT_PADDLE2,		///< the Deck's L5

@@ -377,7 +377,7 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_gamepadAim, set_m_gamepadAim },
 
-	// Confirm and cancel the other way round from the pad's own layout: Xbox, PlayStation and the Deck confirm on
+	// Confirm and cancel the other way round from the pad's own layout: Xbox, PlayStation and the Steam Deck confirm on
 	// the bottom button, Nintendo pads on A, the right one (SdlGamepad.h).  Which button means which, only.
 	{ "GamepadSwapConfirm",				OPT_WND( "CheckGamepadSwapConfirm" ), "GUI:GamepadSwapConfirm",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,

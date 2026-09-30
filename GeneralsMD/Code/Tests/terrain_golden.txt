@@ -1,5 +1,5 @@
 # T1's terrain golden: what the ORIGINAL simulation-terrain code (Tests/terrain_oracle.cpp over
-# Tools/terrain_oracle_extract.py's text of 009795ce) prints for nine shipped maps.  Produced by the
+# Tools/terrain_oracle_extract.py's text of that code as it stood before T1 moved it) prints for nine shipped maps.  Produced by the
 # mingw-w64 build under Wine (CrossOver, bottle zh-t1) and identical, byte for byte, to the native arm64
 # build and the x86_64 build under Rosetta.  test_terrain_golden checks the moved code against it.
 # Blend-tile chunk versions: 8 (Zero Hour maps), 7 (Bridge Busters, Dark Mountain, CHI03), 6 (Cliff,

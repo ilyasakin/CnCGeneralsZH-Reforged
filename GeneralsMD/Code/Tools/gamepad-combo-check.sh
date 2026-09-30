@@ -15,7 +15,7 @@
 #	You should have received a copy of the GNU General Public License
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# G1's combo boxes (docs/mac-port/tasks/G1-gamepad-screens.md): a pad's list is its own until it picks.  In EA's
+# G1's combo boxes: a pad's list is its own until it picks.  In EA's
 # list box a selection is the choice (GLM_SELECTED, then the combo's GCM_SELECTED to its screen, which applies it), so
 # the pad keeps a highlight of its own in an open list, and the screen hears of a choice only when A picks.
 #

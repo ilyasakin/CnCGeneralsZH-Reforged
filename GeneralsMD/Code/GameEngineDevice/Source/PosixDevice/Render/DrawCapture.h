@@ -47,7 +47,7 @@
 **                            declaration tokens through D3DVSD_END (0 when the current declaration did not
 **                            come from one); u32 stream count and per stream u32 stream, stride, and the
 **                            byte offset of the draw's first vertex in the .cap's vertex bytes.
-**                            Written from the description sent to a contributor (who reads no code of this).
+**                            Written from a prose description, so the reader shares no code with this writer.
 */
 
 #pragma once
@@ -60,7 +60,7 @@
 #include <stdint.h>
 
 /// DRAW_CAPTURE_VERSION: a fixed-function draw.  DRAW_CAPTURE_VERSION_PROGRAMMABLE: a draw with an engine
-/// shader bound (A3e), whose draw_<n>.prog holds the programs - for a contributor's vs_1_1/ps_1_1 interpreter.
+/// shader bound (A3e), whose draw_<n>.prog holds the programs - for the tests' vs_1_1/ps_1_1 interpreter (Tests/ffreference/ffprogram.h).
 enum { DRAW_CAPTURE_VERSION = 1, DRAW_CAPTURE_VERSION_PROGRAMMABLE = 2, DRAW_CAPTURE_STAGES = 8, DRAW_CAPTURE_NAME = 48,
 	DRAW_CAPTURE_SIGNATURE = 512, DRAW_CAPTURE_PROGRAM_NAME = 64, DRAW_CAPTURE_VS_CONSTANTS = 96,
 	DRAW_CAPTURE_PS_CONSTANTS = 8 };

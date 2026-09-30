@@ -127,7 +127,7 @@ class UDP
 	Int						AllowBroadcasts(Bool status);
 
 #if !defined(_WIN32)
-  /* Defect #29.  Windows hands a broadcast to a socket bound to one unicast address, and the LAN lobby
+  /* Port defect 29.  Windows hands a broadcast to a socket bound to one unicast address, and the LAN lobby
      relies on it; BSD and Linux sockets do not, so a POSIX lobby bound to its address heard no game
      announcements at all.  The lobby therefore keeps a second socket, on the wildcard address, that
      takes only broadcasts (LANAPI::listenForBroadcasts).

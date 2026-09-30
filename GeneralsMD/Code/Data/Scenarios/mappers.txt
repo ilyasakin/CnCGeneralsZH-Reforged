@@ -1,5 +1,5 @@
 # X2's texture-transform check: models whose materials scroll by a per-second mapper, standing still under the
-# camera, so that two frames a second apart differ only where the mappers move the textures.  a contributor suspects the
+# camera, so that two frames a second apart differ only where the mappers move the textures.  The suspicion is that the
 # Direct3D 11 path never receives the texture-stage transforms; under it these would freeze while -d3d9 moves them.
 #   Fountain1, Fountain2  PMFountain3/4: the water, VPerSec 0.1 to 0.8
 #   CBNukeA               CBNUKEA: VPerSec -1, one whole texture a second

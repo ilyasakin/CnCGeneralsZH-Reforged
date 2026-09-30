@@ -345,7 +345,7 @@ __forceinline float fast_float_ceil(float f)
  * The cast is MSVC's cvttss2si written out (Platform/MsvcFloatCasts.h), not the C cast itself.  In range
  * the two are the same instruction's answer.  Out of range or NaN, C leaves the cast undefined; MSVC and
  * x86 give INT_MIN, while ARM64 saturates and gives 0 for NaN.  The helper gives INT_MIN everywhere, so
- * every one of these macros is Windows' answer by construction (a contributor's float sweep). */
+ * every one of these macros is Windows' answer by construction (found by a sweep of the float conversions). */
 
 #define REAL_TO_INT(x)						((Int)floatToIntAsMsvc(x))
 #define REAL_TO_UNSIGNEDINT(x)		((UnsignedInt)floatToIntAsMsvc(x))

@@ -3,7 +3,7 @@
 # the DLL's MSVC link line (build-ARM64\zh_d3d12.vcxproj, 2026-09-27; spirv-cross-msl gone since
 # SPIRV-Cross's MSL is off on Windows, 2026-09-29).  Windows' own import libraries
 # (kernel32, user32, gdi32, ole32 and the rest) are the platform's and are not listed.  A package that ships
-# zh_d3d12.dll ships these entries' licence texts with it; packaging (a contributor) checks the link line against this.
+# zh_d3d12.dll ships these entries' licence texts with it; packaging checks the link line against this.
 #
 #   <library, as <name>.lib on the link line>  <licence entry>
 

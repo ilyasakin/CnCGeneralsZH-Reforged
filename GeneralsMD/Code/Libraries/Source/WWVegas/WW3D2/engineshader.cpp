@@ -323,7 +323,7 @@ static void write_pixel_preamble(std::string & hlsl, bool bumped = false)
 ** ps_1_1's registers hold [-1, 1] (PixelShader1xMaxValue 1, the documented minimum for ps 1.0 to 1.3),
 ** and only a _sat modifier or the final write clamps to [0, 1].  Every value here is a product or sum
 ** of texels and vertex colours in [0, 1], so none goes below zero, and the saturate on each line is the
-** clamp at one: the same result.  Measured against a contributor's ps_1_1 interpreter on captured draws (A3e-3).
+** clamp at one: the same result.  Measured against the tests' ps_1_1 interpreter on captured draws (A3e-3).
 ** The alpha is the vertex alpha times the water texture's and the shroud never touches it: a
 ** shrouded stretch of water is dark, not transparent.
 */

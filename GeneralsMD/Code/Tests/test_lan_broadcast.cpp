@@ -17,7 +17,7 @@
 */
 
 /*
- * Defect #29: a POSIX LAN lobby heard no broadcasts, because BSD and Linux sockets bound to one unicast
+ * Port defect 29: a POSIX LAN lobby heard no broadcasts, because BSD and Linux sockets bound to one unicast
  * address are not handed them (Windows' are).  The fix (udp.h) keeps a second, wildcard socket per lobby
  * that takes only datagrams sent to 255.255.255.255.  This drives the real Transport and UDP classes
  * through the layout LANAPI builds, two copies of the game on one host:

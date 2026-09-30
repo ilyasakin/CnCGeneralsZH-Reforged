@@ -33,7 +33,7 @@
 # Unlike Windows' build (Tools/ffmpeg-build.sh) there is no mp3 or wav: off Windows the game's own
 # audio is decoded by miniaudio (C4), so FFmpeg serves only the movies.
 #
-# --disable-asm, measured over all 70 movies of the install (V1's task file): the Bink decoder is
+# --disable-asm, measured over all 70 movies of the install (V1): the Bink decoder is
 # bit-exact between the NEON and C builds, but swscale's NEON yuv420p->BGRA path is not the C path's
 # arithmetic. With the C paths every POSIX machine converts to identical bytes, so one golden table
 # serves the Mac and Linux, and nasm is not a build dependency. The cost was 141s instead of 128s to

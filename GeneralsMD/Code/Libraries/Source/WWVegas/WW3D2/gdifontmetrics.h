@@ -26,7 +26,7 @@
 	 every size here), per pixel height.  No font data is included: no outlines, no hinting, no table
 	 copied from a font file.
 
-	 HOW THEY WERE MEASURED (2026-09-27, by a contributor): Tools/gdi-font-metrics.ps1 in a Windows VM, GDI itself:
+	 HOW THEY WERE MEASURED (2026-09-27): Tools/gdi-font-metrics.ps1 in a Windows VM, GDI itself:
 	 CreateFont( -ppem, 0, 0, 0, FW_NORMAL or FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
 	 CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, VARIABLE_PITCH, face ) - render2dsentence.cpp's own call -
 	 selected into a memory DC, then GetTextMetrics.  GetTextFace confirmed each face; tmOverhang was 0 at

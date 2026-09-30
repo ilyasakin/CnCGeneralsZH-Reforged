@@ -20,13 +20,12 @@
 ** The device's frame on SDL3 GPU (decision 7, phase A3a): the SDL_GPUDevice, C2's window claimed for it,
 ** the offscreen back buffer and depth-stencil the engine draws into, and Present, which takes the back
 ** buffer to the window through D3D9's gamma ramp.  Only a device with a window has one: -headless makes
-** no SDL_GPUDevice at all (tasks/A-posix-d3d9-device.md, "A3 design").
+** no SDL_GPUDevice at all (phase A3's design).
 **
 ** Nothing is issued as the engine asks for it.  Clears and draws are recorded into a batch, with a copy
 ** of every byte a draw reads that can still change (the staging stream) and the uploads of the GPU
 ** copies it needs; Flush runs the batch as one copy pass and then render passes that replay the records
-** in order, a clear being the load operation of the pass after it (A3c; tasks/A-posix-d3d9-device.md,
-** "The frame").  Only a clear of the whole target is taken here; a clear of part of it is a clear draw.
+** in order, a clear being the load operation of the pass after it (A3c).  Only a clear of the whole target is taken here; a clear of part of it is a clear draw.
 **
 ** Main thread only, as every SDL GPU call is.
 */

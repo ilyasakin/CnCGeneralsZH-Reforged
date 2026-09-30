@@ -380,7 +380,7 @@ uint64_t PosixDevice9::Write_Programs(const std::string &path, unsigned int stri
 	Out::program(file, written, PixelShader);
 	Out::bytes(file, written, VertexShaderConstants, DRAW_CAPTURE_VS_CONSTANTS * sizeof(VertexShaderConstants[0]));
 	Out::bytes(file, written, PixelShaderConstants, DRAW_CAPTURE_PS_CONSTANTS * sizeof(PixelShaderConstants[0]));
-	// Version 2's additions (a contributor's capture v3): the engine's own D3D8 declaration, when the current one came
+	// Version 2's additions (capture v3): the engine's own D3D8 declaration, when the current one came
 	// from one, and the streams the draw reads - stream 0 only, the one the device draws from: its stride,
 	// and where the first stored vertex is in the .cap's vertex bytes (0: they start at it).
 	std::vector<RenderUInt32> d3d8;

@@ -24,7 +24,7 @@
  * VertexShader_Key, or the engine program's name and pipeline key), because the key is the other
  * thing the generators hand the backend.  The same file builds against the generators before and after the change, with
  * mingw-w64 for Windows (run under Wine) and natively off Windows, so the comparison covers both the
- * text and the platforms.  D3's task file records the runs.
+ * text and the platforms.  (D3.)
  *
  *   ffshader_dump <folder> [d3d9|d3d11|sdl3 ...]       default: every target the build has
  */

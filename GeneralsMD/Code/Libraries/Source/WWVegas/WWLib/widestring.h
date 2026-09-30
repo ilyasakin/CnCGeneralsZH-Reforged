@@ -55,7 +55,7 @@
 **	it is the argument type of a Windows API.  A `typedef wchar_t WCHAR` would make fourteen
 **	translation units compile and leave these three declarations with no possible body off Windows,
 **	or invite a second UTF-16-to-narrow conversion beside the engine's own.  B1 owns what the
-**	engine's text narrows through; see docs/mac-port/B1-widechar-survey.md.
+**	engine's text narrows through; see PORTING.md ("Wide characters").
 */
 #if defined(_WIN32)
 #include "trim.h"

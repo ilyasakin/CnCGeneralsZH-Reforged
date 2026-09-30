@@ -20,7 +20,7 @@
 ** Pipelines and samplers on SDL3 GPU (decision 7, phase A3c).  SDL3 bakes blend, depth, stencil and
 ** rasterizer state into the pipeline, so a pipeline is keyed by all of it, with the program pair, the
 ** vertex layout, the primitive type and the target's formats: a POD compared and hashed by its bytes
-** (tasks/A-posix-d3d9-device.md, "A3 design").  The stencil reference, the viewport, the scissor and the
+** (phase A3's design).  The stencil reference, the viewport, the scissor and the
 ** blend constant are dynamic and not in it.  A sampler is keyed by its D3D9 sampler states.
 **
 ** The translations are free functions, so their test needs no GPU.  What D3D9 has and SDL3 GPU has

@@ -17,7 +17,7 @@
 */
 
 // The adapter off Windows (decision 7): Direct3DCreate9, the one adapter, its modes and CreateDevice.
-// The caps, the Check* answers and the identifier are a contributor's, in PosixD3D9Caps.cpp.  See PosixDevice9.h.
+// The caps, the Check* answers and the identifier are in PosixD3D9Caps.cpp.  See PosixDevice9.h.
 
 #include "PosixDevice9.h"
 

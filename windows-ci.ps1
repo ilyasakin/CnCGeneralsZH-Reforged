@@ -18,9 +18,9 @@
   The Windows check for a merge, in one command: build, the ctest suite, the GPU tests, and E1's replay CRCs.
 
 .DESCRIPTION
-  What the M3 Pro Mac's post-merge run is for the Mac, for Windows (W2). In order:
+  The Windows counterpart of the port's post-merge checks on macOS and Linux (W2). In order:
     1. build.bat -Config (skip with -SkipBuild), then ZH_GAME_DATA set on the build tree when -DataDir is given;
-    2. ctest, minus the audio and video tests (no sound on a worker) and, in session 0, minus the GPU tests;
+    2. ctest, minus the audio and video tests (no sound on a CI machine) and, in session 0, minus the GPU tests;
     3. the desktop part: the GPU tests, then replay-check.ps1 for every E1 run at once, each on its own farm of
        the data with its own user data folder (ZH_USER_DATA_DIR, which Windows honours too). The runs
        are -Seeds at -MaxFrames, or -Runs "seed@frames" pairs when the seeds need different lengths.
@@ -39,7 +39,7 @@
   the farm is made and again after the runs, and a difference fails the check. Symbolic links need an
   elevated session or Developer Mode.
 
-  -ExpectCrc "0@1200:0x0177BEF6","1@12000:0x830467DB" fails the check when a run's recorded CRC is another
+  -ExpectCrc "0@1200:0xE5C34BF3","1@12000:0xA631761E" fails the check when a run's recorded CRC is another
   one: that is the cross-platform comparison ("seed:crc" means that seed at -MaxFrames). Without it the
   check only asks that each replay plays back to the same world. Pin -ExpectCrc to the commit the numbers
   were made on: upstream gameplay data moves them.
@@ -51,11 +51,10 @@
   one, with the same arguments, and exits with its status.
 
 .EXAMPLE
-  .\windows-ci.ps1 -DataDir C:\work\data -Runs "0@1200","1@12000" -ExpectCrc "0@1200:0x0177BEF6","1@12000:0x830467DB"
-    (feature/mac-port from 9f17c203, upstream's merge; seed 0 is at 1200 until defect #34's fix, which
-    crashes it at 12000 on every platform)
-  .\windows-ci.ps1 -DataDir C:\work\data -SkipBuild -Seeds 0 -MaxFrames 1200
-  .\windows-ci.ps1 -Bundle C:\work\bundles\fmp.bundle -Ref feature/mac-port -DataDir C:\work\data
+  .\windows-ci.ps1 -DataDir D:\ZeroHourData -Runs "0@1200","0@12000","1@12000" -ExpectCrc "0@1200:0xE5C34BF3","0@12000:0x0C1B85E4","1@12000:0xA631761E"
+    (the E1 pins PORTING.md gives; upstream gameplay data changes move them)
+  .\windows-ci.ps1 -DataDir D:\ZeroHourData -SkipBuild -Seeds 0 -MaxFrames 1200
+  .\windows-ci.ps1 -Bundle D:\bundles\branch.bundle -Ref my-branch -DataDir D:\ZeroHourData
 
   Exit status: 0 when everything passed, 1 otherwise. The summary says which part failed.
 #>

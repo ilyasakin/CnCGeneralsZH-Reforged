@@ -17,7 +17,7 @@
 #
 # Tools/make-macos-app.sh checked on itself (P1 step 5), with a bundle built from the real inputs (this
 # build's generals, staged overlay and link line) into a temporary folder, without the art:
-#   1. it builds, and the bundle holds what the task file says: Info.plist (lints; the executable, the
+#   1. it builds, and the bundle holds what P1 specifies: Info.plist (lints; the executable, the
 #      id, this build's version, the executable's minimum macOS, high resolution, the category), PkgInfo,
 #      a stripped arm64/x86_64 executable with its dSYM beside the bundle, the icon, the overlay, one
 #      licence file per entry the link line needs; its ad-hoc signature verifies --deep --strict; and no
@@ -35,7 +35,7 @@
 #   6. universal2 (option A's path, tested with tiny stand-ins, no second build): an x86_64 executable
 #      for the target lipo'd in makes a bundle whose executable holds both slices and still verifies;
 #      one built for a newer macOS is refused, and so is an arm64 file passed as the x86_64 one;
-#   7. the art, fetched as on Linux (the user's rule: the app carries none): a fresh bundle built with
+#   7. the art, fetched as on Linux (a project rule: the app carries none): a fresh bundle built with
 #      --art-url <a local file:// release> holds no Reforged*.big, whatever the staged overlay links, and carries
 #      fetch-art.sh with that source in art-source.txt; the script, run from the bundle without ZHR_ART_URL,
 #      verifies the file into the user data folder's ReforgedArt and writes nothing into the bundle (its seal

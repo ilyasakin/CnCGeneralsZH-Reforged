@@ -424,7 +424,7 @@ Install-Litehtml
 Install-LitehtmlPatch
 Install-Nanosvg
 # SDL3 and miniaudio are the platform layer for everything that is not Windows (decision 3 in
-# docs/mac-port/README.md). Windows keeps Win32Device and Miles, so miniaudio is not fetched here, and
+# PORTING.md). Windows keeps Win32Device and Miles, so miniaudio is not fetched here, and
 # vendor.sh says it skips DirectX the same way. SDL3's Metal patch, Libraries\Source\sdl3-metal-windowless.patch,
 # is vendor.sh's too: there is nothing of it here to apply. SDL3 itself comes on every Windows build, for two
 # scoped amendments to decision 3: the gamepad (G1b: its joystick and gamepad subsystems, beside Win32Device's

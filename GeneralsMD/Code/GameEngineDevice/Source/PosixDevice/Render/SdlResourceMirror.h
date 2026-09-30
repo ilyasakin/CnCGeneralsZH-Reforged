@@ -17,8 +17,7 @@
 */
 
 /*
-** GPU copies of A2's textures and buffers (decision 7, phase A3c; tasks/A-posix-d3d9-device.md,
-** "Resources on the GPU").  A copy is made the first time a draw needs it, and brought up to date
+** GPU copies of A2's textures and buffers (decision 7, phase A3c).  A copy is made the first time a draw needs it, and brought up to date
 ** whenever a draw finds the A2 object's version() moved.
 **
 ** What a draw sees is what D3D9 would have shown it.  A copy's new bytes are taken when the draw that

@@ -26,7 +26,7 @@
  * The voice mixes the way that XAudio2 source voice did, not the way a Miles sample does: its left
  * channel to the left speaker and its right to the right at the volume's gain, where a Miles voice
  * sums every channel into both at a pan's constant-power gains.  A mono stream goes to both speakers
- * at the full gain (no movie in the install is mono; V1's task file).
+ * at the full gain (no movie in the install is mono; V1).
  *
  * The engine lock serialises these calls with the rest of the Miles surface; the mix takes what was
  * queued under its own lock.

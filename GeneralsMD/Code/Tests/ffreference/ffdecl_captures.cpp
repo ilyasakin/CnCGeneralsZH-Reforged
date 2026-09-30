@@ -24,7 +24,7 @@
  * bug or a finding.  Also: every stream's declared extent fits its stride, and every stream the D3D8
  * declaration reads is one the capture recorded.
  *
- * The .prog reader is written from a contributor's description of the format (not from the device's writer):
+ * The .prog reader is written from the capture side's description of the format (not from the device's writer):
  *   "ZHPG", u32 version (1, or 2 for capture v3);
  *   VERTEX: u32 Present, then if Present char[64] name, u32 TokenCount, tokens; then (Present or not)
  *     u32 ElementCount and ElementCount 8-byte D3DVERTEXELEMENT9s, no D3DDECL_END;

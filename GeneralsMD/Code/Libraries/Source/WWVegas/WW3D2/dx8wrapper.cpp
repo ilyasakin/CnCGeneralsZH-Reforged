@@ -1404,7 +1404,7 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 
 	// The Direct3D 11 device is built beside the Direct3D 9 one rather than instead of it: the
 	// engine still calls the D3D9 device directly from 148 places outside this wrapper (measured
-	// 2026-09-22; docs/mac-port/D1-call-site-survey.md), so taking it away would be a black
+	// 2026-09-22 by a call-site survey), so taking it away would be a black
 	// screen.  It is on unless -d3d9 or -headless turned it off.  It comes first, so everything the
 	// Direct3D 9 device makes has a Direct3D 11 copy, and only with a new device: a device refused
 	// at startup and created on a reset (an Alt-Tab) drew every building already standing as its

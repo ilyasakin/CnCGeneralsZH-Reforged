@@ -625,7 +625,7 @@ public:
 	void setCopiedFromDefault();
 
 	void setReskinnedFrom(const ThingTemplate* tt) { DEBUG_ASSERTCRASH(m_reskinnedFrom == NULL, ("should be null")); m_reskinnedFrom = tt; }
-	const ThingTemplate* friend_getReskinnedFrom() const { return m_reskinnedFrom; }	///< #34's load-time check
+	const ThingTemplate* friend_getReskinnedFrom() const { return m_reskinnedFrom; }	///< port defect 34's load-time check
 
 	Bool isPrerequisite() const { return m_isPrerequisite; }
 
@@ -788,7 +788,7 @@ private:
 	Byte					m_structureRubbleHeight;
 	Byte					m_shadowType;								///< settings which determine the type of shadow rendered
 	Byte					m_moduleParsingMode;
-	Byte					m_locomotorSetsLostToReplace;	///< #33: locomotor sets a ReplaceModule of the AI module discarded (0: none); see ThingFactory's checkLocomotors
+	Byte					m_locomotorSetsLostToReplace;	///< port defect 33: locomotor sets a ReplaceModule of the AI module discarded (0: none); see ThingFactory's checkLocomotors
 	UnsignedByte	m_crusherLevel;							///< crusher > crushable level to actually crush
 	UnsignedByte	m_crushableLevel;						///< Specifies the level of crushability (must be hit by a crusher greater than this to crush me).
 

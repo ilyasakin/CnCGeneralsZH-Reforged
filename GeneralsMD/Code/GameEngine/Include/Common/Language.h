@@ -85,7 +85,7 @@ typedef enum
 	 of the twenty were ever called, but each one of them was a wchar_t entry point one #include
 	 away from any file in the engine, and three of them (_itow, wcsicmp, wcsnicmp) do not exist
 	 off Windows under any spelling at all.  Pointing them here is what makes them safe to use
-	 again.  See Lib/WideCharFns.h and docs/mac-port/B1-widechar-survey.md.
+	 again.  See Lib/WideCharFns.h and PORTING.md ("Wide characters").
 
 	 The macros with no shim behind them are gone rather than repointed, listed below so that
 	 nothing is lost: repointing a name at a function with different argument or return semantics

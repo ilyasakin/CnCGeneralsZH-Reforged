@@ -536,7 +536,7 @@ void reportMissingNameInTemplate( AsciiString templateName )
 #endif
 
 //-------------------------------------------------------------------------------------------------
-/* #33: an override that replaced a thing's AI module and left it with no SET_NORMAL locomotor.  An
+/* Port defect 33: an override that replaced a thing's AI module and left it with no SET_NORMAL locomotor.  An
 	 object's "Locomotor = SET_..." lines are stored in its AI module's data (ThingTemplate's "Locomotor"
 	 field parses into AIUpdateModuleData), so a ReplaceModule of that module discards them unless the
 	 block re-states them: upstream's fbe8dc6f and 179e1f65 did it to three Chinooks, three Humvees, three
@@ -562,13 +562,13 @@ static void checkLocomotors( ThingTemplate *first )
 		++lost;
 		DEBUG_LOG(( "LocomotorCheck: %s lost its %d locomotor set(s) to a ReplaceModule of its AI module, and has no SET_NORMAL\n",
 			t->getName().str(), setsLost ));
-		DEBUG_CRASH(( "%s lost its locomotors to a ReplaceModule of its AI module (#33): re-state its Locomotor lines", t->getName().str() ));
+		DEBUG_CRASH(( "%s lost its locomotors to a ReplaceModule of its AI module (port defect 33): re-state its Locomotor lines", t->getName().str() ));
 	}
 	DEBUG_LOG(( "LocomotorCheck: %d things had an AI module with locomotors replaced, %d of them left without a SET_NORMAL\n", replaced, lost ));
 }
 
 //-------------------------------------------------------------------------------------------------
-/* #34: an ObjectReskin that ended up without a behaviour module its source has.  A reskin copies its
+/* Port defect 34: an ObjectReskin that ended up without a behaviour module its source has.  A reskin copies its
 	 source's modules, and EA's reskins restate only their Draw, so in EA's data a reskin's behaviour modules
 	 are its source's, name for name.  Upstream's fbe8dc6f added a module to two reskins in a normal load,
 	 and the parse then erased every copied module sharing an interface with it: the Demolition General's
@@ -605,7 +605,7 @@ static void checkReskins( ThingTemplate *first )
 		++lacking;
 		DEBUG_LOG(( "ReskinCheck: %s lacks behaviour modules its source %s has:%s\n", t->getName().str(),
 			source->getName().str(), missing.str() ));
-		DEBUG_CRASH(( "%s lacks modules its source %s has (#34):%s", t->getName().str(), source->getName().str(), missing.str() ));
+		DEBUG_CRASH(( "%s lacks modules its source %s has (port defect 34):%s", t->getName().str(), source->getName().str(), missing.str() ));
 	}
 	DEBUG_LOG(( "ReskinCheck: %d reskins, %d of them lacking a behaviour module their source has\n", reskins, lacking ));
 }

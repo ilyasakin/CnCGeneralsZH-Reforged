@@ -16,7 +16,7 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// a contributor's (decision 7, phase A2): the device's resources and surfaces, Clear, and the implicit back buffer
+// Decision 7, phase A2: the device's resources and surfaces, Clear, and the implicit back buffer
 // and depth surface.  The resources are PosixResources9's, in memory; the copies, conversions and fills
 // are PosixImageOps'.  D3D9's rules are kept where the renderer can see them: a format the caps do not
 // offer for a use is refused (PosixD3D9Caps.h), shared handles are not offered, the Get methods AddRef

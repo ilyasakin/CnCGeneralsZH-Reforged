@@ -22,7 +22,7 @@
  * target's text unchanged) and test_shader_sdl (the SDL3 GPU target through glslang, SPIR-V and
  * MSL).
  *
- * The reference set is the 49 programs decision 4 was measured on (docs/mac-port/README.md):
+ * The reference set is the 49 programs decision 4 was measured on (PORTING.md):
  *   - 19 pixel programs: every case test_ffshadercompile compiles,
  *   - 14 vertex programs: every case test_ffvertexcompile compiles,
  *   - 16 engine programs: every program engineshader.cpp transcribes, the three bumped terrain

@@ -22,7 +22,7 @@
 #      challenge menu's setup (TheChallengeGameInfo) is what GameLogic reads for it.
 #   3. A map no campaign plays: loaded plain, as -file loads it in _DEBUG and _INTERNAL builds.
 #   4. A map that is not there: logged, and the run quits without starting a game.
-#   5. Defect #32: the shipped test map Hovercraft, whose map.ini defines two locomotors of its own.  The
+#   5. Port defect 32: the shipped test map Hovercraft, whose map.ini defines two locomotors of its own.  The
 #      match ends at once (no enemy), and tearing it down must finish: LocomotorStore::reset used to erase
 #      through a dangling iterator and spin there until the alarm.
 # Every run has a time limit, so a start that never happens fails here instead of hanging ctest.
@@ -109,6 +109,6 @@ check 'printf "%s" "$LOG" | grep -q "NoSuch.map'"'"' is not there"' "and says so
 
 run_mission 5 -mission 'Maps\Hovercraft\Hovercraft.map'
 check '[ $STATUS -eq 0 ] && [ -n "$RESULT" ]' \
-	"Hovercraft, whose map.ini defines two locomotors of its own, ends and exits (defect #32; exit $STATUS)"
+	"Hovercraft, whose map.ini defines two locomotors of its own, ends and exits (port defect 32; exit $STATUS)"
 
 exit $failed

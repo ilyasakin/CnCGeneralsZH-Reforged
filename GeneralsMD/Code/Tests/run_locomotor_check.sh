@@ -16,8 +16,8 @@
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # The load-time module checks, one short run for both:
-#   #33: no override may leave a unit without the locomotors EA gave it;
-#   #34: no ObjectReskin may end up without a behaviour module its source has.
+#   port defect 33: no override may leave a unit without the locomotors EA gave it;
+#   port defect 34: no ObjectReskin may end up without a behaviour module its source has.
 #
 # An object's "Locomotor = SET_..." lines are stored in its AI module's data, so a ReplaceModule of that
 # module discards them unless the block re-states them. Upstream's fbe8dc6f and 179e1f65 did that to 12
@@ -26,7 +26,7 @@
 # discards, and ThingFactory's checkLocomotors logs, once everything has loaded:
 #   LocomotorCheck: <name> lost its <n> locomotor set(s) to a ReplaceModule of its AI module, ...
 #   LocomotorCheck: <r> things had an AI module with locomotors replaced, <m> of them left without a SET_NORMAL
-# And (#34) a reskin copies its source's modules; a module added to one in a normal INI load used to erase
+# And (port defect 34) a reskin copies its source's modules; a module added to one in a normal INI load used to erase
 # every copied module sharing an interface with it (upstream's fbe8dc6f left the Demolition General's
 # Technical reskins with no AI, and the first AI that recruited one crashed). ThingFactory's checkReskins logs
 #   ReskinCheck: <name> lacks behaviour modules its source <source> has: ...
@@ -68,7 +68,7 @@ replaced="$(printf '%s' "$summary" | sed -n 's/.*LocomotorCheck: \([0-9]*\) thin
 lost="$(printf '%s' "$summary" | sed -n 's/.*, \([0-9]*\) of them left.*/\1/p')"
 failed=0
 if [ "${lost:-x}" != "0" ]; then
-	echo "FAIL: $lost unit(s) lost their locomotors to a ReplaceModule of their AI module (#33):"
+	echo "FAIL: $lost unit(s) lost their locomotors to a ReplaceModule of their AI module (port defect 33):"
 	printf '%s\n' "$out" | grep 'log: LocomotorCheck: .* lost its' | sed 's/.*LocomotorCheck: /  /'
 	failed=1
 fi
@@ -86,7 +86,7 @@ fi
 reskins="$(printf '%s' "$reskin" | sed -n 's/.*ReskinCheck: \([0-9]*\) reskins.*/\1/p')"
 lacking="$(printf '%s' "$reskin" | sed -n 's/.*, \([0-9]*\) of them lacking.*/\1/p')"
 if [ "${lacking:-x}" != "0" ] || printf '%s\n' "$out" | grep -q 'log: ReskinCheck: .* lacks'; then
-	echo "FAIL: $lacking reskin(s) lack behaviour modules their source has (#34):"
+	echo "FAIL: $lacking reskin(s) lack behaviour modules their source has (port defect 34):"
 	printf '%s\n' "$out" | grep 'log: ReskinCheck: .* lacks' | sed 's/.*ReskinCheck: /  /'
 	failed=1
 else

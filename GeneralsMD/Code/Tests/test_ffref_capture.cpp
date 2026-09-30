@@ -80,7 +80,7 @@ static int anisotropic_as_linear = 0;
 static int known_findings = 0;
 static std::map<std::string, int> not_replayed;
 
-/// Findings recorded in the task doc (tasks/A-posix-d3d9-device.md, "The capture layer") and waiting on a
+/// Findings recorded during the capture layer's work (A3) and waiting on a
 /// ruling, by signature.  A known signature that fails is reported and not counted; one that passes fails
 /// the run, so the list cannot outlive the finding.  A signature the captures do not have is not checked.
 struct Known
@@ -458,7 +458,7 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	memcpy(&header, &bytes[0], sizeof(header));
 	// A programmable draw (version 2): its programs from draw_<n>.prog.  The device draws the transcription
 	// of the program registered under the captured name (A3e); the reference runs the captured tokens
-	// through a contributor's interpreter (ffprogram.h), assembling the water's text itself where the tokens are the
+	// through the shader interpreter (ffprogram.h), assembling the water's text itself where the tokens are the
 	// stub's.  A vertex program waits on the reference reading a declaration.
 	ProgramFile programs;
 	FFRef::Program reference_program, reference_vertex_program;
@@ -709,7 +709,7 @@ static void replay(PosixDevice9 *device, const std::string &directory, const std
 	}
 	if (read && indices != NULL && header.Primitive == D3DPT_TRIANGLELIST && getenv("FFREF_SPLIT") != NULL) {
 		// C1's question, on the device alone: the same triangles as one call per triangle, into the same
-		// clear, against the one call above.  The reference draws the same either way (a contributor's measurement),
+		// clear, against the one call above.  The reference draws the same either way (measured),
 		// so a difference here is the device's or the GPU's.
 		D3DVIEWPORT9 all = { 0, 0, (unsigned)width, (unsigned)height, 0.0f, 1.0f };
 		device->SetViewport(&all);
@@ -1269,7 +1269,7 @@ static int round_trip()
 	}
 	const std::string directory = std::string(user) + "/captures";
 	// All of it: under ctest -j4 on a fresh build this test can run before any other has made
-	// <build>/test-user-data, and a mkdir of the last folder alone then fails (a contributor, the M3 Pro Mac, 2026-09-27).
+	// <build>/test-user-data, and a mkdir of the last folder alone then fails (an M3 Pro, 2026-09-27).
 	make_folders(directory);
 	// The last run's captures; this directory is the test's own.
 	const std::vector<std::string> names = names_in(directory);

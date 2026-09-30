@@ -30,7 +30,7 @@
 #
 #   SHADERCROSS_COMMIT=<commit> build_shaders.sh <glslang> <shadercross>
 #
-# D-spike (docs/mac-port/tasks/D-spike-sdl3-gpu-model.md) measured the pinned versions:
+# The D-spike measured the pinned versions:
 # glslang vulkan-sdk-1.4.357.0 built with ENABLE_HLSL=ON, and SDL_shadercross 1ff05bec built with
 # SDLSHADERCROSS_DXC=OFF, both from source.
 

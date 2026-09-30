@@ -36,8 +36,8 @@
 
 	 The install root is the process's working directory, as on Windows, where WinMain sets it to the
 	 executable's directory.  Here that is the default too, and "-root <dir>" overrides it.  It is set
-	 once, before anything asks for a path, and nothing changes it after (C1's Roots paragraph).  Plan
-	 rule 9 applies to how this is RUN: GameEngine::init deletes Data\INI\INIZH.big from the root, as it
+	 once, before anything asks for a path, and nothing changes it after (C1's Roots paragraph).  Port
+	 rule 9 (PORTING.md) applies to how this is RUN: GameEngine::init deletes Data\INI\INIZH.big from the root, as it
 	 does in a player's install, so a development run must be rooted at a copy of the game data.
 	 The fork's own data is an overlay searched before that root (P1, decision 9): "-overlay <dir>", or
 	 the one a package puts beside the executable.  See chooseOverlays.  Since P1 step 2 every root is
@@ -174,7 +174,7 @@ static void activateThisApp() {}
 /** Whether this runs in the Steam Deck's Game Mode (P3): gamescope's session names itself in
 	* XDG_CURRENT_DESKTOP, and Steam's gamepad interface sets SteamGamepadUI for what it starts.  A file
 	* dialog may not show there, so PosixMain asks for -root in Steam's launch options instead.  (Both names
-	* are what gamescope and Steam document; the Deck itself has not been measured yet.) */
+	* are what gamescope and Steam document; a Steam Deck itself has not been measured yet.) */
 static bool inSteamGameMode()
 {
 	const char *desktop = getenv( "XDG_CURRENT_DESKTOP" ), *gamepadUi = getenv( "SteamGamepadUI" );
@@ -185,7 +185,7 @@ static bool inSteamGameMode()
 static const char GAME_MODE_NO_ROOT[] =
 	"Zero Hour Reforged could not find your Command & Conquer Generals Zero Hour folder.\n\n"
 	"In Steam, open this game's Properties and enter under Launch Options:\n\n"
-	"-root \"~/Games/Command & Conquer Generals Zero Hour\"\n\n"
+	"-root \"/home/you/Games/Command & Conquer Generals Zero Hour\"\n\n"
 	"with the path of your own Zero Hour folder (the one with INIZH.big in it) between the quotes. Or start "
 	"the game once from Desktop Mode to choose the folder there; it is remembered after that.";
 
@@ -229,7 +229,7 @@ static bool chooseFolderWithSdl( PosixInstallQuestion question, const std::strin
 	return answer.state == 1;
 }
 
-/** The chooser's stand-in for tests (the user's rule: no run may need a human at any machine).
+/** The chooser's stand-in for tests (no test run may need a human at any machine).
 	* ZH_TEST_CHOOSER_ANSWERS names a file of answers, one folder a line; each time the chooser is asked it
 	* takes the next line, and "cancel" or the end of the file cancels.  Nothing is shown: the reason the last
 	* answer was refused, which the dialog's message box would have shown, goes to stderr, as each answer does.
@@ -474,7 +474,7 @@ int main( int argc, char *argv[] )
 	// ReleaseCrashInfo.txt, as WinMain's _set_se_translator and SetUnhandledExceptionFilter make it on Windows.
 	installCrashHandlers();
 
-	// The one locale category the game may set (plan rule; C2's task file): dates in the replay and save
+	// The one locale category the game may set (a port rule; C2): dates in the replay and save
 	// lists in the user's format.  LC_NUMERIC would change how the INI parser reads decimals.
 	setlocale( LC_TIME, "" );
 

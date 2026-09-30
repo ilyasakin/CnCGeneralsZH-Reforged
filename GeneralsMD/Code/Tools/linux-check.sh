@@ -78,8 +78,8 @@ docker info >/dev/null 2>&1 || fail "docker is installed but its daemon does not
 
 # --- one run at a time, machine-wide -----------------------------------------------------------
 # Every row builds the whole tree inside a container, and OrbStack's disk image grows on the host
-# with each one.  On 2026-09-26 three sessions ran four rows each at once, filled a 460 GB disk
-# and stopped the Docker daemon.  So runs queue on one lock, at a fixed path every session shares.
+# with each one.  On 2026-09-26 three checkouts ran four rows each at once, filled a 460 GB disk
+# and stopped the Docker daemon.  So runs queue on one lock, at a fixed path every checkout shares.
 # A second run waits and says who it is waiting for; a lock whose owner has died is taken over.
 # mkdir is the lock because it is atomic everywhere and needs no flock(1), which macOS lacks.
 LOCK=/tmp/zhr-linux-check.lock
@@ -164,8 +164,8 @@ ensure_image() { # arch
 # alone for the same reason - Docker cannot prune the cache of one image's builds without the rest.
 # And only images more than a day old: two branches with different package lists can be in use on
 # one machine at once, and removing the other branch's fresh image makes each rebuild the other's
-# forever.  (Found by testing this function: it would have removed an image another session was
-# running at that moment - Docker refused, but the next session to start would have rebuilt it.)
+# forever.  (Found by testing this function: it would have removed an image another run was
+# using at that moment - Docker refused, but the next run to start would have rebuilt it.)
 remove_superseded_images() {
   local old
   old=$(docker image ls --filter until=24h --format '{{.Repository}}:{{.Tag}}' 'zhr-linux-check' \

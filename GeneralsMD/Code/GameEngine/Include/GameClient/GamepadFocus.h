@@ -16,7 +16,7 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// GamepadFocus.h: menus on a gamepad, console-style (G1, docs/mac-port/tasks/G1-gamepad-screens.md).
+// GamepadFocus.h: menus on a gamepad, console-style (G1).
 //
 // While a menu screen, a popup or a box is up, the pad does not move a cursor: it moves a focus from widget to
 // widget, and acts on the focused one.

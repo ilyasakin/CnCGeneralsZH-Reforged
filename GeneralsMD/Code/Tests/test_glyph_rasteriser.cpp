@@ -22,7 +22,7 @@
  * and tmDescent are the VDMX table's; with ANTIALIASED_QUALITY it draws bilevel where the gasp table
  * says no grey.  This test reads those three tables (and cmap) with its OWN parser, not FreeType's, and
  * holds the rasteriser, built on the vendored FreeType 2.14.3, to them for the faces and sizes the
- * game uses (the census in D6's task file).  The design's measurements were made with Homebrew's
+ * game uses (D6's census).  The design's measurements were made with Homebrew's
  * FreeType; this is the same comparison on the vendored one.
  *
  * Also: the antialias switch changes pixels and never advances or heights; "Generals" (Arial with an
@@ -216,7 +216,7 @@ bool haveFont( const char *file )
 	return false;
 }
 
-// The faces the game uses and what each is on disk: census in D6's task file
+// The faces the game uses and what each is on disk: D6's census
 struct Face
 {
 	const char *name;

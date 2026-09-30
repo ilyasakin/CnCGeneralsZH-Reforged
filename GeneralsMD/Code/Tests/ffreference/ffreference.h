@@ -17,7 +17,7 @@
 */
 /*
  * FFReference: Direct3D 9's fixed-function pipeline, computed in double precision on the CPU, from
- * Microsoft's documentation only (A3b, docs/mac-port/tasks/A-posix-d3d9-device.md, "A3 design").
+ * Microsoft's documentation only (A3b).
  *
  * WHAT IT IS FOR.  An independent reading of the documented pipeline, so that A3's GPU fixed-function
  * programs can be compared against something that did not come from the same author or the same
@@ -76,7 +76,7 @@
  *   N3  N.Ldir and N.H are clamped at 0 before use (a negative base has no real power).  pow(0, 0) = 1.
  *       Specular is gated by N.Ldir: a light with N.Ldir <= 0 adds no specular - MEASURED, not read (the
  *       page's formula has no gate): WARP and REF give 0 where N.H is .531 and N.Ldir -.436 (knownprobe
- *       N3a, docs/mac-port/tasks/L2-vulkan-recon.md, "The known list measured").
+ *       N3a, knownprobe_windows.cpp).
  *   N4  Per-light ambient (Atten * Spot * La) is included, as "Ambient Lighting" writes it (measured on
  *       WARP and REF: attenuated, and none beyond the range; knownprobe F1).
  *   N5  With LIGHTING, the lit diffuse's alpha is the diffuse source's alpha and the lit specular's is
@@ -88,7 +88,7 @@
  *   N7  An absent vertex diffuse is 0xFFFFFFFF, as D3DTA writes; an absent vertex SPECULAR is 0x00000000,
  *       RGB and alpha - MEASURED, not read: D3DTA writes 0xffffffff for both, but Windows' own Direct3D 9
  *       (the Microsoft Basic Render Driver, WARP, d3d10warp.dll 10.0.26100.5074, as a HAL device and as
- *       REF, 2026-09-27; docs/mac-port/tasks/L2-vulkan-recon.md, "F7 settled") reads an absent specular as
+ *       REF, 2026-09-27; f7probe_windows.cpp) reads an absent specular as
  *       black with alpha 0 through D3DTA_SPECULAR, adds nothing with SPECULARENABLE, and reads an absent
  *       diffuse as white.  This was the device's reading (finding F7); the measurement is the authority.
  *       COLORVERTEX with a material source naming a colour the vertex lacks uses the material's.
@@ -122,7 +122,7 @@
  *       assess which texture in a mipmap set is the closest resolution"), so this is the nominal only,
  *       and the envelope allows +-0.6 (Freedoms::lodDelta, F11, 2026-09-26): any footprint norm from
  *       L-infinity to L1 is within sqrt(2) of this L2 one, +-0.5 in log2, and 2x2 differencing adds
- *       ~0.1.  Apple's GPU measured +0.10 mean, +0.58 worst on x-stretched footprints (a contributor's probe).
+ *       ~0.1.  Apple's GPU measured +0.10 mean, +0.58 worst on x-stretched footprints (a probe on an M3 Pro).
  *       Microsoft's own two follow this nominal: WARP and REF read lambda within -0.05..+0.03 of it on
  *       isotropic, anisotropic and rotated footprints, where L-infinity or L1 would be 0.5 off (knownprobe
  *       F11).  The +-0.6 stays a ruling for hardware, which no Windows driver here could measure.
@@ -174,7 +174,7 @@
  *       points in a continuous freedom, and colour and alpha move together between them, so the pass
  *       boundary can fall between a failing and a passing variant with a colour on the way from one to
  *       the other - beyond every passing variant's when the texture's colour falls as its alpha rises
- *       (foliage over a bright ground).  Found on the game's own alpha-tested draws (a contributor's C2, 2026-09-26).
+ *       (foliage over a bright ground).  Found on the game's own alpha-tested draws (C2, 2026-09-26).
  */
 
 #ifndef FFREFERENCE_H

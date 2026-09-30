@@ -2608,7 +2608,7 @@ void ScriptActions::doDisplayCinematicText(const AsciiString& displayText, const
 	char buf[256];
 	char *c;
 	strcpy(buf, fontType.str());
-	/* KNOWN DEFECT, kept on purpose (docs/mac-port/README.md, defects in the shipping game): this
+	/* KNOWN DEFECT, kept on purpose (port defect 8, found in the shipping game): this
 		 compared the pointer with '\0', which MSVC read as a null pointer constant, so the test is
 		 `c != NULL` and always true.  The loop ends only on a ' ' or '-'; without one it reads past
 		 the string, and it advances c twice a pass.  Spelled as MSVC compiled it, so every platform

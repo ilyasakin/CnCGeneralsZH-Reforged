@@ -32,7 +32,7 @@
  *   python3 Tools/water_grid_oracle_extract.py <commit> <dir>/water_grid_original.inc
  *   c++ -std=c++17 -O2 -ffp-contract=off -fsigned-char -I<dir> -I Tests -I Libraries/Include \
  *       -I GameEngine/Include Tests/water_grid_oracle.cpp -o water_grid_oracle
- * and the same with x86_64-w64-mingw32-g++ for Wine (T1's task file has the flags).
+ * and the same with x86_64-w64-mingw32-g++ for Wine (T1).
  */
 
 #include "Lib/BaseType.h"

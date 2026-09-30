@@ -57,7 +57,7 @@
 ** The width on Windows is unchanged by this.  The type IDENTITY is not:
 ** `unsigned long` and `unsigned int` are distinct types even where both are 32
 ** bits, so this can move overload resolution and printf-format diagnostics
-** there.  See docs/mac-port/WINDOWS-DEBT.md.
+** there.  See docs/porting/windows-impact.md.
 */
 typedef unsigned char	uint8;
 typedef unsigned short	uint16;

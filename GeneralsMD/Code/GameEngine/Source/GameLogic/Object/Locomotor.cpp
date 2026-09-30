@@ -649,7 +649,7 @@ void LocomotorStore::reset()
 		Overridable *locoTemp = it->second->deleteOverrides();
 		if (!locoTemp)
 		{
-			// Defect #32 (fixed the same way upstream): erase(it) left it dangling, and the loop went on from
+			// Port defect 32 (fixed the same way upstream): erase(it) left it dangling, and the loop went on from
 			// the freed node. A locomotor a map.ini made from nothing (the shipped test map Hovercraft; any
 			// custom map, whose map.ini travels with a map transfer) lands here: the game hung (Mac), crashed
 			// (Windows, Linux) at the end of the match, and upstream saw the heap damage crash a save load.

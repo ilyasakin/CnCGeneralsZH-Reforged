@@ -173,7 +173,7 @@ install_zlib() {
 #
 # Windows is unaffected either way - neither name is ever defined there, so the typedef happens
 # before and after. It does mean vendor.ps1 and vendor.sh now leave different bytes in zconf.h;
-# that is in WINDOWS-DEBT.md.
+# that is in docs/porting/windows-impact.md.
 # zlib's licence, clause 2: "Altered source versions must be plainly marked as such".  Each of the two
 # patches below leaves a comment on the line before the one it changed, and a tree patched before the
 # comment existed gets it on the next run: mark_zlib_altered <file> <awk regex of the changed line> <text>.
@@ -368,7 +368,7 @@ install_gamespy_patch() {
 
 # --- And its second change, Libraries/Source/gamespy-gsi-unix.patch: the SDK's own platform macro
 # renamed from _UNIX to GSI_UNIX, in all 9 files that use it.  gsplatform.h defines it on Linux and
-# Apple, and _UNIX is also the switch for Westwood's abandoned port in WWVegas, which the plan's
+# Apple, and _UNIX is also the switch for Westwood's abandoned port in WWVegas, which the port's
 # rules say never to turn on: every engine file that included a GameSpy header had it turned on from
 # that point.  After the rename the SDK takes exactly the branches it did - its objects are identical
 # - and nothing outside it sees _UNIX.  vendor.ps1 has nothing to apply: Windows never defined it.
@@ -477,7 +477,7 @@ install_nanosvg() {
 }
 
 # --- SDL3 3.4.16, the whole repository: the window, the events, the entry point and the GPU API on
-# every platform that is not Windows (decision 3 in docs/mac-port/README.md). Windows keeps
+# every platform that is not Windows (decision 3 in PORTING.md). Windows keeps
 # Win32Device, so vendor.ps1 does not fetch it - it says so, the way report_directx does here. Same
 # .gitignore dance as litehtml. Pinned to the release's commit, not its tag, because a tag can move.
 install_sdl3() {
@@ -593,7 +593,7 @@ copy_entries() {
 }
 
 # --- glslang, pinned to vulkan-sdk-1.4.357.0 (168d452a): the HLSL front end that compiles the
-# shader generators' SDL3 target to SPIR-V (decision 4 in docs/mac-port/README.md). POSIX only; the
+# shader generators' SDL3 target to SPIR-V (decision 4 in PORTING.md). POSIX only; the
 # Windows build compiles HLSL with d3dcompiler_47.dll and never needs it.
 #
 # THIS TAG IS PAST THE HLSL FRONT END'S DEPRECATION. Upstream deprecated it in April 2026
@@ -661,7 +661,7 @@ install_shadercross() {
 # --- FreeType 2.14.3 (released 2026-03-22; the newest stable tag on 2026-09-26), pinned to the
 # release's commit 0a0221a1: the glyph rasteriser under render2dsentence off Windows (decision 6, D6).
 # POSIX only; Windows draws text with GDI. Its TrueType interpreter v35 is what reproduces GDI's
-# advance widths (D6's task file). Copied without tests/, subprojects/ and the other build systems.
+# advance widths (D6). Copied without tests/, subprojects/ and the other build systems.
 install_freetype() {
   local destination="$libraries/Source/freetype"
   if [ -e "$destination/src/truetype/ttinterp.c" ] && [ -z "$force" ]; then return 0; fi

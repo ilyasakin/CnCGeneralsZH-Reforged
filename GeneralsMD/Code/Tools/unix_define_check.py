@@ -20,7 +20,7 @@ compile command.
     python3 Tools/unix_define_check.py <build>/compile_commands.json <source root>
 
 Why.  _UNIX is the switch for Westwood's abandoned 1990s UNIX port, which runs through WWVegas at
-about sixty sites, and the plan's rules say never to turn it on (docs/mac-port/README.md, "never
+about sixty sites, and the port's rules say never to turn it on (PORTING.md, "Never
 define _UNIX").  It was on anyway: the vendored GameSpy SDK's gsplatform.h defined it on Linux and
 Apple, so every engine file that included a GameSpy header had it from that point, and 34 of them
 did.  Tools/vendor.sh now renames the SDK's macro to GSI_UNIX.  This check keeps a definition from
@@ -99,7 +99,7 @@ def main():
         return 1
     hits = defines_in_tree(root) + defines_on_command_lines(compile_commands)
     if hits:
-        print("FAIL: _UNIX is defined - see the plan's rule \"never define _UNIX\":")
+        print("FAIL: _UNIX is defined - see PORTING.md, \"Never define _UNIX\":")
         for h in hits:
             print("  " + h)
         return 1

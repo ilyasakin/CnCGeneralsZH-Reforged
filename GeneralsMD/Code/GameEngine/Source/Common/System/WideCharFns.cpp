@@ -19,7 +19,7 @@
 // WideCharFns.cpp
 // The engine's own string functions over WideChar.  See Lib/WideCharFns.h for why these exist
 // and why they are not called wcs*.
-// Added for the macOS port, B1.  See docs/mac-port/B1-widechar-survey.md.
+// Added for the macOS port, B1.  See PORTING.md ("Wide characters").
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
@@ -382,7 +382,7 @@ static size_t narrowToWideChar( const wchar_t *in, WideChar *out, size_t outCoun
 	while (in[i] != 0 && i + 1 < outCount)
 	{
 		// Anything outside the BMP cannot be carried by a 16-bit code unit.  B1 changes a width,
-		// not a text model (see the task's "Do not" list), and nothing in the engine's format
+		// not a text model (by design), and nothing in the engine's format
 		// strings or string tables is outside the BMP - so substitute rather than invent a
 		// surrogate pair, and make it visible if it ever happens.
 		const unsigned long cp = (unsigned long)in[i];

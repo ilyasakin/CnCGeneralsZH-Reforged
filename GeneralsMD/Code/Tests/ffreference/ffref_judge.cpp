@@ -19,7 +19,7 @@
 /*
  * ffref_judge: FFReference's own replay of a capture set (L2's oracle side, and A3's on any backend).
  *
- * Every draw_NNNNN.cap in the folder is read by ffcapture.h (written from a contributor's description of the
+ * Every draw_NNNNN.cap in the folder is read by ffcapture.h (written from the capture side's description of the
  * format, not from the device or its harness), its textures decoded there, its programs decoded by
  * ffprogram.h, and drawn by FFReference into a target of the capture's size.  With --gpu, the GPU's own
  * pixels for the same capture (the device harness's dump, read as a black box) are compared with it,
@@ -30,7 +30,7 @@
  *   unreadable   the file disagrees with the format's description (it says where)
  * Without --gpu it draws only, and reports what the reference did: a check of the reader itself.
  *
- * THE STARTING POINT, as a contributor describes the harness's replay: before each draw the whole target is cleared
+ * THE STARTING POINT, as the capture side describes the harness's replay: before each draw the whole target is cleared
  * to 0xFF3F2F1F, depth to 1.0 and stencil to 0 (a D24S8 depth-stencil), then the captured viewport is set;
  * a draw with no depth-stencil bound has depth and stencil off.  The GPU dump is <capture>.cap.bgra: the
  * back buffer read back after the draw, B, G, R, A bytes, rows top first, TargetWidth x TargetHeight.
@@ -96,7 +96,7 @@ std::vector<std::string> captureNames( const std::string &dir )
 }
 
 /* The port's D3DX stub assembles nothing: for D3DXAssembleShader it emits a stream that carries the text.
-	 Its layout, as a contributor described it in words (not read from d3dx9posix.cpp): word 0 the version token; word 1
+	 Its layout, as the capture side described it in words (not read from d3dx9posix.cpp): word 0 the version token; word 1
 	 a comment token, 0xFFFE | N << 16, N = 2 + ceil(L / 4); word 2 the tag 0x5253485A ("ZHSR"); word 3 L,
 	 the text's byte count; then the L bytes, zero-padded to a word; then END (0x0000FFFF), no instructions.
 	 Recognised only when all of that holds; anything else is taken as real tokens. */

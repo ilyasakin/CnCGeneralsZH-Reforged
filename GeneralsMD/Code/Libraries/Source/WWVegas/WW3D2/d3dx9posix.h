@@ -16,7 +16,7 @@
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// The D3DX texture helpers off Windows (decision 7): defined in d3dx9posix_texture.cpp (a contributor's, A2),
+// The D3DX texture helpers off Windows (decision 7): defined in d3dx9posix_texture.cpp (phase A2),
 // bound by Bind_D3DX9_Runtime in d3dx9posix.cpp.  Their signatures are d3dx9runtime.h's function
 // pointer types'.  Not for the renderer to include: it calls the D3DX names.
 

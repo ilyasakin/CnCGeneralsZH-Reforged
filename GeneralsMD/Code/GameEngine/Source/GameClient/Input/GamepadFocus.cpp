@@ -638,7 +638,7 @@ void GamepadFocus::update( void )
 	}
 	// pressed as the transition ends, or HOLD_MS after the press at the latest: the main menu starts a side's logo
 	// transition as its pane's ends, so the handler can stay busy past the moment a click works again (seen on
-	// the M3 Pro Mac: the held B pressed at the cap went through).  Wall time, not frames: the Deck draws 60 to 90 frames a
+	// an M3 Pro: the held B pressed at the cap went through).  Wall time, not frames: the Steam Deck draws 60 to 90 frames a
 	// second, where 45 frames would come before EA's second-long lock ends
 	// ...and HOLD_FRAMES too, whichever comes later: the shell's transitions step once a frame, so on a loaded or
 	// slow machine the lock outlasts 1.5 s (seen on a loaded Linux worker: pressed at 1.5 s, 34 frames, dropped)

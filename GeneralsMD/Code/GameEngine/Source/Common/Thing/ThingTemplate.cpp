@@ -573,7 +573,7 @@ void ThingTemplate::parseModuleName(INI* ini, void *instance, void* store, const
 	}
 	else if (self->m_moduleParsingMode == MODULEPARSE_ADD_REMOVE_REPLACE)
 	{
-		/* #34: a module inside ReplaceModule or AddModule in a normal load.  The block names exactly what it
+		/* Port defect 34: a module inside ReplaceModule or AddModule in a normal load.  The block names exactly what it
 			 replaces, as it does in an override file (above), so it clears nothing else.  The clearing below is
 			 for an object that restates its own modules: run here, it erased every copied module sharing an
 			 interface with the new one, and upstream's fbe8dc6f, replacing the death module of two ObjectReskins
@@ -805,13 +805,13 @@ void ThingTemplate::parseReplaceModule(INI *ini, void *instance, void *store, co
 	// The object's Locomotor lines are stored in its AI module's data, so a replaced AI module takes
 	// them along: Lazr_AmericaVehicleChinook's replaced ChinookAIUpdate left it no locomotor, and the
 	// first move order it got off the pad read a null one. (Upstream's fix, below: an emptied
-	// replacement gets the old sets back. The port's #33 re-stated them in FixesReforged.ini too.)
+	// replacement gets the old sets back. The port's fix for port defect 33 re-stated them in FixesReforged.ini too.)
 	const AIUpdateModuleData *aiBefore = self->friend_getAIModuleInfo();
 	const LocomotorTemplateMap locomotorsBefore = aiBefore ? aiBefore->m_locomotorTemplates : LocomotorTemplateMap();
 
 	const char *modToRemove = ini->getNextToken();
 	AsciiString removedModuleName;
-	/* #33's guard: the sets the replaced AI module had are counted here, and ThingFactory's
+	/* Port defect 33's guard: the sets the replaced AI module had are counted here, and ThingFactory's
 		 checkLocomotors reports any thing whose replacement still has none once everything has loaded.
 		 With upstream's carry-over below that can only fire if the carry-over itself fails. */
 	Int setsBefore = 0;

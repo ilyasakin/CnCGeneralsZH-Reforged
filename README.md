@@ -155,7 +155,7 @@ Build Tools install needs the `Microsoft.VisualStudio.Component.VC.ATL` componen
 and its tests, the machine also needs the DirectX End-User Runtime (June 2010), for `d3dx9_43.dll`:
 Microsoft's full `directx_Jun2010_redist.exe` (winget's `Microsoft.DirectX` installs nothing).
 `windows-ci.ps1` is the whole Windows check in one command: build, ctest, the GPU tests in the desktop
-session, and the replay CRCs (docs/mac-port/tasks/W2-windows-build.md).
+session, and the replay CRCs. Other platforms: see [PORTING.md](PORTING.md).
 
 x64 only. The 32-bit build and the last of the inline assembly went in September 2026, and `-A
 Win32` is now a configure error.

@@ -18,7 +18,7 @@
 
 // WideCharFns.h
 // The engine's own string functions over WideChar.
-// Added for the macOS port, B1.  See docs/mac-port/B1-widechar-survey.md.
+// Added for the macOS port, B1.  See PORTING.md ("Wide characters").
 
 #pragma once
 
@@ -88,7 +88,7 @@ Int WideCharNCmp ( const WideChar *a, const WideChar *b, size_t n );
 
 	  Nothing calls these yet.  When UnicodeString::compareNoCase is moved onto them, that IS a
 	  behaviour change on Windows for strings holding non-ASCII letters, and it needs its own row
-	  in docs/mac-port/WINDOWS-DEBT.md at the time. */
+	  in docs/porting/windows-impact.md at the time. */
 Int WideCharICmp  ( const WideChar *a, const WideChar *b );
 Int WideCharNICmp ( const WideChar *a, const WideChar *b, size_t n );
 
@@ -173,7 +173,7 @@ Int WideCharScan ( const WideChar *in, const WideChar *format, ... );
 
 /** What fgetwc returns at the end of a binary stream under MSVC: WEOF, which is 0xFFFF there.
 	  Not EOF (-1) - so Recorder.cpp's `c == EOF` tests never fire on a truncated header, on
-	  Windows or here (docs/mac-port/README.md, defect 15). */
+	  Windows or here (port defect 15). */
 enum { WIDECHAR_FILE_EOF = 0xFFFF };
 
 /** fputwc(c, f) on a binary stream: two bytes, low first.  Returns the unit written, or

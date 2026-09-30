@@ -3416,7 +3416,7 @@ void operator delete[](void *p) WW_NOEXCEPT_DELETE
 	sanitizer runtime is in play there, and one of ours would not be equivalent: the build is /EHa, so
 	the nothrow news' catch (...) would also catch a structured exception (an access violation inside
 	allocateBytes) and answer NULL, where the CRT's, compiled /EHsc, lets it reach the crash handler.
-	MSVC's STL reaches the nothrow new too (stable_sort's temporary buffer), a contributor's second read.
+	MSVC's STL reaches the nothrow new too (stable_sort's temporary buffer), found on a second review.
 */
 #ifndef _MSC_VER
 void operator delete(void *p, size_t) WW_NOEXCEPT_DELETE

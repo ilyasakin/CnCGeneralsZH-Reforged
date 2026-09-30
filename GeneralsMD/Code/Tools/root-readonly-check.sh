@@ -89,7 +89,7 @@ farm() {
 
 # plant <root>: a real Data/INI/INIZH.big in <root>. The farm entry is REMOVED first: the install has
 # that file, so the entry is a link to it, and writing the link writes the install (2026-09-26: this
-# script's first version overwrote the install's copy exactly so; see P1's task file).
+# script's first version overwrote the install's copy exactly so, P1).
 plant() {
 	mkdir -p "$1/Data/INI"
 	rm -f -- "$1/Data/INI/INIZH.big"

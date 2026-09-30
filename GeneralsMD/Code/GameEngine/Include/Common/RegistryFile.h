@@ -25,7 +25,7 @@
 	 from it; WWDownload's registry functions read and write theirs through here too, so every reader
 	 and writer of the file shares one parser and one idea of which line is a key's.
 
-	 The protocol (C1's task file, "Registry.ini: the protocol"):
+	 The protocol (C1, "Registry.ini: the protocol"):
 	 - A key is registryFileKey's: "Generals\\" for original-Generals values or "" for Zero Hour's,
 		 then the registry path below the game's key without its leading backslashes, then '\\', then
 		 the value name.  Keys match in any case, and the last line that sets one wins.

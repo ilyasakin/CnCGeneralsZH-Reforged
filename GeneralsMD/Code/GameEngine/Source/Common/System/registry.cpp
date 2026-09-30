@@ -201,7 +201,7 @@ Bool GetUnsignedIntFromRegistry(AsciiString path, AsciiString key, UnsignedInt& 
 	 WWDownload's registry functions this file's reader and writer.
 
 	 Nothing in the engine proper writes the file: on Windows the installer writes the registry, and
-	 here that is the future launcher's or installer's job (C1's task file says so).  Where there is no file, or
+	 here that is the future launcher's or installer's job (C1).  Where there is no file, or
 	 no user data directory, every caller keeps its compiled-in default - GetRegistryLanguage's
 	 "english", GetRegistryVersion's 65536.  The user data directory is EarlyOptions.h's
 	 findUserDataDirectory (C1 (e)). */

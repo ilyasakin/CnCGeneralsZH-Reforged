@@ -134,7 +134,7 @@ SdlGameEngine::SdlGameEngine( const WindowRequest &request )
 /* The window and SDL's video outlive the engine, as WinMain's window outlives GameMain: the engine's own
 	 teardown (the base class's, which runs after this) still releases the device, and the GPU device made
 	 on SDL's video must go before the video does.  Under Vulkan, quitting the video unloads the Vulkan
-	 library, and the device's destroy then called into it (the Linux x86_64 host, -offscreen, 2026-09-27).  So the
+	 library, and the device's destroy then called into it (Linux x86_64, -offscreen, 2026-09-27).  So the
 	 window is handed on here, and SdlGameEngine_releaseWindow, which PosixMain calls after GameMain,
 	 releases it. */
 static SDL_Window *s_pendingWindow = NULL;
@@ -247,8 +247,8 @@ void SdlGameEngine::createWindow( void )
 	   - on Apple, SDL's dummy driver, with ZH_SDL_GPU_METAL_WINDOWLESS for the Metal backend, which otherwise
 	     wants a view the dummy driver cannot make (Libraries/Source/sdl3-metal-windowless.patch);
 	   - elsewhere, SDL's offscreen driver, which gives Vulkan a headless surface (VK_EXT_headless_surface)
-	     with no patch.  The dummy driver has no Vulkan surface, and SDL's Vulkan backend refuses it (a contributor's
-	     L2 recon, docs/mac-port/tasks/L2-vulkan-recon.md).
+	     with no patch.  The dummy driver has no Vulkan surface, and SDL's Vulkan backend refuses it (measured in
+	     the L2 Vulkan work).
 	 The hint ZH_OFFSCREEN_FRAMES tells the device (a
 	 hint, not ZH_OFFSCREEN itself: the device must not act on the variable when -headless starts no video).
 	 Monitors.h keeps its no-display answers, as
@@ -380,8 +380,8 @@ Radar *SdlGameEngine::createRadar( void )
 	return NEW W3DRadar;
 }
 
-/* The rule: no sound and no windows in automated runs.  A hidden window (-hiddenwindow, or
-	 ZH_HIDDEN_WINDOW) or no window (-offscreen, ZH_OFFSCREEN) is a harness or automated run, so it is
+/* An automated run makes no sound and shows no window.  A hidden window (-hiddenwindow, or
+	 ZH_HIDDEN_WINDOW) or no window (-offscreen, ZH_OFFSCREEN) is a harness's or a script's run, so it is
 	 silent exactly as -noaudio makes it, and
 	 the audio device is never opened.  ZH_ALLOW_AUDIO=1 keeps the sound for a deliberate audio check.
 	 This is the place: after the command line is parsed, before TheAudio opens its device. */
@@ -395,7 +395,7 @@ AudioManager *SdlGameEngine::createAudioManager( void )
 		TheWritableGlobalData->m_speechOn = FALSE;
 		TheWritableGlobalData->m_soundsOn = FALSE;
 		TheWritableGlobalData->m_musicOn = FALSE;
-		DEBUG_LOG(( "Audio off: a hidden window or -offscreen is an automated or harness run (ZH_ALLOW_AUDIO=1 keeps it)\n" ));
+		DEBUG_LOG(( "Audio off: a hidden window or -offscreen is a harness's or a script's run (ZH_ALLOW_AUDIO=1 keeps it)\n" ));
 	}
 	return NEW MilesAudioManager;
 }

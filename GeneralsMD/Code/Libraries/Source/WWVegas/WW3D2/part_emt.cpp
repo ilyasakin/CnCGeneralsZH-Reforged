@@ -133,7 +133,7 @@ ParticleEmitterClass::ParticleEmitterClass(float emit_rate, unsigned int burst_s
 }
 
 
-// A name or user string may be NULL: copied as Windows copies it (Platform/StrdupAsWindows.h, defect #31).
+// A name or user string may be NULL: copied as Windows copies it (Platform/StrdupAsWindows.h, port defect 31).
 ParticleEmitterClass::ParticleEmitterClass(const ParticleEmitterClass & src) :
 	RenderObjClass(src),
 	EmitRate(src.EmitRate),
@@ -858,7 +858,7 @@ void
 ParticleEmitterClass::Set_Name (const char *pname)
 {
 	// Copy before freeing the old name: pname may point into it (upstream). strdupAsWindows: a NULL
-	// name copies as NULL, as the UCRT's _strdup does (defect #31's class).
+	// name copies as NULL, as the UCRT's _strdup does (port defect 31's class).
 	char *name = strdupAsWindows(pname);
 	::free (NameString);
 	NameString = name;

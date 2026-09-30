@@ -29,7 +29,7 @@
 //     window still waits for vsync), and work: the frame without it - what the frame costs;
 //   - not paced: frames presented to a window SDL called hidden, occluded or minimised, and frames whose
 //     swapchain gave no drawable.  macOS hands a hidden or occluded window drawables and does not wait for
-//     vsync, so a run full of them measures the game unpaced - a -hiddenwindow run, and the MacBook Air's
+//     vsync, so a run full of them measures the game unpaced - a -hiddenwindow run, and a MacBook Air's
 //     locked session, read as 119 fps on a 60 Hz panel - and the counts say so;
 //   - GPU (ZH_GPU_TIMING_SYNC=1 only): every submit waits for its fence, and the waits add up.  That
 //     serialises CPU and GPU, so a SYNC run's frame times are not the game's: it measures the GPU.
@@ -174,7 +174,7 @@ void PosixDevice9::Timing_Report()
 	}
 	if (state.FirstPresent == 0) {
 		// A device made and replaced before any frame (the engine does that at some sizes, e.g. 3024x1964
-		// offscreen on the M3 Pro Mac) has nothing to report, and must not use up the one report.
+		// offscreen on an M3 Pro) has nothing to report, and must not use up the one report.
 		return;
 	}
 	state.Reported = true;

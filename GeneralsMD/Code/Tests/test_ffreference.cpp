@@ -321,7 +321,7 @@ TEST(ffref_absent_vertex_colours_as_windows_measures_them)
 // ---- the device's known list, measured on Windows' own Direct3D 9 --------------------------------
 // Each value below is what Tests/ffreference/knownprobe_windows.cpp read back on the Microsoft Basic
 // Render Driver (WARP) as a HAL device and on the reference rasteriser (d3dref9.dll) as REF, 2026-09-27
-// (docs/mac-port/tasks/L2-vulkan-recon.md, "The known list measured").  The probe's scene is rebuilt here
+// (ffreference/knownprobe_windows.cpp).  The probe's scene is rebuilt here
 // draw for draw: a 64x64 A8R8G8B8 target cleared to 0xFF3F2F1F, identity transforms, lighting off,
 // stage 0 SELECTARG1 DIFFUSE for colour and alpha.  Values are bytes; a tolerance of 1 covers the
 // 8-bit rounding where WARP and REF themselves differ by one.

@@ -20,9 +20,9 @@
 ** The Direct3D 9 the renderer speaks, off Windows (decision 7, phase A1).
 **
 ** WW3D2 and W3DDevice are written in Direct3D 9: 545 of its names appear in the code the POSIX build
-** compiles (docs/mac-port/RENDERER-ROUTE-RECON.md).  Off Windows they talk to a D3D9-shaped device
+** compiles (measured when the route was chosen; PORTING.md, decision 7).  Off Windows they talk to a D3D9-shaped device
 ** of our own, so this header declares those names - the types, the constants and the interfaces the
-** renderer uses - and nothing else.  It is a deliberate exception to the plan's engine-own names:
+** renderer uses - and nothing else.  It is a deliberate exception to the port's engine-own names:
 ** here the D3D9 names ARE the interface.
 **
 **   - Written from the values Microsoft publishes for Direct3D 9, not copied from any header.  Every

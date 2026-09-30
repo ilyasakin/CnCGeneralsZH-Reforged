@@ -19,7 +19,7 @@
 /*
 ** The SDL3 GPU target: a generated program's D3D11 text, made into what SDL's GPU API binds.
 **
-** Decision 4 (docs/mac-port/README.md) keeps HLSL as the one shader language.  Off Windows the
+** Decision 4 (PORTING.md) keeps HLSL as the one shader language.  Off Windows the
 ** generated text goes through glslang's HLSL front end to SPIR-V for Vulkan, and SPIRV-Cross turns
 ** that SPIR-V into MSL for Metal.  The arithmetic is the D3D11 profile's exactly; what differs is
 ** where things are bound, so the generators write their D3D11 text and this rewrites the bindings.

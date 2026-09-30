@@ -17,15 +17,15 @@
 */
 
 // The Microsoft spellings this tree was written against, and the standard ones it is being moved
-// to.  One header rather than an #ifdef at each of a few hundred call sites, per rule 2 of
-// docs/mac-port/README.md: a platform difference lives behind a named header with the reason in
+// to.  One header rather than an #ifdef at each of a few hundred call sites, per the port's rule
+// (PORTING.md): a platform difference lives behind a named header with the reason in
 // its comment.
 //
 // Which way round, and why.  The call sites are being renamed to the POSIX and C99 names -
 // strcasecmp, snprintf, access - and this header teaches MSVC those names.  The other direction
 // would have been less work now and wrong later: it would have left the Microsoft spellings spread
 // across 70-odd files with a #define somewhere making them mean something else, which is the thing
-// B3's task file says not to do.  What is left here is small, and it shrinks as call sites move.
+// B3 set out not to do.  What is left here is small, and it shrinks as call sites move.
 //
 // Inline functions, not macros, wherever a function will do.  A macro named strcasecmp is a trap
 // for whatever declares strcasecmp next; an inline function is overload-resolved and scoped like
@@ -45,12 +45,12 @@
 #define MSVCCOMPAT_H
 
 // _UNIX switches on Westwood's abandoned 1990s UNIX port, about sixty sites across WWVegas, and the
-// plan's rules say never to define it (docs/mac-port/README.md, "never define _UNIX").  The vendored
+// port's rules say never to define it (PORTING.md, "Never define _UNIX").  The vendored
 // GameSpy SDK used to define it; Tools/vendor.sh renames the SDK's macro, and the ctest
 // unix_define_check keeps any definition out of the tree and the compile flags.  This catches one
 // that arrives before every WWVegas and engine file reaches this header anyway.
 #if defined(_UNIX)
-#error "_UNIX is defined. See docs/mac-port/README.md, \"Rule: never define _UNIX\"."
+#error "_UNIX is defined. See PORTING.md, \"Never define _UNIX\"."
 #endif
 
 // ---------------------------------------------------------------------------
@@ -224,7 +224,7 @@ inline int _wcsnicmp(const wchar_t* a, const wchar_t* b, size_t n)
 // possible body off Windows, or invite a second UTF-16-to-narrow conversion beside the engine's own.
 // Where WW3D2's text interface takes a WCHAR it is really taking engine text and becomes WideChar
 // under B1; where wwstring.h and widestring.h take one they are Win32-only and have a platform
-// guard.  See docs/mac-port/B1-widechar-survey.md.  Agreed with B1's owner rather than assumed.
+// guard.  See PORTING.md ("Wide characters").
 
 typedef char TCHAR;
 

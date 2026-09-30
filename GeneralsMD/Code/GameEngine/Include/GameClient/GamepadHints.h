@@ -34,7 +34,7 @@
 // there are no hints, and the letters stay.
 //
 // Which glyph a button gets follows what is printed on it in each family: South is A on an Xbox pad and
-// the Deck, Cross on a PlayStation pad, B on a Nintendo one - SDL_GetGamepadButtonLabel's answers,
+// the Steam Deck, Cross on a PlayStation pad, B on a Nintendo one - SDL_GetGamepadButtonLabel's answers,
 // which test_sdl_gamepad checks the tables against.
 
 #pragma once

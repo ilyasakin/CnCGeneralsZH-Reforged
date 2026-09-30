@@ -270,7 +270,7 @@ bool PosixDevice9::Build_Vertex_Description(VertexPipelineDescription &descripti
 	// With a pixel shader bound the cascade is the program's, and every stage still gets its coordinates
 	// from its TEXCOORDINDEX: the engine's programs sample stages whose COLOROP is DISABLE (the terrain's
 	// cloud and noise, the water's highlights and shroud), as dx11backend's every_stage has it (A3e-3:
-	// without this they sampled at (0, 0), found against a contributor's interpreter).
+	// without this they sampled at (0, 0), found against the tests' shader interpreter).
 	const bool every_stage = PixelShader != NULL;
 	description.StageCount = 0;
 	for (unsigned index = 0; index < MAXIMUM_VERTEX_STAGES; ++index) {
@@ -931,7 +931,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	// its base, and only those are staged: the stream is then bound MinVertex vertices before them, so each index
 	// still lands on its own vertex.  The engine's dynamic buffer is one buffer filled front to back through a
 	// frame, and copying from the base instead (every vertex before MinVertex too) copied the whole buffer so far
-	// on every draw: in a particle-heavy frame nine bytes in ten were never read, and the Deck's frames went from
+	// on every draw: in a particle-heavy frame nine bytes in ten were never read, and a Steam Deck's frames went from
 	// 15 to 60 ms and more.  The binding cannot start before the stream does, so a draw whose vertices would land
 	// too near its start still stages from its base, as before.
 	if (stage_vertices) {

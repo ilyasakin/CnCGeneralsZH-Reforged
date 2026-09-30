@@ -29,7 +29,7 @@
  * Windows, where wchar_t is already two bytes, it passes today.  On a Mac build it is red until
  * B1 lands - that is the signal it exists to give, not a fault in the test.
  *
- * See docs/mac-port/tasks/B1-widechar-char16.md and docs/mac-port/B1-widechar-survey.md.
+ * See PORTING.md ("Wide characters").
  */
 
 #include "Common/XferLoad.h"

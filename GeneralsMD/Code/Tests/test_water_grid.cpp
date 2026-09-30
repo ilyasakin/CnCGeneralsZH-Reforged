@@ -23,14 +23,14 @@
  * Tests/water_grid_scenario.h through it that way, under EA's loop and three shapes of the fork's
  * catch-up, and requires every one to print what the ORIGINAL code printed under EA's loop.
  *
- * The golden is Tests/water_grid_oracle.cpp's first line: the original text, taken from 7b209198 by
+ * The golden is Tests/water_grid_oracle.cpp's first line: the original text, taken from the tree before T1 moved it, by
  * Tools/water_grid_oracle_extract.py and stepped on the client pass as W3DTerrainVisual::update did,
  * one pass per logic frame.  Identical from mingw-w64 under Wine, native arm64 and x86_64 under Rosetta.
  * The armed control is the oracle's other lines: the original under the catch-up schedules below, which
  * all differ from it (and whose grid is still moving at frame 240, where EA's has settled by 183).
  *
  * What it cannot see: that GameLogic::update makes the call, and makes it at the top of the frame - that
- * is the engine's loop, which needs the W3D device to run (read in the source, T1's task file); the
+ * is the engine's loop, which needs the W3D device to run (read in the source, T1); the
  * client passes' own reads of the grid, which now see it a step earlier in a pass, and draw nothing
  * the simulation reads.
  */

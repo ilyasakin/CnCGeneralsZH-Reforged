@@ -15,7 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-// GamepadCycle.h: a pad's way round the player's base (docs/mac-port/tasks/G1-gamepad-screens.md, "Structures").
+// GamepadCycle.h: a pad's way round the player's base.
 //
 // View held with RB or LB (GamepadReforged.ini) steps through the local player's production buildings - the
 // command centre, barracks, war factory, airfield and the rest that build something - in a fixed order (by

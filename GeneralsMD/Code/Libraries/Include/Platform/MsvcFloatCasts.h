@@ -24,18 +24,18 @@
 // int range or NaN, and then keeps the low byte.  So -11.3 became 245 and 300.2 became 44, and code
 // came to depend on the wrap.  ARM64's clang lowers the same cast to fcvtzs or fcvtzu and, since the
 // result "cannot" be out of range, uses it unmasked: a particle at about -0.28 rad (orientation -11)
-// indexed its orientation table 190 GB past the end (docs/mac-port/README.md, the latent undefined
-// behaviour list).
+// indexed its orientation table 190 GB past the end (PORTING.md, "Defects found while
+// porting").
 //
 // The lowering assumed is MSVC's long-standing one.  Visual Studio 2022 has an option for it,
-// /fpcvt:BC (that one) against /fpcvt:IA (saturating); a contributor recalls it from memory and the current
+// /fpcvt:BC (that one) against /fpcvt:IA (saturating); this is from memory, and the current
 // documentation should be checked.  A Windows build that changed it would stop matching this header
 // while the other platforms still passed, which is what test_msvc_float_casts' MSVC-side comparison
 // is there to catch.
 //
 // Each function here is that MSVC result, computed with defined operations only, so every platform
 // gets the Windows answer and Windows gets the answer it always had.  Measured on Windows 11 with
-// MSVC 19.44 x64 (W2, docs/mac-port/tasks/W2-windows-build.md): test_msvc_float_casts compares MSVC's
+// MSVC 19.44 x64 (W2): test_msvc_float_casts compares MSVC's
 // own casts with these on Windows and passes, and a probe over sixteen to twenty edge values (the
 // int, uint16 and uint32 edges, +-1e20, the infinities and NaN) matched every one.  One spelling for
 // the whole tree: a float-to-unsigned site that the ARM64 sweep finds uses these, not a local cast.

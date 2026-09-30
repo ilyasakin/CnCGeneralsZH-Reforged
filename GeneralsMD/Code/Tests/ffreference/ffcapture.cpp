@@ -607,7 +607,7 @@ bool drawState( const Capture &capture, const VertexLayout &layout, const FFRef:
 		out.renderState[FFRef::RS_STENCILENABLE] = 0;
 	}
 	// SCISSORTESTENABLE: the capture holds no rectangle, and the replay sets none, so the device's default
-	// applies - the whole target (a contributor's description of the replay) - which setDefaults gave the scissor.
+	// applies - the whole target (the capture side's description of the replay) - which setDefaults gave the scissor.
 	out.world = matrixFrom( h.world );
 	out.view = matrixFrom( h.view );
 	out.projection = matrixFrom( h.projection );

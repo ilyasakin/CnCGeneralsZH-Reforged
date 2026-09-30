@@ -21,7 +21,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 /* MessageBoxWrapper (Common/System/Debug.cpp) is the engine's message box.  Its flags and answers
-	 were Win32's MB_* and ID* names, which exist only on Windows; the plan does not define Win32's
+	 were Win32's MB_* and ID* names, which exist only on Windows; the port does not define Win32's
 	 names elsewhere (as WCHAR is left undefined, and D3's generators use FF_* rather than D3D's).  So
 	 these are the engine's names, with Win32's numbers: on Windows each is checked equal to the SDK's
 	 below, so what reaches ::MessageBox is exactly what did; elsewhere they are the same numbers, for

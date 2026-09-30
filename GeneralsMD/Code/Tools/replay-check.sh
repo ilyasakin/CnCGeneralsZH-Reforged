@@ -25,7 +25,7 @@
 # uninitialised memory, iteration order that depends on addresses, and anything else that differs
 # between two runs of one binary.  It says NOTHING about whether this build agrees with a Windows build:
 # that needs a replay recorded on Windows, played back here, and none exists yet.  Do not call a pass
-# "parity" (E1's task file).
+# "parity" (E1).
 #
 # A mismatch names the frame the CRC was taken at, not the frame the runs parted: it says a divergence
 # happened, not where.  -DebugCRCFromFrame narrows it down afterwards.
@@ -58,7 +58,7 @@
 #                     matches), at --maxframes (default 12000).  --seeds and --players are ignored
 #   --keep            leave the temporary folder and the logs, and say where
 #   --log-lines <re>  print each live run's log lines matching the extended regex, as "  log: <line>",
-#                     before the log is removed (Tests/run_locomotor_check.sh reads defect #33's check)
+#                     before the log is removed (Tests/run_locomotor_check.sh reads port defect 33's check)
 #   --package <folder>  the same for a Linux package (P3, Tools/linux-portable.sh): its launcher
 #                     zero-hour-reforged.sh runs with no -root and no -overlay; the overlay it must report is
 #                     <folder>/share/zero-hour-reforged/overlay, the install is found through Registry.ini
@@ -226,7 +226,7 @@ fi
 # ---- a run ---------------------------------------------------------------------------------------
 # Sets RUN_CRC and RUN_FRAME from the run's last HEADLESS CRC line, RUN_RESULT from its HEADLESS
 # RESULT line, RUN_BUILT to the number of structures the AI put up after frame 0, and RUN_BUILT_NAMES
-# to their distinct template names, sorted (defect #33's check reads the Supply Centers there); empty
+# to their distinct template names, sorted (port defect 33's check reads the Supply Centers there); empty
 # when the run wrote none.
 run_game() {	# run_game <log prefix> <switches...>
 	local prefix="$TAG$1"; shift

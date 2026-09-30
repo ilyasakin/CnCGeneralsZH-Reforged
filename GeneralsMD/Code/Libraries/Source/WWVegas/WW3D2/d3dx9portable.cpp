@@ -18,7 +18,7 @@
 // The D3DX functions whose bodies are arithmetic and nothing else: the renderer's matrix functions and the
 // FVF vertex size.  macOS and Linux use them as D3DX itself (d3dx9posix.cpp forwards to them), and Windows on
 // ARM64, which has no d3dx9_43.dll (Microsoft shipped it for x86 and x64 only), binds them in the DLL's
-// place (d3dx9runtime.cpp).  Moved here unchanged from d3dx9posix.cpp, where a contributor wrote them (phase A1);
+// place (d3dx9runtime.cpp).  Moved here unchanged from d3dx9posix.cpp, where they were written (phase A1);
 // Tests/test_d3dx9portable_oracle.cpp holds them against the DLL on Windows x64.
 
 #include "d3dx9runtime.h"

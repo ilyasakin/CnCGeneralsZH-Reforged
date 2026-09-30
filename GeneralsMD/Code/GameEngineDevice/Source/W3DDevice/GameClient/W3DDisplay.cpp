@@ -1117,8 +1117,8 @@ void W3DDisplay::init( void )
 		else
 		{
 			DEBUG_LOG(( "-d3d12%s: %s; the old renderer draws instead\n", TheGlobalData->m_direct3D12 ? "" : " (the default)", why ));
-			// a contributor's rule (Common/EarlyCommandLine.h, unattendedByEnvironment, batch5): set when present and
-			// neither empty nor "0".  To be replaced by that helper once both branches are in.
+			// The rule of Common/EarlyCommandLine.h's unattendedByEnvironment: set when present and
+			// neither empty nor "0".  A copy of that helper's rule, which could call it instead.
 			const char *unattended = getenv( "ZH_UNATTENDED" );
 			if( TheGlobalData->m_direct3D12 && unattended != NULL && unattended[ 0 ] != '\0' && strcmp( unattended, "0" ) != 0 )
 			{
@@ -2269,7 +2269,7 @@ static void smoothMotionApply()
 		for (DrawModule **dm = modules; *dm; ++dm)
 			(*dm)->smoothMotionApply(TheSmoothMotionAlpha);
 		// With ZH_SMOOTH_MOTION_STATS, how far an aircraft's logic position - where its exhaust and its health
-		// bar are, which stay on the ticks - leads the place it is drawn (the maintainer's question about fast units).
+		// bar are, which stay on the ticks - leads the place it is drawn (a question about fast units).
 		static const Bool stats = getenv("ZH_SMOOTH_MOTION_STATS") != NULL;
 		Coord3D shown;
 		if (stats && draw->getObject() != NULL && draw->getObject()->isKindOf(KINDOF_AIRCRAFT)
@@ -3829,7 +3829,7 @@ static void CreateBMPFile(char *pszFile, char *image, Int width, Int height)
 	// the image's own 3 * width * height bytes are read.  The Windows writer this replaces sized the image
 	// (width + 7) / 8 * height * 24 bytes and wrote that many out of a 3 * width * height buffer: past its
 	// end whenever the width is not a multiple of 8 (a 1366-wide screen), and with unpadded rows, so a
-	// skewed picture, whenever it is not a multiple of 4 (defect #18).
+	// skewed picture, whenever it is not a multiple of 4 (port defect 18).
 	FILE *fp = zh_fopen(pszFile, "wb");
 	if (fp == NULL)
 		return;

@@ -50,7 +50,7 @@
 /*
 **	sint64 was declared for WIN32 or for _UNIX and for nothing else, so on a compiler that is neither
 **	it simply did not exist and Get_Processor_Ticks_Per_Second had no return type.  _UNIX is not the
-**	answer - see docs/mac-port/tasks/W1-wwlib.md for why nobody should define it - and `long long`
+**	answer - see PORTING.md ("Never define _UNIX") - and `long long`
 **	is exactly 64 bits everywhere this builds, so the else does not need a platform behind it at all.
 */
 #ifdef WIN32

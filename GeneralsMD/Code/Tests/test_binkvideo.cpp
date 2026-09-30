@@ -36,7 +36,7 @@
  * alpha, and each golden frame must have colour in it (not a blank frame that any decoder matches).
  *
  * What it cannot see: the picture on screen (W3DVideoBuffer, the renderer's); Windows' pixels (its
- * swscale runs x86 SIMD, where this build runs the C paths - V1's task file); the retail BINKW32.DLL,
+ * swscale runs x86 SIMD, where this build runs the C paths - V1); the retail BINKW32.DLL,
  * which is 32-bit Windows code (bink_smoke compares against it on Windows).
  *
  * Needs ZH_GAME_DATA (ZH_DATA_DIR here); without it the test exits 77 and ctest reports Skipped.

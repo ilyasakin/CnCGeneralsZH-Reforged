@@ -147,11 +147,9 @@ if [ -n "$RUNTESTS" ]; then
   "$CTEST" --test-dir "$BUILD" --output-on-failure || fail "tests failed."
 fi
 
-# --- stage into GeneralsMD/Run ---
-# Deliberately inert. On Windows CMakeLists.txt copies the exe and the FFmpeg DLLs into Run/ as a
-# post-build step; on macOS there is nothing to stage until C2 produces an executable, and what
-# gets staged is Generals.app rather than a pile of files beside the .big archives. The step is
-# here rather than absent so that whoever lands M2 has the obvious place to put it.
-# TODO(C2): stage the built app into GeneralsMD/Run once there is one.
+# --- nothing is staged into GeneralsMD/Run ---
+# On Windows CMakeLists.txt copies the exe and the FFmpeg DLLs into Run/ as a post-build step. Here the
+# game runs from the build tree (-root <your Zero Hour folder> -overlay <build>/overlay), or as the app
+# bundle that `ninja macos_app` makes; PORTING.md has the details.
 
-echo "[build] done. Nothing runnable yet - M2 is the milestone that produces an executable."
+echo "[build] done: $BUILD/generals (PORTING.md says how to run it)."

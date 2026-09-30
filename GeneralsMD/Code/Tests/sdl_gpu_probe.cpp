@@ -18,7 +18,7 @@
 /*
  * What SDL3's GPU API can do on this machine, for the game as it stands.
  *
- * Decision 3 in docs/mac-port/README.md chose SDL3's GPU API for the renderer off Windows, with one
+ * Decision 3 in PORTING.md chose SDL3's GPU API for the renderer off Windows, with one
  * Vulkan backend plus MoltenVK as the fallback if D2 finds something the game needs that it cannot
  * express.  This is the evidence for that call, gathered before anyone designs the interface.
  *
@@ -28,7 +28,7 @@
  *
  * Built on POSIX and deliberately not registered with ctest: it needs a GPU and a display, and a
  * machine without either cannot say anything about one that has them.  Run it by hand and record
- * the output in D2's and D5's task files with the machine and OS it came from.
+ * the output with the machine and OS it came from.
  *
  * What it cannot see, because SDL cannot be asked:
  *   - Anything that lives in shader code rather than in the device: fog, alpha test, the texture

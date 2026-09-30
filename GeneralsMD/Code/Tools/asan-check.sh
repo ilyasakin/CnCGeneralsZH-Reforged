@@ -16,7 +16,7 @@
 #	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 # asan-check.sh: the whole game under AddressSanitizer, in a ZH_SANITIZE=address build
-# (docs/mac-port/sanitizers.md).  Two runs, and each must exit 0 with no ASan report:
+# (docs/porting/sanitizers.md).  Two runs, and each must exit 0 with no ASan report:
 #   mobstress  headless, the mobstress scenario on Alpine Assault, seed 1, --mob-frames (default 12000): the
 #              simulation, the allocator and its locks, the job threads
 #   skirmish   -offscreen and -noaudio at 1920x1080, the seed-1234 generated skirmish, --skirmish-frames

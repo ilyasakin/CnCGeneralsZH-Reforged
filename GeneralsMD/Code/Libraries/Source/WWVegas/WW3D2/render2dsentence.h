@@ -135,7 +135,7 @@ private:
 	StringClass							GDIFontName;
 #if defined(_WIN32)
 	// GDI draws each glyph (Store_GDI_Char).  Off Windows FreeType does, through GlyphRasteriserClass,
-	// answering the same questions (D6, docs/mac-port/tasks/D6-text-rasterisation.md).
+	// answering the same questions (D6; PORTING.md, decision 6).
 	HFONT									OldGDIFont;
 	HBITMAP								OldGDIBitmap;
 	HBITMAP								GDIBitmap;	

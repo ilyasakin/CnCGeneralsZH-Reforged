@@ -19,9 +19,8 @@
 /*
  * ffcapture: the device's draw captures, read for FFReference's own replay (L2's oracle side).
  *
- * INDEPENDENCE RECORD.  Written from a contributor's written descriptions of the capture format (v1, v2's .prog,
- * v3's D3D8 declaration; the descriptions are quoted in docs/mac-port/tasks/L2-vulkan-recon.md's
- * judging section) and from Microsoft's pages for D3DFVF, D3DFORMAT and the BC formats.  Its author did
+ * INDEPENDENCE RECORD.  Written from the capture side's written descriptions of the capture format (v1, v2's .prog,
+ * v3's D3D8 declaration) and from Microsoft's pages for D3DFVF, D3DFORMAT and the BC formats.  Its author did
  * not read the device's capture writer (PosixDevice9Capture.cpp), the harness's reader
  * (test_ffref_capture.cpp) or any other A3 code.  A disagreement between this reader and the writer is
  * a finding about the description.

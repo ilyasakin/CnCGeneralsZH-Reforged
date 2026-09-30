@@ -89,7 +89,7 @@ static void non_ties_round_to_the_nearer_side()
 //
 // That is not an arm64 artefact.  cvtss2si under _RC_NEAR does exactly the same thing, so the
 // Windows build has always behaved this way and every architecture agrees - which is the property
-// this port needs.  It is recorded in B3's task file as something for whoever owns hrawanim.cpp,
+// this port needs.  It is recorded (port defect 4) as something for whoever owns hrawanim.cpp,
 // because an animation picking frame 32 where it means 33 is a bug wherever it runs.
 static void the_frame_number_idiom_rounds_to_nearest()
 {

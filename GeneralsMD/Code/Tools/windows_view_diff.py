@@ -26,7 +26,7 @@ sees differently.
 Every changed file lands in one of three buckets:
   identical      the change lives in comments or in branches MSVC never takes
   include case   only the case of #include lines differs; NTFS folds case, so the same file
-  different      anything else, printed line by line. Each one wants a WINDOWS-DEBT.md row.
+  different      anything else, printed line by line. Each one wants a docs/porting/windows-impact.md row.
 
   windows_view_diff.py                  merge-base with feature/mac-port .. HEAD
   windows_view_diff.py BASE [HEAD]      any two revisions; HEAD may be WORKTREE for uncommitted work

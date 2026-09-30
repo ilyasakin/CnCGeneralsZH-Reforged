@@ -26,7 +26,7 @@
 ** D3D11 shaped is not a phase, it is a different program.  (This said "236 places and 5600 calls"
 ** when it was written on 2026-09-09; the first number was a count of every mention of the device
 ** accessor in the sources, taken before ef8303a9 cut it by 45%, and the second was never a static
-** count of anything.  docs/mac-port/D1-call-site-survey.md has the measurement that replaced it.)
+** count of anything.  A call-site survey (D1, 2026-09-22) replaced it with a measurement.)
 ** So this takes the calls as they are and resolves them at the
 ** moment of the draw, which is the only moment where everything needed to build a D3D11 pipeline is
 ** known at once.
@@ -143,7 +143,7 @@ public:
 	// The programs that ship with the game, compiled by Microsoft's d3dcompiler_47 when the file was
 	// recorded (Tools/record-dx11-shaders.ps1): read after the user's cache, so for the same source a
 	// shipped program wins.  A first start then compiles only what the recording never met.  Under
-	// Wine, whose d3dcompiler is vkd3d-shader, a single compile took minutes (a contributor, X2).
+	// Wine, whose d3dcompiler is vkd3d-shader, a single compile took minutes (measured on a Steam Deck, X2).
 	void Load_Shipped_Programs(const char * path);
 	unsigned Shipped_Program_Count() const { return ShippedPrograms; }
 	// Writes the cache if a program was compiled since the last write and the last write is at least

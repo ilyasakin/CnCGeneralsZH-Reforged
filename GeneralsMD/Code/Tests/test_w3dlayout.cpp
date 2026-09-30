@@ -29,7 +29,7 @@
  * Every number below is the layout MSVC produces, which is the layout the
  * retail .w3d files in a Zero Hour install actually have.  They were measured
  * by dumping clang's record layouts for the real headers with `long` forced to
- * 32 bits (see docs/mac-port/B7-w3d-layout.md), not by counting members.
+ * 32 bits (B7), not by counting members.
  *
  * WHAT THIS FILE WILL DO ON A MAC BUILD TODAY: fail to compile, loudly, on the
  * first static_assert.  That is the intended outcome and not a bug in this

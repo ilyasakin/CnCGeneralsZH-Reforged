@@ -698,7 +698,7 @@ bool Debug::CrashDone(bool die)
 #endif
     {
       // A -headless run has nobody to click OK: it waited on this box forever (W2, a purecall under
-      // #32's old loop).  The text goes where a harness can read it, and the run ends as the box would.
+      // port defect 32's old loop).  The text goes where a harness can read it, and the run ends as the box would.
       if (isUnattendedProcess())	// -headless or ZH_UNATTENDED
       {
         fputs("Game crash: ",stderr);

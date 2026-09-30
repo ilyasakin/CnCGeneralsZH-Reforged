@@ -21,8 +21,8 @@
 ** names (decision 7, phase A0).
 **
 ** WW3D2 and W3DDevice speak Direct3D 9, and off Windows they will speak it to a D3D9-shaped device of
-** our own (docs/mac-port/RENDERER-ROUTE-RECON.md).  That device's header declares the D3D9 names but
-** none of Win32's: the plan does not define DWORD, HRESULT or HWND off Windows.  So where the renderer
+** our own (PORTING.md, decision 7).  That device's header declares the D3D9 names but
+** none of Win32's: the port does not define DWORD, HRESULT or HWND off Windows.  So where the renderer
 ** holds a Win32 type, it holds one of two things instead:
 **
 **   - an engine scalar (UnsignedInt, UnsignedShort, UnsignedByte, Int, Real) where the value never
