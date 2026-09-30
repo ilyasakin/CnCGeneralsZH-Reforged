@@ -35,7 +35,14 @@
 
 #include "Common/Monitors.h"
 
+struct SDL_Window;
+
 /** Monitors.h's table over SDL3's displays.  Valid only while SDL's video subsystem is up. */
 extern const PlatformDisplays TheSdlDisplays;
+
+/** The pixel density of the display whose rect, in the table's pixels, is this one; with none, that of the
+	* display the window is on, and 1 without either.  A size or place in the table's pixels divided by it is
+	* the same in SDL's points, which is what SDL's window calls take. */
+float SdlDisplays_densityOf( const MonitorRect &rect, SDL_Window *window );
 
 #endif // __SDLDISPLAYS_H

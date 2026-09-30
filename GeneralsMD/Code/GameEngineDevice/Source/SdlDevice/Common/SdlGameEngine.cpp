@@ -48,6 +48,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -94,25 +95,33 @@ static void dressWindow( Int mode )
 }
 
 /** W3DDisplay's sizeWindowToClient, for SDL's window: a client area of the resolution, a plain window
-	* in the middle of the chosen monitor and a borderless one at its corner. */
+	* in the middle of the chosen monitor and a borderless one at its corner.  The resolution and the monitor
+	* are in pixels (SdlDisplays.h) and SDL places and sizes a window in points, so both are divided by the
+	* monitor's pixel density: on a display scaled by 2 (a Retina Mac, Wayland at 200 %) a 1280x720 window
+	* is 640x360 points and so 1280x720 pixels, drawn one to one, as on Windows, where the game is DPI-aware.
+	* Taken as points, it was 2560x1440 pixels, and the back buffer was stretched twice over (Wayland at
+	* scale 2, 2026-09-30).  Where points are pixels (X11, a display at 100 %) the density is 1 and nothing
+	* changes. */
 static void sizeWindow( Int mode, Int width, Int height, const MonitorRect &screen )
 {
 	SDL_Window *window = s_titledWindow;
 	if (window == NULL)
 		return;
-	SDL_SetWindowSize( window, width, height );
-	int x = (int)screen.left, y = (int)screen.top;
+	const float density = SdlDisplays_densityOf( screen, window );
+	const int pointsWidth = (int)lround( width / density ), pointsHeight = (int)lround( height / density );
+	SDL_SetWindowSize( window, pointsWidth, pointsHeight );
+	int x = (int)lround( screen.left / density ), y = (int)lround( screen.top / density );
 	if (mode == WINDOW_MODE_WINDOWED)
 	{
-		x += ((int)(screen.right - screen.left) - width) / 2;
-		y += ((int)(screen.bottom - screen.top) - height) / 2;
+		x += ((int)lround( (screen.right - screen.left) / density ) - pointsWidth) / 2;
+		y += ((int)lround( (screen.bottom - screen.top) / density ) - pointsHeight) / 2;
 	}
 	SDL_SetWindowPosition( window, x, y );
 
 	int pixelWidth = 0, pixelHeight = 0;
 	SDL_GetWindowSizeInPixels( window, &pixelWidth, &pixelHeight );
-	DEBUG_LOG(( "SdlGameEngine: mode %d at %dx%d; the window is %dx%d pixels\n", mode, width, height,
-		pixelWidth, pixelHeight ));
+	DEBUG_LOG(( "SdlGameEngine: mode %d at %dx%d, %dx%d points at a density of %.2f; the window is %dx%d pixels\n",
+		mode, width, height, pointsWidth, pointsHeight, density, pixelWidth, pixelHeight ));
 }
 
 SdlGameEngine::SdlGameEngine( const WindowRequest &request )
