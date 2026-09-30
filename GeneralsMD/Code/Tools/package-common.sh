@@ -23,7 +23,7 @@
 #       the licence entries those libraries need, with the table's "+" lines; status 1, printing the
 #       libraries the table does not name, when any is missing
 #   hud_check_files <dir>
-#       the files under <dir> that turn the HUD overlay off (the user's directive: it stays on), if any
+#       the files under <dir> that force the HUD overlay on (the user's rule: off by default in Release), if any
 #   license_entry <entry> <folder>
 #       copies that entry's files into <folder>; CODE, REPO and BUILD are the caller's
 
@@ -54,11 +54,11 @@ package_license_entries() {
 	{ for lib in "$@"; do awk -v l="$lib" '$1 == l { print $2 }' "$table"; done; awk '$1 == "+" { print $2 }' "$table"; } | sort -u
 }
 
-hud_off='^[[:space:]]*ShowHudOverlay[[:space:]]*=[[:space:]]*(no|false|0)([^[:alnum:]]|$)'
+hud_on='^[[:space:]]*ShowHudOverlay[[:space:]]*=[[:space:]]*(yes|true|1)([^[:alnum:]]|$)'
 hud_check_files() {
 	# find -L walks every file, symbolic links followed (the staged overlay links its art): a recursive
 	# grep may not follow them, and which grep is first in PATH varies (ugrep's -r does not)
-	find -L "$1" -type f -exec grep -a -i -l -E "$hud_off" -- {} + 2>/dev/null
+	find -L "$1" -type f -exec grep -a -i -l -E "$hud_on" -- {} + 2>/dev/null
 }
 
 license_entry() {

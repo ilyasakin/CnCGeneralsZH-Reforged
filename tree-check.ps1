@@ -60,7 +60,8 @@ $cases = @(
 # reference build from before that draws without it, so the bloom would be the difference counted.
 function Shoot($exe, $c, $tag) {
   Get-ChildItem "$shots\sshot*.bmp" -ErrorAction SilentlyContinue | Remove-Item -Force
-  $args = @('-win','-xres','1280','-yres','720','-quickstart','-noshellmap','-multiInstance','-msaa','0','-dx11post','off',
+  # -showHudOverlay: off by default in Release, and every evidence picture shows the corner readout
+  $args = @('-win','-xres','1280','-yres','720','-quickstart','-noshellmap','-multiInstance','-showHudOverlay','-msaa','0','-dx11post','off',
             '-map',"`"Maps\$($c.map)\$($c.map).map`"",'-autoskirmish','4','-aidiff','easy','-seed','5',
             '-maxframes',($c.f+80),'-screenshot',$c.f,'-camera',$c.x,$c.y,'-logPrefix',"chk_$tag`_") + $pace
   try {

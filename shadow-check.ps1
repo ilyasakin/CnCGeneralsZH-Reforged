@@ -29,7 +29,8 @@ $cases = @(
 
 function Shoot($case, $tag, $extra) {
   Get-ChildItem "$shots\sshot*.bmp" -ErrorAction SilentlyContinue | Remove-Item -Force
-  $arguments = @('-win','-xres','1280','-yres','720','-quickstart','-noshellmap','-multiInstance',
+  # -showHudOverlay: off by default in Release, and every evidence picture shows the corner readout
+  $arguments = @('-win','-xres','1280','-yres','720','-quickstart','-noshellmap','-multiInstance','-showHudOverlay',
     '-msaa','0','-dx11post','off','-map',"`"Maps\$($case.map)\$($case.map).map`"",
     '-autoskirmish','4','-aidiff','easy','-seed','5','-maxframes',($case.f+80),
     '-screenshot',$case.f,'-camera',$case.x,$case.y,'-logPrefix',"shd_$tag`_",'-turbo')
