@@ -8892,89 +8892,115 @@ static Bool RMGParsedMapIsPlayable( void )
 	return TRUE;
 }
 
-TEST(every_start_reaches_its_money_and_has_two_ways_out)
+/* The seeds the sweep below checks for one player count: 1 to 12, four and three spread by primes, one
+	more, and one named seed each (2-player seed 0, 4-player 12345, 8-player 7), without repeats. */
+static std::vector<Int> moneySweepSeeds( Int players )
+{
+	std::vector<Int> listed;
+	Int s;
+	for( s = 1; s <= 12; s++ )
+		listed.push_back( s );
+	for( s = 1; s <= 4; s++ )
+		listed.push_back( s * 7919 + players );
+	for( s = 1; s <= 3; s++ )
+		listed.push_back( s * 104729 + players );
+	listed.push_back( 1000 + players );
+	if( players == 2 )
+		listed.push_back( 0 );
+	if( players == 4 )
+		listed.push_back( 12345 );
+	if( players == 8 )
+		listed.push_back( 7 );
+
+	std::vector<Int> seeds;
+	for( s = 0; s < (Int)listed.size(); s++ )
+	{
+		Bool already = FALSE;
+		for( Int t = 0; t < (Int)seeds.size(); t++ )
+		{
+			if( seeds[t] == listed[s] )
+				already = TRUE;
+		}
+		if( !already )
+			seeds.push_back( listed[s] );
+	}
+	return seeds;
+}
+
+/* One player count's part of the sweep: every seed's map must let each start reach its money and leave
+	its ring two ways.  Before the playability repair, 2-player seed 1 and 4-player seed 12345 (and 32
+	others on this sweep) failed the ring check; they stay in the seed list.
+
+	A Debug build checks part of the sweep: the named seeds (1, 7, 0, 12345) and every third of the
+	others, counted across the three player counts in the order 2, 4, 8 as when this was one case, so
+	the same 26 of the 62 maps.  The full sweep takes about 230 s in Release and five times that and
+	more in an MSVC Debug build; Release checks every map.  It is three cases, one per player count, each
+	its own ctest entry, so ctest -j runs them side by side. */
+static void moneySweep( Int players )
 {
 	CHECK( bootOnce() );
 
-	/* Before the playability repair, 2-player seed 1 and 4-player seed 12345 (and 32 others on
-		this sweep) failed the ring check. They stay in the seed list below.
-
-		A Debug build checks part of the sweep: the named seeds (1, 7, 0, 12345) and every third of the
-		others.  The full 62 maps take this case about 230 s in Release and five times that and more in
-		an MSVC Debug build, past test_gameengine's own time limit; Release checks every map. */
-
-	static const Int thePlayers[] = { 2, 4, 8 };
-	const Int numPlayers = sizeof(thePlayers) / sizeof(thePlayers[0]);
-
-	Int maps = 0;
 	Int considered = 0;
+	static const Int thePlayers[] = { 2, 4, 8 };
+	for( Int p = 0; p < (Int)(sizeof(thePlayers) / sizeof(thePlayers[0])) && thePlayers[p] != players; p++ )
+		considered += (Int)moneySweepSeeds( thePlayers[p] ).size();
+	const Int first = considered;
+
+	const std::vector<Int> seeds = moneySweepSeeds( players );
+	Int maps = 0;
 	Int failed = 0;
-
-	for( Int p = 0; p < numPlayers; p++ )
+	for( Int s = 0; s < (Int)seeds.size(); s++ )
 	{
-		Int players = thePlayers[p];
-		std::vector<Int> seeds;
-		Int s;
-		for( s = 1; s <= 12; s++ )
-			seeds.push_back( s );
-		for( s = 1; s <= 4; s++ )
-			seeds.push_back( s * 7919 + players );
-		for( s = 1; s <= 3; s++ )
-			seeds.push_back( s * 104729 + players );
-		seeds.push_back( 1000 + players );
-		if( players == 2 )
-			seeds.push_back( 0 );
-		if( players == 4 )
-			seeds.push_back( 12345 );
-		if( players == 8 )
-			seeds.push_back( 7 );
-
-		for( s = 0; s < (Int)seeds.size(); s++ )
-		{
-			Int seed = seeds[s];
-			Bool already = FALSE;
-			for( Int t = 0; t < s; t++ )
-			{
-				if( seeds[t] == seed )
-					already = TRUE;
-			}
-			if( already )
-				continue;
-			considered++;
+		Int seed = seeds[s];
+		considered++;
 #if defined(_DEBUG)
-			const Bool named = ( seed == 1 || seed == 7 || seed == 0 || seed == 12345 );
-			if( !named && ( considered % 3 ) != 0 )
-				continue;
+		const Bool named = ( seed == 1 || seed == 7 || seed == 0 || seed == 12345 );
+		if( !named && ( considered % 3 ) != 0 )
+			continue;
 #endif
 
-			RandomMapSettings settings;
-			settings.m_seed = seed;
-			settings.m_numPlayers = players;
-			settings.m_playableCells = RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, players );
+		RandomMapSettings settings;
+		settings.m_seed = seed;
+		settings.m_numPlayers = players;
+		settings.m_playableCells = RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, players );
 
-			std::vector<char> bytes;
-			RandomMapGenerator::generate( settings, bytes );
-			parseGeneratedMap( bytes );
-			maps++;
+		std::vector<char> bytes;
+		RandomMapGenerator::generate( settings, bytes );
+		parseGeneratedMap( bytes );
+		maps++;
 
-			if( !RMGParsedMapIsPlayable() )
-			{
-				failed++;
-				RMGDescribePlayabilityFailure( players, seed );
-			}
-
-			CHECK( RMGParsedMapIsPlayable() );
+		if( !RMGParsedMapIsPlayable() )
+		{
+			failed++;
+			RMGDescribePlayabilityFailure( players, seed );
 		}
+
+		CHECK( RMGParsedMapIsPlayable() );
 	}
 
-	CHECK( considered >= 12 * numPlayers );
+	CHECK( considered - first >= 12 );
 #if defined(_DEBUG)
-	printf( "Debug: %d of %d maps\n", maps, considered );
+	printf( "Debug: %d of %d %d-player maps\n", maps, considered - first, players );
 #else
-	CHECK( maps == considered );
+	CHECK( maps == considered - first );
 #endif
 	if( failed == 0 )
-		printf( "PASS every_start_reaches_its_money_and_has_two_ways_out (%d maps)\n", maps );
+		printf( "PASS every_start_reaches_its_money_and_has_two_ways_out, %d players (%d maps)\n", players, maps );
+}
+
+TEST(every_start_reaches_its_money_and_has_two_ways_out_2_players)
+{
+	moneySweep( 2 );
+}
+
+TEST(every_start_reaches_its_money_and_has_two_ways_out_4_players)
+{
+	moneySweep( 4 );
+}
+
+TEST(every_start_reaches_its_money_and_has_two_ways_out_8_players)
+{
+	moneySweep( 8 );
 }
 
 //-------------------------------------------------------------------------------------------------
