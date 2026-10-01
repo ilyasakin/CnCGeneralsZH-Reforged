@@ -269,8 +269,8 @@ structure, so a disagreement stops the build instead of desynchronising a game.
 
 **E1**, the replay check (`Tools/replay-check.sh`, `replay-check.ps1` on Windows), plays a headless skirmish,
 plays its replay back and plays the seed again, and compares the three runs' world CRCs. The pinned results
-are seed 0 at 1200 frames `0x43105931`, seed 0 at 12000 `0x9667EA29` and seed 1 at 12000 `0x4AA09367`, since
-upstream efd3070a (v2.3.2) was merged; they are identical on macOS arm64, macOS x86_64 under Rosetta,
+are seed 0 at 1200 frames `0x43105931`, seed 0 at 12000 `0x240A0702` and seed 1 at 12000 `0x35F5CF4D`, since
+upstream 1e94f8c7 was merged; they are identical on macOS arm64, macOS x86_64 under Rosetta,
 Linux x86_64 (GCC), Windows x64 and Windows ARM64 (MSVC; ARM64 from a Windows ARM64 CI run on the integrated
 tree). Replays recorded on one platform play back on the others, and a two-host LAN match between macOS and
 Linux keeps one world. Upstream gameplay data changes move the pins.
@@ -365,8 +365,8 @@ MSVC's own casts on Windows), `license-headers.py --check`, `fingerprint-manifes
   through raw `DX8CALL`). Upstream's code, not the port's; not fixed.
 - **`TheGameResultsQueue` is published to its thread without synchronisation** (ThreadSanitizer; benign on
   x86, not on ARM in principle). Not fixed.
-- **Windows verification is partial.** Of the rows in docs/porting/windows-impact.md, 155 are verified on
-  Windows, 62 partly and 101 open (as of 2026-09-30). What is left needs checks run in a Debug build, someone at
+- **Windows verification is partial.** Of the rows in docs/porting/windows-impact.md, 156 are verified on
+  Windows, 62 partly and 101 open (as of 2026-10-01). What is left needs checks run in a Debug build, someone at
   a Windows screen (menus, text, input), a network game between two Windows machines, GameSpy, an AMD machine,
   or old replays and saves.
 - Retail replays (32-bit `time_t` in the header) are probably misread by both 64-bit builds; unverified.
@@ -374,6 +374,9 @@ MSVC's own casts on Windows), `license-headers.py --check`, `fingerprint-manifes
   map's path, which the engine lowercases whole.
 - The app icon comes from `Main/Generals.ico`'s 48 px image, which is soft on a Retina display.
 - The macOS app is ad-hoc signed, not notarised.
+- **The trainer panel cannot be used with a gamepad yet.** It is an HTML overlay whose keys have no game window
+  behind them, and it opens only on the console's typed `trainer` command. With a pad the cursor can still click
+  its keys. Planned: D-pad focus between its keys, and a Start-menu entry where cheats are available.
 
 ## Defects found while porting
 
@@ -416,6 +419,7 @@ own changes, "upstream" by a specific upstream commit; the rest are in EA's rele
 | 32 | A dangling iterator in `LocomotorStore::reset` crashes or hangs a map with its own locomotor | fixed |
 | 33 | Upstream (fbe8dc6f, 179e1f65): a `ReplaceModule` of an AI module dropped units' locomotors | fixed upstream too |
 | 34 | Upstream (fbe8dc6f): a module added to a reskin erased its copied modules | fixed |
+| 35 | The port: POSIX checkouts had LF INI files where Windows has CRLF, so the INI CRC differed and a Mac or Linux game could not join a Windows one | fixed (`.gitattributes`, the staged INIs) |
 
 Unnumbered, all fixed: a failed `UDP::Bind` leaked its socket; a challenge with no load movie read through
 NULL; the game crashed when the drive holding its data went away (now it says so and exits); `Player::init`

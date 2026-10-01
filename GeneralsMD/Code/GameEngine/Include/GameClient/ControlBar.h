@@ -459,7 +459,7 @@ enum CommandPlace
 	COMMAND_PLACE_RALLY = COMMAND_PLACE_B,
 	COMMAND_PLACE_SELL = COMMAND_PLACE_N,
 	COMMAND_PLACE_CLEAR_MINES = COMMAND_PLACE_N,	///< a dozer's or worker's
-	COMMAND_PLACE_FAKE_STRUCTURES = COMMAND_PLACE_H,	///< the GLA worker's switch to and from the fakes
+	COMMAND_PLACE_FAKE_STRUCTURES = COMMAND_PLACE_H,	///< the GLA worker's switch to and from the fakes, the end of the defense row
 	COMMAND_PLACE_EXPLOSIVE = COMMAND_PLACE_B			///< the Demolition worker's suicide charge
 };
 
@@ -467,15 +467,29 @@ enum CommandPlace
 	* share a command type with things that flow.  See ControlBar_commandPlaces. */
 Int ControlBar_namedCommandPlace( const char *buttonName );
 
+/** What a command button is for, which picks its row on the grid.  See ControlBar_commandPlaces. */
+enum CommandGroup
+{
+	COMMAND_GROUP_PRODUCTION = 0,	///< a unit to train, or a structure that makes units (a factory, a command center, a fake)
+	COMMAND_GROUP_DEFENSE,				///< a base defense to build
+	COMMAND_GROUP_UTILITY,				///< any other structure to build: power, supply, tech, superweapons
+	COMMAND_GROUP_ABILITY,				///< upgrades, special powers, weapon switches and the rest
+	COMMAND_GROUP_PASSENGER				///< one passenger's way out of a transport or bunker
+};
+
+/** The group of a command button; GUI_COMMAND_DOZER_CONSTRUCT reads the structure's KindOf. */
+Int ControlBar_commandGroup( const class CommandButton *command );
+
 /** Where each of `count` command slots stands: `types` is what each slot holds, GUI_COMMAND_NONE for
-	* an empty one, `pinned` a place a slot's button always takes by name or -1, and `places` gets a
-	* CommandPlace for each or -1.  Pinned buttons, stop, attack move, guard, evacuate, rally point and
-	* sell go to their own places.  A set with an attack move has attack, hold position and move too,
-	* keys no command set has a button for, so their places are kept for them; the return is TRUE then.
-	* Everything else is packed toward the top left, Q A W Z S E X D R C F T V G Y B H N, skipping the
-	* places taken: what the set builds (structures, units) in slot order, then the rest - abilities,
-	* upgrades, passengers - in slot order, so a building's upgrades come after its production. */
-Bool ControlBar_commandPlaces( const Int *types, const Int *pinned, Int count, Int *places );
+	* an empty one, `groups` its CommandGroup, `pinned` a place a slot's button always takes by name or
+	* -1, and `places` gets a CommandPlace for each or -1.  Pinned buttons, stop, attack move, guard,
+	* evacuate, rally point and sell go to their own places.  A set with an attack move has attack, hold
+	* position and move too, keys no command set has a button for, so their places are kept for them;
+	* the return is TRUE then.  Passengers gather in the bottom right corner.  The rest go by rows, the
+	* owner's of 2026-09-30: production along Q, defenses along A, other structures along Z, and
+	* abilities along Q, or along A under a set's production.  A row fills left to right in slot order;
+	* what does not fit goes on in the next row down with room, then in the rows above. */
+Bool ControlBar_commandPlaces( const Int *types, const Int *groups, const Int *pinned, Int count, Int *places );
 enum { MAX_RIGHT_HUD_UPGRADE_CAMEOS = 5};
 enum { MAX_MULTI_SELECT_GROUPS = 36 };	///< unit types a multi-selection tells apart (6x6 grid, Tab focus)
 enum { 
@@ -1269,6 +1283,8 @@ public:
 	// get method for list of commandbuttons
 	const CommandButton *getCommandButtons( void ) { return m_commandButtons; }
 
+	Drawable *findStandInBuilder( Bool freeOnly );				///< the local player's free builder (or, unless freeOnly, any builder) to stand in for an empty selection
+
 protected:
 
 	ICoord2D m_defaultControlBarPosition;				///< Stored the original position of the control bar on the screen
@@ -1366,6 +1382,7 @@ protected:
 	CommandButton *m_buildPageBackButton;									///< takes a page back to the menu buttons
 	Int m_buildPage;																			///< BUILD_PAGE_ROOT, or the page being shown
 	ObjectID m_buildPageObjectID;													///< builder the page belongs to; a new one starts at the menu
+	DrawableID m_standInBuilderID;												///< with nothing selected, the builder whose command bar is shown (INVALID_DRAWABLE_ID otherwise)
 
 	/** A player upgrade is researched once, so it goes to exactly one of the selected buildings -
 		* and the bar cannot see the queue an earlier click in this same frame just filled, because

@@ -26,6 +26,7 @@
 #include "Common/OptionsCatalog.h"
 #include "Common/GlobalData.h"
 #include "Common/UserPreferences.h"
+#include "GameClient/Mouse.h"
 #include "GameClient/PlayerColorScheme.h"
 #include "GameClient/View.h"
 
@@ -60,6 +61,27 @@ OPTION_BOOL_ACCESSORS( m_snapCameraRotateTo45 )
 OPTION_BOOL_ACCESSORS( m_zoomToCursor )
 OPTION_BOOL_ACCESSORS( m_isometricCamera )
 OPTION_BOOL_ACCESSORS( m_smoothMotion )
+OPTION_BOOL_ACCESSORS( m_startAtMaxZoom )
+
+// The view copied its closest height out of GlobalData once, when it was made, so a change from
+// the menu has to be handed to it.  It is not moved: the next turn of the wheel meets the new limit.
+static Int get_m_closerZoomPercent( void ) { return TheGlobalData->m_closerZoomPercent; }
+static void set_m_closerZoomPercent( Int value )
+{
+	TheWritableGlobalData->m_closerZoomPercent = value;
+	if (TheTacticalView)
+		TheTacticalView->setMinHeightAboveGround( View_closestCameraHeight( TheGlobalData->m_minCameraHeight, value ) );
+}
+
+// This catalog loads before there is a mouse, so the value waits in GlobalData and Mouse::parseIni
+// takes it from there.  The menu changes it with the mouse up, which is the branch below.
+static Int get_m_dragTolerance( void ) { return TheGlobalData->m_dragTolerance; }
+static void set_m_dragTolerance( Int value )
+{
+	TheWritableGlobalData->m_dragTolerance = value;
+	if (TheMouse)
+		TheMouse->m_dragTolerance = (UnsignedInt)value;
+}
 OPTION_BOOL_ACCESSORS( m_formationDrag )
 OPTION_BOOL_ACCESSORS( m_showAllyCursors )
 OPTION_BOOL_ACCESSORS( m_chromaLighting )
@@ -80,6 +102,9 @@ OPTION_BOOL_ACCESSORS( m_gamepadEnabled )
 OPTION_BOOL_ACCESSORS( m_gamepadAim )
 OPTION_BOOL_ACCESSORS( m_gamepadSwapConfirm )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
+OPTION_BOOL_ACCESSORS( m_showNetBox )
+OPTION_INT_ACCESSORS( m_incomeRateMode )
+OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
 OPTION_BOOL_ACCESSORS( m_shadowsForProjectiles )
 OPTION_BOOL_ACCESSORS( m_shadowsForProps )
@@ -244,6 +269,26 @@ const OptionDef TheOptionCatalog[] =
 	{ "SmoothMotion",							OPT_WND( "CheckSmoothMotion" ), "GUI:SmoothMotion",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_smoothMotion, set_m_smoothMotion },
+	// A match opens as far out as the wheel goes, or at the height the map's author framed it for.
+	// Read when the map loads, so it counts from the next match.  On Options > Controls.
+	{ "StartAtMaxZoom",						OPT_WND( "CheckStartAtMaxZoom" ), "GUI:StartAtMaxZoom",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_startAtMaxZoom, set_m_startAtMaxZoom },
+
+	// Percent taken off GameData.ini's MinCameraHeight, so the wheel comes nearer the ground than
+	// the 120 units the game ships with; 60 leaves 48.  There is no row for the far end and there
+	// will not be one: how much of the map a player sees is an advantage, and Options.ini is outside
+	// the mismatch check.  This one only ever shows less.
+	{ "CloserZoom",								OPT_WND( "SliderCloserZoom" ), "GUI:CloserZoom",
+		OPTION_INT, APPLY_LIVE, 0, 60,
+		get_m_closerZoomPercent, set_m_closerZoomPercent },
+
+	// Pixels the pointer may travel with a button held before the press stops being a click and
+	// starts a selection box, a camera drag or a formation line.  Mouse.ini says 25, which is the
+	// default here; a high-DPI mouse wants more and a small screen less.
+	{ "DragTolerance",						OPT_WND( "SliderDragTolerance" ), "GUI:DragTolerance",
+		OPTION_INT, APPLY_LIVE, 2, 50,
+		get_m_dragTolerance, set_m_dragTolerance },
 
 	// With the move, attack move or guard key armed, a left drag over the ground spreads the
 	// selection along the line drawn instead of sending everyone to one point.  On by default, and
@@ -382,6 +427,27 @@ const OptionDef TheOptionCatalog[] =
 	{ "GamepadSwapConfirm",				OPT_WND( "CheckGamepadSwapConfirm" ), "GUI:GamepadSwapConfirm",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_gamepadSwapConfirm, set_m_gamepadSwapConfirm },
+	// The box in the top right corner: the match clock, the frame rates and, in a network game, the
+	// connection.  Off, the superweapon timers move up into the corner it leaves.  A key of its own
+	// and not ShowHudOverlay, which left this catalog on purpose: an Options.ini from before that
+	// still says "no" under the old name.
+	{ "ShowNetBox",								OPT_WND( "CheckNetBox" ), "GUI:NetBox",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_showNetBox, set_m_showNetBox },
+
+	// The income beside the money: per second, per minute, or automatic, which is per minute while
+	// the player earns under ten dollars a second and per second from there up.  A supply line
+	// bringing in $135 a minute reads "+2/s" per second, and losing a third of it still reads "+2/s".
+	{ "IncomeRate",								OPT_WND( "ComboBoxIncomeRate" ), "GUI:IncomeRate",
+		OPTION_ENUM, APPLY_LIVE, 0, INCOME_RATE_MODE_COUNT - 1,
+		get_m_incomeRateMode, set_m_incomeRateMode },
+
+	// The row of slots over a building that holds troops is drawn empty too: ten grey boxes over a
+	// Barracks nobody is healing in.  Off, a building wears its slots only while somebody is inside.
+	// Vehicles keep theirs either way, where an empty row is how much the transport carries.
+	{ "EmptyBuildingPips",				OPT_WND( "CheckEmptyBuildingPips" ), "GUI:EmptyBuildingPips",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_showEmptyBuildingPips, set_m_showEmptyBuildingPips },
 
 	// Which language the words are in.  English is the string table the game shipped with, and every
 	// other entry is a translation laid over it, so a line the translation lacks stays English.  The

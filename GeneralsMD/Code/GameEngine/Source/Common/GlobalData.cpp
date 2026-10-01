@@ -717,6 +717,7 @@ GlobalData::GlobalData()
 	m_unitLimit = FALSE;						// no unit limit unless -unitlimit asks for one
 	m_incomeSharing = 0;						// INCOME_SHARING_OFF unless -incomesharing asks
 	m_techRespawn = 0;							// a destroyed tech building stays destroyed unless -techrespawn asks
+	m_supplyPileLimit = 0;					// a supply pile takes any number of players unless -supplypilelimit asks
 	m_autoSkirmishObserver = FALSE;
 	m_headless = FALSE;
 	m_turbo = FALSE;
@@ -1150,6 +1151,8 @@ GlobalData::GlobalData()
 #else
 	m_smoothMotion = TRUE;
 #endif
+	m_closerZoomPercent = 0;
+	m_dragTolerance = 25;		// what Mouse.ini in INIZH.big says, so nothing moves until the slider does
 	// a left drag with the move, attack move or guard key armed draws a formation line
 	m_formationDrag = TRUE;
 	m_showAllyCursors = TRUE;
@@ -1172,6 +1175,9 @@ GlobalData::GlobalData()
 #else
 	m_showHudOverlay = FALSE;
 #endif
+	m_showNetBox = TRUE;
+	m_incomeRateMode = INCOME_RATE_PER_SECOND;
+	m_showEmptyBuildingPips = TRUE;
 	m_showPlacementRangeRing = TRUE;
 	m_showSkillStrip = TRUE;
 	m_showSuperweaponStrip = TRUE;

@@ -84,6 +84,8 @@ void Direct3D11_Dump_Programs_To(const char *) {}
 void Direct3D11_Set_Shader_Cache_Directory(const char *) {}
 void Direct3D11_Present_Enable(bool) {}
 bool Direct3D11_Present_Is_Enabled() { return false; }
+bool Direct3D11_Can_Tear() { return false; }
+bool Direct3D11_Take_Present_Failure(long &) { return false; }
 void Direct3D11_Set_VSync(bool) {}
 // Windows answers whether it understood the chain's text.  There is no post-process here to
 // understand it for, so every chain is refused.

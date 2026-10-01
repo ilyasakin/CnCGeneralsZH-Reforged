@@ -2373,6 +2373,23 @@ GameMessage::Type CommandTranslator::evaluateContextCommand( Drawable *draw,
 		}  // end else if
 #endif
 		// ********************************************************************************************
+		// A right click on a selected building takes the rally point away from everything selected.
+		// Only the click is answered: the hover and SelectionXlat's EVALUATE_ONLY fall through as
+		// they always did, so the building keeps its selection cursor.
+		else if( type == DO_COMMAND && draw && draw->isSelected()
+						 && TheInGameUI->canSelectedObjectsDoAction( InGameUI::ACTIONTYPE_SET_RALLY_POINT, NULL, InGameUI::SELECTION_ALL, FALSE ) )
+		{
+			msgType = GameMessage::MSG_CLEAR_RALLY_POINT;
+
+			// SELECTION_ALL above means every selected drawable has an object
+			const DrawableList *allSelectedDrawables = TheInGameUI->getAllSelectedDrawables();
+			for( DrawableList::const_iterator it = allSelectedDrawables->begin(); it != allSelectedDrawables->end(); ++it )
+			{
+				GameMessage *newMsg = TheMessageStream->appendMessage( msgType );
+				newMsg->appendObjectIDArgument( (*it)->getObject()->getID() );
+			}
+		}
+		// ********************************************************************************************
 		else if ( pos && !draw && TheInGameUI->canSelectedObjectsDoAction( InGameUI::ACTIONTYPE_SET_RALLY_POINT, NULL, InGameUI::SELECTION_ALL, FALSE ))
 		{
 			msgType = GameMessage::MSG_SET_RALLY_POINT;
@@ -2836,6 +2853,14 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			disp = DESTROY_MESSAGE;
 			break;
 		}		// end select next idle worker
+
+		case GameMessage::MSG_META_SELECT_NEXT_IDLE_UNIT:
+		{
+			TheInGameUI->selectNextIdleUnit();
+
+			disp = DESTROY_MESSAGE;
+			break;
+		}		// end select next idle unit
 
 		case GameMessage::MSG_META_COMMAND_SLOT01:
 		case GameMessage::MSG_META_COMMAND_SLOT02:

@@ -1331,6 +1331,41 @@ Bool aiReleaseWave( Real heldPower, Real wavePower, UnsignedInt heldFrames, Unsi
 }
 
 //-------------------------------------------------------------------------------------------------
+Real aiWinChance( Real myPower, Real enemyPower )
+{
+	const Real PRIOR = 1500.0f;		// about two main battle tanks a side
+
+	return (myPower + PRIOR) / (myPower + enemyPower + 2.0f * PRIOR);
+}
+
+//-------------------------------------------------------------------------------------------------
+AIPressure aiPressureLevel( Real chance, Bool enemyBaseInSight, AIPressure current )
+{
+	const Real FINISH_AT = 0.85f;
+	const Real PRESS_AT = 0.65f;
+	const Real DEFEND_AT = 0.35f;
+	const Real KEEP = 0.10f;			// how far past its threshold a level is kept
+
+	if( current == AIPRESSURE_FINISH ? chance >= FINISH_AT - KEEP : (enemyBaseInSight && chance >= FINISH_AT) )
+		return AIPRESSURE_FINISH;
+	if( current >= AIPRESSURE_PRESS ? chance >= PRESS_AT - KEEP : (enemyBaseInSight && chance >= PRESS_AT) )
+		return AIPRESSURE_PRESS;
+	if( chance <= (current == AIPRESSURE_DEFEND ? DEFEND_AT + KEEP : DEFEND_AT) )
+		return AIPRESSURE_DEFEND;
+	return AIPRESSURE_NORMAL;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool aiReleaseWaveAt( AIPressure level, Real heldPower, Real wavePower, UnsignedInt heldFrames, UnsignedInt maxHoldFrames )
+{
+	if( level >= AIPRESSURE_PRESS )
+		return heldPower > 0.0f;
+	if( level == AIPRESSURE_DEFEND )
+		return heldPower >= wavePower && aiReleaseWave( heldPower, 2.0f * wavePower, heldFrames, 2 * maxHoldFrames );
+	return aiReleaseWave( heldPower, wavePower, heldFrames, maxHoldFrames );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** How well a team answers what the enemy is fielding.
 	*
 	* m_answer carries the matchups: how the team's own units fare, weapon against armour, against

@@ -859,8 +859,9 @@ void StateMachine::xfer( Xfer *xfer )
 	xfer->xferUnsignedInt(&curStateID);
 	if (xfer->getXferMode() == XFER_LOAD)	{
 		// We are going to jump into the current state.	We don't call onEnter or onExit, because the 
-		// state was already active when we saved.
-		m_currentState = internalGetState( curStateID );
+		// state was already active when we saved.  A machine saved with no state gets none back: the
+		// block further down is read into the default state, which is where the save wrote it from.
+		m_currentState = ( curStateID == INVALID_STATE_ID ) ? NULL : internalGetState( curStateID );
 	}
 
 	Bool snapshotAllStates = false;
@@ -903,8 +904,8 @@ void StateMachine::xfer( Xfer *xfer )
 		// A machine can stand with no current state (halt and clear both leave it so), and the file
 		// needs some state's block here, so the default one is written in its place.  It used to be
 		// assigned as well.  A replay checkpoint is a save taken mid-playback: a unit with no state in
-		// the recording got an idle one in the playback and went on thinking.  A load has already
-		// taken the default for an id it cannot find, a few lines up.
+		// the recording got an idle one in the playback and went on thinking.  A load reads the same
+		// block into the default state and leaves the machine without one, as it was saved.
 		//
 		State *state = m_currentState;
 		if( state == NULL )

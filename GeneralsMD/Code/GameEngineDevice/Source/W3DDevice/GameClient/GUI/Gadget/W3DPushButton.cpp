@@ -58,6 +58,7 @@
 #include "GameClient/Display.h"
 #include "GameClient/GamepadHints.h"
 #include "GameClient/DisplayStringManager.h"
+#include "GameClient/InGameUI.h"		// HudReadout_draw, the plate every corner marking stands on
 #include "W3DDevice/GameClient/W3DGameWindow.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/W3DGadget.h"
@@ -134,6 +135,8 @@ static GameFont *getBadgeFont( GameWindow *window, Real designPoints = BADGE_DES
 }  // end getBadgeFont
 
 static DisplayString *badgeString( const UnicodeString &text, GameFont *font );
+static void drawBadge( GameWindow *window, const UnicodeString &text, Real designPoints,
+											 HudReadoutCorner corner, Color color );
 
 // drawButtonText =============================================================
 /** Draw button text to the screen */
@@ -175,8 +178,9 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 
 	// set our font to that of our parent if not the same - except the shortcut letter, which is a
 	// corner marking and wears the marking font
+	const Bool shortcut = BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON );
 	GameFont *font = window->winGetFont();
-	if( BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON ) )
+	if( shortcut )
 		font = getBadgeFont( window );
 	if( font != NULL && text->getFont() != font )
 		text->setFont( font );
@@ -205,12 +209,21 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	if( glyphInstead )
 		GamepadHints::inkRows( GamepadHints::getShown(), glyphButton, height, inkTop, inkBottom );
 
-	// where to draw
-	if( BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON ) )
+	// the shortcut letter is a corner marking: the marking font, on the markings' plate in the top
+	// left corner, which the button's own art could be any colour under.  A gamepad's glyph in its
+	// place (G1) is placed by its ink, below.
+	if( shortcut && !glyphInstead )
 	{
-		// Oh god... this is a total hack for shortcut buttons to handle rendering text top left corner...
+		drawBadge( window, text->getText(), BADGE_DESIGN_POINTS, HUD_READOUT_TOP_LEFT, textColor );
+		return;
+	}
+
+	// where to draw
+	if( shortcut )
+	{
+		// the glyph's ink two pixels in from the top left corner, as the letter's was
 		textPos.x = origin.x + 2;
-		textPos.y = origin.y + (glyphInstead ? 2 - inkTop : 0);		// a glyph's ink two pixels in, as the letter's
+		textPos.y = origin.y + 2 - inkTop;
 	}
 	else
 	{
@@ -218,13 +231,12 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 		textPos.y = origin.y + (size.y / 2) - (inkTop + inkBottom) / 2;
 	}
 
-	// Shortcut text sits on top of the button's own art, which can be any colour at all -
-	// a light unit portrait swallowed the letter.  Lay a translucent black plate under it,
-	// around a glyph's ink rather than its line.
-	if( BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON ) && width > 0 && height > 0 )
+	// a glyph sits on top of the button's own art, which can be any colour at all: a translucent black
+	// plate under it, around its ink rather than its line
+	if( shortcut && width > 0 && height > 0 )
 	{
-		TheDisplay->drawFillRect( textPos.x - 2, textPos.y + inkTop - (glyphInstead ? 1 : 0), width + 4,
-														inkBottom - inkTop + (glyphInstead ? 2 : 0), GameMakeColor( 0, 0, 0, 160 ) );
+		TheDisplay->drawFillRect( textPos.x - 2, textPos.y + inkTop - 1, width + 4,
+														inkBottom - inkTop + 2, GameMakeColor( 0, 0, 0, 160 ) );
 	}
 
 	// draw it
@@ -257,7 +269,7 @@ static DisplayString *badgeString( const UnicodeString &text, GameFont *font )
 	for( Int slot = 0; slot < BADGE_STRING_SLOTS; ++slot )
 	{
 		DisplayString *candidate = theBadgeStrings[ slot ];
-		if( candidate != NULL && candidate->getFont() == font && candidate->getText() == text )
+		if( candidate != NULL && candidate->getFont() == font && candidate->peekText() == text )
 			return candidate;
 	}
 
@@ -285,34 +297,45 @@ static DisplayString *badgeString( const UnicodeString &text, GameFont *font )
 //=============================================================================
 static void drawCountBadge( GameWindow *window, Int count )
 {
-	ICoord2D origin, size, textPos;
-	Int width, height;
-
 	UnicodeString text;
 	text.format( u"%d", count );
-	DisplayString *badge = badgeString( text, getBadgeFont( window, COUNT_BADGE_DESIGN_POINTS ) );
+	drawBadge( window, text, COUNT_BADGE_DESIGN_POINTS, HUD_READOUT_BOTTOM_RIGHT, GameMakeColor( 255, 255, 255, 255 ) );
+
+}  // end drawCountBadge
+
+// drawBadge ==================================================================
+/** One corner marking: `text` on its plate in `corner` of the button's inner
+	* rectangle, inside the frame the command bar's page draws over the button's
+	* edge.  Text too wide for the button is set a point smaller until it fits, so
+	* a four figure price or a three figure countdown shrinks instead of running
+	* out over the frame or into the next button. */
+//=============================================================================
+static void drawBadge( GameWindow *window, const UnicodeString &text, Real designPoints,
+											 HudReadoutCorner corner, Color color )
+{
+	IRegion2D cell;
+	ICoord2D size;
+	window->winGetScreenPosition( &cell.lo.x, &cell.lo.y );
+	window->winGetSize( &size.x, &size.y );
+	cell.hi.x = cell.lo.x + size.x;
+	cell.hi.y = cell.lo.y + size.y;
+
+	GameFont *font = getBadgeFont( window, designPoints );
+	DisplayString *badge = badgeString( text, font );
 	if( badge == NULL )
 		return;
 
-	window->winGetScreenPosition( &origin.x, &origin.y );
-	window->winGetSize( &size.x, &size.y );
-	badge->getSize( &width, &height );
+	// each size tried is a string badgeString keeps, so a marking that had to shrink is looked up
+	// the next frame, not lettered again
+	while( font != NULL && font->pointSize > 6 && !HudReadout_fits( badge, cell ) )
+	{
+		font = TheFontLibrary->getFont( font->nameString, font->pointSize - 1, TRUE );
+		badge = badgeString( text, font );
+	}
 
-	// the plate is what the eye reads as the badge, so it is the plate that sits in the corner -
-	// hanging it a few pixels short left a stripe of button art outside it and the three badges
-	// looked scattered rather than pinned to the button
-	const Int plateWidth = width + 4;
-	textPos.x = origin.x + size.x - plateWidth + 2;
-	textPos.y = origin.y + size.y - height;
+	HudReadout_draw( badge, cell, corner, color );
 
-	// a solid plate rather than the shortcut letter's translucent one: this number has to be legible
-	// over whatever cameo is underneath it without the player stopping to look for it
-	TheDisplay->drawFillRect( textPos.x - 2, textPos.y, plateWidth, height,
-														GameMakeColor( 0, 0, 0, 230 ) );
-	badge->draw( textPos.x, textPos.y, GameMakeColor( 255, 255, 255, 255 ),
-							 GameMakeColor( 0, 0, 0, 255 ) );
-
-}  // end drawCountBadge
+}  // end drawBadge
 
 // drawSecondsBadge ===========================================================
 /** Draw a small "12s" label in the button's bottom left corner - how long the
@@ -320,27 +343,9 @@ static void drawCountBadge( GameWindow *window, Int count )
 //=============================================================================
 static void drawSecondsBadge( GameWindow *window, Int seconds )
 {
-	ICoord2D origin, size, textPos;
-	Int width, height;
-
 	UnicodeString text;
 	text.format( u"%ds", seconds );
-	DisplayString *label = badgeString( text, getBadgeFont( window ) );
-	if( label == NULL )
-		return;
-
-	window->winGetScreenPosition( &origin.x, &origin.y );
-	window->winGetSize( &size.x, &size.y );
-	label->getSize( &width, &height );
-
-	textPos.x = origin.x + 2;
-	textPos.y = origin.y + size.y - height;
-
-	// same translucent plate the count badge wears - button art can be any colour
-	TheDisplay->drawFillRect( textPos.x - 2, textPos.y, width + 4, height,
-														GameMakeColor( 0, 0, 0, 160 ) );
-	label->draw( textPos.x, textPos.y, GameMakeColor( 255, 255, 255, 255 ),
-							 GameMakeColor( 0, 0, 0, 255 ) );
+	drawBadge( window, text, BADGE_DESIGN_POINTS, HUD_READOUT_BOTTOM_LEFT, GameMakeColor( 255, 255, 255, 255 ) );
 
 }  // end drawSecondsBadge
 
@@ -351,28 +356,9 @@ static void drawSecondsBadge( GameWindow *window, Int seconds )
 //=============================================================================
 static void drawCostBadge( GameWindow *window, Int cost )
 {
-	ICoord2D origin, size, textPos;
-	Int width, height;
-
 	UnicodeString text;
 	text.format( u"$%d", cost );
-	DisplayString *label = badgeString( text, getBadgeFont( window ) );
-	if( label == NULL )
-		return;
-
-	window->winGetScreenPosition( &origin.x, &origin.y );
-	window->winGetSize( &size.x, &size.y );
-	label->getSize( &width, &height );
-
-	const Int plateWidth = width + 4;
-	textPos.x = origin.x + size.x - plateWidth + 2;
-	textPos.y = origin.y;
-
-	// same translucent plate the other two badges wear - button art can be any colour
-	TheDisplay->drawFillRect( textPos.x - 2, textPos.y, plateWidth, height,
-														GameMakeColor( 0, 0, 0, 160 ) );
-	label->draw( textPos.x, textPos.y, GameMakeColor( 235, 210, 120, 255 ),
-							 GameMakeColor( 0, 0, 0, 255 ) );
+	drawBadge( window, text, BADGE_DESIGN_POINTS, HUD_READOUT_TOP_RIGHT, GameMakeColor( 235, 210, 120, 255 ) );
 
 }  // end drawCostBadge
 
@@ -385,33 +371,14 @@ static void drawCostBadge( GameWindow *window, Int cost )
 //=============================================================================
 static void drawPowerBadge( GameWindow *window, Int power )
 {
-	ICoord2D origin, size, textPos;
-	Int width, height;
-
 	// the game's own sign: a template's EnergyProduction is negative when it consumes
 	const Int draws = -power;
 
 	UnicodeString text;
 	text.format( draws > 0 ? u"-%d" : u"+%d", draws > 0 ? draws : -draws );
-	DisplayString *label = badgeString( text, getBadgeFont( window ) );
-	if( label == NULL )
-		return;
-
-	window->winGetScreenPosition( &origin.x, &origin.y );
-	window->winGetSize( &size.x, &size.y );
-	label->getSize( &width, &height );
-
-	const Int plateWidth = width + 4;
-	textPos.x = origin.x + size.x - plateWidth + 2;
-	textPos.y = origin.y + size.y - height;
-
-	// same translucent plate the other badges wear - button art can be any colour
-	TheDisplay->drawFillRect( textPos.x - 2, textPos.y, plateWidth, height,
-														GameMakeColor( 0, 0, 0, 160 ) );
-	label->draw( textPos.x, textPos.y,
-							 draws > 0 ? GameMakeColor( 255, 170, 90, 255 )		// spends it
-												 : GameMakeColor( 130, 220, 255, 255 ),	// supplies it
-							 GameMakeColor( 0, 0, 0, 255 ) );
+	drawBadge( window, text, BADGE_DESIGN_POINTS, HUD_READOUT_BOTTOM_RIGHT,
+						 draws > 0 ? GameMakeColor( 255, 170, 90, 255 )			// spends it
+											 : GameMakeColor( 130, 220, 255, 255 ) );	// supplies it
 
 }  // end drawPowerBadge
 

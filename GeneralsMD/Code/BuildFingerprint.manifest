@@ -62,9 +62,12 @@ Data/Scenarios/overlordlong.txt
 Data/Scenarios/parade.txt
 Data/Scenarios/particles100k.txt
 Data/Scenarios/reachshot.txt
+Data/Scenarios/scudstorm.txt
 Data/Scenarios/shiftorders.txt
 Data/Scenarios/shiftqueue.txt
 Data/Scenarios/squad30.txt
+Data/Scenarios/standinbuild.txt
+Data/Scenarios/standinfake.txt
 Data/Scenarios/stashbeside.txt
 Data/Scenarios/techrespawn.txt
 Data/Scenarios/towncross.txt
@@ -84,6 +87,7 @@ Data/Scenarios/vision.txt
 Data/Scripts/SkirmishScripts.scb
 Data/Turkish/Generals.str
 Data/Window/Html/Chat.html
+Data/Window/Html/Cheats.html
 Data/Window/Html/ControlBar.html
 Data/Window/Html/Feed.html
 Data/Window/Html/Icons/IdleWorker.svg
@@ -2696,6 +2700,7 @@ Tests/miles_smoke.cpp
 Tests/replay_wide_oracle.cpp
 Tests/run_data_gone_check.sh
 Tests/run_generals_smoke.sh
+Tests/run_ini_crlf_check.sh
 Tests/run_locomotor_check.sh
 Tests/run_mission_check.sh
 Tests/run_net_check.sh

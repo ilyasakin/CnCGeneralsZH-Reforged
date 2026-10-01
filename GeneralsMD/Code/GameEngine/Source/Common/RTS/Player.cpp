@@ -4533,13 +4533,15 @@ void Player::crc( Xfer *xfer )
 	* 7: added Preorder flag
 	* 8: Save m_disabledSciences & m_hiddenSciences. jba.
 	* 9: The shift queue, m_orderQueue (fork).
+	* 10: The vision spies (fork).
+	* 11: m_attackedFrame, which the skirmish AI's base-under-attack test reads (fork).
 	*/
 // ------------------------------------------------------------------------------------------------
 void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 10;
+	const XferVersion currentVersion = 11;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5095,6 +5097,13 @@ void Player::xfer( Xfer *xfer )
 		xfer->xferInt( &byWhom );
 		m_visionSpies[ i ].byWhom = byWhom;
 	}
+
+	// the frame this player was last hit, which the skirmish AI reads to keep a base under attack
+	// garrisoned; an older save has none and reads as never
+	if( version >= 11 )
+		xfer->xferUnsignedInt( &m_attackedFrame );
+	else
+		m_attackedFrame = 0;
 
 }  // end xfer
 

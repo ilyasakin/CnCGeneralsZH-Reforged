@@ -95,15 +95,21 @@ OVERLAY="$WORK/overlay"
 
 tap() { echo "w pad $1 down"; echo "n pad $1 up"; }		# "w": an edge rightly moves nothing
 taps() { local b="$1" n="$2"; for (( i = 0; i < n; ++i )); do tap "$b"; done; }
-# each Options page: down five, right, down two, up three, right, down three, left
-page() { taps DPadDown 5; tap DPadRight; taps DPadDown 2; taps DPadUp 3; tap DPadRight; taps DPadDown 3; tap DPadLeft; }
+# each Options page, a column at a time, so every widget on it is reached (the check below holds the walk to that):
+# the column the page starts in, down; the next one up from the bottom row, where right goes (right from a column's
+# top does not); the page again from its start (the shoulders out and back), the third column up from the bottom row;
+# the page again, the column to the left of the start, down (Controls starts in its middle column)
+reenter() { if [ "${1:-}" = first ]; then tap RightShoulder; tap LeftShoulder; else tap LeftShoulder; tap RightShoulder; fi; }
+page() { taps DPadDown 14; tap DPadRight; taps DPadUp 14; reenter "${1:-}"; taps DPadDown 14; taps DPadRight 2; taps DPadUp 14; reenter "${1:-}"; tap DPadLeft; taps DPadDown 14; }
 {
 	taps DPadDown 6; taps DPadUp 3					# the main menu's column, round and back to Options
-	tap South; page							# Options, its first page
+	tap South; page first					# Options, its first page (the shoulders out and back go right, then left)
 	for p in 2 3 4 5 6 7; do tap RightShoulder; [ "$RECORD" -eq 1 ] && echo "w shot"; page; done		# and the other six
 	tap East; taps DPadUp 3; tap South				# back; up to Solo Play; its pane
 	taps DPadDown 4; tap South					# down to Skirmish; skirmish setup, on Start Game
-	taps DPadUp 4; taps DPadLeft 2; taps DPadDown 2; taps DPadRight 3; tap DPadUp
+	# the Lobby Settings tab by the shoulder (its place among the player rows is a near tie the D-pad does not always
+	# break the same way), then that page's settings, the supply pile limit first, and back up through the rows
+	tap RightShoulder; taps DPadLeft 6; taps DPadDown 6; taps DPadUp 8; taps DPadRight 4; taps DPadDown 8
 	echo "s quit"
 } > "$WORK/menus.txt"
 {
@@ -162,9 +168,21 @@ OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
 OptionsMenu.wnd OptionsMenu.wnd:CheckSmoothMotion
 OptionsMenu.wnd OptionsMenu.wnd:SliderGamma
 OptionsMenu.wnd OptionsMenu.wnd:TabControls
-OptionsMenu.wnd OptionsMenu.wnd:TabGameplay
-OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxResolution
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxWindowMode
+OptionsMenu.wnd OptionsMenu.wnd:CheckVSync
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
+OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxResolution
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxWindowMode
+OptionsMenu.wnd OptionsMenu.wnd:CheckVSync
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxDetail
 OptionsMenu.wnd OptionsMenu.wnd:LowResSlider
@@ -174,9 +192,27 @@ OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
 OptionsMenu.wnd OptionsMenu.wnd:SliderAnisotropy
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxTextureFilter
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxBloomThreshold
-OptionsMenu.wnd OptionsMenu.wnd:ComboBoxTextureFilter
-OptionsMenu.wnd OptionsMenu.wnd:SliderAnisotropy
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxBloom
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMSAA
+OptionsMenu.wnd OptionsMenu.wnd:TabControls
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
+OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxDetail
+OptionsMenu.wnd OptionsMenu.wnd:LowResSlider
+OptionsMenu.wnd OptionsMenu.wnd:ParticleCapSlider
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:CheckShowProps
+OptionsMenu.wnd OptionsMenu.wnd:CheckSmoothWater
+OptionsMenu.wnd OptionsMenu.wnd:CheckGroundLighting
+OptionsMenu.wnd OptionsMenu.wnd:CheckCloudShadows
+OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
+OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxDetail
+OptionsMenu.wnd OptionsMenu.wnd:LowResSlider
+OptionsMenu.wnd OptionsMenu.wnd:ParticleCapSlider
 OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:Check3DShadows
 OptionsMenu.wnd OptionsMenu.wnd:Check2DShadows
@@ -184,47 +220,108 @@ OptionsMenu.wnd OptionsMenu.wnd:CheckInfantryShadows
 OptionsMenu.wnd OptionsMenu.wnd:CheckProjectileShadows
 OptionsMenu.wnd OptionsMenu.wnd:CheckPropShadows
 OptionsMenu.wnd OptionsMenu.wnd:CheckParticleShadows
-OptionsMenu.wnd OptionsMenu.wnd:CheckBehindBuilding
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
 OptionsMenu.wnd OptionsMenu.wnd:CheckBehindBuilding
 OptionsMenu.wnd OptionsMenu.wnd:CheckHeatEffects
 OptionsMenu.wnd OptionsMenu.wnd:CheckTreeSway
-OptionsMenu.wnd OptionsMenu.wnd:ComboBoxSmoke
-OptionsMenu.wnd OptionsMenu.wnd:CheckParticleBounce
-OptionsMenu.wnd OptionsMenu.wnd:CheckNoDynamicLOD
-OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:CheckExtraAnimations
+OptionsMenu.wnd OptionsMenu.wnd:TabControls
+OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
+OptionsMenu.wnd OptionsMenu.wnd:Check3DShadows
+OptionsMenu.wnd OptionsMenu.wnd:Check2DShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckInfantryShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckProjectileShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckPropShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckParticleShadows
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:CheckNoDynamicLOD
+OptionsMenu.wnd OptionsMenu.wnd:CheckParticleBounce
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxSmoke
+OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
+OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
+OptionsMenu.wnd OptionsMenu.wnd:Check3DShadows
+OptionsMenu.wnd OptionsMenu.wnd:Check2DShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckInfantryShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckProjectileShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckPropShadows
+OptionsMenu.wnd OptionsMenu.wnd:CheckParticleShadows
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:SliderMusicVolume
 OptionsMenu.wnd OptionsMenu.wnd:SliderSFXVolume
 OptionsMenu.wnd OptionsMenu.wnd:SliderVoiceVolume
 OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
 OptionsMenu.wnd OptionsMenu.wnd:TabControls
-OptionsMenu.wnd OptionsMenu.wnd:TabGameplay
-OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:Check3DShadows
+OptionsMenu.wnd OptionsMenu.wnd:SliderMusicVolume
+OptionsMenu.wnd OptionsMenu.wnd:SliderSFXVolume
+OptionsMenu.wnd OptionsMenu.wnd:SliderVoiceVolume
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
+OptionsMenu.wnd OptionsMenu.wnd:Check3DShadows
+OptionsMenu.wnd OptionsMenu.wnd:SliderMusicVolume
+OptionsMenu.wnd OptionsMenu.wnd:SliderSFXVolume
+OptionsMenu.wnd OptionsMenu.wnd:SliderVoiceVolume
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:Retaliation
 OptionsMenu.wnd OptionsMenu.wnd:CheckDoubleClickAttackMove
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
 OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
 OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
+OptionsMenu.wnd OptionsMenu.wnd:SliderDragTolerance
 OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
 OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadAim
-OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
-OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
-OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepad
+OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
+OptionsMenu.wnd OptionsMenu.wnd:SliderMusicVolume
+OptionsMenu.wnd OptionsMenu.wnd:Retaliation
+OptionsMenu.wnd OptionsMenu.wnd:CheckDoubleClickAttackMove
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:CheckChromaLighting
+OptionsMenu.wnd OptionsMenu.wnd:SliderDragTolerance
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadSwapConfirm
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepadAim
+OptionsMenu.wnd OptionsMenu.wnd:CheckGamepad
+OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
+OptionsMenu.wnd OptionsMenu.wnd:SliderMusicVolume
+OptionsMenu.wnd OptionsMenu.wnd:Retaliation
+OptionsMenu.wnd OptionsMenu.wnd:CheckZoomToCursor
+OptionsMenu.wnd OptionsMenu.wnd:CheckIsometricCamera
+OptionsMenu.wnd OptionsMenu.wnd:CheckStartAtMaxZoom
+OptionsMenu.wnd OptionsMenu.wnd:SliderCloserZoom
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHealthBars
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxPlayerColors
-OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHudScale
 OptionsMenu.wnd OptionsMenu.wnd:CheckOrderLines
+OptionsMenu.wnd OptionsMenu.wnd:CheckEmptyBuildingPips
 OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
-OptionsMenu.wnd OptionsMenu.wnd:ComboBoxLanguage
+OptionsMenu.wnd OptionsMenu.wnd:CheckNetBox
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxIncomeRate
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHudScale
 OptionsMenu.wnd OptionsMenu.wnd:TabControls
-OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
-OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:Retaliation
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHealthBars
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxPlayerColors
+OptionsMenu.wnd OptionsMenu.wnd:CheckOrderLines
+OptionsMenu.wnd OptionsMenu.wnd:CheckEmptyBuildingPips
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxLanguage
+OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
+OptionsMenu.wnd OptionsMenu.wnd:Retaliation
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHealthBars
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxPlayerColors
+OptionsMenu.wnd OptionsMenu.wnd:CheckOrderLines
+OptionsMenu.wnd OptionsMenu.wnd:CheckEmptyBuildingPips
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxOnlineIP
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxIP
 OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
@@ -232,9 +329,19 @@ OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
 OptionsMenu.wnd OptionsMenu.wnd:CheckSendDelay
 OptionsMenu.wnd OptionsMenu.wnd:ButtonFirewallRefresh
 OptionsMenu.wnd OptionsMenu.wnd:TextEntryFirewallPortOverride
-OptionsMenu.wnd OptionsMenu.wnd:TextEntryHTTPProxy
-OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:TabControls
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHealthBars
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxOnlineIP
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxIP
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
+OptionsMenu.wnd OptionsMenu.wnd:ButtonAccept
+OptionsMenu.wnd OptionsMenu.wnd:TextEntryHTTPProxy
+OptionsMenu.wnd OptionsMenu.wnd:TabGameplay
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxHealthBars
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxOnlineIP
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxIP
+OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 MainMenu.wnd MainMenu.wnd:ButtonOptions
 MainMenu.wnd MainMenu.wnd:ButtonLoadReplay
 MainMenu.wnd MainMenu.wnd:ButtonMultiplayer
@@ -245,27 +352,34 @@ MainMenu.wnd MainMenu.wnd:ButtonChina
 MainMenu.wnd MainMenu.wnd:ButtonChallenge
 MainMenu.wnd MainMenu.wnd:ButtonSkirmish
 SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonStart
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonSelectMap
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonMapStartPosition1
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonMapStartPosition0
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxTeam1
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxPlayerTemplate1
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:TabLobbySettings
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ListboxInfo
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonStart
-SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonSelectMap"
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonBack
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxSupplyPileLimit
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxIncomeSharing
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxSuperweapons
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxStartingCash
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:TabInfo
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxPlayer7
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxPlayer6
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxPlayer5
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxColor5
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxPlayerTemplate5
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxStartingCash
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:CheckBoxUnitLimit
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ComboBoxTechRespawn
+SkirmishGameOptionsMenu.wnd SkirmishGameOptionsMenu.wnd:ButtonStart"
 EXPECTED_CARD="Q
 W
 E
 R
-F
-D
-S
+B
+X
+Z
+Q
 W
+S
 E
-D
-F
-N
+R
+B
 R"
 
 status=0
@@ -278,6 +392,20 @@ elif [ "$MENUS" != "$EXPECTED_MENUS" ]; then
 	status=1
 else
 	echo "PASS: the D-pad went where the list says on the main menu, all seven Options pages, Solo Play and skirmish setup"
+fi
+# Reach, whatever the list says: every widget the Options catalog names (OptionsCatalog.cpp's OPT_WND rows) and the lobby's
+# supply pile limit must be among the widgets the walk focused.  A new option with no way there on a pad fails here by
+# name, rather than as a list nobody re-reads.
+UNREACHED=""
+for widget in $(grep -o 'OPT_WND( "[A-Za-z0-9]*" )' "$CODE/GameEngine/Source/Common/OptionsCatalog.cpp" | sed 's/OPT_WND( "//; s/" )//' | sort -u) \
+		SkirmishGameOptionsMenu.wnd:ComboBoxSupplyPileLimit; do
+	case "$widget" in *:*) name="$widget";; *) name="OptionsMenu.wnd:$widget";; esac
+	printf '%s\n' "$MENUS" | grep -q -x ".* $name" || UNREACHED="$UNREACHED $name"
+done
+if [ -n "$UNREACHED" ]; then
+	echo "FAIL: not reached on the pad:$UNREACHED"; status=1
+else
+	echo "PASS: every option in the catalog, and the lobby's supply pile limit, is reached on the pad"
 fi
 if [ "$CARD_STATUS" -ne 0 ] && [ "$CARD_STATUS" -ne 1 ]; then
 	echo "FAIL: the match with the command card did not end by itself (exit $CARD_STATUS)"; status=1

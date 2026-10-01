@@ -2135,6 +2135,18 @@ Int parseTechRespawn(char *args[], int num)
 	return 1;
 }
 
+/* -supplypilelimit <players>: the lobby's supply pile limit for an -autoskirmish run, carried the
+	 same way as -incomesharing. */
+Int parseSupplyPileLimit(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1 && args[1])
+	{
+		TheWritableGlobalData->m_supplyPileLimit = atoi(args[1]);
+		return 2;
+	}
+	return 1;
+}
+
 /* -slowframe <ms> lowers the bar a logic frame has to clear before it logs its own breakdown.
 
 	 The default of 20ms is a stutter hunt: it catches the frames a player would notice. Chasing a
@@ -2571,6 +2583,7 @@ static CommandLineParam params[] =
 	{ "-unitlimit", parseUnitLimit },
 	{ "-incomesharing", parseIncomeSharing },
 	{ "-techrespawn", parseTechRespawn },
+	{ "-supplypilelimit", parseSupplyPileLimit },
 	{ "-showlanes", parseShowLanes },
 	{ "-uidrill", parseUIDrill },
 	{ "-resdrill", parseResDrill },

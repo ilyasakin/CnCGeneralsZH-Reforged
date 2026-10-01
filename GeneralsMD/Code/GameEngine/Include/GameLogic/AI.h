@@ -403,6 +403,34 @@ Int aiLeastDefendedLane( const Real *laneFirepower, Int laneCount, Int requested
 	* the enemy's, because two AIs each waiting to outnumber the other never move. */
 Bool aiReleaseWave( Real heldPower, Real wavePower, UnsignedInt heldFrames, UnsignedInt maxHoldFrames );
 
+/** How hard a skirmish AI leans on its current enemy, from how it rates its chance against him.  In
+	* order, so a comparison reads as "at least this much". */
+enum AIPressure
+{
+	AIPRESSURE_DEFEND = 0,	///< outmatched: teams stay home until they are a bigger wave than usual
+	AIPRESSURE_NORMAL,			///< an even match, or an enemy nobody has looked at: the wave as it always was
+	AIPRESSURE_PRESS,				///< ahead: no waiting for a wave, teams go as they form
+	AIPRESSURE_FINISH,			///< he has next to no army left: the guards at home go too
+	AIPRESSURE_COUNT
+};
+
+/** The chance of winning the fight between the two armies, 0..1, from what each is worth in the
+	* build-cost currency the waves are counted in.  Both sides are given a couple of tanks they do not
+	* have, so one rifleman against nothing is not a rout. */
+Real aiWinChance( Real myPower, Real enemyPower );
+
+/** The level that chance asks for.  A level is left later than it is entered, so a chance sitting on
+	* a threshold does not change the orders every two seconds: a Hard AI watching an army walk in and
+	* out of its sight changed level six times in a minute on a chance between 0.58 and 0.66.  PRESS and
+	* FINISH are only entered with the enemy's base in view: an army that is merely out of sight is not
+	* an army that is gone. */
+AIPressure aiPressureLevel( Real chance, Bool enemyBaseInSight, AIPressure current );
+
+/** aiReleaseWave under pressure.  Ahead, whatever is parked goes.  Outmatched, the wave is twice the
+	* size, the wait twice as long, and what has waited that long still goes only if it is a wave: a
+	* trickle sent at an enemy who outnumbers it is a gift. */
+Bool aiReleaseWaveAt( AIPressure level, Real heldPower, Real wavePower, UnsignedInt heldFrames, UnsignedInt maxHoldFrames );
+
 class TAiData : public Snapshot
 {
 public:

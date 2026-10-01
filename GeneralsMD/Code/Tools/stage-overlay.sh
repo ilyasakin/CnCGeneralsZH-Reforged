@@ -65,6 +65,12 @@ if [ "$dev" = "--dev" ]; then
 	copy Cinema Cinema
 else
 	copy INI Data/INI
+	# CRLF, as a Windows build ships them: the multiplayer INI CRC reads each line with its carriage return,
+	# so LF masters would give another CRC and no join with a Windows player (.gitattributes). A checkout
+	# made before that attribute keeps its LF files, so they are converted here, as git converts: each LF
+	# not already after a CR, and a last line without one left as it is. A CRLF checkout is unchanged.
+	command -v perl > /dev/null || { echo "stage-overlay: perl is needed to write the INI files with CRLF" >&2; exit 1; }
+	find "$out/Data/INI" -type f -exec perl -pi -e 's/(?<!\r)\n/\r\n/' {} +
 	copy Patch.str Data/Patch.str
 	copy Scripts Data/Scripts
 	copy Turkish Data/Turkish

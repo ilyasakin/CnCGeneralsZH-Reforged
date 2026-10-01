@@ -47,12 +47,14 @@
     {{attackkey.x}} ...    the attack, hold position and move places, where the page's own keys
     {{holdkey.x}} ...      stand, data-click="order:attack", "order:hold" and "order:move", for a
     {{movekey.x}} ...      selection that attack moves; no command set has a button for any of
-                           them.  .key is the key bound to that place, "A", "C" and "V" as shipped
+                           them.  The game letters each with the key bound to its place
     data-each="portraitcells" the portrait bar's cells, the portrait's first and then only what it
                            holds, each {{cell.x}} .y .w .h
-    {{skilltray.x}} ...    the general's powers' tray, a panel as {{centre.x}} is, only as big as the
-                           powers shown; data-each="skillcells" a cell behind each power, each
-                           {{cell.x}} .y .w .h
+    {{skilltray.x}} ...    the general's powers' tray, a panel as {{centre.x}} is, round the full rows
+                           of three (or the one short row when there are fewer than three);
+                           {{skillstep.x}} ... the step a last row of one or two stands in on top of
+                           it, {{skillstep.shown}} "hidden" when there is none; data-each="skillcells"
+                           a cell behind each power, each {{cell.x}} .y .w .h
     {{signals.x}} ...      the step of smoke signal buttons on the radar panel's top edge;
                            data-click="signal:attack", "signal:defend" or "signal:look" sends one
                            to the middle of the view; {{signals.shown}} is "hidden" where the keys
@@ -276,9 +278,8 @@
   .order .glow { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-size: 100% 100%; background-repeat: no-repeat; }
   .order:hover .glow { background-image: url(Cameo_hilited); }
   .held .order:hover .glow { background-image: url(Cameo_push); }
-  /* the key in the top left corner, the way the command buttons wear theirs */
-  .order .keyname { position: absolute; left: 0; top: 0; padding: 0 1px; line-height: 7px; font-size: 7px;
-                    background-color: rgba(0, 0, 0, 0.6); color: #ffffff; }
+  /* the key in each one's top left corner is the game's, lettered the way the command buttons'
+     are (InGameUI::drawCellGridFront) */
 
   /* the under-attack light: a red lamp in a tab on the radar's bezel, dark until the bar blinks it.
      The tab is 66 by 14 and the lamp a bar 54 by 10 with its rim */
@@ -323,6 +324,13 @@
      as big as the powers shown, a dark cell behind each; its bottom edge is shaded, since it stands
      over the battlefield rather than on the screen's edge */
   .bezel .base { position: absolute; height: 1px; background-color: #0c1114; }
+  /* a last row of one or two powers stands on the tray under it as a step, as the superweapon
+     strip's short row hangs under its tray: no bottom of its own, and its well's bottom edge is the
+     well's steel, the gap between two rows */
+  .bezel.step .base { display: none; }
+  .bezel.step .sunk { border-bottom-color: #23272c; }
+  .china .bezel.step .sunk { border-bottom-color: #290f09; }
+  .gla .bezel.step .sunk { border-bottom-color: #282311; }
 
   /* the smoke signals: a step on the radar's bezel's top edge at its right hand end, dark down its
      own right.  Three keys in it side by side: a crosshair to attack, a shield to defend, an eye to
@@ -399,9 +407,9 @@
   </div>
   <div class="piece commandcell" data-each="commandcells" style="left: {{cell.x}}px; top: {{cell.y}}px; width: {{cell.w}}px; height: {{cell.h}}px"><div class="edge" style="left: -{{ring}}px; top: -{{ring}}px; right: -{{ring}}px; bottom: -{{ring}}px; border-width: {{ring}}px"></div><div class="bevel"></div></div>
   <div class="piece commandcell" data-each="portraitcells" style="left: {{cell.x}}px; top: {{cell.y}}px; width: {{cell.w}}px; height: {{cell.h}}px"><div class="edge" style="left: -{{ring}}px; top: -{{ring}}px; right: -{{ring}}px; bottom: -{{ring}}px; border-width: {{ring}}px"></div><div class="bevel"></div></div>
-  <div class="piece order attack {{attackkey.shown}}" data-click="order:attack" style="left: {{attackkey.x}}px; top: {{attackkey.y}}px; width: {{attackkey.w}}px; height: {{attackkey.h}}px"><div class="glow"></div><div class="keyname">{{attackkey.key}}</div></div>
-  <div class="piece order hold {{holdkey.shown}}" data-click="order:hold" style="left: {{holdkey.x}}px; top: {{holdkey.y}}px; width: {{holdkey.w}}px; height: {{holdkey.h}}px"><div class="glow"></div><div class="keyname">{{holdkey.key}}</div></div>
-  <div class="piece order move {{movekey.shown}}" data-click="order:move" style="left: {{movekey.x}}px; top: {{movekey.y}}px; width: {{movekey.w}}px; height: {{movekey.h}}px"><div class="glow"></div><div class="keyname">{{movekey.key}}</div></div>
+  <div class="piece order attack {{attackkey.shown}}" data-click="order:attack" style="left: {{attackkey.x}}px; top: {{attackkey.y}}px; width: {{attackkey.w}}px; height: {{attackkey.h}}px"><div class="glow"></div></div>
+  <div class="piece order hold {{holdkey.shown}}" data-click="order:hold" style="left: {{holdkey.x}}px; top: {{holdkey.y}}px; width: {{holdkey.w}}px; height: {{holdkey.h}}px"><div class="glow"></div></div>
+  <div class="piece order move {{movekey.shown}}" data-click="order:move" style="left: {{movekey.x}}px; top: {{movekey.y}}px; width: {{movekey.w}}px; height: {{movekey.h}}px"><div class="glow"></div></div>
 
   <div class="piece frame bezel solid {{skilltray.shown}}" style="left: {{skilltray.x}}px; top: {{skilltray.y}}px; width: {{skilltray.w}}px; height: {{skilltray.h}}px; border-width: {{skilltray.bt}}px {{skilltray.br}}px {{skilltray.bb}}px {{skilltray.bl}}px">
     <div class="steel" style="left: -{{skilltray.bl}}px; right: -{{skilltray.br}}px; top: -{{skilltray.bt}}px; bottom: -{{skilltray.bb}}px"></div>
@@ -409,6 +417,12 @@
     <div class="lit" style="left: -{{skilltray.bl}}px; top: -{{skilltray.bt}}px; bottom: -{{skilltray.bb}}px"></div>
     <div class="base" style="left: -{{skilltray.bl}}px; right: -{{skilltray.br}}px; bottom: -{{skilltray.bb}}px"></div>
     <div class="sunk grid" style="width: {{skilltray.w}}px; height: {{skilltray.h}}px"></div>
+  </div>
+  <div class="piece frame bezel step solid {{skillstep.shown}}" style="left: {{skillstep.x}}px; top: {{skillstep.y}}px; width: {{skillstep.w}}px; height: {{skillstep.h}}px; border-width: {{skillstep.bt}}px {{skillstep.br}}px {{skillstep.bb}}px {{skillstep.bl}}px">
+    <div class="steel" style="left: -{{skillstep.bl}}px; right: -{{skillstep.br}}px; top: -{{skillstep.bt}}px; bottom: -{{skillstep.bb}}px"></div>
+    <div class="shine" style="left: -{{skillstep.bl}}px; right: -{{skillstep.br}}px; top: -{{skillstep.bt}}px"></div>
+    <div class="lit" style="left: -{{skillstep.bl}}px; top: -{{skillstep.bt}}px; bottom: -{{skillstep.bb}}px"></div>
+    <div class="sunk grid" style="width: {{skillstep.w}}px; height: {{skillstep.h}}px"></div>
   </div>
   <div class="piece commandcell" data-each="skillcells" style="left: {{cell.x}}px; top: {{cell.y}}px; width: {{cell.w}}px; height: {{cell.h}}px"><div class="edge" style="left: -{{ring}}px; top: -{{ring}}px; right: -{{ring}}px; bottom: -{{ring}}px; border-width: {{ring}}px"></div><div class="bevel"></div></div>
 

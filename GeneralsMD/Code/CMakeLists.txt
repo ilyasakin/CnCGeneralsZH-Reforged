@@ -2280,6 +2280,15 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(overlay_crc_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # The INI masters' line ends: the overlay staged from an LF and from a CRLF checkout holds the same CRLF
+  # bytes, and with the game's data the INI CRC agrees from both, while LF files (the armed control)
+  # give another - the CRC a Windows build has, or none of its joins (.gitattributes, stage-overlay.sh).
+  add_test(NAME ini_crlf_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tests/run_ini_crlf_check.sh $<TARGET_FILE:generals>)
+  set_tests_properties(ini_crlf_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+  if(ZH_GAME_DATA)
+    set_tests_properties(ini_crlf_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # P1 step 2: the roots are read-only - GameEngine::init's INIZH.big delete is refused, the farm and the
   # install are unchanged after a skirmish; -writableRoot in a root with no links does delete; and a run
   # from inside an app bundle logs to the user data's Logs, not into the bundle.
@@ -3053,7 +3062,7 @@ if(ZH_PLATFORM_POSIX)
 
   # The tests that build a farm of the install (a folder of links into it) never run at the same time:
   # one at a time is the belt to the braces above.  Readers that only open archives are not in it.
-  foreach(_zh_test replay_check replay_check_app net_check overlay_crc_check packaging_resolution_check root_readonly_check
+  foreach(_zh_test replay_check replay_check_app net_check overlay_crc_check ini_crlf_check packaging_resolution_check root_readonly_check
                    lod_first_run_check test_bigfilesystem test_install_textures test_milesaudiomanager
                    mission_check data_gone_check locomotor_check)
     if(TEST ${_zh_test})

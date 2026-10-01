@@ -4324,13 +4324,14 @@ void Object::crc( Xfer *xfer )
 	* 8: Kris: Conversion of object status bits from UnsignedInt to BitFlags<>
 	* 9: Extra sighting for reveal to all with different range units
 	* 10: each player's memory of it while it is out of their sight
+	* 11: the cached angle, which the matrix does not give back bit for bit
 	*/
 //-------------------------------------------------------------------------------------------------
 void Object::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 10;
+	const XferVersion currentVersion = 11;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -4354,6 +4355,18 @@ void Object::xfer( Xfer *xfer )
 		//
 		if( xfer->getXferMode() == XFER_LOAD )
 			setTransformMatrix(&mtx);
+
+		//
+		// And the load derives that same angle, so the angle itself goes into the file: a jump back in
+		// a replay is a load, and the playback carries on from it against the recording's CRCs.
+		//
+		if( version >= 11 )
+		{
+			Real angle = getOrientation();
+			xfer->xferReal( &angle );
+			if( xfer->getXferMode() == XFER_LOAD )
+				restoreOrientation( angle );
+		}
 	}
 	else
 	{

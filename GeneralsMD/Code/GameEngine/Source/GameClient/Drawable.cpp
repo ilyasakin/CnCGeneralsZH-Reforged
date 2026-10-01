@@ -3203,7 +3203,10 @@ void Drawable::drawContained( const IRegion2D *healthBarRegion )
 	if (!container->getContainerPipsToShow(numTotal, numFull))
 		return;
 
-	// empty containers still show their (empty) pips
+	// empty containers still show their (empty) pips, unless the player switched that off for
+	// buildings: a Barracks wears ten empty boxes for the whole match otherwise
+	if (numFull == 0 && !TheGlobalData->m_showEmptyBuildingPips && obj->isKindOf( KINDOF_STRUCTURE ))
+		return;
 
 	Int numInfantry = 0;
 	const ContainedItemsList* contained = container->getContainedItemsList();

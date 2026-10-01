@@ -25,3 +25,9 @@ GeneralsMD/Code/BuildFingerprint.manifest text eol=lf
 GeneralsMD/Code/Data/dx11shaders.shipped -text
 # Compiled Direct3D 12 programs (-d3d12), recorded the same way with -Renderer d3d12: binary, never converted.
 GeneralsMD/Code/Data/d3d12shaders.shipped -text
+
+# The INI masters are CRLF in every checkout, as autocrlf makes them on Windows. The multiplayer INI CRC
+# reads each line with its carriage return (INI::readLine turns it into a space), so a build made from an
+# LF checkout computes another CRC and cannot join a Windows player's game. Tools/stage-overlay.sh makes
+# them CRLF as well, for a checkout made before this line, whose files git does not rewrite.
+GeneralsMD/Code/Data/INI/** text eol=crlf

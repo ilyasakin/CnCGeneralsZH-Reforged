@@ -245,6 +245,7 @@ GameLogic::GameLogic( void )
 	m_proRules = FALSE;
 	m_incomeSharing = INCOME_SHARING_OFF;
 	m_techRespawnDelay = 0;
+	m_supplyPileLimit = 0;
 	m_gamePaused = FALSE;
 	m_inputEnabledMemory = TRUE;
 	m_mouseVisibleMemory = TRUE;
@@ -1260,6 +1261,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
                   ? (UnsignedInt)UnitLimitPerPlayer( TheGameInfo->getNumNonObserverPlayers() ) : 0;
       m_incomeSharing = TheGameInfo->getIncomeSharing();
       m_techRespawnDelay = TheGameInfo->getTechRespawn() * 60 * LOGICFRAMES_PER_SECOND;
+      m_supplyPileLimit = TheGameInfo->getSupplyPileLimit();
     }
     else
     {
@@ -1269,6 +1271,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
       m_unitCap = 0;
       m_incomeSharing = INCOME_SHARING_OFF;
       m_techRespawnDelay = 0;
+      m_supplyPileLimit = 0;
     }
 
     /* Pro Rules hold in the modes people play each other in, when the lobby's check box is ticked,
@@ -5752,13 +5755,14 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 14: xfer m_proRules
 	* 15: xfer m_incomeSharing
 	* 16: xfer m_techRespawnDelay and m_pendingTechBuildings
+	* 17: xfer m_supplyPileLimit
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 16;
+	const XferVersion currentVersion = 17;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -6172,6 +6176,15 @@ void GameLogic::xfer( Xfer *xfer )
   {
     m_techRespawnDelay = 0;
     m_pendingTechBuildings.clear();
+  }
+
+  if ( version >= 17 )
+  {
+    xfer->xferInt( &m_supplyPileLimit );
+  }
+  else if ( xfer->getXferMode() == XFER_LOAD )
+  {
+    m_supplyPileLimit = 0;
   }
 }  // end xfer
 

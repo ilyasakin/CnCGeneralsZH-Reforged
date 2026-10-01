@@ -1275,6 +1275,9 @@ void W3DDisplay::init( void )
 		" -offscreen paces by ZH_OFFSCREEN_HZ instead)\n", DX8Wrapper::Get_Requested_VSync() ? "on" : "off"));
 #endif
 	DEBUG_LOG(("W3DDisplay::init - present: %s\n", DX8Wrapper::Is_Flip_Present() ? "flip" : "discard"));
+	if (Direct3D11_Present_Is_Enabled())
+		DEBUG_LOG(("W3DDisplay::init - dx11 swap chain: %s\n",
+							 Direct3D11_Can_Tear() ? "flip, tearing allowed" : "blt, held to the refresh"));
 	DEBUG_LOG(("W3DDisplay::init - adapter: %s\n",
 						 WW3D::Get_Render_Device_Name(WW3D::Get_Render_Device())));
 	{
@@ -2771,6 +2774,11 @@ AGAIN:
 					if( pipelineMS + textureMS > DX11_FRAME_COST_REPORT_MS )
 						DEBUG_LOG(("DX11 FRAME COST frame %d: %u pipelines built in %.1f ms, %u textures copied in %.1f ms\n",
 							TheGameLogic->getFrame(), pipelines, pipelineMS, textures, textureMS));
+
+					long presentResult = 0;
+					if( Direct3D11_Take_Present_Failure( presentResult ) )
+						DEBUG_LOG(("DX11 PRESENT refused at frame %d: 0x%08X, logged once\n",
+							TheGameLogic->getFrame(), (UnsignedInt)presentResult));
 				}
 
 				/* End_Render is where a lost device is noticed and reset, and that reset is the most
