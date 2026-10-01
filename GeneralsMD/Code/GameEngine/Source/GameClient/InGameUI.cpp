@@ -760,7 +760,7 @@ void InGameUI::addSuperweapon(Int playerIndex, const AsciiString& powerName, Obj
 	if (powerTemplate == NULL)
 		return;
 
-	// Pro Rules: a silo nobody may fire gets no countdown on everybody's screen and no "missile ready"
+	// Pro Rules or No Superweapons: a silo nobody may fire gets no countdown on everybody's screen and no "missile ready"
 	if (ProRulesRefuseSpecialPower(ThePlayerList->getNthPlayer(playerIndex), powerTemplate->getSpecialPowerType()))
 		return;
 
@@ -10735,6 +10735,33 @@ Bool InGameUI_incomePerMinute( Int incomeRateMode, Int perSecond )
 		return perSecond < INCOME_RATE_AUTOMATIC_PER_SECOND_FROM;
 
 	return incomeRateMode == INCOME_RATE_PER_MINUTE;
+}
+
+static bool buildPlanComesFirst( const BuildPlanNumber& a, const BuildPlanNumber& b )
+{
+	if( a.builder != b.builder )
+		return a.builder < b.builder;
+	if( a.current != b.current )
+		return a.current != FALSE;
+	return a.plan < b.plan;
+}
+
+void InGameUI_numberBuildPlans( std::vector<BuildPlanNumber>& plans )
+{
+	std::sort( plans.begin(), plans.end(), buildPlanComesFirst );
+
+	size_t first = 0;
+	while( first < plans.size() )
+	{
+		size_t end = first + 1;
+		while( end < plans.size() && plans[ end ].builder == plans[ first ].builder )
+			++end;
+
+		// a lone "1" says nothing, as on a unit's order markers
+		for( size_t i = first; i < end; ++i )
+			plans[ i ].step = end - first > 1 ? (Int)( i - first ) + 1 : 0;
+		first = end;
+	}
 }
 
 /** One seat on the scoreboard page.  `full` is whether the local player may see the numbers: his

@@ -1613,7 +1613,12 @@ CommandAvailability ControlBar::getCommandAvailability( const CommandButton *com
 				// this chain and report the button as available - a power the object cannot even
 				// perform was drawn ready to fire. There is nothing behind it, so hide it.
 				return COMMAND_HIDDEN;
-			} 
+			}
+
+			// a silo whose missile can never fire has no fire button at all
+			if( SuperweaponMissileSilencedInMatch( command->getSpecialPowerTemplate()->getSpecialPowerType() ) )
+				return COMMAND_HIDDEN;
+
 			//
 			// the cooldown in seconds: what is left of it while the power charges, and the whole
 			// of it while the power is ready, so you can see what firing it will cost you

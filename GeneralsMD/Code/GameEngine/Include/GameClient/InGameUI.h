@@ -383,6 +383,21 @@ Bool InGameUI_commandPlaces( IRegion2D *rects, Int *holds );
 	* player earning `perSecond` dollars a second.  See IncomeRateModeType for what automatic picks. */
 Bool InGameUI_incomePerMinute( Int incomeRateMode, Int perSecond );
 
+/** A plan waiting for its builder, as the number over its silhouette is worked out. */
+struct BuildPlanNumber
+{
+	ObjectID plan;
+	ObjectID builder;					///< the dozer or worker the plan was given to
+	Bool current;							///< the builder is already on its way to this one
+	Coord3D spot;							///< where the number goes, in the world
+	Int step;									///< 1 for the next one built, 0 when its builder has only the one
+};
+
+/** Number each builder's plans in the order it will take them: the one it is walking to first, then
+	* lowest id first, which is the order findUnfinishedStructureToContinue picks them in.  The list
+	* comes back sorted by builder and step. */
+void InGameUI_numberBuildPlans( std::vector<BuildPlanNumber>& plans );
+
 // ------------------------------------------------------------------------------------------------
 /** Basic functionality common to all in-game user interfaces */
 // ------------------------------------------------------------------------------------------------ 

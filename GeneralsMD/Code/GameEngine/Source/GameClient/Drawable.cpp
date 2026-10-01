@@ -4525,7 +4525,9 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 				if( sp == NULL || sp->isReady() )
 					continue;
 				const SpecialPowerTemplate *tmpl = sp->getSpecialPowerTemplate();
-				if( tmpl == NULL || !tmpl->hasPublicTimer() )
+				// a silo whose missile can never fire charges towards nothing
+				if( tmpl == NULL || !tmpl->hasPublicTimer()
+						|| SuperweaponMissileSilencedInMatch( tmpl->getSpecialPowerType() ) )
 					continue;
 
 				ScienceType needed = sp->getRequiredScience();

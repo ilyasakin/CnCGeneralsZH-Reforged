@@ -409,11 +409,6 @@ AudioHandle AudioManager::addAudioEvent(const AudioEventRTS *eventToAdd)
 		return AHSV_NoSound;
 	}
 
-	// The battle behind the main menu kills infantry, and their death cries are not menu sound.
-	if (eventToAdd->getEventName().endsWith("VoiceDie") && TheGameLogic->isInShellGame()) {
-		return AHSV_NoSound;
-	}
-
 #ifdef INTENSIVE_AUDIO_DEBUG
 	DEBUG_LOG(("AUDIO (%d): Received addAudioEvent('%s')", TheGameLogic->getFrame(), eventToAdd->getEventName().str()));
 #endif

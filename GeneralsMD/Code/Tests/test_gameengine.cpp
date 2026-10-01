@@ -7433,11 +7433,11 @@ TEST(an_armed_unit_sees_little_further_than_it_can_shoot)
 	 range, and nothing taken away for standing lower. */
 TEST(high_ground_reaches_further_and_low_ground_no_shorter)
 {
-	CHECK_NEAR( Weapon_elevationRangeBonus( 200.0f, 20.0f ), 60.0f, 0.0001f );
-	CHECK_NEAR( Weapon_elevationRangeBonus( 200.0f, 400.0f ), 200.0f, 0.0001f );
-	CHECK_NEAR( Weapon_elevationRangeBonus( 200.0f, FLT_MAX ), 200.0f, 0.0001f );
-	CHECK_NEAR( Weapon_elevationRangeBonus( 200.0f, 0.0f ), 0.0f, 0.0001f );
-	CHECK_NEAR( Weapon_elevationRangeBonus( 200.0f, -40.0f ), 0.0f, 0.0001f );
+	CHECK_NEAR( Weapon_highGroundRangeBonus( 200.0f, 20.0f ), 60.0f, 0.0001f );
+	CHECK_NEAR( Weapon_highGroundRangeBonus( 200.0f, 400.0f ), 200.0f, 0.0001f );
+	CHECK_NEAR( Weapon_highGroundRangeBonus( 200.0f, FLT_MAX ), 200.0f, 0.0001f );
+	CHECK_NEAR( Weapon_highGroundRangeBonus( 200.0f, 0.0f ), 0.0f, 0.0001f );
+	CHECK_NEAR( Weapon_highGroundRangeBonus( 200.0f, -40.0f ), 0.0f, 0.0001f );
 }
 
 /** A hill hides the ground behind it. Standing in the middle of flat ground with a wall of high cells
@@ -12793,6 +12793,35 @@ TEST(income_rate_stays_per_second_until_picked_and_automatic_turns_at_ten_a_seco
 	CHECK( !InGameUI_incomePerMinute( INCOME_RATE_AUTOMATIC, 40 ) );
 }
 
+TEST(build_plans_are_numbered_in_the_order_their_builder_takes_them)
+{
+	// dozer 7 holds plans 40, 12 and 25 and is walking to 40; dozer 3 holds 30 alone
+	const Int ids[] = { 40, 12, 30, 25 };
+	const Int builders[] = { 7, 7, 3, 7 };
+	const Bool current[] = { TRUE, FALSE, FALSE, FALSE };
+	std::vector<BuildPlanNumber> plans;
+	for( Int i = 0; i < 4; ++i )
+	{
+		BuildPlanNumber plan;
+		plan.plan = (ObjectID)ids[ i ];
+		plan.builder = (ObjectID)builders[ i ];
+		plan.current = current[ i ];
+		plan.step = -1;
+		plans.push_back( plan );
+	}
+
+	InGameUI_numberBuildPlans( plans );
+
+	CHECK_EQ( (Int)plans[ 0 ].plan, 30 );
+	CHECK_EQ( plans[ 0 ].step, 0 );
+	CHECK_EQ( (Int)plans[ 1 ].plan, 40 );
+	CHECK_EQ( plans[ 1 ].step, 1 );
+	CHECK_EQ( (Int)plans[ 2 ].plan, 12 );
+	CHECK_EQ( plans[ 2 ].step, 2 );
+	CHECK_EQ( (Int)plans[ 3 ].plan, 25 );
+	CHECK_EQ( plans[ 3 ].step, 3 );
+}
+
 TEST(empty_building_slots_are_a_check_box_that_starts_on)
 {
 	const OptionDef *def = findOptionDef( "EmptyBuildingPips" );
@@ -14253,6 +14282,26 @@ TEST(the_superweapon_rule_is_a_mode_with_one_exception)
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla ), (Int)SUPERWEAPON_CAP_BANNED );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, laserGeneral ), (Int)SUPERWEAPON_CAP_BANNED );
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral ), 1 );
+
+	// except the silo, one for everybody, built for China's upgrades: its missile is what No refuses
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "ChinaNuclearMissileLauncher" ) ), 1 );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "Nuke_ChinaNuclearMissileLauncher" ) ), 1 );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ) ), 1 );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, gla, AsciiString( "GLAScudStorm" ) ), (Int)SUPERWEAPON_CAP_BANNED );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, laserGeneral, AsciiString( "Lazr_AmericaParticleCannonUplink" ) ), (Int)SUPERWEAPON_CAP_BANNED );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_LIMIT, superweaponGeneral, AsciiString( "SupW_AmericaNuclearMissileLauncher" ) ), 4 );
+	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_ALLOW, gla, AsciiString( "ChinaNuclearMissileLauncher" ) ), (Int)SUPERWEAPON_CAP_UNLIMITED );
+
+	// and that missile is silenced under No or Pro Rules, every general's copy, and nothing else is
+	CHECK( SuperweaponMissileSilenced( SPECIAL_NEUTRON_MISSILE, FALSE, SUPERWEAPONS_NONE ) );
+	CHECK( SuperweaponMissileSilenced( NUKE_SPECIAL_NEUTRON_MISSILE, FALSE, SUPERWEAPONS_NONE ) );
+	CHECK( SuperweaponMissileSilenced( SUPW_SPECIAL_NEUTRON_MISSILE, FALSE, SUPERWEAPONS_NONE ) );
+	CHECK( SuperweaponMissileSilenced( SPECIAL_NEUTRON_MISSILE, TRUE, SUPERWEAPONS_ALLOW ) );
+	CHECK( !SuperweaponMissileSilenced( SPECIAL_NEUTRON_MISSILE, FALSE, SUPERWEAPONS_LIMIT ) );
+	CHECK( !SuperweaponMissileSilenced( SPECIAL_NEUTRON_MISSILE, FALSE, SUPERWEAPONS_ALLOW ) );
+	CHECK( !SuperweaponMissileSilenced( SPECIAL_PARTICLE_UPLINK_CANNON, TRUE, SUPERWEAPONS_NONE ) );
+	CHECK( !SuperweaponMissileSilenced( SPECIAL_SCUD_STORM, TRUE, SUPERWEAPONS_NONE ) );
+	CHECK( !SuperweaponMissileSilenced( SPECIAL_CLUSTER_MINES, FALSE, SUPERWEAPONS_NONE ) );
 
 	// a player with no template at all - the civilian seat - is nobody's exception
 	CHECK_EQ( SuperweaponBuildCap( SUPERWEAPONS_NONE, AsciiString::TheEmptyString ), (Int)SUPERWEAPON_CAP_BANNED );
