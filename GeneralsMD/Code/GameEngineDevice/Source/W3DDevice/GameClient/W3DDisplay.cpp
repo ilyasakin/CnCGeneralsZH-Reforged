@@ -2748,6 +2748,7 @@ AGAIN:
 				// last of the 2D overlays, so the console covers everything it drops over
 				if( TheGameConsole )
 					TheGameConsole->render();
+				GamepadFocus::drawOverConsole();		// a pad's focus on the console's cheat panel, over it
 
 				if (s_screenShotPending)
 				{

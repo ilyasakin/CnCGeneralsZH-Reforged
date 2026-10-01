@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 // FILE: GameConsole.h //////////////////////////////////////////////////////////////////////////
 // Desc: Drop-down command console on the key above Tab, drawn straight to the display rather
@@ -29,6 +30,7 @@
 #include "Common/MessageStream.h"
 #include "Common/AsciiString.h"
 #include "Common/UnicodeString.h"
+#include "Lib/BaseType.h"		// IRegion2D
 
 #include <deque>
 #include <string>
@@ -66,6 +68,14 @@ public:
 	/// The cheat panel, Window/Html/Cheats.html, that "trainer" opens: every cheat a click away.
 	Bool isCheatPanelOpen( void ) const { return m_cheatPanelOpen; }
 	void closeCheatPanel( void ) { m_cheatPanelOpen = FALSE; }
+	/// Whether cheats are on offer: a campaign or skirmish match being played, never a network game or a replay.
+	static Bool cheatsAvailable( void );
+	/// Opens the cheat panel where cheats are on offer (the pause menu's key for it, which a gamepad reaches); FALSE
+	/// anywhere else.
+	Bool openCheatPanel( void );
+	/// The panel's keys as drawn this frame, in screen pixels, each with the click it sends ("close" first), for a
+	/// gamepad's focus (GamepadFocus's box source).  Both empty while the panel is not shown.
+	void cheatPanelKeys( std::vector< IRegion2D > &rects, std::vector< std::string > &clicks ) const;
 	/// TRUE when the pointer is on the panel; with `act`, a click there runs what it was on.
 	Bool handleCheatPanelMouse( const ICoord2D &mouse, Bool act );
 
@@ -94,6 +104,8 @@ private:
 	Bool m_cheatPanelLogged;			///< its keys' places written to the log once for each opening
 	std::string m_cheatPage;			///< Window/Html/Cheats.html as read, empty until the first opening
 	HtmlOverlay *m_cheatOverlay;
+	std::vector< IRegion2D > m_cheatPanelRects;		///< its keys as drawn this frame (cheatPanelKeys)
+	std::vector< std::string > m_cheatPanelClicks;	///< what each sends, in the same order
 };
 
 extern GameConsole *TheGameConsole;

@@ -521,6 +521,8 @@ static void fillCheatPanelCells( std::vector< HtmlValues > &cells, std::vector< 
 void GameConsole::renderCheatPanel( void )
 {
 	m_cheatPanelShown = FALSE;
+	m_cheatPanelRects.clear();
+	m_cheatPanelClicks.clear();
 	if( !m_cheatPanelOpen )
 		return;
 	if( !areCheatsAvailable() )
@@ -556,17 +558,52 @@ void GameConsole::renderCheatPanel( void )
 	m_cheatOverlay->hover( TheMouse->getMouseStatus()->pos );
 	m_cheatOverlay->draw();
 	m_cheatPanelShown = TRUE;
+	m_cheatOverlay->rectsOf( ".key", m_cheatPanelRects );
+	m_cheatPanelClicks = clicks;
 
 	// where each key landed, so a script driving the game over -control knows where to click
 	if( !m_cheatPanelLogged )
 	{
 		m_cheatPanelLogged = TRUE;
-		std::vector< IRegion2D > keys;
-		m_cheatOverlay->rectsOf( ".key", keys );
+		const std::vector< IRegion2D > &keys = m_cheatPanelRects;
 		for( size_t each = 0; each < keys.size() && each < clicks.size(); ++each )
 			DEBUG_LOG(( "Cheat panel: \"%s\" at %d %d\n", clicks[ each ].c_str(),
 									( keys[ each ].lo.x + keys[ each ].hi.x ) / 2, ( keys[ each ].lo.y + keys[ each ].hi.y ) / 2 ));
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool GameConsole::cheatsAvailable( void )
+{
+	return areCheatsAvailable();
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The pause menu's way in, as the console's "trainer" is the keyboard's: the panel comes up with
+	* the next frame, where cheats are on offer. */
+//-------------------------------------------------------------------------------------------------
+Bool GameConsole::openCheatPanel( void )
+{
+	if( !areCheatsAvailable() )
+		return FALSE;
+	if( !m_cheatPanelOpen )
+	{
+		m_cheatPanelOpen = TRUE;
+		m_cheatPanelLogged = FALSE;
+	}
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void GameConsole::cheatPanelKeys( std::vector< IRegion2D > &rects, std::vector< std::string > &clicks ) const
+{
+	rects.clear();
+	clicks.clear();
+	if( !m_cheatPanelShown )
+		return;
+	const size_t count = m_cheatPanelRects.size() < m_cheatPanelClicks.size() ? m_cheatPanelRects.size() : m_cheatPanelClicks.size();
+	rects.assign( m_cheatPanelRects.begin(), m_cheatPanelRects.begin() + count );
+	clicks.assign( m_cheatPanelClicks.begin(), m_cheatPanelClicks.begin() + count );
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -41,7 +41,7 @@
 param(
 	# a folder holding zerohour\ (a Zero Hour install) and generals\ (the base game)
 	[string] $DataDir = "",
-	# which checks: crc, combo, menu
+	# which checks: crc, combo, menu; trainer (gamepad-trainer-check.sh) when asked for
 	[string[]] $Checks = @("crc", "combo", "menu"),
 	[string] $WorkDir = (Join-Path $env:TEMP "zh-gamepad-check"),
 	# a folder put in front of PATH for the games: the x64 lane's d3dx9_43.dll on an ARM64 machine
@@ -105,7 +105,7 @@ function Invoke-DesktopPart {
 			"cd `"`$(cygpath -u '$Tools')`" || exit 2",
 			"exec ./$script --generals `"`$ZH_GAME_FARM/generals.exe`" --data `"`$(cygpath -u '$DataDir')`"")
 		[IO.File]::WriteAllText($starter, ($lines -join "`n") + "`n")
-		foreach ($name in "GAMEPAD_CRC_TIMEOUT", "GAMEPAD_COMBO_TIMEOUT", "GAMEPAD_MENU_TIMEOUT") {
+		foreach ($name in "GAMEPAD_CRC_TIMEOUT", "GAMEPAD_COMBO_TIMEOUT", "GAMEPAD_MENU_TIMEOUT", "GAMEPAD_TRAINER_TIMEOUT") {
 			Set-Item "env:$name" "$GameTimeoutSeconds"
 		}
 		$clock = [Diagnostics.Stopwatch]::StartNew()

@@ -106,6 +106,7 @@ Data/Window/Html/Tooltip.html
 Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/LanGameOptionsMenu.wnd
 Data/Window/Menus/OptionsMenu.wnd
+Data/Window/Menus/QuitMenu.wnd
 Data/Window/Menus/SkirmishGameOptionsMenu.wnd
 Data/d3d12shaders.shipped
 Data/dx11shaders.shipped
@@ -3625,6 +3626,7 @@ Tools/gamepad-crc-check.sh
 Tools/gamepad-dpad-check.sh
 Tools/gamepad-game.sh
 Tools/gamepad-menu-check.sh
+Tools/gamepad-trainer-check.sh
 Tools/gamepad-windows-game.sh
 Tools/gametext.py
 Tools/gdi-font-metrics-header.py

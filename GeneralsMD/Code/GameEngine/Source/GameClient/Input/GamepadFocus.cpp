@@ -23,6 +23,7 @@
 
 #include "GameClient/Color.h"
 #include "GameClient/Display.h"
+#include "GameClient/GameConsole.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
@@ -41,6 +42,7 @@
 #include "GameClient/KeyDefs.h"
 #include "GameClient/Shell.h"
 #include "GameClient/WindowLayout.h"
+#include "GameLogic/GameLogic.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -71,7 +73,17 @@ struct Screen
 	std::vector<GameWindow *> roots;
 	std::string key;
 	Bool modal;
+	Bool panel;		///< the trainer's cheat panel: no windows, its keys are the page's (panelKeys)
 };
+
+/// The trainer's cheat panel (GameConsole: Window/Html/Cheats.html over the match) is a screen while it is up and
+/// no popup is over it.  Its keys are not windows: the focus is one of them, kept by the click it sends
+const char *const CHEAT_PANEL_SCREEN = "Cheats.html";
+
+Bool panelUp( void )
+{
+	return TheGameConsole != NULL && TheGameConsole->isCheatPanelOpen() && GameConsole::cheatsAvailable();
+}
 
 const char *nameOf( GameWindow *window )
 {
@@ -101,6 +113,7 @@ Bool screenNow( Screen &screen )
 	screen.roots.clear();
 	screen.key.clear();
 	screen.modal = FALSE;
+	screen.panel = FALSE;
 	if (TheWindowManager == NULL)
 		return FALSE;
 	GameWindow *modal = TheWindowManager->winGetModal();
@@ -125,6 +138,12 @@ Bool screenNow( Screen &screen )
 	if (popup != NULL)
 	{
 		screen.key = popup;
+		return TRUE;
+	}
+	if (panelUp())
+	{
+		screen.key = CHEAT_PANEL_SCREEN;
+		screen.panel = TRUE;
 		return TRUE;
 	}
 	if (TheShell != NULL && TheShell->isShellActive() && TheShell->top() != NULL && !TheShell->top()->isHidden())
@@ -322,9 +341,13 @@ UnsignedInt theTransitionSince = 0;		///< when (ms) the shell's transition handl
 
 /** The client's frame: the shell's transitions step once a frame (WindowTransitions.ini counts FrameDelay in frames),
 	* so the waits on them are counted in frames too; on a slow machine a transition takes longer in wall time */
+/// Pictures drawn while a match stood paused (GamepadFocus::draw counts them): the client's frame is the logic's
+/// (GameLogic::update sets it), which stands still under the pause menu, where a menu's stillness is still counted
+UnsignedInt thePausedFrames = 0;
+
 UnsignedInt clientFrame( void )
 {
-	return TheGameClient != NULL ? TheGameClient->getFrame() + 1 : 1;		// never 0, which means "none"
+	return TheGameClient != NULL ? TheGameClient->getFrame() + thePausedFrames + 1 : 1;		// never 0, which means "none"
 }
 
 /// The shell is running a transition (a pane's buttons still scaling in drop a press, and so does the main
@@ -371,6 +394,103 @@ void setFocus( GameWindow *window )
 	if (!theScreenKey.empty())
 		theLastFocus[ theScreenKey ] = theFocusId;
 	pointAt( window );
+}
+
+std::string thePanelFocus;					///< the cheat panel's focused key, by its click; kept while the panel is shut
+Int thePanelLaneX = 0, thePanelLaneY = 0;	///< as theLaneX and theLaneY, over the panel's keys
+std::string thePanelLaneFocus;
+
+void setPanelFocus( const std::vector<GamepadFocus::Box> &boxes, const std::vector<std::string> &clicks, Int index )
+{
+	if (clicks[ index ] == thePanelFocus)
+		return;
+	thePanelFocus = clicks[ index ];
+	++theFocusChanges;
+	const GamepadFocus::Box &box = boxes[ index ];
+	DEBUG_LOG(( "GAMEPAD FOCUS: %s %s\n", CHEAT_PANEL_SCREEN, thePanelFocus.c_str() ));
+	DEBUG_LOG(( "GAMEPAD FOCUS AT: %d,%d %dx%d\n", box.left, box.top, box.right - box.left + 1, box.bottom - box.top + 1 ));
+}
+
+/// The cheat panel's keys as it last drew them, each with its click ("close" first), and the focused one's index:
+/// the one focused before, else the first cheat's first key.  -1 before the panel has drawn any
+Int panelKeys( std::vector<GamepadFocus::Box> &boxes, std::vector<std::string> &clicks )
+{
+	std::vector<IRegion2D> rects;
+	TheGameConsole->cheatPanelKeys( rects, clicks );
+	boxes.clear();
+	for (size_t i = 0; i < rects.size(); ++i)
+	{
+		const GamepadFocus::Box box = { rects[i].lo.x, rects[i].lo.y, rects[i].hi.x - 1, rects[i].hi.y - 1 };
+		boxes.push_back( box );
+	}
+	if (boxes.empty())
+		return -1;
+	for (size_t i = 0; i < clicks.size(); ++i)
+		if (clicks[i] == thePanelFocus)
+			return (Int)i;
+	const Int first = boxes.size() > 1 ? 1 : 0;
+	setPanelFocus( boxes, clicks, first );
+	return first;
+}
+
+/// The pad on the cheat panel: the D-pad goes from key to key as on a menu's widgets, A clicks the key (the
+/// panel takes the press as it takes a mouse's), B shuts the panel as Escape does
+Bool actOnPanel( GamepadFocus::Action action )
+{
+	std::vector<GamepadFocus::Box> boxes;
+	std::vector<std::string> clicks;
+	const Int focus = panelKeys( boxes, clicks );
+	switch (action)
+	{
+		case GamepadFocus::NAV_UP: case GamepadFocus::NAV_DOWN: case GamepadFocus::NAV_LEFT: case GamepadFocus::NAV_RIGHT:
+		{
+			if (focus < 0)
+				return TRUE;
+			const Bool vertical = action == GamepadFocus::NAV_UP || action == GamepadFocus::NAV_DOWN;
+			const Int dx = action == GamepadFocus::NAV_LEFT ? -1 : action == GamepadFocus::NAV_RIGHT ? 1 : 0;
+			const Int dy = action == GamepadFocus::NAV_UP ? -1 : action == GamepadFocus::NAV_DOWN ? 1 : 0;
+			const GamepadFocus::Box &from = boxes[ focus ];
+			if (clicks[ focus ] != thePanelLaneFocus)
+			{
+				thePanelLaneX = (from.left + from.right) / 2;
+				thePanelLaneY = (from.top + from.bottom) / 2;
+			}
+			const Int next = GamepadFocus::pickNeighbourBox( &boxes[0], (Int)boxes.size(), from, dx, dy,
+				vertical ? thePanelLaneX : thePanelLaneY );
+			if (next >= 0)
+			{
+				setPanelFocus( boxes, clicks, next );
+				if (vertical)
+					thePanelLaneY = (boxes[ next ].top + boxes[ next ].bottom) / 2;
+				else
+					thePanelLaneX = (boxes[ next ].left + boxes[ next ].right) / 2;
+				thePanelLaneFocus = clicks[ next ];
+				if (theHooks.pointTo != NULL)
+					theHooks.pointTo( thePanelLaneX, thePanelLaneY );
+			}
+			return TRUE;
+		}
+
+		case GamepadFocus::ACCEPT_DOWN:
+		case GamepadFocus::ACCEPT_UP:
+			if (focus < 0)
+				return TRUE;
+			if (action == GamepadFocus::ACCEPT_DOWN && theHooks.pointTo != NULL)
+				theHooks.pointTo( (boxes[ focus ].left + boxes[ focus ].right) / 2, (boxes[ focus ].top + boxes[ focus ].bottom) / 2 );
+			if (theHooks.leftButton != NULL)
+				theHooks.leftButton( action == GamepadFocus::ACCEPT_DOWN );
+			if (action == GamepadFocus::ACCEPT_DOWN)
+				DEBUG_LOG(( "GAMEPAD FOCUS: %s %s pressed\n", CHEAT_PANEL_SCREEN, clicks[ focus ].c_str() ));
+			return TRUE;
+
+		case GamepadFocus::BACK:
+			TheGameConsole->closeCheatPanel();
+			DEBUG_LOG(( "GAMEPAD FOCUS: %s shut\n", CHEAT_PANEL_SCREEN ));
+			return TRUE;
+
+		default:
+			return FALSE;		// Start, the shoulders, X and Y: nothing here, and the match waits until B
+	}
 }
 
 /// TRUE once the focusable widgets have been the same ones for SETTLE_MS (a screen is not still arriving)
@@ -616,6 +736,54 @@ void padListLog( GameWindow *combo, const char *what )
 			GadgetComboBoxGetLength( combo ) ));
 }
 
+/// One of the hint bar's buttons: its glyph, then its word - a label from the string table, or the text of the
+/// button that is its owner
+struct HintItem { Int button; const char *label; GameWindow *owner; };
+const Int MAX_HINTS = 8;
+
+/// The hint bar: the buttons that do something here, right to left from the bottom right corner
+void drawHints( const HintItem *items, Int count )
+{
+	static DisplayString *glyphs[ MAX_HINTS ] = { NULL }, *words[ MAX_HINTS ] = { NULL };
+	const Int points = TheDisplay->getHeight() / 45 > 11 ? TheDisplay->getHeight() / 45 : 11;
+	GameFont *wordFont = TheFontLibrary != NULL ? TheFontLibrary->getFont( AsciiString( "Arial" ), points, TRUE ) : NULL;
+	Int x = TheDisplay->getWidth() - 12;
+	const Int centreY = TheDisplay->getHeight() - points - 10;		// the row's middle: glyph ink and word centred on it
+	for (Int i = count - 1; i >= 0; --i)
+	{
+		GameFont *glyphFont = NULL;
+		UnicodeString glyph;
+		if (TheDisplayStringManager == NULL || wordFont == NULL
+				|| !GamepadHints::glyphFor( GamepadHints::getShown(), items[i].button, points * 2, glyphFont, glyph ))
+			continue;
+		if (glyphs[i] == NULL)
+			glyphs[i] = TheDisplayStringManager->newDisplayString();
+		if (words[i] == NULL)
+			words[i] = TheDisplayStringManager->newDisplayString();
+		if (glyphs[i] == NULL || words[i] == NULL)
+			continue;
+		const UnicodeString word = items[i].owner != NULL ? items[i].owner->winGetText()
+			: (TheGameText != NULL && items[i].label[0] != 0 ? TheGameText->fetch( items[i].label ) : UnicodeString::TheEmptyString);
+		if (glyphs[i]->getFont() != glyphFont)
+			glyphs[i]->setFont( glyphFont );
+		if (glyphs[i]->getText() != glyph)
+			glyphs[i]->setText( glyph );
+		if (words[i]->getFont() != wordFont)
+			words[i]->setFont( wordFont );
+		if (words[i]->getText() != word)
+			words[i]->setText( word );
+		Int gw, gh, ww, wh;
+		glyphs[i]->getSize( &gw, &gh );
+		words[i]->getSize( &ww, &wh );
+		x -= ww;
+		words[i]->draw( x, centreY - wh / 2, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+		x -= gw + 4;
+		glyphs[i]->draw( x, GamepadHints::glyphTop( GamepadHints::getShown(), items[i].button, gh, centreY ),
+			GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+		x -= (i > 0 && items[i - 1].owner == NULL && items[i - 1].label[0] == 0) ? 4 : 18;	// a pair's first glyph sits close
+	}
+}
+
 }  // namespace
 
 void GamepadFocus::setHooks( const Hooks &hooks )
@@ -666,18 +834,30 @@ Bool GamepadFocus::isSettled( UnsignedInt stillMs )
 	UnsignedInt signature = 2166136261u;		// FNV-1a over the screen, the focus, and each widget's id and rectangle
 	std::vector<GameWindow *> widgets;
 	// a screen with nothing to focus yet (the shell still loading, a pane not yet shown) is not a menu to press on
-	const Bool up = screenNow( screen ) && (focusables( screen, widgets ), !widgets.empty());
+	// the cheat panel: its keys as drawn, and the focused one's click
+	std::vector<Box> keys;
+	std::vector<std::string> clicks;
+	const Bool shown = screenNow( screen );
+	const Bool up = shown && (screen.panel ? panelKeys( keys, clicks ) >= 0 : (focusables( screen, widgets ), !widgets.empty()));
 	if (up)
 	{
 		for (size_t i = 0; i < screen.key.size(); ++i)
 			signature = (signature ^ (UnsignedInt)(unsigned char)screen.key[i]) * 16777619u;
 		signature = (signature ^ (UnsignedInt)theFocusId) * 16777619u;
+		for (size_t i = 0; i < thePanelFocus.size() && screen.panel; ++i)
+			signature = (signature ^ (UnsignedInt)(unsigned char)thePanelFocus[i]) * 16777619u;
 		for (size_t i = 0; i < widgets.size(); ++i)
 		{
 			Int x, y, width, height;
 			rectOf( widgets[i], x, y, width, height );
 			const Int parts[5] = { widgets[i]->winGetWindowId(), x, y, width, height };
 			for (Int k = 0; k < 5; ++k)
+				signature = (signature ^ (UnsignedInt)parts[k]) * 16777619u;
+		}
+		for (size_t i = 0; i < keys.size(); ++i)
+		{
+			const Int parts[4] = { keys[i].left, keys[i].top, keys[i].right, keys[i].bottom };
+			for (Int k = 0; k < 4; ++k)
 				signature = (signature ^ (UnsignedInt)parts[k]) * 16777619u;
 		}
 	}
@@ -797,6 +977,8 @@ Bool GamepadFocus::act( Action action )
 	Screen screen;
 	if (!screenNow( screen ))
 		return FALSE;
+	if (screen.panel)
+		return actOnPanel( action );
 	if ((action == ACCEPT_DOWN || action == BACK) && !getenv( "ZH_TEST_NO_HOLD" ) && shellLocked())
 	{
 		theHeld.held = TRUE;
@@ -1060,11 +1242,13 @@ Bool GamepadFocus::act( Action action )
 
 void GamepadFocus::draw( void )
 {
+	if (TheGameLogic != NULL && TheGameLogic->isInGame() && TheGameLogic->isGamePaused())
+		++thePausedFrames;
 	if (!thePadDriving || TheDisplay == NULL)
 		return;
 	Screen screen;
-	if (!screenNow( screen ))
-		return;
+	if (!screenNow( screen ) || screen.panel)
+		return;		// the cheat panel's frame and hints go over the panel (drawOverConsole)
 	std::vector<GameWindow *> widgets;
 	focusables( screen, widgets );
 	GameWindow *focus = widgets.empty() ? NULL : currentFocus( screen, widgets );
@@ -1096,9 +1280,7 @@ void GamepadFocus::draw( void )
 		&& comboBeside( widgets, focus, 1 ) == NULL && comboBeside( widgets, focus, -1 ) == NULL;
 
 	// the hint bar: the buttons that do something here, bottom right
-	struct Item { Int button; const char *label; GameWindow *owner; };		// owner: a button whose own text is the word
-	const Int MAX_ITEMS = 8;
-	Item items[ MAX_ITEMS ];
+	HintItem items[ MAX_HINTS ];
 	Int count = 0;
 	// a closed combo box: left and right change it in place (the word after the pair of glyphs)
 	if (closedCombo)
@@ -1122,42 +1304,25 @@ void GamepadFocus::draw( void )
 	if (list == NULL && !tabs.empty())
 		items[ count++ ] = { GAMEPAD_BUTTON_RIGHT_SHOULDER, "GUI:GamepadTabs", NULL };
 
-	static DisplayString *glyphs[ MAX_ITEMS ] = { NULL }, *words[ MAX_ITEMS ] = { NULL };
-	const Int points = TheDisplay->getHeight() / 45 > 11 ? TheDisplay->getHeight() / 45 : 11;
-	GameFont *wordFont = TheFontLibrary != NULL ? TheFontLibrary->getFont( AsciiString( "Arial" ), points, TRUE ) : NULL;
-	Int x = TheDisplay->getWidth() - 12;
-	const Int centreY = TheDisplay->getHeight() - points - 10;		// the row's middle: glyph ink and word centred on it
-	for (Int i = count - 1; i >= 0; --i)
+	drawHints( items, count );
+}
+
+void GamepadFocus::drawOverConsole( void )
+{
+	if (!thePadDriving || TheDisplay == NULL)
+		return;
+	Screen screen;
+	if (!screenNow( screen ) || !screen.panel)
+		return;
+	std::vector<Box> keys;
+	std::vector<std::string> clicks;
+	const Int focus = panelKeys( keys, clicks );
+	if (focus >= 0)
 	{
-		GameFont *glyphFont = NULL;
-		UnicodeString glyph;
-		if (TheDisplayStringManager == NULL || wordFont == NULL
-				|| !GamepadHints::glyphFor( GamepadHints::getShown(), items[i].button, points * 2, glyphFont, glyph ))
-			continue;
-		if (glyphs[i] == NULL)
-			glyphs[i] = TheDisplayStringManager->newDisplayString();
-		if (words[i] == NULL)
-			words[i] = TheDisplayStringManager->newDisplayString();
-		if (glyphs[i] == NULL || words[i] == NULL)
-			continue;
-		const UnicodeString word = items[i].owner != NULL ? items[i].owner->winGetText()
-			: (TheGameText != NULL && items[i].label[0] != 0 ? TheGameText->fetch( items[i].label ) : UnicodeString::TheEmptyString);
-		if (glyphs[i]->getFont() != glyphFont)
-			glyphs[i]->setFont( glyphFont );
-		if (glyphs[i]->getText() != glyph)
-			glyphs[i]->setText( glyph );
-		if (words[i]->getFont() != wordFont)
-			words[i]->setFont( wordFont );
-		if (words[i]->getText() != word)
-			words[i]->setText( word );
-		Int gw, gh, ww, wh;
-		glyphs[i]->getSize( &gw, &gh );
-		words[i]->getSize( &ww, &wh );
-		x -= ww;
-		words[i]->draw( x, centreY - wh / 2, GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
-		x -= gw + 4;
-		glyphs[i]->draw( x, GamepadHints::glyphTop( GamepadHints::getShown(), items[i].button, gh, centreY ),
-			GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
-		x -= (i > 0 && items[i - 1].owner == NULL && items[i - 1].label[0] == 0) ? 4 : 18;	// a pair's first glyph sits close
+		const Box &box = keys[ focus ];
+		TheDisplay->drawOpenRect( box.left - 3, box.top - 3, box.right - box.left + 7, box.bottom - box.top + 7, 2.0f,
+			GameMakeColor( 255, 210, 60, 255 ) );
 	}
+	const HintItem items[] = { { GAMEPAD_BUTTON_SOUTH, "GUI:GamepadSelect", NULL }, { GAMEPAD_BUTTON_EAST, "GUI:GamepadBack", NULL } };
+	drawHints( items, 2 );
 }

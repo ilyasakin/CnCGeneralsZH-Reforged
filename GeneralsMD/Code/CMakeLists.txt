@@ -2168,6 +2168,14 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(gamepad_dpad_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # The trainer on a pad: the pause menu's Trainer key, the D-pad over the cheat panel's keys, A runs a cheat and B
+  # shuts the panel, and the match is changed only by the cheat (Tools/gamepad-trainer-check.sh)
+  add_test(NAME gamepad_trainer_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/gamepad-trainer-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(gamepad_trainer_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1500)	# three matches to frame 1200 at 30 a second
+  if(ZH_GAME_DATA)
+    set_tests_properties(gamepad_trainer_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # G1's combo boxes: the pad's highlight in an open list chooses nothing until A, and a skirmish set up by the pad is
   # the one the mouse sets up, match CRC for match CRC (Tools/gamepad-combo-check.sh)
   add_test(NAME gamepad_combo_check

@@ -44,6 +44,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetPushButton.h"
+#include "GameClient/GameConsole.h"
 #include "GameClient/GameText.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/Shell.h"
@@ -79,12 +80,14 @@ static GameWindow *buttonRestartWin	= NULL;
 static GameWindow *buttonSaveLoadWin = NULL;
 static GameWindow *buttonOptionsWin = NULL;
 static GameWindow *buttonExitWin = NULL;
+static GameWindow *buttonTrainerWin = NULL;
 
 static NameKeyType buttonExit = NAMEKEY_INVALID;
 static NameKeyType buttonRestart = NAMEKEY_INVALID;
 static NameKeyType buttonReturn = NAMEKEY_INVALID;
 static NameKeyType buttonOptions = NAMEKEY_INVALID;
 static NameKeyType buttonSaveLoad = NAMEKEY_INVALID;
+static NameKeyType buttonTrainer = NAMEKEY_INVALID;
 
 static void initGadgetsFullQuit( void )
 {
@@ -93,11 +96,13 @@ static void initGadgetsFullQuit( void )
 	buttonReturn = TheNameKeyGenerator->nameToKey( AsciiString( "QuitMenu.wnd:ButtonReturn" ) );
 	buttonOptions = TheNameKeyGenerator->nameToKey( AsciiString( "QuitMenu.wnd:ButtonOptions" ) );
 	buttonSaveLoad = TheNameKeyGenerator->nameToKey( AsciiString( "QuitMenu.wnd:ButtonSaveLoad" ) );
+	buttonTrainer = TheNameKeyGenerator->nameToKey( AsciiString( "QuitMenu.wnd:ButtonTrainer" ) );
 	
 	buttonRestartWin	= TheWindowManager->winGetWindowFromId( NULL, buttonRestart );
 	buttonSaveLoadWin = TheWindowManager->winGetWindowFromId( NULL, buttonSaveLoad );
 	buttonOptionsWin = TheWindowManager->winGetWindowFromId( NULL, buttonOptions );
 	buttonExitWin = TheWindowManager->winGetWindowFromId( NULL, buttonExit );
+	buttonTrainerWin = TheWindowManager->winGetWindowFromId( NULL, buttonTrainer );
 }
 
 static void initGadgetsNoSaveQuit( void )
@@ -107,10 +112,12 @@ static void initGadgetsNoSaveQuit( void )
 	buttonReturn = TheNameKeyGenerator->nameToKey( AsciiString( "QuitNoSave.wnd:ButtonReturn" ) );
 	buttonOptions = TheNameKeyGenerator->nameToKey( AsciiString( "QuitNoSave.wnd:ButtonOptions" ) );
 	buttonSaveLoad = NAMEKEY_INVALID;
+	buttonTrainer = NAMEKEY_INVALID;
 	
 	buttonRestartWin	= TheWindowManager->winGetWindowFromId( NULL, buttonRestart );
 	buttonOptionsWin = TheWindowManager->winGetWindowFromId( NULL, buttonOptions );
 	buttonSaveLoadWin = NULL;
+	buttonTrainerWin = NULL;
 	buttonExitWin = TheWindowManager->winGetWindowFromId( NULL, buttonExit );
 
 }
@@ -516,6 +523,11 @@ void ToggleQuitMenu()
 		}
 
 
+		// the trainer's key, the way a pad reaches the cheat panel (the keyboard has the console's
+		// "trainer"): shown only where the cheats are on offer
+		if( buttonTrainerWin )
+			buttonTrainerWin->winHide( !GameConsole::cheatsAvailable() );
+
 		if (quitConfirmationWindow)
 			TheWindowManager->winDestroy(quitConfirmationWindow);
 		quitConfirmationWindow = NULL;
@@ -599,6 +611,13 @@ WindowMsgHandledType QuitMenuSystem( GameWindow *window, UnsignedInt msg,
 				ToggleQuitMenu();
 
 			}  // end else if
+			else if( controlID == buttonTrainer )
+			{
+				// the menu goes, and the match goes on under the cheat panel
+				ToggleQuitMenu();
+				if( TheGameConsole )
+					TheGameConsole->openCheatPanel();
+			}
 			else if( buttonOptions == controlID )
 			{
 				WindowLayout *optLayout = TheShell->getOptionsLayout(TRUE);

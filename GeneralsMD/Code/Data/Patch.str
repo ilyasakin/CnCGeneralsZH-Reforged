@@ -1417,6 +1417,10 @@ GUI:CheatPanelTitle
 "Cheats"
 END
 
+GUI:QuitMenuTrainer
+"Cheats"
+END
+
 GUI:CheatMoney
 "Cash"
 END

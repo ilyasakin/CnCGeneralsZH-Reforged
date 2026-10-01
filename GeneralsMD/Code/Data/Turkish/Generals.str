@@ -15913,6 +15913,10 @@ GUI:CheatPanelTitle
 "Hileler"
 END
 
+GUI:QuitMenuTrainer
+"Hileler"
+END
+
 GUI:CheatMoney
 "Para"
 END

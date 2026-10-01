@@ -198,6 +198,8 @@ Confirm and Cancel** (off).
   where the focus is and what each button does.
 - **Drop-down lists** work as on a console: confirm opens the list, the D-pad moves a highlight, confirm picks
   and cancel closes the list with nothing changed.
+- **The trainer panel** opens from the pause menu's Cheats key, shown where cheats are available: the D-pad
+  moves between its keys, confirm presses one and cancel closes it. `gamepad_trainer_check` plays it by pad.
 - **In a match**, the left stick moves the game's own cursor, with an aim assist that eases a resting cursor
   onto a nearby visible unit or building; the right stick scrolls the camera. A tap of the right trigger puts
   the command bar's 6x3 grid under the D-pad; holding it opens a radial command menu under the left stick.
@@ -365,7 +367,7 @@ MSVC's own casts on Windows), `license-headers.py --check`, `fingerprint-manifes
   through raw `DX8CALL`). Upstream's code, not the port's; not fixed.
 - **`TheGameResultsQueue` is published to its thread without synchronisation** (ThreadSanitizer; benign on
   x86, not on ARM in principle). Not fixed.
-- **Windows verification is partial.** Of the rows in docs/porting/windows-impact.md, 156 are verified on
+- **Windows verification is partial.** Of the rows in docs/porting/windows-impact.md, 157 are verified on
   Windows, 62 partly and 101 open (as of 2026-10-01). What is left needs checks run in a Debug build, someone at
   a Windows screen (menus, text, input), a network game between two Windows machines, GameSpy, an AMD machine,
   or old replays and saves.
@@ -374,9 +376,6 @@ MSVC's own casts on Windows), `license-headers.py --check`, `fingerprint-manifes
   map's path, which the engine lowercases whole.
 - The app icon comes from `Main/Generals.ico`'s 48 px image, which is soft on a Retina display.
 - The macOS app is ad-hoc signed, not notarised.
-- **The trainer panel cannot be used with a gamepad yet.** It is an HTML overlay whose keys have no game window
-  behind them, and it opens only on the console's typed `trainer` command. With a pad the cursor can still click
-  its keys. Planned: D-pad focus between its keys, and a Start-menu entry where cheats are available.
 
 ## Defects found while porting
 

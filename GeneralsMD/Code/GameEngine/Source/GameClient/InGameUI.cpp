@@ -12530,8 +12530,8 @@ void InGameUI::drawPromotionPage( GameWindow *parent, Bool front )
 static const char *const QUIT_MENU_PAGE = "Window\\Html\\QuitMenu.html";
 
 /** The Esc menu's keys top to bottom.  QuitMenu.wnd has them all, QuitNoSave.wnd, for network games
-	* and replays, all but the first. */
-static const char *const QUIT_MENU_KEYS[] = { "ButtonSaveLoad", "ButtonOptions", "ButtonRestart", "ButtonExit", "ButtonReturn" };
+	* and replays, all but the save and the trainer, whose cheats are refused there. */
+static const char *const QUIT_MENU_KEYS[] = { "ButtonSaveLoad", "ButtonOptions", "ButtonTrainer", "ButtonRestart", "ButtonExit", "ButtonReturn" };
 
 /** The game's logo over the keys, one name in each layout; the page stands it down. */
 static const char *const QUIT_MENU_LOGOS[] = { "WinLoad", "WinLogo" };

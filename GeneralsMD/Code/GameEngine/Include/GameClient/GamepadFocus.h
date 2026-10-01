@@ -90,6 +90,10 @@ public:
 	/// The focus frame and the hint bar, over the GUI and under the cursor (W3DDisplay::draw)
 	static void draw( void );
 
+	/// The trainer's cheat panel's frame and hints, over the panel, which the console draws last of all
+	/// (W3DDisplay::draw, after GameConsole::render)
+	static void drawOverConsole( void );
+
 	/// The focused widget, or NULL: for the tests
 	static GameWindow *getFocus( void );
 
