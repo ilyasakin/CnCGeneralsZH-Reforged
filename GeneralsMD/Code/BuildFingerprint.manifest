@@ -86,6 +86,7 @@ Data/Scenarios/tunnelwalk.txt
 Data/Scenarios/vision.txt
 Data/Scripts/SkirmishScripts.scb
 Data/Turkish/Generals.str
+Data/Window/Html/Alert.html
 Data/Window/Html/Chat.html
 Data/Window/Html/Cheats.html
 Data/Window/Html/ControlBar.html
@@ -100,6 +101,7 @@ Data/Window/Html/Net.html
 Data/Window/Html/Promotion.html
 Data/Window/Html/Queue.html
 Data/Window/Html/QuitMenu.html
+Data/Window/Html/Readout.html
 Data/Window/Html/Scoreboard.html
 Data/Window/Html/Spectator.html
 Data/Window/Html/Tooltip.html

@@ -1483,6 +1483,19 @@ GUI:HudSuperweaponLaunched
 "launched"
 END
 
+// the superweapon banner under the clock: %s is the superweapon's own name, "Nuclear Missile"
+GUI:HudAlertBuilt
+"%s built"
+END
+
+GUI:HudAlertReady
+"%s ready"
+END
+
+GUI:HudAlertLaunched
+"%s launched"
+END
+
 // after a general's power's name in the event feed, the moment it is used
 GUI:HudPowerUsed
 "used"

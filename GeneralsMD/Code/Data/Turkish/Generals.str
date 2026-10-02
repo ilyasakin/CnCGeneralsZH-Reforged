@@ -15977,6 +15977,18 @@ GUI:HudSuperweaponLaunched
 "ateşlendi"
 END
 
+GUI:HudAlertBuilt
+"%s tamamlandı"
+END
+
+GUI:HudAlertReady
+"%s hazır"
+END
+
+GUI:HudAlertLaunched
+"%s ateşlendi"
+END
+
 GUI:HudPowerUsed
 "kullanıldı"
 END

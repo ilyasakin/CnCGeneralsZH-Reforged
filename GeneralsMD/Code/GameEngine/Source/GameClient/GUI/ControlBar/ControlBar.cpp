@@ -1615,8 +1615,13 @@ Real ControlBarUniformScale( void )
 //-------------------------------------------------------------------------------------------------
 Real ControlBarHudScaleFor( Int displayWidth, Int displayHeight )
 {
-	const Real s = ControlBarUniformScaleFor( displayWidth, displayHeight ) * CONTROL_BAR_HUD_PERCENT / 100.0f;
-	return s < 1.0f ? 1.0f : s;
+	return (Real)displayHeight / CONTROL_BAR_DESIGN_H * CONTROL_BAR_HUD_PERCENT / 100.0f;
+}
+
+//-------------------------------------------------------------------------------------------------
+Real ControlBarHudPageScale( void )
+{
+	return ControlBarHudScale() * 100.0f / CONTROL_BAR_HUD_PERCENT;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1631,7 +1636,15 @@ Real ControlBarHudScale( void )
 	if( step < 0 || step > 3 )
 		step = 0;
 
-	return ControlBarHudScaleFor( TheDisplay->getWidth(), TheDisplay->getHeight() ) * steps[ step ];
+	return ControlBarHudScaleFit( ControlBarHudScaleFor( TheDisplay->getWidth(), TheDisplay->getHeight() ) * steps[ step ],
+																TheDisplay->getWidth() );
+}
+
+//-------------------------------------------------------------------------------------------------
+Real ControlBarHudScaleFit( Real scale, Int displayWidth )
+{
+	const Real widest = (Real)displayWidth / InGameUI_consolePageWidth();
+	return scale < widest ? scale : widest;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4641,8 +4654,8 @@ ControlBar::PressOutcome ControlBar::peekSpecialPowerShortcutPress( Int index, G
 
 //-------------------------------------------------------------------------------------------------
 /** One key cannot reach eleven powers laid out three to a row, so it takes two: the first press
-	* picks the row - F1 the row in the corner, F2 the one above it - and the second picks the power
-	* in it, F1 being the rightmost.  Until a row is picked only the head of each row is labelled,
+	* picks the row - a group of three, standing as a column: F1 the one against the console, F2 the
+	* one right of it - and the second picks the power in it, F1 being the bottom one.  Until a row is picked only the head of each row is labelled,
 	* with the key that picks that row; once one is, the labels move onto its three powers. */
 //-------------------------------------------------------------------------------------------------
 void ControlBar::pressSpecialPowerShortcut( Int index )
@@ -6388,21 +6401,22 @@ Int ControlBar::placeSpecialPowerShortcutGrid( const ICoord2D *corner, const ICo
 	// the bar covers every cell, or a cell off its edge draws and never takes a click, and it is only
 	// as big as the powers shown, so the battlefield round them takes its own clicks.  Its position is
 	// its own parent's, and the layout's root is not the screen
-	const Int columns = MIN( shown, (Int)SPECIAL_POWER_SHORTCUT_COLS );
-	const Int rows = ( shown + SPECIAL_POWER_SHORTCUT_COLS - 1 ) / SPECIAL_POWER_SHORTCUT_COLS;
+	const Int columns = ( shown + SPECIAL_POWER_SHORTCUT_COLS - 1 ) / SPECIAL_POWER_SHORTCUT_COLS;
+	const Int rows = MIN( shown, (Int)SPECIAL_POWER_SHORTCUT_COLS );
 	const Int width = columns * cell.x + ( columns - 1 ) * gap;
 	const Int height = rows * cell.y + ( rows - 1 ) * gap;
 	Int parentX = 0, parentY = 0;
 	if( m_specialPowerShortcutParent->winGetParent() )
 		m_specialPowerShortcutParent->winGetParent()->winGetScreenPosition( &parentX, &parentY );
-	m_specialPowerShortcutParent->winSetPosition( corner->x - width - parentX, corner->y - height - parentY );
+	m_specialPowerShortcutParent->winSetPosition( corner->x - parentX, corner->y - height - parentY );
 	m_specialPowerShortcutParent->winSetSize( width, height );
 	m_specialPowerShortcutParent->winSetDrawFunc( drawNoTray );
 	if( m_specialPowerShortcutParent->winIsHidden() )
 		m_specialPowerShortcutParent->winHide( FALSE );
 
-	// the first power in the corner, the row running left from it and the next row over it: the
-	// order the row keys count in.  Each cameo fills its cell
+	// the first power in the corner, its group of SPECIAL_POWER_SHORTCUT_COLS going up from it and the
+	// next group in the column to the right: F1's group is the first column, F2's the second, the
+	// order the group keys count in.  Each cameo fills its cell
 	for( Int i = 0; i < MAX_SPECIAL_POWER_SHORTCUTS; i++ )
 	{
 		GameWindow *slot = m_specialPowerShortcutButtonParents[ i ];
@@ -6410,9 +6424,9 @@ Int ControlBar::placeSpecialPowerShortcutGrid( const ICoord2D *corner, const ICo
 		if( slot == NULL || button == NULL )
 			continue;
 
-		const Int column = i % SPECIAL_POWER_SHORTCUT_COLS;
-		const Int row = i / SPECIAL_POWER_SHORTCUT_COLS;
-		slot->winSetPosition( width - ( column + 1 ) * cell.x - column * gap, height - ( row + 1 ) * cell.y - row * gap );
+		const Int column = i / SPECIAL_POWER_SHORTCUT_COLS;
+		const Int row = i % SPECIAL_POWER_SHORTCUT_COLS;
+		slot->winSetPosition( column * ( cell.x + gap ), height - ( row + 1 ) * cell.y - row * gap );
 		slot->winSetSize( cell.x, cell.y );
 		slot->winSetDrawFunc( drawNoTray );
 		button->winSetSize( cell.x, cell.y );
@@ -6900,8 +6914,8 @@ void ControlBar::drawSpecialPowerShortcutMultiplierText()
 
 		//
 		// a power takes two keys, so only the half of them that the next press can reach is
-		// labelled: with no row pending that is the head of each row, carrying the key that
-		// picks the row; with one pending it is that row's powers, carrying their own keys.
+		// labelled: with no group pending that is the foot of each group's column, carrying the
+		// key that picks the group; with one pending it is that group's powers, carrying their own keys.
 		// Which key a slot number means is up to CommandMap.ini - getMetaKeyLabel returns
 		// nothing for an unbound one.
 		//

@@ -848,9 +848,10 @@ public:
 	/** paint `button`'s key, the one `place` is bound to.  `place` below 0 clears it. */
 	void labelPlaceButton( GameWindow *button, Int place );
 
-	/** The general's powers are laid out SPECIAL_POWER_SHORTCUT_COLS to a row, so one key press
-		cannot reach eleven of them.  The first press picks a row (F1 is the row in the corner,
-		F2 the one above it) and the second picks a power inside that row (F1 is the rightmost),
+	/** The general's powers are laid out SPECIAL_POWER_SHORTCUT_COLS to a group, so one key press
+		cannot reach eleven of them.  The first press picks a group, which stands on the HUD as a
+		column (F1 is the column against the console, F2 the next) and the second picks a power
+		inside it (F1 is the bottom one),
 		which puts every power two keystrokes away: F1-F1, F2-F1, F2-F3.  This is what the
 		SHORTCUT_SLOTnn keys are wired to. */
 	void pressSpecialPowerShortcut( Int index );
@@ -909,6 +910,8 @@ public:
 
 	/// is the drawable the currently selected drawable for the context sensitive UI?
 	Bool isDrivingContextUI( Drawable *draw ) const { return draw == m_currentSelectedDrawable; }
+	/// the drawable whose portrait and commands the bar is showing, NULL for none
+	Drawable *getContextDrawable( void ) const { return m_currentSelectedDrawable; }
 
 	//-----------------------------------------------------------------------------------------------
 	// the remaining methods are used to construct the command buttons and command sets for
@@ -1105,9 +1108,10 @@ public:
 		* solid panel. */
 	void setPageSolids( const std::vector< IRegion2D > *solids, const std::vector< IRegion2D > *holes = NULL );
 
-	/** The HUD page's place for the general's powers: the first in `corner`, the bottom right of the
-		* grid, each `cell` big with `gap` between them, a row of SPECIAL_POWER_SHORTCUT_COLS running
-		* left from it and the next row over it, the order the row keys count in.  The slots' own tray
+	/** The HUD page's place for the general's powers: the first in `corner`, the bottom left of the
+		* grid, each `cell` big with `gap` between them, a group of SPECIAL_POWER_SHORTCUT_COLS going
+		* up from it as a column and the next group the column right of it, the order the group keys
+		* count in.  The slots' own tray
 		* art is not drawn; the page draws their cells.  NULL hides the bar.  Screen pixels.  Asked every
 		* frame the page draws, so it holds against the bar's own layout.  Returns how many powers are
 		* shown, each in its place. */
@@ -1610,12 +1614,24 @@ extern Bool ControlBarPanelDesignToScreen( Int panel, const IRegion2D *design,
 extern Real ControlBarUniformScale( void );
 extern Real ControlBarUniformScaleFor( Int displayWidth, Int displayHeight );	///< ...for a screen you name
 
-/** The scale the bottom HUD's page and everything laid out on it are drawn at: the uniform scale cut
-	* to CONTROL_BAR_HUD_PERCENT of itself, the owner's "too big" of 2026-09-28, and never below 1.  The
-	* tooltips, the boards and the menus keep the uniform scale. */
+/** The scale the bottom HUD's page and everything laid out on it are drawn at: the screen's height
+	* over 600, cut to CONTROL_BAR_HUD_PERCENT of itself, the owner's "too big" of 2026-09-28, with HUD
+	* Size on top, then fitted to the screen's width by ControlBarHudScaleFit.  It follows the height
+	* alone and is not rounded or floored, the owner's rule of 2026-10-01: the HUD covers the same part
+	* of the screen's height at every resolution, and a wider screen does not make it bigger.  1.26 at
+	* 1920x1080, as it was when it went by the narrower axis; 0.84 at 1280x720.  ControlBarHudScaleFor
+	* is the scale before HUD Size and the fit. */
 enum { CONTROL_BAR_HUD_PERCENT = 70 };
 extern Real ControlBarHudScale( void );
 extern Real ControlBarHudScaleFor( Int displayWidth, Int displayHeight );
+/** `scale` cut down until the console, InGameUI_consolePageWidth page pixels, fits `displayWidth`. */
+extern Real ControlBarHudScaleFit( Real scale, Int displayWidth );
+/** The in-match HUD's other pages - the event feed, the chat, the network box, the scoreboard, the
+	* build card, the observer's and the replay's strips - authored at the uniform scale's size: the HUD
+	* scale over CONTROL_BAR_HUD_PERCENT, so they keep their size beside the console at every
+	* resolution and HUD Size, and are what they were at 1920x1080.  The shell's pages, the quit menu
+	* and the promotion screen keep the uniform scale. */
+extern Real ControlBarHudPageScale( void );
 
 /** Undo the .wnd loader's separate-axis stretch over a whole layout: every window under 'root' is
 	* recovered to its authored 800x600 rectangle and put back at ControlBarUniformScale(), anchored

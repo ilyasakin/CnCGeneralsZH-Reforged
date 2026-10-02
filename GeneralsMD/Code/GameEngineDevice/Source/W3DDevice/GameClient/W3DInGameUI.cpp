@@ -484,7 +484,12 @@ void W3DInGameUI::draw( void )
 	tPostStart = Clock_Ticks();
 #endif
 
-	postDraw();
+	// While the map loads the display calls this every pass to paint the load screen's windows, and
+	// the match is already "in game" with its peace time set: the truce plate, the corner readout and
+	// the strips drew over the load screen.  Only the windows belong there.
+	const Bool matchOnScreen = !TheGlobalData->m_loadScreenRender;
+	if( matchOnScreen )
+		postDraw();
 
 #ifdef DEBUG_LOGGING
 	tPostEnd = Clock_Ticks();
@@ -509,9 +514,12 @@ void W3DInGameUI::draw( void )
 	// the one reading you want visible exactly when something is going wrong.
 	//
 	// the peace time clock across the top middle, and the clock plate in the corner beside it
-	drawPeaceTimer();
-	drawHudOverlay();
-	drawScoreboard();
+	if( matchOnScreen )
+	{
+		drawPeaceTimer();
+		drawHudOverlay();
+		drawScoreboard();
+	}
 
 #ifdef EXTENDED_STATS
 	}

@@ -10994,20 +10994,23 @@ TEST(every_ai_rung_is_named_the_same_way_as_every_other)
 		for (Int b = a + 1; b < numRungs; ++b)
 			CHECK( WideCharCmp( SlotStateName( rungs[a] ).str(), SlotStateName( rungs[b] ).str() ) != 0 );
 }
-/* Five is what a column of the strip shows before the rest of the queue folds into the "+N" that
-	 closes it as a sixth cell.  It used to be sixteen across the bottom of the screen, which at a
-	 busy war factory ran the cameos most of the way over the map. */
+/* Nine is what the strip shows before the rest of the queue folds into the "+N" that closes it as a
+	 tenth cell: two rows of five standing on the console over the selection.  It used to be sixteen
+	 across the bottom of the screen, which at a busy war factory ran the cameos most of the way over
+	 the map. */
 TEST(the_production_strip_folds_a_long_queue_into_its_overflow)
 {
-	CHECK_EQ( 5, (Int)InGameUI::PRODUCTION_STRIP_ROW_MAX );
+	enum { ROW = 5 };
+	CHECK_EQ( 9, (Int)InGameUI::PRODUCTION_STRIP_ROW_MAX );
 
 	//
-	// The column, its overflow cell included, has to stand inside the 600 the layout is written in
-	// with room to spare for the control bar it stands on: it grows upward out of the corner, and a
-	// cell drawn past the top of the screen is a cell nobody can read.
+	// The rows, the overflow cell included, have to fill whole rows of five and stand inside the 600
+	// the layout is written in with room to spare for the console they stand on: they grow upward,
+	// and a cell drawn past the top of the screen is a cell nobody can read.
 	//
 	const Int cells = (Int)InGameUI::PRODUCTION_STRIP_ROW_MAX + 1;
-	const Int height = cells * (Int)InGameUI::PRODUCTION_STRIP_TRAY_H;
+	CHECK_EQ( 0, cells % ROW );
+	const Int height = cells / ROW * (Int)InGameUI::PRODUCTION_STRIP_TRAY_H;
 	CHECK( height < 600 / 2 );
 }
 
@@ -12043,17 +12046,43 @@ TEST(the_hud_is_measured_at_the_command_bars_own_scale)
 	CHECK_NEAR( ControlBarUniformScaleFor( 0, 0 ), 1.0f, 0.001f );
 }
 
-/* The bottom HUD is drawn smaller than the rest, the owner's "too big": seventy percent of the
-	 uniform scale, so 1.26 at 1920x1080 where the boards stand at 1.8, and never under what was
-	 authored, so 1280x720 stays at 1 where seventy percent would have been 0.84. */
-TEST(controlbar_hud_scale_is_seventy_percent_and_never_below_one)
+/* The bottom HUD follows the screen's height alone, the owner's rule of 2026-10-01: seventy percent
+	 of the height over 600, so 1.26 at 1920x1080 as before, with no floor and no whole steps.  It
+	 covers the same part of the height at 720, 1080 and 1440, and an ultrawide screen of the same
+	 height draws it no bigger. */
+TEST(controlbar_hud_scale_follows_the_screens_height)
 {
 	CHECK_NEAR( ControlBarHudScaleFor( 1920, 1080 ), 1.26f, 0.001f );
 	CHECK_NEAR( ControlBarHudScaleFor( 3840, 2160 ), 2.52f, 0.001f );
-	CHECK_NEAR( ControlBarHudScaleFor( 2560, 1080 ), 1.26f, 0.001f );
-	CHECK_NEAR( ControlBarHudScaleFor( 1280, 720 ), 1.0f, 0.001f );
-	CHECK_NEAR( ControlBarHudScaleFor( 800, 600 ), 1.0f, 0.001f );
-	CHECK( ControlBarHudScaleFor( 1920, 1080 ) < ControlBarUniformScaleFor( 1920, 1080 ) );
+	CHECK_NEAR( ControlBarHudScaleFor( 1280, 720 ), 0.84f, 0.001f );
+
+	struct Screen { Int w, h; };
+	const Screen screens[] = { { 1280, 720 }, { 1920, 1080 }, { 2560, 1440 } };
+	const Real reference = ControlBarHudScaleFit( ControlBarHudScaleFor( 1920, 1080 ), 1920 ) / 1080.0f;
+	for( Int i = 0; i < (Int)ARRAY_SIZE( screens ); i++ )
+	{
+		const Real covered = ControlBarHudScaleFit( ControlBarHudScaleFor( screens[ i ].w, screens[ i ].h ), screens[ i ].w ) / screens[ i ].h;
+		CHECK_NEAR( covered, reference, 0.0001f );
+	}
+	CHECK_NEAR( ControlBarHudScaleFit( ControlBarHudScaleFor( 2560, 1080 ), 2560 ),
+							ControlBarHudScaleFit( ControlBarHudScaleFor( 1920, 1080 ), 1920 ), 0.0001f );
+}
+
+/* HUD Size grows the console until it would no longer fit the screen's width, and there it stops:
+	 at HUD Size 100% only a screen narrower than about 1.05:1, at 150% one narrower than about 1.57:1,
+	 which takes in 4:3 and 5:4. */
+TEST(controlbar_hud_size_stops_where_the_console_fills_the_width)
+{
+	const Int console = InGameUI_consolePageWidth();
+	CHECK( console > 800 && console < 1024 );
+	CHECK_NEAR( ControlBarHudScaleFit( 1.26f, 1920 ), 1.26f, 0.001f );
+	CHECK_NEAR( ControlBarHudScaleFit( 1.5f, 1280 ), 1280.0f / console, 0.001f );
+	CHECK( ControlBarHudScaleFit( 1.5f, 1280 ) * console <= 1280.0f );
+	CHECK_NEAR( ControlBarHudScaleFit( 1.0f, 1024 ), 1.0f, 0.001f );
+	CHECK( ControlBarHudScaleFit( 1.0f, 800 ) < 1.0f );
+	const Real narrow = ControlBarHudScaleFor( 1024, 768 );
+	CHECK_NEAR( ControlBarHudScaleFit( narrow, 1024 ), narrow, 0.0001f );
+	CHECK( ControlBarHudScaleFit( narrow * 1.5f, 1024 ) < narrow * 1.5f );
 }
 
 /* A health bar is drawn in raw pixels over a tank whose own size on screen is set by the camera,

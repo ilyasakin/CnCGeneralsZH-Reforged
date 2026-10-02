@@ -96,6 +96,12 @@ extern Real ControlBarHudScale( void );
 	* bar itself is laid out at. */
 static const Real BADGE_DESIGN_POINTS = 7.0f;
 
+/** The smallest a marking is set.  At 1280x720 the HUD's 0.84 makes seven points 5, and at 5 this
+	* font's figures run together: $600 read $800 and 2500 read 2600, and a misread price is worse
+	* than none.  So the marking stays at 6, and one still too wide sheds its unit - "$2000" is
+	* "2000", "24s" is "24" - before it is clipped. */
+static const Int BADGE_LEAST_POINTS = 6;
+
 /** The queue count is the one marking a player reads at a glance in the middle of a fight - how
 	* many more of these are still coming - and at seven points against a busy cameo it was a smudge
 	* nobody found without looking for it.  It gets its own size, and an opaque plate under it. */
@@ -122,8 +128,8 @@ static GameFont *getBadgeFont( GameWindow *window, Real designPoints = BADGE_DES
 		return NULL;
 
 	Int pointSize = REAL_TO_INT_FLOOR( designPoints * ControlBarHudScale() );
-	if( pointSize < 6 )
-		pointSize = 6;
+	if( pointSize < BADGE_LEAST_POINTS )
+		pointSize = BADGE_LEAST_POINTS;
 
 	// bold, because these are markings on a picture: at seven points against a busy cameo the light
 	// weight reads as noise on the artwork rather than as a letter
@@ -136,7 +142,7 @@ static GameFont *getBadgeFont( GameWindow *window, Real designPoints = BADGE_DES
 
 static DisplayString *badgeString( const UnicodeString &text, GameFont *font );
 static void drawBadge( GameWindow *window, const UnicodeString &text, Real designPoints,
-											 HudReadoutCorner corner, Color color );
+											 HudReadoutCorner corner, Color color, const UnicodeString &bare = UnicodeString::TheEmptyString );
 
 // drawButtonText =============================================================
 /** Draw button text to the screen */
@@ -308,10 +314,15 @@ static void drawCountBadge( GameWindow *window, Int count )
 	* rectangle, inside the frame the command bar's page draws over the button's
 	* edge.  Text too wide for the button is set a point smaller until it fits, so
 	* a four figure price or a three figure countdown shrinks instead of running
-	* out over the frame or into the next button. */
+	* out over the frame or into the next button, down to BADGE_LEAST_POINTS.  A
+	* marking with a unit is drawn as `bare`, its figures alone, where the HUD's
+	* scale would set it under BADGE_LEAST_POINTS: held up at that size it shares
+	* its row with the corner beside it, and "$2000" ran under the hotkey's plate
+	* while "6s" lost its "s" to a block - and as `bare` too when it still does not
+	* fit at that size. */
 //=============================================================================
 static void drawBadge( GameWindow *window, const UnicodeString &text, Real designPoints,
-											 HudReadoutCorner corner, Color color )
+											 HudReadoutCorner corner, Color color, const UnicodeString &bare )
 {
 	IRegion2D cell;
 	ICoord2D size;
@@ -321,17 +332,20 @@ static void drawBadge( GameWindow *window, const UnicodeString &text, Real desig
 	cell.hi.y = cell.lo.y + size.y;
 
 	GameFont *font = getBadgeFont( window, designPoints );
-	DisplayString *badge = badgeString( text, font );
+	const Bool cramped = REAL_TO_INT_FLOOR( designPoints * ControlBarHudScale() ) < BADGE_LEAST_POINTS;
+	DisplayString *badge = badgeString( cramped && !bare.isEmpty() ? bare : text, font );
 	if( badge == NULL )
 		return;
 
 	// each size tried is a string badgeString keeps, so a marking that had to shrink is looked up
 	// the next frame, not lettered again
-	while( font != NULL && font->pointSize > 6 && !HudReadout_fits( badge, cell ) )
+	while( font != NULL && font->pointSize > BADGE_LEAST_POINTS && !HudReadout_fits( badge, cell ) )
 	{
 		font = TheFontLibrary->getFont( font->nameString, font->pointSize - 1, TRUE );
 		badge = badgeString( text, font );
 	}
+	if( !bare.isEmpty() && !HudReadout_fits( badge, cell ) )
+		badge = badgeString( bare, font );
 
 	HudReadout_draw( badge, cell, corner, color );
 
@@ -343,9 +357,10 @@ static void drawBadge( GameWindow *window, const UnicodeString &text, Real desig
 //=============================================================================
 static void drawSecondsBadge( GameWindow *window, Int seconds )
 {
-	UnicodeString text;
+	UnicodeString text, bare;
 	text.format( u"%ds", seconds );
-	drawBadge( window, text, BADGE_DESIGN_POINTS, HUD_READOUT_BOTTOM_LEFT, GameMakeColor( 255, 255, 255, 255 ) );
+	bare.format( u"%d", seconds );
+	drawBadge( window, text, BADGE_DESIGN_POINTS, HUD_READOUT_BOTTOM_LEFT, GameMakeColor( 255, 255, 255, 255 ), bare );
 
 }  // end drawSecondsBadge
 
@@ -356,9 +371,10 @@ static void drawSecondsBadge( GameWindow *window, Int seconds )
 //=============================================================================
 static void drawCostBadge( GameWindow *window, Int cost )
 {
-	UnicodeString text;
+	UnicodeString text, bare;
 	text.format( u"$%d", cost );
-	drawBadge( window, text, BADGE_DESIGN_POINTS, HUD_READOUT_TOP_RIGHT, GameMakeColor( 235, 210, 120, 255 ) );
+	bare.format( u"%d", cost );
+	drawBadge( window, text, BADGE_DESIGN_POINTS, HUD_READOUT_TOP_RIGHT, GameMakeColor( 235, 210, 120, 255 ), bare );
 
 }  // end drawCostBadge
 

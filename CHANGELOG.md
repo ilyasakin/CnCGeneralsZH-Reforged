@@ -8,6 +8,17 @@ found and fixed â€” EA's own, not port damage.**
 
 ---
 
+## The command bar moves to the middle
+
+- The command bar is one console standing in the middle of the bottom edge: a taller radar, your selection and the build grid side by side, with the power bar over the grid. The idle worker, rank and under-attack keys sit in a row over your selection, and in multiplayer the smoke signals join them.
+- Your general's powers grow out of the console's right end, a column for each F key with its powers stacked up it, and only the powers you have take any room.
+- A single unit's name and health stand beside its portrait, and a veteran gets his gold stars there too. A group shows every type it holds in the same box, five to a row.
+- The match clock hangs from the middle of the top edge with your money in its own box under it. Superweapon countdowns in the top right corner are as big as your general's power buttons. Hold Tab and the scoreboard drops down from it.
+- Peace time has its own plate under your money, so the truce clock never pushes the match clock aside. When the last ten seconds start, the countdown hangs straight off that plate.
+- A superweapon built, charged or fired anywhere on the map flashes its name in big letters under the clock: "Nuclear Missile launched". Yours are white, an ally's blue, an enemy's red. Each line stays four seconds and fades out. When several land at once they queue and hurry through, two seconds each with one more waiting and one second with a pile behind it, so the last news never sits stale.
+- Your production queue stands on the console over your selection, five to a row, each row only as long as what is in it. The event feed runs down from the menu key in the top left corner, and the chat sits under it.
+- HUD Size grows the console from its middle, and on a narrow screen it stops at the size that still fits.
+
 ## Groups attack-move at their own speed
 
 - An attack move used to hold the whole group to its slowest member when you held Ctrl on the click, and the computer's groups did that every time. A damaged truck walked the tanks in. Each unit now goes at its own speed. A replay recorded before this, of a group attack-moving that way, will not play back the same.
