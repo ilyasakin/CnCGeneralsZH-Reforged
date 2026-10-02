@@ -150,6 +150,8 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxPlayerColors",   None),
     (LABEL,  "LabelHudScale",          "GUI:HudScale"),
     (COMBO,  "ComboBoxHudScale",       None),
+    (LABEL,  "LabelMenuLayout",        "GUI:MenuLayout"),
+    (COMBO,  "ComboBoxMenuLayout",     None),
     (LABEL,  "LabelLanguage",          "GUI:Language"),
     (COMBO,  "ComboBoxLanguage",       None),
     (CHECK,  "CheckOrderLines",        "GUI:OrderLines"),
@@ -237,6 +239,7 @@ GROUP_LAYOUT = [
         setting("LabelMonitor", "ComboBoxMonitor"),
         setting("ResolutionLabel", "ComboBoxResolution"),
         setting("LabelWindowMode", "ComboBoxWindowMode"),
+        setting("LabelMenuLayout", "ComboBoxMenuLayout"),
         ("check", "CheckVSync")]),
     ("PageDisplay",  1, "GUI:OptionsGroupPicture", [
         setting("GammaLabel", "SliderGamma", "ValueGamma"),

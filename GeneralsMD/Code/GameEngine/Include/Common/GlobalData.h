@@ -76,6 +76,12 @@ enum HealthBarModeType
 /** The HudScale option's steps, 100/115/130/150% of the bottom HUD's own size (ControlBarHudScale). */
 enum { HUD_SCALE_COUNT = 4 };
 
+/** How a menu laid out at 800x600 meets a screen of another shape (GameWindowManagerScript.cpp's
+	* parseScreenRect).  Stretch is EA's: across by W/800 and down by H/600 apiece, so a 16:10 screen draws
+	* every panel, logo and medal 1.2x wide.  Fit scales by the smaller of the two and centres the
+	* 4:3 area; a full-screen backdrop still fills the screen.  At 4:3 the two are the same. */
+enum { MENU_LAYOUT_STRETCH = 0, MENU_LAYOUT_FIT = 1, MENU_LAYOUT_COUNT = 2 };
+
 /** The IncomeRate option: what the income beside the money is counted over.  Automatic is per
 	* minute below INCOME_RATE_AUTOMATIC_PER_SECOND_FROM dollars a second and per second from there
 	* up: under that a whole number of dollars a second rounds most of the income away, which is
@@ -334,6 +340,7 @@ public:
 	Bool m_showObjectHealth;			///< debug display object health
 	Int m_healthBarMode;					///< HealthBarModeType: which units wear a bar at all
 	Int m_hudScale;								///< HUD size step, 0 = 100%; see ControlBarHudScale (client only)
+	Int m_menuLayout;							///< MENU_LAYOUT_STRETCH or MENU_LAYOUT_FIT, for the Menus/ layouts (client only)
 	Int m_playerColorScheme;			///< PlayerColorSchemeType: whose colour the client draws (client only)
 	Int m_textLanguage;						///< TextLanguageType: the translation GameText lays over the CSF, read once at startup (client only)
 	Bool m_gamepadEnabled;				///< G1: a connected controller plays; off, every controller is ignored (client only)

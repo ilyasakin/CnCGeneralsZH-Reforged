@@ -15469,6 +15469,22 @@ TOOLTIP:HudScale
 "Komuta çubuğunu ve alttaki arayüzü çözünürlüğün seçtiğinden daha büyük çizer."
 END
 
+GUI:MenuLayout
+"Menü Düzeni"
+END
+
+GUI:MenuLayout0
+"Esnet"
+END
+
+GUI:MenuLayout1
+"Sığdır"
+END
+
+TOOLTIP:MenuLayout
+"Sığdır, menüleri çizildikleri biçimde tutar ve geniş ekranda ortalar. Esnet, oyunun her zaman yaptığı gibi onları ekranın kenarlarına kadar genişletir."
+END
+
 GUI:OptionsGroupInput
 "Kontrol Düzeni"
 END

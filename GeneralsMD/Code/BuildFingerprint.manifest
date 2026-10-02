@@ -3763,6 +3763,7 @@ Tools/matchbot/wnet/tcp.cpp
 Tools/matchbot/wnet/tcp.h
 Tools/matchbot/wnet/udp.cpp
 Tools/matchbot/wnet/udp.h
+Tools/menufit-click-check.sh
 Tools/net-check.sh
 Tools/net_check.py
 Tools/optionsmenu_layout.py

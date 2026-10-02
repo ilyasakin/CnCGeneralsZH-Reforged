@@ -162,6 +162,7 @@ MainMenu.wnd MainMenu.wnd:ButtonOptions
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxResolution
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxWindowMode
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMenuLayout
 OptionsMenu.wnd OptionsMenu.wnd:CheckVSync
 OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
@@ -172,6 +173,7 @@ OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxResolution
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxWindowMode
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMenuLayout
 OptionsMenu.wnd OptionsMenu.wnd:CheckVSync
 OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:ButtonBack
@@ -181,6 +183,7 @@ OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMonitor
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxResolution
 OptionsMenu.wnd OptionsMenu.wnd:ComboBoxWindowMode
+OptionsMenu.wnd OptionsMenu.wnd:ComboBoxMenuLayout
 OptionsMenu.wnd OptionsMenu.wnd:CheckVSync
 OptionsMenu.wnd OptionsMenu.wnd:ButtonDefaults
 OptionsMenu.wnd OptionsMenu.wnd:CheckClassicGraphics
@@ -291,6 +294,7 @@ OptionsMenu.wnd OptionsMenu.wnd:CheckGamepad
 OptionsMenu.wnd OptionsMenu.wnd:TabNetwork
 OptionsMenu.wnd OptionsMenu.wnd:SliderMusicVolume
 OptionsMenu.wnd OptionsMenu.wnd:Retaliation
+OptionsMenu.wnd OptionsMenu.wnd:SliderScrollSpeed
 OptionsMenu.wnd OptionsMenu.wnd:CheckZoomToCursor
 OptionsMenu.wnd OptionsMenu.wnd:CheckIsometricCamera
 OptionsMenu.wnd OptionsMenu.wnd:CheckStartAtMaxZoom

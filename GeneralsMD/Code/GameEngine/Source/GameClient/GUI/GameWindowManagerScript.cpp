@@ -54,6 +54,7 @@
 #include "Common/file.h"
 #include "Common/FileSystem.h"
 #include "Common/GameMemory.h"
+#include "Common/GlobalData.h"
 #include "Common/NameKeyGenerator.h"
 #include "Common/FunctionLexicon.h"
 #include "GameClient/Display.h"
@@ -502,6 +503,34 @@ static Bool parseTooltip( char *token, WinInstanceData *instData,
 	* and adjust to make the screen rect coords relative to any parent
 	* if present */
 //=============================================================================
+// Whether the layout being read is laid out Fit rather than stretched (GlobalData.h, MenuLayout):
+// set by winCreateFromScript for each file, read by parseScreenRect for each window in it.
+static Bool theLayoutFits = FALSE;
+
+// The menus are Fit's: the shell's screens and the dialogs a match opens over the battlefield, all
+// centred on a 4:3 panel of their own.  The rest of Window/ is the battlefield's own furniture - the
+// command bar, which scales itself (ControlBarUniformScale), and windows that hold a screen edge
+// (the general's powers bar, the build tooltip) or follow the battlefield (chat, diplomacy, the
+// general's promotion screen, replay controls, IME) - and stays stretched.
+// Whether a path starts with this folder name (lower case), any case, then '/' or '\\'.
+static Bool startsWithFolder( const char *path, const char *folder )
+{
+	for( ; *folder != 0; ++path, ++folder )
+		if( tolower( (unsigned char)*path ) != *folder )
+			return FALSE;
+	return *path == '/' || *path == '\\';
+}
+
+static Bool layoutFits( const char *filename )
+{
+	if( TheGlobalData == NULL || TheGlobalData->m_menuLayout != MENU_LAYOUT_FIT || filename == NULL )
+		return FALSE;
+	// "Menus/X.wnd" as the shell names them, or the whole "Window\\Menus\\X.wnd"
+	if( startsWithFolder( filename, "window" ) )
+		filename += 7;
+	return startsWithFolder( filename, "menus" );
+}
+
 static Bool parseScreenRect( char *token, char *buffer,
 														 Int *x, Int *y, Int *width, Int *height )
 {
@@ -535,10 +564,33 @@ static Bool parseScreenRect( char *token, char *buffer,
 	//
 	Real xScale = (Real)TheDisplay->getWidth() / (Real)createRes.x;
 	Real yScale = (Real)TheDisplay->getHeight() / (Real)createRes.y;
-	screenRegion.lo.x = (Int)((Real)screenRegion.lo.x * xScale);
-	screenRegion.lo.y = (Int)((Real)screenRegion.lo.y * yScale);
-	screenRegion.hi.x = (Int)((Real)screenRegion.hi.x * xScale);
-	screenRegion.hi.y = (Int)((Real)screenRegion.hi.y * yScale);
+
+	//
+	// Fit (MenuLayout): one scale both ways, the smaller, with the layout's 4:3 area centred, so a
+	// panel, a logo or a medal keeps the shape it was drawn in.  A window that covers the whole
+	// layout - within two pixels, as a few parents are drawn - still fills the screen: it is the
+	// backdrop, or the parent everything else sits in.  At 4:3 the scales are equal and the offsets
+	// nothing, and this is the stretch to the pixel.
+	//
+	const Bool fullScreen = screenRegion.lo.x <= 2 && screenRegion.lo.y <= 2 &&
+		screenRegion.hi.x >= createRes.x - 2 && screenRegion.hi.y >= createRes.y - 2;
+	if( theLayoutFits && !fullScreen )
+	{
+		const Real scale = min( xScale, yScale );
+		const Real left = ((Real)TheDisplay->getWidth() - (Real)createRes.x * scale) / 2.0f;
+		const Real top = ((Real)TheDisplay->getHeight() - (Real)createRes.y * scale) / 2.0f;
+		screenRegion.lo.x = (Int)((Real)screenRegion.lo.x * scale + left);
+		screenRegion.lo.y = (Int)((Real)screenRegion.lo.y * scale + top);
+		screenRegion.hi.x = (Int)((Real)screenRegion.hi.x * scale + left);
+		screenRegion.hi.y = (Int)((Real)screenRegion.hi.y * scale + top);
+	}
+	else
+	{
+		screenRegion.lo.x = (Int)((Real)screenRegion.lo.x * xScale);
+		screenRegion.lo.y = (Int)((Real)screenRegion.lo.y * yScale);
+		screenRegion.hi.x = (Int)((Real)screenRegion.hi.x * xScale);
+		screenRegion.hi.y = (Int)((Real)screenRegion.hi.y * yScale);
+	}
 
 	//
 	// given the screen region upper left compute the upper left that we
@@ -2736,6 +2788,7 @@ GameWindow *GameWindowManager::winCreateFromScript( AsciiString filenameString,
   // Reset the window stack
   resetWindowStack();
 	resetWindowDefaults();
+	theLayoutFits = layoutFits( filename );
 
 	//
 	// get the filename from the parameter, if it doesn't contain a '\' it is

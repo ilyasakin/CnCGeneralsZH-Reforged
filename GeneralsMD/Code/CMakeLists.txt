@@ -2186,6 +2186,14 @@ if(ZH_PLATFORM_POSIX)
   if(ZH_GAME_DATA)
     set_tests_properties(gamepad_combo_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
   endif()
+  # MenuLayout: a click opens the main menu's Credits where the button is drawn, Fit or Stretch, and only there
+  # (Tools/menufit-click-check.sh); four short menu runs at 1280x800
+  add_test(NAME menufit_click_check
+           COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/menufit-click-check.sh --generals $<TARGET_FILE:generals>)
+  set_tests_properties(menufit_click_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1200)
+  if(ZH_GAME_DATA)
+    set_tests_properties(menufit_click_check PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+  endif()
   # P1 step 3: the staged overlay, <build>/overlay - what the app bundle will copy verbatim and what the
   # harnesses pass with -overlay - and <build>/overlay-dev, the -scenario and -cinema folders that never
   # ship.  Tools/stage-overlay.sh is the one place the list lives.  Small (10 MB; the art is linked).

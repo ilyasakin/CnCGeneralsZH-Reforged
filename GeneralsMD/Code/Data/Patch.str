@@ -918,6 +918,22 @@ TOOLTIP:HudScale
 "Draws the command bar and the rest of the bottom HUD larger than your resolution would."
 END
 
+GUI:MenuLayout
+"Menu Layout"
+END
+
+GUI:MenuLayout0
+"Stretch"
+END
+
+GUI:MenuLayout1
+"Fit"
+END
+
+TOOLTIP:MenuLayout
+"Fit keeps the menus in the shape they were drawn in and centres them on a wide screen. Stretch widens them to the screen's edges, as the game always did."
+END
+
 GUI:OptionsGroupInput
 "Input"
 END

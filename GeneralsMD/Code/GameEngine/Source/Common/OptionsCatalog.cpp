@@ -96,6 +96,7 @@ OPTION_BOOL_ACCESSORS( m_vsync )
 OPTION_BOOL_ACCESSORS( m_classicGraphics )
 OPTION_INT_ACCESSORS( m_healthBarMode )
 OPTION_INT_ACCESSORS( m_hudScale )
+OPTION_INT_ACCESSORS( m_menuLayout )
 OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_BOOL_ACCESSORS( m_gamepadEnabled )
@@ -395,6 +396,13 @@ const OptionDef TheOptionCatalog[] =
 	{ "HudScale",									OPT_WND( "ComboBoxHudScale" ), "GUI:HudScale",
 		OPTION_ENUM, APPLY_LIVE, 0, HUD_SCALE_COUNT - 1,
 		get_m_hudScale, set_m_hudScale },
+
+	// How the menus meet a screen that is not 4:3: stretched to it, as EA drew them, or fitted and
+	// centred at their own shape (GlobalData.h).  Layouts are read once as they are built, so Accept
+	// builds the shell again.
+	{ "MenuLayout",								OPT_WND( "ComboBoxMenuLayout" ), "GUI:MenuLayout",
+		OPTION_ENUM, APPLY_SHELL_REBUILD, 0, MENU_LAYOUT_COUNT - 1,
+		get_m_menuLayout, set_m_menuLayout },
 
 	// Whose colour a player is drawn in.  Purely local: the match still agrees on the lobby's
 	// colours and this only changes what this screen puts on top of them, so two people in the same

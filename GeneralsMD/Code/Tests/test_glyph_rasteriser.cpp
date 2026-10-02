@@ -521,6 +521,35 @@ TEST(glyph_rasteriser_substitutes_take_gdis_heights)
 #endif
 }
 
+/* And their widths where the game asks for an lfWidth: Liberation is scaled against Arial's own average
+	 character width, as GDI scales Arial, not its own (glyphrasteriser.cpp, theGdiAverageWidths), so the
+	 shell's "Generals" lettering is Windows' width.  Scaled by its own it came out 0.76 as wide.  The widths
+	 are the golden's for macOS's Arial, which draws "SKIRMISH" at 1280x800 the width Windows does (149 and
+	 150 px); Liberation's plain Arial at 14 points, the control, says how close metric-compatible gets. */
+TEST(glyph_rasteriser_substitutes_squeeze_to_gdis_width)
+{
+#if !defined(__linux__)
+	printf( "  skip: macOS reads Arial itself, whose squeeze the golden checks\n" );
+#else
+	const char *text = "General, 1,234 $ supplies: Qwerty jig!";
+	GlyphRasteriserClass::Set_Antialias_Mode( GlyphRasteriserClass::ANTIALIAS_AS_GASP_SAYS );
+	static const struct { int points, width, windows; } SIZES[] = {
+		{ 14, 0, 317 },			// the control: no lfWidth
+		{ 15, 8, 301 },			// "Generals" 15
+		{ 20, 10, 376 },		// "Generals" 20
+	};
+	for (size_t i = 0; i < sizeof( SIZES ) / sizeof( SIZES[0] ); ++i)
+	{
+		const int ppem = pixelsFor( SIZES[i].points );
+		GlyphRasteriserClass r;
+		CHECK( r.Create_Font( "Arial", ppem, SIZES[i].width, false, 2 * ppem ) );
+		const Drawn d = drawString( r, text );
+		printf( "  Arial %dpt lfWidth %d: %d px, Windows %d px\n", SIZES[i].points, SIZES[i].width, d.advance, SIZES[i].windows );
+		CHECK( abs( d.advance - SIZES[i].windows ) * 100 <= SIZES[i].windows );		// within 1%
+	}
+#endif
+}
+
 TEST(glyph_rasteriser_matches_its_golden)
 {
 #if !defined(__APPLE__)

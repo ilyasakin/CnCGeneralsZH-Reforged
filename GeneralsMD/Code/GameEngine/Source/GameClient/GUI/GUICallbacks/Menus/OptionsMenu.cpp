@@ -1090,7 +1090,13 @@ static void readCatalogWidgets( void )
 				GadgetComboBoxGetSelectedPos( widget, &selected );
 				// -1 is a combo box with nothing picked, which is not a value to write anywhere
 				if( selected >= 0 )
-					def.set( clampOptionValue( def, def.lo + selected ) );
+				{
+					const Int value = clampOptionValue( def, def.lo + selected );
+					// a layout read as the menus were built shows only once they are built again
+					if( def.apply == APPLY_SHELL_REBUILD && value != def.get() )
+						pendingShellRebuild = TRUE;
+					def.set( value );
+				}
 				break;
 			}
 

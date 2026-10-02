@@ -183,6 +183,45 @@ bool fontconfigFile( const char *family, bool bold, std::string &path, bool &isB
 }
 #endif
 
+/* GDI makes an lfWidth font that wide by scaling the Windows face against its own OS/2 xAvgCharWidth.  A
+	 Linux substitute matches the face's advance widths but not that field: Liberation Sans says 1187 units
+	 where Arial says 904 (an average over every glyph, where Arial keeps the older weighted one), so
+	 scaling by the substitute's own made every lfWidth font 0.76 as wide as on Windows - the shell's
+	 "Generals" titles and buttons among them.  The Windows faces' values, read from Windows 11's files
+	 (Arial 7.03, Times New Roman 7.05, Courier New 6.94) and the same in macOS's (5.01.2x, 5.01.4x,
+	 5.00.2x), all at 2048 units per em; used only when the file found is the substitute named here. */
+struct GdiAverageWidth
+{
+	const char *face;					// the Windows face, as Substitution::gdiMetrics names it
+	const char *substitute;		// the metric-compatible family that stands in for it
+	bool bold;
+	int xAvgCharWidth;
+};
+
+const GdiAverageWidth theGdiAverageWidths[] =
+{
+	{ "Arial",						"Liberation Sans",	false,	904 },
+	{ "Arial",						"Liberation Sans",	true,		980 },
+	{ "Times New Roman",	"Liberation Serif",	false,	821 },
+	{ "Times New Roman",	"Liberation Serif",	true,		874 },
+	{ "Courier New",			"Liberation Mono",	false,	1229 },
+	{ "Courier New",			"Liberation Mono",	true,		1229 },
+};
+const int GDI_AVERAGE_WIDTH_UNITS_PER_EM = 2048;
+
+/* The Windows face's xAvgCharWidth where the file is its substitute; 0 for any other file, which then
+	 scales by its own (a family fontconfig fell back to has no Windows value to borrow). */
+int gdiAverageWidth( const char *face, bool bold, const char *familyFound )
+{
+	if (face == NULL || familyFound == NULL)
+		return 0;
+	for (size_t i = 0; i < sizeof( theGdiAverageWidths ) / sizeof( theGdiAverageWidths[0] ); ++i)
+		if (theGdiAverageWidths[i].bold == bold && strcmp( theGdiAverageWidths[i].face, face ) == 0
+				&& strcasecmp( theGdiAverageWidths[i].substitute, familyFound ) == 0)
+			return theGdiAverageWidths[i].xAvgCharWidth;
+	return 0;
+}
+
 /* The GDI line metrics of a Windows face at a pixel height, from gdifontmetrics.h: false outside the
 	 table's faces and sizes. */
 bool gdiMetrics( const char *face, bool bold, int ppem, int &ascent, int &descent )
@@ -328,11 +367,15 @@ bool GlyphRasteriserClass::Create_Font( const char *face, int pixel_height, int 
 		return false;
 
 	/* lfWidth is the average character width GDI makes the font have: the x scale is it over the
-		 file's own average, OS/2 xAvgCharWidth, at this height.  Rounded to whole pixels per em, as the
-		 hinted rasteriser works in; GDI's exact rounding is not known here (D6). */
+		 file's own average, OS/2 xAvgCharWidth, at this height - or over the Windows face's, where the file
+		 is its Linux substitute (theGdiAverageWidths).  Rounded to whole pixels per em, as the hinted
+		 rasteriser works in; GDI's exact rounding is not known here (D6). */
 	int xPpem = pixel_height;
 	TT_OS2 *os2 = (TT_OS2 *)FT_Get_Sfnt_Table( ftFace, FT_SFNT_OS2 );
-	if (average_width > 0 && os2 != NULL && os2->xAvgCharWidth > 0)
+	const int windowsAverage = average_width > 0 ? gdiAverageWidth( metricsFace, bold, ftFace->family_name ) : 0;
+	if (windowsAverage > 0)
+		xPpem = (int)floor( (double)average_width * GDI_AVERAGE_WIDTH_UNITS_PER_EM / windowsAverage + 0.5 );
+	else if (average_width > 0 && os2 != NULL && os2->xAvgCharWidth > 0)
 		xPpem = (int)floor( (double)average_width * ftFace->units_per_EM / os2->xAvgCharWidth + 0.5 );
 	if (xPpem < 1)
 		xPpem = 1;
